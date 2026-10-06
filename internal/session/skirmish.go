@@ -577,6 +577,14 @@ type SkirmishEntryOptions struct {
 	// catalog clone in every gameplay mode (docs/DESIGN_MODS_MUTATORS.md §6).
 	// The zero value applies none.
 	Mutators content.Mutators
+	// Restrictions are the battle's unit restrictions, applied to this
+	// entry's catalog clone before the mutators in every gameplay mode
+	// (docs/DESIGN_MODS_MUTATORS.md §15). A Survival battle is a skirmish
+	// entry and takes the same field; a campaign mission has no such field.
+	// The host resolves the player's preference against the running content
+	// first, so an entry the catalog cannot take refuses entry (§15.3). The
+	// zero value restricts nothing.
+	Restrictions content.Restrictions
 	// AIOverrides are the Modern AI computer players' configured parameters,
 	// given to each computer player's manager at battle entry
 	// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI computer player"). The
@@ -682,6 +690,13 @@ func prepareSkirmishEntry(fs vfs.FSOps, cat *content.Catalog, cfg SkirmishConfig
 	if err != nil {
 		return skirmishEntry{}, err
 	}
+	// The unit restrictions come first, where mission entry applies its
+	// UseOnlyUnits list, so the Community preparation and the mutators see
+	// the restricted catalog (docs/DESIGN_MODS_MUTATORS.md §15.1, §15.5).
+	cat, err = applyEntryRestrictions(cat, options.Restrictions)
+	if err != nil {
+		return skirmishEntry{}, err
+	}
 	cat = prepareCommunityWeapons(cat, cfg.Gameplay, entryFeatures)
 	cat, err = applyEntryMutators(cat, options.Mutators)
 	if err != nil {
@@ -695,7 +710,11 @@ func prepareSkirmishEntry(fs vfs.FSOps, cat *content.Catalog, cfg SkirmishConfig
 	// Freeze every input later composition and unit creation read: each
 	// admitted unit's program and model (units not yet built included), the
 	// animation table, the map, the AI profile and the extension inputs.
-	inputs, err := freezeSkirmishInputs(sources, skirmishSimulationRequest(cat, m, entryFeatures, options))
+	request := skirmishSimulationRequest(cat, m, entryFeatures, options)
+	// The frozen selection records the set beside the mutators; the prepared
+	// catalog already carries its effect (§15.5).
+	request.Restrictions = options.Restrictions
+	inputs, err := freezeSkirmishInputs(sources, request)
 	if err != nil {
 		return skirmishEntry{}, fmt.Errorf("session: skirmish content: %w", err)
 	}
@@ -708,8 +727,10 @@ func prepareSkirmishEntry(fs vfs.FSOps, cat *content.Catalog, cfg SkirmishConfig
 // compiled, prepared or frozen a second time. Of the options it reads only the
 // Community sources the session keeps, the mutators it records, the builder
 // options, the AI overrides and the load observer; the front half consumed the
-// rest. audio is the mount the presentation audio service resolves samples
-// from; it never reaches the simulation, and nil gives a silent service.
+// rest. The unit restrictions it records are the frozen inputs' own, the set
+// their catalog was prepared with. audio is the mount the presentation audio
+// service resolves samples from; it never reaches the simulation, and nil
+// gives a silent service.
 func composeSkirmish(entry skirmishEntry, options SkirmishEntryOptions, audio vfs.FSOps) (*Session, error) {
 	cfg, m, entryFeatures, inputs := entry.cfg, entry.mission, entry.features, entry.inputs
 	report := options.Progress
@@ -770,6 +791,7 @@ func composeSkirmish(entry skirmishEntry, options SkirmishEntryOptions, audio vf
 		Community:        entryFeatures,
 		EntryCommunity:   entryFeatures,
 		Mutators:         options.Mutators,
+		Restrictions:     inputs.Restrictions(),
 		Catalog:          cat,
 		World:            terrain,
 		Mission:          m,

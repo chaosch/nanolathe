@@ -80,6 +80,10 @@ type Report struct {
 	// "buildCost=0.5,buildSpeed=2"; empty for the unmutated catalog
 	// (docs/DESIGN_MODS_MUTATORS.md §6.6).
 	Mutators string `json:"mutators"`
+	// Restrictions is the canonical unit-restriction set the session bound,
+	// e.g. "armkrog=0,armpw=20"; empty for none
+	// (docs/DESIGN_MODS_MUTATORS.md §15.5).
+	Restrictions string `json:"restrictions"`
 	// Mod is the mounted installed mod, `<id>@<version>`, or `none`
 	// (docs/DESIGN_MODS_MUTATORS.md §6.6), spelled as the battle benchmark's
 	// scene metadata spells it.
@@ -205,6 +209,7 @@ func buildReport(request Request, kind ScenarioKind, identity string, sess *sess
 		Gameplay:         sess.Gameplay.Normalize(),
 		Rules:            sess.Rules.Name,
 		Mutators:         sess.Mutators.String(),
+		Restrictions:     sess.Restrictions.String(),
 		Mod:              reportedMod(request.Mod),
 		Community:        sess.Community,
 		EntryCommunity:   sess.EntryCommunity,

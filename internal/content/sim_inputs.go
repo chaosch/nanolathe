@@ -35,7 +35,11 @@ var ErrSimulationInputNotCaptured = errors.New("nanolathe: simulation input was 
 // selected schema's index in the catalog's map header; AIProfile is the
 // profile name the planner will load; CommunityDigest is the effective
 // Community table's digest; Mutators are the mutators already applied to
-// Catalog, recorded and never applied again.
+// Catalog, recorded and never applied again. Restrictions are the unit
+// restrictions already applied to Catalog, before the mutators
+// (docs/DESIGN_MODS_MUTATORS.md §15.5); they too are recorded and never
+// applied again. They add no manifest entry: the restricted records carry
+// their effect, so an unrestricted battle's digest is unchanged.
 type SimulationInputRequest struct {
 	Catalog         *Catalog
 	SimArt          *SimArt
@@ -44,6 +48,7 @@ type SimulationInputRequest struct {
 	AIProfile       string
 	CommunityDigest [32]byte
 	Mutators        Mutators
+	Restrictions    Restrictions
 }
 
 // SimulationInputs is one battle's frozen simulation content. Its accessors
@@ -59,10 +64,11 @@ type SimulationInputs struct {
 	manifest   []SimulationInput
 	provenance []SimulationInputProvenance
 	digest     [32]byte
-	// selection is the request's map, extension and mutator selection as the
-	// freeze recorded it, its catalog and animation-table pointers cleared and
-	// its mutators in their canonical spelling. Admission compares a match
-	// configuration with it (DESIGN_MULTIPLAYER §8.8).
+	// selection is the request's map, extension, restriction and mutator
+	// selection as the freeze recorded it, its catalog and animation-table
+	// pointers cleared and its mutators in their canonical spelling.
+	// Admission compares a match configuration with it (DESIGN_MULTIPLAYER
+	// §8.8).
 	selection SimulationInputRequest
 }
 
@@ -199,6 +205,17 @@ func (i *SimulationInputs) Mutators() Mutators {
 		return Mutators{}
 	}
 	return i.selection.Mutators
+}
+
+// Restrictions returns the unit restrictions the catalog had already been
+// prepared with when it was frozen, before its mutators
+// (docs/DESIGN_MODS_MUTATORS.md §15.5). They are recorded, never applied
+// again.
+func (i *SimulationInputs) Restrictions() Restrictions {
+	if i == nil {
+		return Restrictions{}
+	}
+	return i.selection.Restrictions
 }
 
 // canonicalMutators spells every identity factor as the zero value, the one

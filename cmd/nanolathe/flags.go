@@ -8,6 +8,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/community"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/gameplay"
+	"github.com/nanolathe-gg/nanolathe/internal/headless"
 	"github.com/nanolathe-gg/nanolathe/internal/modlibrary"
 	"github.com/nanolathe-gg/nanolathe/internal/session"
 	"github.com/nanolathe-gg/nanolathe/internal/settings"
@@ -51,6 +52,14 @@ type Options struct {
 	// when the player applies a new set (docs/DESIGN_MODS_MUTATORS.md §6).
 	MutatorArgs map[string]string
 	Mutators    content.Mutators
+	// Restrictions is the unit-restriction set every skirmish and Survival
+	// battle request carries; a campaign mission takes none
+	// (docs/DESIGN_MODS_MUTATORS.md §15). RestrictionsSet records that
+	// --restrict was given, a set or none, so the flag replaces the saved
+	// set for the run (§15.5). Names are checked once the content is
+	// compiled, at battle entry.
+	Restrictions    content.Restrictions
+	RestrictionsSet bool
 	// AIArgs are the --ai key=value parameters, already checked against the
 	// Modern AI brain's keys; AIOverrides is the resolved configuration
 	// every battle request carries: the flag's parameters for every
@@ -319,6 +328,11 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 		}
 		return nil
 	})
+	var restrictArgs []string
+	set.Func("restrict", "unit restriction <unit>=<count>, e.g. armpw=20 or armkrog=0: 0 removes the unit from a skirmish or Survival battle and 1..100 caps each player's units of it, in every gameplay mode (repeatable; none selects no restrictions; omitted uses the saved set in the window, and none for --shot, --film, --battle-benchmark and --headless; refused with --mission and --load-save)", func(text string) error {
+		restrictArgs = append(restrictArgs, text)
+		return nil
+	})
 	set.Func("ai-player", "a computer player's AI by lobby row, <row>=<classic|modern> or all=<classic|modern> for every computer row (repeatable; a named row overrides all), for a battle the command line composes, in any gameplay mode: row 2 is the --map skirmish's computer player, rows 2 and 3 a Survival battle's buddies; omitted rows play Classic, and the lobby's rows carry their own choice", func(text string) error {
 		choice, err := session.ParseComputerAI(text)
 		if err != nil {
@@ -408,6 +422,21 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 			fmt.Fprintln(out, err)
 			return opts, err
 		}
+	}
+	if len(restrictArgs) != 0 {
+		// A mission keeps its own authored unit list and a save brings its
+		// own set (docs/DESIGN_MODS_MUTATORS.md §15.1, §15.5).
+		if opts.Mission != "" || opts.LoadSave != "" {
+			err := fmt.Errorf("nanolathe: unit restrictions do not apply to a campaign mission or a loaded save: logical path <command line>, providers searched [restrict], expected no --restrict with --mission or --load-save")
+			fmt.Fprintln(out, err)
+			return opts, err
+		}
+		restrictions, err := headless.ParseRestrictFlags(restrictArgs)
+		if err != nil {
+			fmt.Fprintln(out, err)
+			return opts, err
+		}
+		opts.Restrictions, opts.RestrictionsSet = restrictions, true
 	}
 	if len(opts.ComputerAI) != 0 && (opts.Map == "" || opts.Mission != "" || opts.LoadSave != "") {
 		err := fmt.Errorf("nanolathe: invalid computer AI selection: logical path <command line>, providers searched [ai-player], expected --map and no --mission or --load-save")

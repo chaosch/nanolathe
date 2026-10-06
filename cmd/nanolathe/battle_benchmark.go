@@ -156,7 +156,7 @@ func runBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *clien
 		}
 		return sample
 	}
-	metadata := map[string]any{"scene_version": 5, "gameplay": s.Gameplay.Normalize(), "rules": s.Rules.Name, "gameplay_features": s.Community, "entry_gameplay_features": s.EntryCommunity, "gameplay_features_digest": s.Community.Digest(), "content_profile": cs.contentProfileName(), "mod": cs.modSelector(), "mutators": s.Mutators.String(), "phase_timing": true, "tps": opts.BenchmarkTPS, "map": opts.Map, "seed": opts.Seed, "factories": opts.BenchmarkFactories, "viewport": []int32{b.cam.ViewW, b.cam.ViewH}, "zoom": viewZoomOf(b).Float(), "auto_remaster": opts.AutoRemaster, "pre_window_ticks": opts.BenchmarkPreTicks, "display": loadedSettings().Display, "root": opts.Root, "roots": opts.Roots}
+	metadata := map[string]any{"scene_version": 5, "gameplay": s.Gameplay.Normalize(), "rules": s.Rules.Name, "gameplay_features": s.Community, "entry_gameplay_features": s.EntryCommunity, "gameplay_features_digest": s.Community.Digest(), "content_profile": cs.contentProfileName(), "mod": cs.modSelector(), "mutators": s.Mutators.String(), "restrictions": s.Restrictions.String(), "phase_timing": true, "tps": opts.BenchmarkTPS, "map": opts.Map, "seed": opts.Seed, "factories": opts.BenchmarkFactories, "viewport": []int32{b.cam.ViewW, b.cam.ViewH}, "zoom": viewZoomOf(b).Float(), "auto_remaster": opts.AutoRemaster, "pre_window_ticks": opts.BenchmarkPreTicks, "display": loadedSettings().Display, "root": opts.Root, "roots": opts.Roots}
 	if scene != nil {
 		metadata["coastal_scene"] = scene
 		metadata["battle_center"] = []int32{cx, cz}
