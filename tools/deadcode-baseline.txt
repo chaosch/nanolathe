@@ -33,7 +33,6 @@ github.com/nanolathe-gg/nanolathe/internal/content CompileCategories
 github.com/nanolathe-gg/nanolathe/internal/content CompileMaps
 github.com/nanolathe-gg/nanolathe/internal/content CompileUnits
 github.com/nanolathe-gg/nanolathe/internal/content CompileWeaponsWithDuplicates
-github.com/nanolathe-gg/nanolathe/internal/content ParseRestrictions
 github.com/nanolathe-gg/nanolathe/internal/content canonicalUnitMap
 github.com/nanolathe-gg/nanolathe/internal/docs Citation.String
 github.com/nanolathe-gg/nanolathe/internal/docs CitingFiles

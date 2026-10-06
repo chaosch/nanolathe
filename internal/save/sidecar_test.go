@@ -84,7 +84,7 @@ func TestSidecarRoundTripsEveryModSpelling(t *testing.T) {
 func TestSidecarRefusesAnotherSchemaAndMalformedFiles(t *testing.T) {
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"schema":  `{"schema": 2, "rules": "modern", "mod": null}`,
+		"schema":  `{"schema": 3, "rules": "modern", "mod": null}`,
 		"json":    `{"schema": 1,`,
 		"mod":     `{"schema": 1, "mod": "prota"}`,
 		"modless": `{"schema": 1, "mod": {"id": "prota"}}`,
@@ -129,5 +129,54 @@ func TestSidecarCarriesTheAIRecord(t *testing.T) {
 	}
 	if got, _, err := ReadSidecar(plain); err != nil || len(got.AI) != 0 {
 		t.Fatalf("a sidecar without the record read back %q (err %v)", got.AI, err)
+	}
+}
+
+// A sidecar is written as schema 2 exactly when it records unit
+// restrictions, so every other save stays readable by a build that reads
+// only schema 1, and that build refuses a restricted one rather than
+// restoring its bank without them (docs/DESIGN_MODS_MUTATORS.md §15.5,
+// proposal R-P7). This build reads both; a schema 1 sidecar naming
+// restrictions, even as null, and a schema 2 one without a non-empty set
+// are malformed.
+func TestSidecarSchemaFollowsRestrictions(t *testing.T) {
+	dir := t.TempDir()
+	plain := filepath.Join(dir, "plain.SAV")
+	if err := WriteSidecar(plain, Sidecar{Profile: "nanolathe-1.0", Restrictions: map[string]int{}}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(SidecarPath(plain))
+	if !strings.Contains(string(raw), `"schema": 1`) || strings.Contains(string(raw), "restrictions") {
+		t.Fatalf("a sidecar without restrictions = %s, want schema 1 and no restrictions key", raw)
+	}
+	restricted := filepath.Join(dir, "restricted.SAV")
+	want := map[string]int{"armkrog": 0, "armpw": 20}
+	if err := WriteSidecar(restricted, Sidecar{Profile: "nanolathe-1.0", Restrictions: want}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(SidecarPath(restricted))
+	if !strings.Contains(string(raw), `"schema": 2`) {
+		t.Fatalf("a sidecar with restrictions = %s, want schema 2", raw)
+	}
+	got, ok, err := ReadSidecar(restricted)
+	if err != nil || !ok || got.Schema != SidecarSchemaRestrictions || !reflect.DeepEqual(got.Restrictions, want) {
+		t.Fatalf("read back %+v (%v, %v), want schema 2 with %v", got, ok, err, want)
+	}
+	if got, ok, err := ReadSidecar(plain); err != nil || !ok || got.Schema != SidecarSchema || got.Restrictions != nil {
+		t.Fatalf("read back %+v (%v, %v), want schema 1 without restrictions", got, ok, err)
+	}
+	for name, tc := range map[string]struct{ body, want string }{
+		"schema 1 with":      {`{"schema": 1, "mod": null, "restrictions": {"armpw": 0}}`, "schema 1 with unit restrictions"},
+		"schema 1 with null": {`{"schema": 1, "mod": null, "restrictions": null}`, "schema 1 with unit restrictions"},
+		"schema 2 without":   {`{"schema": 2, "mod": null}`, "schema 2 without unit restrictions"},
+		"schema 2 empty":     {`{"schema": 2, "mod": null, "restrictions": {}}`, "schema 2 without unit restrictions"},
+	} {
+		bank := filepath.Join(dir, strings.ReplaceAll(name, " ", "-")+".SAV")
+		if err := os.WriteFile(SidecarPath(bank), []byte(tc.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, err := ReadSidecar(bank); err == nil || ok || !strings.Contains(err.Error(), "unreadable: "+tc.want) {
+			t.Fatalf("%s: ReadSidecar = (%v, %v), want a refusal for %s", name, ok, err, tc.want)
+		}
 	}
 }

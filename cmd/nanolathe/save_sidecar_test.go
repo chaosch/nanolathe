@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,5 +242,97 @@ func TestLoadingAnotherModsSaveSwitchesToItFirst(t *testing.T) {
 	}
 	if next.modSetting.ID != "plain" || next.modSetting.Version != "1" || next.opts.Mutators != sight {
 		t.Fatalf("the shell selects mod %+v and mutators %q, want the save's", next.modSetting, next.opts.Mutators)
+	}
+}
+
+// A battle with unit restrictions saves a schema 2 sidecar that records
+// them, and loading it restores the restricted index space whatever the
+// host has selected since, then makes the recorded set the running content's
+// restriction setting and the next battle's (docs/DESIGN_MODS_MUTATORS.md
+// §15.5, proposals R-P6 and R-P7). The load dialog counts them. A recorded
+// unit the content cannot take, or an entry that does not read, refuses the
+// load with a message naming it. Skipped without retail assets.
+func TestSaveSidecarRestoresUnitRestrictions(t *testing.T) {
+	resetSaveLoadScreenState(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	restrictions, err := content.ParseRestrictions(map[string]int{"armflash": 2, "armpw": 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := Options{Root: testsupport.RetailRoot(t), Map: "ashap plateau", Seed: 7, Restrictions: restrictions, RestrictionsSet: true}
+	cs, err := openContent(opts)
+	if err != nil {
+		t.Skipf("retail content unavailable: %v", err)
+	}
+	defer cs.Close()
+	previous := clPtr
+	defer func() { clPtr = previous }()
+	shell, cl, err := newDirectBattleView(opts, cs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shell.teardownBattle(cl)
+	saved := shell.battle.sess
+	if !saved.Restrictions.Equal(restrictions) {
+		t.Fatalf("the battle runs %q, want %q", saved.Restrictions, restrictions)
+	}
+	path := session.RetailSavePath(t.TempDir(), "restricted")
+	if err := shell.writeSaveWithSidecar(path, func() error { return shell.writeBattleSave(path, "restricted") }); err != nil {
+		t.Fatal(err)
+	}
+	sc, ok, err := save.ReadSidecar(path)
+	if err != nil || !ok || sc.Schema != save.SidecarSchemaRestrictions || len(sc.Restrictions) != 2 || sc.Restrictions["armpw"] != 0 || sc.Restrictions["armflash"] != 2 {
+		t.Fatalf("sidecar %+v (%v, %v), want schema 2 recording the battle's restrictions", sc, ok, err)
+	}
+	if got, want := saveSidecarLine(path), "Total Annihilation - 2 restrictions"; got != want {
+		t.Fatalf("load dialog sidecar line %q, want %q", got, want)
+	}
+
+	// The host's selection moves on; the load puts the recorded one back.
+	shell.selectRestrictions(content.Restrictions{})
+	if err := shell.loadRetailSavePath(path); err != nil {
+		t.Fatal(err)
+	}
+	restored := shell.battle.sess
+	if restored == saved || !restored.Restrictions.Equal(restrictions) || restored.Catalog.Hash != sc.Catalog {
+		t.Fatalf("restored %q over catalog %s, want the sidecar's %v over %s", restored.Restrictions, restored.Catalog.Hash, sc.Restrictions, sc.Catalog)
+	}
+	want, got := saved.Catalog.UnitRecords(), restored.Catalog.UnitRecords()
+	if len(got) != len(want) {
+		t.Fatalf("restored %d definitions, want the restricted table's %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].UnitName != want[i].UnitName || got[i].UnitDefID != want[i].UnitDefID || got[i].Limit != want[i].Limit {
+			t.Fatalf("definition %d restored as %s #%d, want %s #%d", i, got[i].UnitName, got[i].UnitDefID, want[i].UnitName, want[i].UnitDefID)
+		}
+	}
+	if !shell.opts.Restrictions.Equal(restrictions) || shell.opts.RestrictionsSet || !maps.Equal(shell.captureSettings().Restrictions, restrictions.Map()) {
+		t.Fatalf("the shell selects %q (flag %v, setting %v) after the load, want the save's", shell.opts.Restrictions, shell.opts.RestrictionsSet, shell.captureSettings().Restrictions)
+	}
+	if line := shell.modStatusLine(); !strings.HasSuffix(line, " - 2 restrictions") {
+		t.Fatalf("chip %q after the load, want the save's two restrictions", line)
+	}
+
+	// A recorded unit the content cannot take, and an entry that does not
+	// read, refuse the load and name it.
+	for _, tc := range []struct {
+		recorded map[string]int
+		want     string
+	}{
+		{map[string]int{"armflash": 2, "notaunit": 0}, "notaunit (not in this content)"},
+		{map[string]int{"ArmPW": 0}, "ArmPW"},
+	} {
+		sc.Restrictions = tc.recorded
+		if err := save.WriteSidecar(path, sc); err != nil {
+			t.Fatal(err)
+		}
+		err := shell.loadRetailSavePath(path)
+		if message := loadFailureMessage(err); err == nil || !strings.Contains(message, tc.want) {
+			t.Fatalf("load recording %v = %v (%q), want a refusal naming %s", tc.recorded, err, message, tc.want)
+		}
+	}
+	if shell.battle.sess != restored || !shell.opts.Restrictions.Equal(restrictions) {
+		t.Fatal("a refused load changed the running battle or the selection")
 	}
 }

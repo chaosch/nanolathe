@@ -268,10 +268,12 @@ func (g *gameShell) loadRetailSavePath(path string) error {
 	}
 	if hasSidecar {
 		// The recorded rule set, Community sources and entry table, unit
-		// limit and mutators replace the host's (§7.3 steps 3–6). The
-		// configured word is set before staging, so Strict sizes its pool
-		// from it exactly as it would from a configured limit.
+		// limit, unit restrictions and mutators replace the host's (§7.3
+		// steps 3–6, §15.5). The configured word is set before staging, so
+		// Strict sizes its pool from it exactly as it would from a
+		// configured limit.
 		deps.Gameplay, deps.CommunitySources, deps.Mutators = selection.gameplay, selection.sources, selection.mutators
+		deps.Restrictions = selection.restrictions
 		deps.EntryCommunity = &selection.entry.Entry
 		deps.UnitLimit = sidecar.UnitLimit
 		// The Modern AI controllers resume their generators (DESIGN_SESSIONS_AI_SAVE
@@ -288,6 +290,9 @@ func (g *gameShell) loadRetailSavePath(path string) error {
 		return err
 	}
 	if loaded.Route == session.RetailLoadRouteCampaignContinuation {
+		if err := continuationRestrictionsRefusal(selection); err != nil {
+			return err
+		}
 		if err := g.applyRetailContinuation(loaded.Continuation); err != nil {
 			return err
 		}
@@ -296,7 +301,7 @@ func (g *gameShell) loadRetailSavePath(path string) error {
 		// the mutators, the rule set and the unit limit.
 		if hasSidecar {
 			g.setup.UnitLimit = sidecar.UnitLimit
-			g.selectFromSidecar(selection, modPlan.selection)
+			g.selectFromSidecar(selection, modPlan.selection, nil)
 		}
 		return nil
 	}
@@ -355,7 +360,7 @@ func (g *gameShell) loadRetailSavePath(path string) error {
 	}
 	g.importedRetailBattle = true
 	if hasSidecar {
-		g.selectFromSidecar(selection, modPlan.selection)
+		g.selectFromSidecar(selection, modPlan.selection, sess)
 	}
 	g.commitBattleCandidate(battle)
 	clPtr.PrepareBattlePresentation()

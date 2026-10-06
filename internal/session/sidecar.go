@@ -9,8 +9,9 @@ import (
 
 // SaveSidecar is the part of a save's sidecar the session owns: the bound
 // rule set and its base, the Community sources and battle-entry table, the
-// mutators and the catalog identity after them
-// (docs/DESIGN_MODS_MUTATORS.md §7.2). The host fills the mod, the content
+// unit restrictions and the mutators, and the catalog identity after them
+// (docs/DESIGN_MODS_MUTATORS.md §7.2, §15.5). A battle with unit
+// restrictions records them, which makes the file schema 2 (save.WriteSidecar). The host fills the mod, the content
 // profile and the configured unit limit, which are its selections, not the
 // session's.
 //
@@ -37,6 +38,9 @@ func SaveSidecar(s *Session) save.Sidecar {
 		Entry: s.EntryCommunity,
 	}
 	out.Mutators = s.Mutators.Map()
+	if !s.Restrictions.IsZero() {
+		out.Restrictions = s.Restrictions.Map()
+	}
 	if rec := RecordAIControllers(s); rec != nil {
 		if data, err := json.Marshal(rec); err == nil {
 			out.AI = data

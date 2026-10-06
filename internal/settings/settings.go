@@ -462,6 +462,17 @@ type Settings struct {
 	// reader parses it with content.ParseMutators and reports an invalid entry
 	// there. A command-line --mutator wins over it.
 	Mutators map[string]string `json:"mutators,omitempty"`
+	// Restrictions is the unit-restriction setting, each canonical unit key
+	// mapped to its count, e.g. {"armkrog": 0, "armpw": 20}
+	// (docs/DESIGN_MODS_MUTATORS.md §15.9). Like Mutators it is kept
+	// verbatim: the reader parses it with content.ParseRestrictions and
+	// leaves out of a battle, with a notice, an entry it cannot read or the
+	// running content cannot take, while the entry stays in the file
+	// (§15.3). Unlike the mutators it names one content set's units, so it is
+	// a mod-scoped, atomic path (layers.go): a mod's layer that states a set
+	// replaces the base set whole, and a mod without one plays the base set.
+	// A command-line --restrict wins over it.
+	Restrictions map[string]int `json:"restrictions,omitempty"`
 	// Mod is the saved mod choice (docs/DESIGN_MODS_MUTATORS.md §4.3). It is
 	// only stored and round-tripped here; the mod library resolves it. The
 	// zero value selects no mod and is omitted from the file.
@@ -1173,6 +1184,11 @@ func (s *Settings) Normalize() {
 	// only an empty set is folded to absent.
 	if len(s.Mutators) == 0 {
 		s.Mutators = nil
+	}
+	// So are the restriction entries; an empty set, stated or not, restricts
+	// nothing.
+	if len(s.Restrictions) == 0 {
+		s.Restrictions = nil
 	}
 	// The modernAI layers are likewise kept verbatim for the command that
 	// checks them; only empty maps are folded to absent.
