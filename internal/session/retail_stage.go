@@ -50,6 +50,15 @@ type RetailLoadDeps struct {
 	// §6.3). A save without a sidecar restores with the zero value, which
 	// applies none (§7.3 step 1).
 	Mutators content.Mutators
+	// Restrictions are the unit restrictions a skirmish save's sidecar
+	// recorded (docs/DESIGN_MODS_MUTATORS.md §15.5). They are checked against
+	// the restore's catalog and applied to its clone before the mutators, so
+	// the restored definition index space is the one the bank was written
+	// against; an entry the catalog cannot take refuses the load with a
+	// *content.RestrictionsError in the chain. A campaign bank takes none,
+	// since a mission keeps its own unit list (§15.1). The zero value — every
+	// save without a sidecar or without restrictions — restricts nothing.
+	Restrictions content.Restrictions
 	// EntryCommunity is the battle-entry Community table a save's sidecar
 	// recorded (docs/DESIGN_MODS_MUTATORS.md §7.3 step 4). When set, it is
 	// the restored session's entry table in place of one resolved from the
@@ -180,6 +189,22 @@ func StageRetailBattle(bank *save.Bank, deps RetailLoadDeps) (*RetailBattleStage
 			return nil, err
 		}
 	}
+	// A skirmish save's unit restrictions take the same position: after the
+	// compile, before the terrain, the pool and every unit, and before the
+	// mutators — the order fresh skirmish entry gives them — through the same
+	// entry transform, so the restored catalog is the one the battle's fresh
+	// entry built (docs/DESIGN_MODS_MUTATORS.md §15.1, §15.5). The weapon
+	// reload preparation above touches no unit record and no identity, so it
+	// commutes with them.
+	if !deps.Restrictions.IsZero() {
+		if sessionKind == sessionKindCampaign {
+			return nil, fmt.Errorf("session: retail restore: a campaign save records unit restrictions %q: a mission keeps its own unit list", deps.Restrictions.String())
+		}
+		cat, err = applyEntryRestrictions(cat, deps.Restrictions)
+		if err != nil {
+			return nil, fmt.Errorf("session: retail restore of the saved unit restrictions: %w", err)
+		}
+	}
 	// Mutators follow the restriction here as they do in fresh mission entry
 	// (docs/DESIGN_MODS_MUTATORS.md §6.3), for two reasons: the restriction
 	// recomputes the catalog digest from the authored records, which would
@@ -228,6 +253,7 @@ func StageRetailBattle(bank *save.Bank, deps RetailLoadDeps) (*RetailBattleStage
 		Community:        entryFeatures,
 		EntryCommunity:   entryFeatures,
 		Mutators:         deps.Mutators,
+		Restrictions:     deps.Restrictions,
 		State:            StateBattle,
 		Catalog:          cat,
 		World:            terrain,
