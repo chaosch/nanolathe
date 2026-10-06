@@ -368,6 +368,7 @@ func (st *state) planOne(b *core.Board) bool {
 // action budget the other layers left allows; a job that does not fit
 // waits for the next think with its builder still held.
 func (st *state) emit(b *core.Board) {
+	st.dropCapped(b.K)
 	js := &st.jobs
 	k := b.K
 	for i := range js.list {

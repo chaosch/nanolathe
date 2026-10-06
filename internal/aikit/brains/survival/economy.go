@@ -28,6 +28,7 @@ func (e *Economy) Init(b *core.Board) {
 // Plan implements core.Policy.
 func (e *Economy) Plan(b *core.Board) {
 	st := e.st
+	st.kit = b.K
 	if !st.ready {
 		st.setup(b)
 	}

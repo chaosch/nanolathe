@@ -276,7 +276,7 @@ func (st *state) pickTowerBudget(b *core.Board, builder *aikit.UnitInfo, aa bool
 	var bestScore int64
 	for _, p := range builder.Builds {
 		d := st.tab.of(p)
-		if aa && !d.aa || !aa && !d.tower {
+		if aa && !d.aa || !aa && !d.tower || st.allowance(b.K, p) <= 0 {
 			continue
 		}
 		v := int64(p.Value)
@@ -340,10 +340,11 @@ func (st *state) nextWall(b *core.Board, u *aikit.OwnUnit) (sector int, prod *ai
 	return best, wp, true
 }
 
-// wallPiece is the first wall piece builder makes, nil when none.
+// wallPiece is the first wall piece builder makes whose restriction cap
+// leaves an allowance (caps.go), nil when none.
 func (st *state) wallPiece(builder *aikit.UnitInfo) *aikit.UnitInfo {
 	for _, p := range builder.Builds {
-		if st.tab.of(p).wall {
+		if st.tab.of(p).wall && st.allowance(st.kit, p) > 0 {
 			return p
 		}
 	}
