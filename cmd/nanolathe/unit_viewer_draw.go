@@ -190,7 +190,12 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 		message = "Model unavailable\r" + s.model.err.Error()
 	}
 	if message != "" {
-		for i, line := range retailWrapLines(message, unitViewerTextWidth, 468) {
+		// A carriage return starts a new line; each line wraps on its own.
+		var lines []string
+		for _, part := range strings.Split(message, "\r") {
+			lines = append(lines, retailWrapLines(part, unitViewerTextWidth, 468)...)
+		}
+		for i, line := range lines {
 			if i >= 10 {
 				break
 			}

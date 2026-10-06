@@ -168,7 +168,7 @@ func buildUnitViewerField(opts Options, cs *contentSet, key nlSceneKey) (*nlPrev
 	if unitViewerFieldWaterFirst(cat, key.field) {
 		slices.Reverse(sites)
 	}
-	var refusals []string
+	var first *unitViewerFieldRun
 	for i, site := range sites {
 		run := &unitViewerFieldRun{key: key.field, site: site, w: key.w, h: key.h, zoom: 1}
 		inst, err := buildNLPreviewSceneWith(opts, cs, key, run.preset(), key.mutators)
@@ -178,14 +178,26 @@ func buildUnitViewerField(opts Options, cs *contentSet, key nlSceneKey) (*nlPrev
 		inst.field = run
 		if run.refused == "" || i == len(sites)-1 {
 			if run.refused != "" {
-				run.err = "the field cannot stage it: " + strings.Join(append(refusals, run.refused), "; ")
+				run.err = unitViewerFieldRefusal(first, run)
 			}
 			return inst, nil
 		}
-		refusals = append(refusals, run.refused)
+		first = run
 		inst.close()
 	}
 	return nil, fmt.Errorf("nanolathe: unit viewer field: logical path units/%s, providers searched [field sites], expected a site", key.field.unit)
+}
+
+// unitViewerFieldRefusal words the placement validator's refusals at both
+// sites.
+func unitViewerFieldRefusal(first, second *unitViewerFieldRun) string {
+	if first == nil {
+		return fmt.Sprintf("%s refuses it: %s", second.site.name, second.refused)
+	}
+	if first.refused == second.refused {
+		return fmt.Sprintf("neither %s nor %s takes it: %s", first.site.name, second.site.name, second.refused)
+	}
+	return fmt.Sprintf("%s refuses it: %s; %s refuses it: %s", first.site.name, first.refused, second.site.name, second.refused)
 }
 
 // preset is the field's scene: an empty battle at the site, centred on the
@@ -237,7 +249,7 @@ func (run *unitViewerFieldRun) stage(st *nlStage) {
 	nlClear(s, cx-480, cz-400, cx+480, cz+480)
 	x, z, y, ok := st.spot(def, cx, cz, unitViewerFieldRings)
 	if !ok {
-		run.refused = fmt.Sprintf("%s refuses it%s", run.site.name, nlRefusal(s, def, cx, cz))
+		run.refused = strings.TrimPrefix(nlRefusal(s, def, cx, cz), ": ")
 		return
 	}
 	h, err := s.Units.Create(def, s.LocalOwner, nlFixed(x), y, nlFixed(z))
