@@ -18,8 +18,9 @@ mod which is not installed is refused with a message naming it and saying
 whether *Get more mods* offers it; the load does not start the download
 itself (§7.3 step 2). The maintainer's decisions of 2026-09-23 are in §2. The
 proposals this document made were confirmed the same day and are listed in
-§12. **Unit restrictions (§15) are designed and approved, not implemented
-(2026-10-05)**; their proposals, approved the same day, are in §15.10.
+§12. **Unit restrictions (§15) are implemented (2026-10-06)**, apart from
+the follow-ups at the end of §15.12; their proposals, approved on
+2026-10-05, are in §15.10.
 
 This document owns the mod library, the mod config every mod ships in its
 own `nanolathe-mod.json` (§4.2), the remote catalogue, the mutator transform,
@@ -1485,8 +1486,8 @@ fingerprint. Units 1–8 are implemented.
 10. **Follow-ups.** Manifest signatures (§5.4); fuzz targets for the exposed
    readers, recommended before the catalogue is advertised widely;
    `minimumEngine` once releases are stamped.
-11. **Unit restrictions.** Designed, not implemented; its own units are
-   §15.12.
+11. **Unit restrictions.** Implemented as the four units of §15.12; the
+   follow-ups listed there remain.
 
 ## 14. Research map
 
@@ -1517,8 +1518,8 @@ fingerprint. Units 1–8 are implemented.
 
 ## 15. Unit restrictions
 
-**User-authorized 2026-10-05; design approved the same day; units 1, 2 and 4
-of §15.12 implemented, unit 3 (Survival and the Modern AI) not yet.** On 2026-10-05 the
+**User-authorized 2026-10-05; design approved the same day; all four units
+of §15.12 implemented 2026-10-06.** On 2026-10-05 the
 user chose *Retail restrictions, every mode*: implement retail's multiplayer
 restriction rules once, offer them in
 skirmish and Survival beside the mutators, edit them in the unit viewer, and
