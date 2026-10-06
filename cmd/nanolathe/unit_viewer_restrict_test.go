@@ -87,8 +87,9 @@ func TestUnitViewerRestrictRowStates(t *testing.T) {
 }
 
 // The stepper runs 0..100 with No limit above: down from No limit gives 100
-// and up from 100 gives No limit [08 R-SKIR-01 §10]; it stops at its ends,
-// at 1 for a commander, and never moves a norestrict name.
+// and up from 100 gives No limit [08 R-SKIR-01 §10], while up from No limit
+// starts a cap at 1 (ten when coarse), so the plus button cycles; it stops at
+// 0, at 1 for a commander, and never moves a norestrict name.
 func TestUnitViewerRestrictStepperEnds(t *testing.T) {
 	e := restrictEditor(t, nil)
 	steps := []struct {
@@ -97,20 +98,49 @@ func TestUnitViewerRestrictStepperEnds(t *testing.T) {
 		want   int
 		moved  bool
 	}{
-		{1, false, unitViewerNoLimit, false},
-		{-1, false, 100, true},
-		{1, false, unitViewerNoLimit, true},
-		{-1, true, 100, true},
-		{-1, true, 90, true},
-		{1, false, 91, true},
-		{-1, true, 90, true},
-		{1, true, 100, true},
-		{1, true, unitViewerNoLimit, true},
+		{1, false, 1, true},
+		{1, false, 2, true},
+		{1, false, 3, true},
+		{-1, false, 2, true},
+		{1, true, 10, true},
+		{1, true, 20, true},
+		{-1, true, 10, true},
+		{-1, true, 0, true},
+		{1, false, 1, true},
+		{-1, false, 0, true},
+		{-1, false, 0, false},
+		{-1, true, 0, false},
 	}
 	for i, st := range steps {
 		if moved := e.step("armpw", st.dir, st.coarse); moved != st.moved || e.value("armpw") != st.want {
-			t.Fatalf("step %d: value %d moved %v, want %d moved %v", i, e.value("armpw"), moved, st.want, st.moved)
+			t.Fatalf("step %d from No limit: value %d moved %v, want %d moved %v", i, e.value("armpw"), moved, st.want, st.moved)
 		}
+	}
+	// The top end runs as retail's slider does, and a coarse step up from No
+	// limit starts at ten.
+	ends := []struct {
+		from, dir int
+		coarse    bool
+		want      int
+	}{
+		{unitViewerNoLimit, -1, false, 100},
+		{unitViewerNoLimit, -1, true, 100},
+		{100, 1, false, unitViewerNoLimit},
+		{95, 1, true, 100},
+		{100, 1, true, unitViewerNoLimit},
+		{91, -1, true, 90},
+		{unitViewerNoLimit, 1, true, 10},
+	}
+	for _, c := range ends {
+		_ = e.setValue("armpw", c.from)
+		if !e.step("armpw", c.dir, c.coarse) || e.value("armpw") != c.want {
+			t.Fatalf("from %d by %d (coarse %v): %d, want %d", c.from, c.dir, c.coarse, e.value("armpw"), c.want)
+		}
+	}
+	// A commander starts its cap at its floor of 1 too.
+	_ = e.setValue("armcom", unitViewerNoLimit)
+	if !e.step("armcom", 1, false) || e.value("armcom") != 1 {
+		t.Fatalf("commander's first cap is %d", e.value("armcom"))
 	}
 	_ = e.setValue("armpw", 1)
 	if !e.step("armpw", -1, false) || e.value("armpw") != 0 || e.step("armpw", -1, true) {
@@ -132,19 +162,18 @@ func TestUnitViewerRestrictStepperEnds(t *testing.T) {
 	}
 }
 
-// Reset gives every unlocked name 100 and a wacky one 0, as retail's does; a
-// commander keeps 100; a norestrict name and names the content lacks are
-// left alone. Clear all empties the set.
-func TestUnitViewerRestrictResetAndClearAll(t *testing.T) {
-	e := restrictEditor(t, map[string]int{"armpw": 3, "notaunit": 0})
-	e.reset()
-	want := map[string]int{"armcom": 100, "armflash": 100, "armpw": 100, "armwack": 0, "corak": 100, "notaunit": 0}
-	if got := e.draft.Map(); !maps.Equal(got, want) {
-		t.Fatalf("Reset gave %v, want %v", got, want)
+// Reset empties the set: every unit back to No limit, a wacky name and the
+// entries the content leaves out included, rather than retail's board of
+// 100s (§15.9). It greys once the set is empty.
+func TestUnitViewerRestrictResetUncaps(t *testing.T) {
+	cat, entries := restrictEditorFixture()
+	s := &toolsScreen{entries: entries, restrict: unitViewerRestrict{draft: restrictionSet(t, map[string]int{"armpw": 3, "armwack": 0, "armshield": 1, "notaunit": 0})}}
+	s.restrict.names, s.restrict.keys = unitViewerRestrictNames(cat, entries)
+	if !s.activateRestrict("RRESET") || !s.restrict.draft.IsZero() {
+		t.Fatalf("Reset left %v", s.restrict.draft.Map())
 	}
-	e.draft = content.Restrictions{}
-	if !e.draft.IsZero() {
-		t.Fatal("Clear all left entries")
+	if removed, capped, leftOut := s.restrict.tally(); removed+capped+leftOut != 0 {
+		t.Fatalf("Reset left %d removed, %d capped, %d left out", removed, capped, leftOut)
 	}
 }
 
@@ -176,9 +205,9 @@ func TestUnitViewerRestrictedOnlyNarrowsWithSearch(t *testing.T) {
 		t.Fatalf("a single edit changed the list: %v", keys())
 	}
 	s.query = ""
-	s.activateRestrict("RCLEAR")
+	s.activateRestrict("RRESET")
 	if !s.restrict.draft.IsZero() || len(s.filtered) != 0 {
-		t.Fatalf("Clear all left %v listed", keys())
+		t.Fatalf("Reset left %v listed", keys())
 	}
 }
 
