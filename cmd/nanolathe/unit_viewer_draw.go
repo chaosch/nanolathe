@@ -39,9 +39,14 @@ func (s *toolsScreen) Draw(dst *ebiten.Image) {
 		r := unitViewerRect(s.panel.Window.PlacedRect(i))
 		switch g.Kind {
 		case gui.KindButton:
-			if strings.HasPrefix(g.Name, "TAB") {
+			switch {
+			case strings.HasPrefix(g.Name, "TAB"):
 				s.drawTab(dst, i, g, r)
-			} else {
+			case g.Name == "RSWITCH":
+				s.drawRestrictSwitch(dst, i, g, r)
+			case g.Name == "RESTRONLY":
+				s.drawRestrictOnly(dst, i, r)
+			default:
 				s.drawButton(dst, i, g, r)
 			}
 		case gui.KindTextBox:
@@ -84,17 +89,30 @@ func (s *toolsScreen) drawHeader(dst *ebiten.Image) {
 	} else {
 		s.label(dst, "NANOLATHE", screenkit.Rect{X: 32, Y: 24, W: 244, H: 40}, screenkit.Style{Size: 30, Tracking: 0.06, Top: nlGoldTop, Bottom: nlGoldBottom}, true)
 	}
-	s.label(dst, "UNIT VIEWER", screenkit.Rect{X: 306, Y: 27, W: 360, H: 29}, screenkit.Style{Size: 20, Tracking: 0.1, Top: nlCream}, true)
-	s.label(dst, s.contentName, screenkit.Rect{X: 306, Y: 58, W: 690, H: 20}, screenkit.Style{Size: 12, Top: nlDim}, false)
-	s.label(dst, "PREVIEW", screenkit.Rect{X: 920, Y: 38, W: 90, H: 20}, screenkit.Style{Size: 11, Tracking: 0.12, Top: nlGreenText, Align: 2}, true)
-	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 306, Y: 52, W: 141, H: 2}), nlGreenText)
+	// Opened from the Nanolathe screen's card, the viewer is that screen's
+	// restriction editor and says so.
+	title := "UNIT VIEWER"
+	if s.restrict.route == unitViewerRestrictCard {
+		title = "UNIT RESTRICTIONS"
+	}
+	ts := screenkit.Style{Size: 20, Tracking: 0.1, Top: nlCream}
+	s.label(dst, title, screenkit.Rect{X: 306, Y: 27, W: 480, H: 29}, ts, true)
+	s.label(dst, s.contentName, screenkit.Rect{X: 306, Y: 58, W: 590, H: 20}, screenkit.Style{Size: 12, Top: nlDim}, false)
+	// Apply, when the menu route shows it, sits beside Back and moves the
+	// label aside.
+	preview := screenkit.Rect{X: 920, Y: 38, W: 90, H: 20}
+	if i := s.panel.Index("APPLY"); i >= 0 && s.panel.ActiveAt(i) {
+		preview.X = 798
+	}
+	s.label(dst, "PREVIEW", preview, screenkit.Style{Size: 11, Tracking: 0.12, Top: nlGreenText, Align: 2}, true)
+	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 306, Y: 52, W: math.Round(unitViewerMeasure(title, ts, true)) - 4, H: 2}), nlGreenText)
 	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 32, Y: 84, W: 1136, H: 1}), color.RGBA{123, 119, 86, 100})
 }
 
 func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 	kicker := screenkit.Style{Size: 14, Tracking: 0.12, Top: nlKicker, Upper: true}
 	s.label(dst, "Unit library", screenkit.Rect{X: 32, Y: 108, W: 234, H: 24}, kicker, true)
-	s.label(dst, fmt.Sprintf("%d / %d units", len(s.filtered), len(s.entries)), screenkit.Rect{X: 34, Y: 191, W: 230, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
+	s.label(dst, fmt.Sprintf("%d / %d units", len(s.filtered), len(s.entries)), screenkit.Rect{X: 34, Y: 191, W: 108, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
 	s.label(dst, "Unit data", screenkit.Rect{X: 862, Y: 108, W: 210, H: 24}, kicker, true)
 	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 862, Y: 175, W: 306, H: 1}), color.RGBA{123, 119, 86, 100})
 	if s.selected != nil {
@@ -142,6 +160,8 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 		message = "Catalog unavailable\r" + s.loadErr.Error()
 	case s.loading != nil:
 		message = "Loading units..."
+	case s.selected == nil && s.restrict.only:
+		message = "No restricted units match.\rTurn off Restricted only to list every unit."
 	case s.selected == nil:
 		message = "No matching units.\rTry another name or unit ID."
 	case s.model.err != nil:
@@ -155,8 +175,10 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 			s.label(dst, line, screenkit.Rect{X: 336, Y: 300 + float64(i)*26, W: 468, H: 25}, screenkit.Style{Size: unitViewerBodySize, Top: nlBody, Align: 1}, false)
 		}
 	}
-	s.label(dst, "Arrows / page keys select", screenkit.Rect{X: 32, Y: 734, W: 260, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
-	s.label(dst, "Drag to rotate  /  Wheel to zoom  /  Alt+Left or Backspace: previous unit", screenkit.Rect{X: 306, Y: 734, W: 528, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
+	s.drawRestrictBlock(dst)
+	// The library's footer counts the restriction draft (§15.9).
+	s.label(dst, s.restrict.footer(), screenkit.Rect{X: 32, Y: 732, W: 234, H: 18}, screenkit.Style{Size: 11, Top: nlKicker}, false)
+	s.label(dst, "Arrows select  /  Drag to rotate  /  Wheel to zoom  /  Alt+Left or Backspace: back", screenkit.Rect{X: 306, Y: 734, W: 528, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
 	s.label(dst, "Base values / before mutators", screenkit.Rect{X: 862, Y: 734, W: 306, H: 16}, screenkit.Style{Size: 10, Top: nlDim}, false)
 }
 
@@ -184,6 +206,10 @@ func (s *toolsScreen) drawButton(dst *ebiten.Image, index int, g gui.Gadget, r s
 			dy = -dy
 		}
 		screenkit.Poly(dst, []float64{x, y + dy, x - device.W*0.2, y - dy, x + device.W*0.2, y - dy}, nlBody)
+		return
+	}
+	if g.Name == "RDOWN" || g.Name == "RUP" {
+		s.drawStepGlyph(dst, r, g.Name == "RUP", disabled)
 		return
 	}
 	selected := g.Name == "SPIN" && s.spinning || s.selected != nil && !disabled && s.buttonSelected(g.Name)
@@ -255,13 +281,23 @@ func (s *toolsScreen) drawLibrary(dst *ebiten.Image, index int, g gui.Gadget, r 
 		y := r.Y + 2 + float64(i-top)*float64(g.ItemHeight)
 		row := screenkit.Rect{X: r.X, Y: y, W: r.W, H: float64(g.ItemHeight) - 4}
 		name, id, _ := strings.Cut(rows[i], "\r")
-		c := nlBody
+		def := s.filtered[i].Def
+		// Every record carrying a name shows that name's restriction; a
+		// removed name's row dims (DESIGN_MODS_MUTATORS §15.9).
+		state := s.restrict.rowState(unitViewerRestrictKey(def))
+		c, picAlpha := nlBody, 1.0
+		if state.removed {
+			c, picAlpha = color.RGBA{128, 122, 100, 255}, 0.35
+		}
 		if i == selected {
 			screenkit.Fill(target, s.deviceRect(row), color.RGBA{34, 63, 30, 185})
 			screenkit.Fill(target, s.deviceRect(screenkit.Rect{X: row.X, Y: row.Y, W: 3, H: row.H}), nlGreenText)
 			c = nlCream
+			if state.removed {
+				c = color.RGBA{190, 180, 140, 255}
+			}
 		}
-		s.drawPicture(target, s.filtered[i].Def, screenkit.Rect{X: row.X + 8, Y: y + 2, W: 48, H: 48})
+		s.drawPictureAlpha(target, def, screenkit.Rect{X: row.X + 8, Y: y + 2, W: 48, H: 48}, picAlpha)
 		// Long names shrink a little, then take two lines above the ID.
 		text := screenkit.Rect{X: row.X + 64, Y: y + 8, W: row.W - 70, H: 21}
 		st := screenkit.Style{Size: 15, Top: c, Upper: true}
@@ -279,7 +315,16 @@ func (s *toolsScreen) drawLibrary(dst *ebiten.Image, index int, g gui.Gadget, r 
 		for j, line := range lines {
 			s.label(target, line, screenkit.Rect{X: text.X, Y: text.Y + float64(j)*16, W: text.W, H: 18}, st, true)
 		}
-		s.label(target, id, screenkit.Rect{X: text.X, Y: idY, W: text.W, H: 14}, screenkit.Style{Size: 10, Top: nlDim}, false)
+		idW := text.W
+		if used := s.drawRestrictRowState(target, state, text.X+text.W, idY); used > 0 {
+			idW -= used + 6
+		}
+		// An ID beside a state shrinks a little before it would clip.
+		ids := screenkit.Style{Size: 10, Top: nlDim}
+		for ids.Size > 8.5 && unitViewerMeasure(id, ids, false) > idW {
+			ids.Size -= 0.5
+		}
+		s.label(target, id, screenkit.Rect{X: text.X, Y: idY + (10-ids.Size)/2, W: idW, H: 14}, ids, false)
 	}
 	if s.panel.Focused() == index {
 		screenkit.Outline(target, s.deviceRect(r), max(1, s.scale), color.RGBA{102, 101, 71, 200})
@@ -289,10 +334,15 @@ func (s *toolsScreen) drawLibrary(dst *ebiten.Image, index int, g gui.Gadget, r 
 // drawPicture draws a unit's build picture, or a neutral empty frame while it
 // decodes or when the content has none. No substitute art is drawn.
 func (s *toolsScreen) drawPicture(dst *ebiten.Image, def *content.UnitDef, r screenkit.Rect) {
+	s.drawPictureAlpha(dst, def, r, 1)
+}
+
+// drawPictureAlpha is drawPicture at a reduced opacity, for a removed unit.
+func (s *toolsScreen) drawPictureAlpha(dst *ebiten.Image, def *content.UnitDef, r screenkit.Rect, alpha float64) {
 	device := s.deviceRect(r)
 	screenkit.Fill(dst, device, color.RGBA{8, 13, 10, 230})
 	if img := s.pics.image(def); img != nil {
-		screenkit.Image(dst, img, device, 1, false)
+		screenkit.Image(dst, img, device, alpha, false)
 	}
 	screenkit.Outline(dst, device, max(1, s.scale*0.75), color.RGBA{70, 76, 60, 220})
 }

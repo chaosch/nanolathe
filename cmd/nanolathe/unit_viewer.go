@@ -72,6 +72,8 @@ type unitViewerLoad struct {
 	entries  []unitViewerEntry
 	tree     unitViewerTree
 	features map[string]*content.FeatureDef
+	names    map[string]unitViewerRestrictName
+	keys     []string
 	err      error
 }
 
@@ -116,9 +118,10 @@ type toolsScreen struct {
 	picsPending            int // pictures the last Draw requested that were still decoding
 	infoTab                int
 	infoRows               []unitViewerRow
-	altHeld                bool
+	altHeld, shiftHeld     bool
 	pointerX, pointerY     float64 // logical pointer, for link hover
 	linkPress              *content.UnitDef
+	restrict               unitViewerRestrict // the restriction editor (unit_viewer_restrict.go)
 }
 
 func (s *toolsScreen) Active() bool { return s != nil && s.open }
@@ -136,6 +139,9 @@ func (s *toolsScreen) show(g *gameShell) {
 	s.last = time.Time{}
 	s.action, s.weapon, s.animationPaused = "Idle", 1, false
 	s.severity, s.power, s.speed = 0, 0, 0
+	// Ctrl+U edits the running content's saved set, names it lacks included,
+	// so Apply keeps them in the file (DESIGN_MODS_MUTATORS §15.9).
+	s.restrict = unitViewerRestrict{route: unitViewerRestrictMenu, host: g, draft: g.restrictions.readable, saved: g.restrictions.readable}
 	s.initializeRetail(g)
 	s.query, s.top = "", 0
 	s.searchFocus, s.selectAll, s.spinning = true, false, true
@@ -160,7 +166,8 @@ func (s *toolsScreen) openViewer() {
 		if cat != nil {
 			features = cat.Features
 		}
-		ch <- unitViewerLoad{entries: entries, tree: unitViewerBuildTree(cat, entries), features: features, err: err}
+		names, keys := unitViewerRestrictNames(cat, entries)
+		ch <- unitViewerLoad{entries: entries, tree: unitViewerBuildTree(cat, entries), features: features, names: names, keys: keys, err: err}
 	}()
 }
 
@@ -174,6 +181,7 @@ func (s *toolsScreen) pollLoad() {
 		s.entries, s.tree, s.loadErr = result.entries, result.tree, result.err
 		s.features = result.features
 		s.model.features = s.features
+		s.restrict.names, s.restrict.keys = result.names, result.keys
 		s.filter()
 	default:
 	}
@@ -198,11 +206,13 @@ func (s *toolsScreen) release() {
 	s.shell, s.panel, s.art = nil, nil, nil
 	s.fonts, s.uiClock = screenkit.Fonts{}, 0
 	s.tokens = nil
+	s.restrict = unitViewerRestrict{}
 }
 
 func (s *toolsScreen) back() {
 	s.dragging = false
 	s.closing = true
+	s.leaveRestrictions()
 }
 
 func (s *toolsScreen) resetView() {
@@ -213,6 +223,9 @@ func (s *toolsScreen) resetView() {
 func (s *toolsScreen) filter() {
 	defer s.refreshLists()
 	s.filtered = filterUnitViewerEntries(s.entries, s.query)
+	if s.restrict.only {
+		s.filtered = s.restrict.keep(s.filtered)
+	}
 	s.top = 0
 	for _, e := range s.filtered {
 		if e.Def == s.selected {
@@ -290,6 +303,7 @@ func (s *toolsScreen) Update() {
 	in := screenkit.ReadInput()
 	shortcut := ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)
 	s.altHeld = ebiten.IsKeyPressed(ebiten.KeyAlt)
+	s.shiftHeld = ebiten.IsKeyPressed(ebiten.KeyShift)
 	s.updateInput(in, ebiten.AppendInputChars(nil), shortcut, dt)
 }
 
@@ -360,6 +374,8 @@ func (s *toolsScreen) updateInput(in screenkit.Input, typed []rune, shortcut boo
 		switch {
 		case s.viewRect.Contains(in.X, in.Y):
 			s.changeZoom(in.WheelY)
+		case unitViewerRestrictStepper.Contains(in.X, in.Y):
+			s.wheelRestrict(in.WheelY)
 		case p != nil && s.listRect.Contains(in.X, in.Y):
 			p.ScrollTextListAt(p.Index("UNITS"), float32(-in.WheelY*3))
 		case p != nil && s.infoRect.Contains(in.X, in.Y):
