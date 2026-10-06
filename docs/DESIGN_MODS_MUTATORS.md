@@ -1942,7 +1942,8 @@ player's set for that mod, layered as §4.6 describes. It is atomic, like
 rather than merging with it, and a mod with no set of its own plays the base
 set, whose names it lacks are left out with the notice of §15.3
 (proposal R-P5). A mod's config cannot recommend restrictions: `restrictions`
-joins the match-selection keys its `settings` section refuses (§4.2). A
+joins the match-selection keys its `settings` section refuses (§4.2), and
+its `locks` may not name it. A
 manual root stack and the original game play the base set.
 
 **The Nanolathe screen card.** The Mutators tab of the Nanolathe screen

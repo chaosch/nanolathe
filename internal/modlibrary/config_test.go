@@ -121,6 +121,7 @@ func TestParseConfigDocumentRefusals(t *testing.T) {
 		"unknown lock":            {`{` + head + `,"locks":["presentation.sparkle"]}`, "names no setting"},
 		"lock past a leaf":        {`{` + head + `,"locks":["switchAlt.x"]}`, "names no setting"},
 		"repeated lock":           {`{` + head + `,"locks":["gameplay","gameplay"]}`, "twice"},
+		"restrictions lock":       {`{` + head + `,"locks":["restrictions"]}`, "unit restrictions"},
 		"trailing document":       {`{` + head + `}{}`, "reading mod"},
 	} {
 		_, err := ParseMetadata([]byte(tc.doc))

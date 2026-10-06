@@ -207,6 +207,12 @@ func parseConfigDocument(data []byte) (Metadata, error) {
 		if !settingsPathExists(lock) {
 			return Metadata{}, fail(fmt.Sprintf("mod config lock %q names no setting", lock), MetadataFile+" locks", "dotted paths into the settings document, such as gameplay or presentation.waterSurface")
 		}
+		// A lock would hold the player's unit restrictions at the base set
+		// for this mod, which is a recommendation by another route; the set
+		// is the player's own choice (docs/DESIGN_MODS_MUTATORS.md §15.9).
+		if lock == "restrictions" || strings.HasPrefix(lock, "restrictions.") {
+			return Metadata{}, fail(fmt.Sprintf("mod config lock %q names the unit restrictions", lock), MetadataFile+" locks", "a setting a mod may recommend; unit restrictions are the player's own choice")
+		}
 		config.Locks = append(config.Locks, lock)
 	}
 	meta := Metadata{
