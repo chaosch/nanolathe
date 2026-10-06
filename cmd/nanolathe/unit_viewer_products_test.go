@@ -349,23 +349,26 @@ func TestUnitViewerSprayMatchesPreviewProjectionRetail(t *testing.T) {
 			if pad, _ := unitViewerRootLocal(m.geometry, m.poses, g.pad); pad != placement.Position {
 				t.Fatalf("spray target %v, attachment placement %v", pad, placement.Position)
 			}
-			h, p, b := unitViewerOrientation(40960, 8192)
-			if _, _, _, err := m.record(def, h, p, b, 1, 984, 628); err != nil || !m.view.ok {
-				t.Fatalf("record: %v", err)
-			}
-			project, _ := m.rootLocalProjector()
 			src, _ := unitViewerRootLocal(m.geometry, m.poses, g.nano)
-			x, y := project(src)
-			opts := client.ModelPreviewOptions{Model: parent, Width: m.view.w, Height: m.view.h, Heading: h, Pitch: p, Bank: b,
-				Structure: true, KeyPlane: def.ZBuffer, PiecePoses: m.poses, Attachment: m.attachment(parent)}
-			points, err := preview.ProjectedPieces(opts, m.view.projection, []client.ModelPreviewPiece{{Name: m.geometry.Pieces[g.nano].Name}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			// The spray leaves the drawn nano piece, to within the fixed-point
-			// rounding of composing below and at the root separately.
-			if math.Abs(points[0].X-x) > 0.01 || math.Abs(points[0].Y-y) > 0.01 {
-				t.Fatalf("spray source (%.3f, %.3f), drawn nano piece (%.3f, %.3f)", x, y, points[0].X, points[0].Y)
+			for _, yaw := range []uint16{0, 16384, 40960, 61000} {
+				h, p, b := unitViewerOrientation(yaw, 8192)
+				if _, _, _, err := m.record(def, h, p, b, 1, 984, 628); err != nil || !m.view.ok {
+					t.Fatalf("record: %v", err)
+				}
+				project, _ := m.rootLocalProjector()
+				x, y := project(src)
+				opts := client.ModelPreviewOptions{Model: parent, Width: m.view.w, Height: m.view.h, Heading: h, Pitch: p, Bank: b,
+					Structure: true, KeyPlane: def.ZBuffer, PiecePoses: m.poses, Attachment: m.attachment(parent)}
+				points, err := preview.ProjectedPieces(opts, m.view.projection, []client.ModelPreviewPiece{{Name: m.geometry.Pieces[g.nano].Name}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				// The spray leaves the drawn nano piece at every orbit angle,
+				// to within the fixed-point rounding of composing below and
+				// at the root separately.
+				if math.Abs(points[0].X-x) > 0.01 || math.Abs(points[0].Y-y) > 0.01 {
+					t.Fatalf("yaw %d: spray source (%.3f, %.3f), drawn nano piece (%.3f, %.3f)", yaw, x, y, points[0].X, points[0].Y)
+				}
 			}
 		})
 	}

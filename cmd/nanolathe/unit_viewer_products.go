@@ -193,7 +193,7 @@ func (c *unitViewerProduct) work(quantum int32, speed int) bool {
 // implies [04 §4.4]: 0 for a fresh frame, 100 once complete.
 func (c *unitViewerProduct) percent() int32 { return 100 - cob.BuildPercentLeft(c.remaining) }
 
-// unitViewerProductStatus is the status line for the product cycle.
+// productStatus is the status line for the product cycle.
 func (a *unitViewerAnimation) productStatus() string {
 	g := &a.build
 	p := g.products
