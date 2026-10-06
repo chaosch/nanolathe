@@ -11,6 +11,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
+	"github.com/nanolathe-gg/nanolathe/internal/gameplay"
 	"github.com/nanolathe-gg/nanolathe/internal/input"
 	"github.com/nanolathe-gg/nanolathe/internal/platform/screenkit"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
@@ -122,6 +123,13 @@ type toolsScreen struct {
 	pointerX, pointerY     float64 // logical pointer, for link hover
 	linkPress              *content.UnitDef
 	restrict               unitViewerRestrict // the restriction editor (unit_viewer_restrict.go)
+	// field is the Death and Wreck field (unit_viewer_field.go). It stages
+	// its battles with the shell's options and gameplay mode and draws them
+	// with the player's presentation choices; it writes no settings.
+	field         unitViewerField
+	opts          Options
+	fieldGameplay gameplay.Mode
+	fieldRender   nlRender
 }
 
 func (s *toolsScreen) Active() bool { return s != nil && s.open }
@@ -130,6 +138,8 @@ func (s *toolsScreen) show(g *gameShell) {
 	s.release()
 	s.open, s.closing, s.viewer = true, false, false
 	s.cs = g.cs
+	s.opts, s.fieldGameplay = g.opts, g.gameplay.Normalize()
+	s.fieldRender = unitViewerFieldRender(g.presentation, g.display)
 	s.contentName = "Total Annihilation"
 	if g.cs != nil && g.cs.mod != nil {
 		s.contentName = g.cs.mod.Name
@@ -195,6 +205,9 @@ func (s *toolsScreen) release() {
 		<-s.loading
 		s.loading = nil
 	}
+	// The field's staging reads the content too; join it before the host
+	// may unmount it.
+	s.field.release(s.cs)
 	s.model.release()
 	// The picture worker reads the content's archives; join it before the
 	// host may unmount them.
@@ -300,6 +313,7 @@ func (s *toolsScreen) Update() {
 	}
 	s.last = now
 	s.pollLoad()
+	s.field.poll()
 	in := screenkit.ReadInput()
 	shortcut := ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)
 	s.altHeld = ebiten.IsKeyPressed(ebiten.KeyAlt)
@@ -467,6 +481,11 @@ func (s *toolsScreen) updateInput(in screenkit.Input, typed []rune, shortcut boo
 	s.yaw = math.Mod(s.yaw+65536, 65536)
 	if !s.animationPaused {
 		s.model.updateAnimation(dt)
+	}
+	// The field steps in Draw, which renders it; Pause holds it there too.
+	s.syncField()
+	if !s.animationPaused {
+		s.field.dt += max(0, dt)
 	}
 }
 

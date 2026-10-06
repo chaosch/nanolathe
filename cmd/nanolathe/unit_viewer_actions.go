@@ -357,12 +357,15 @@ func (a *unitViewerAnimation) hit() {
 	a.note = fmt.Sprintf("Hit from ahead / health %d%%", cob.TakeDamagePercent(health, def.MaxDamage))
 }
 
-// unitViewerDeath records the local death query's outcome.
+// unitViewerDeath records the local death query's outcome. field marks a
+// corpse taken from the field's real death (adoptFieldWreck) rather than
+// from this script's own query.
 type unitViewerDeathState struct {
 	done    bool
 	depth   int32
 	queried bool
 	corpse  *content.FeatureDef
+	field   bool
 }
 
 // kill runs slot-end death handling's synchronous local Killed query with the
@@ -370,6 +373,9 @@ type unitViewerDeathState struct {
 // variant takes Nanolathe's sanctioned substitute [04 R-CB-01 §7][04 R-CB-01 §9].
 // The battle then tears the script down, so the preview stops: pieces the
 // script exploded stay hidden, and no debris, explosion or effect follows.
+// The stage shows the field's real death for Death and Wreck instead
+// (unit_viewer_field.go); Wreck's turntable then draws the corpse that death
+// left, and this query's answer stands only until it does.
 func (a *unitViewerAnimation) kill() {
 	d := &a.death
 	a.script.health = 0
@@ -393,6 +399,8 @@ func (a *unitViewerAnimation) kill() {
 func (a *unitViewerAnimation) wreckNote() string {
 	d := &a.death
 	switch {
+	case d.field && d.corpse == nil:
+		return fmt.Sprintf("Wreck / severity %d left no corpse in the field", a.severity)
 	case d.depth == 0:
 		return fmt.Sprintf("Wreck / severity %d leaves no corpse (depth 0)", a.severity)
 	case d.corpse == nil:

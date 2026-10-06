@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/nanolathe-gg/nanolathe/internal/settings"
 )
 
 func unitViewerShotSyntax() error {
@@ -53,6 +54,9 @@ func (p *unitViewerShotPlan) set(key, value string) bool {
 
 // apply loads the selected model, presses the plan's buttons and advances the
 // preview. A land or stop capture first flies or builds for the default time.
+// Death and Wreck stage their field synchronously and run it for the plan's
+// field ticks; by default a death is caught two-thirds of a second after it
+// happens and a wreck just after the turntable takes its corpse over.
 func (p unitViewerShotPlan) apply(s *toolsScreen) error {
 	if !s.model.ensureLoaded(s.cs, s.selected) {
 		return s.model.err
@@ -69,10 +73,16 @@ func (p unitViewerShotPlan) apply(s *toolsScreen) error {
 	}
 	ticks := p.ticks
 	if ticks == 0 {
-		ticks = map[string]int{"idle": 90, "on": 90, "off": 90, "move": 60, "fly": 180, "land": 240, "aim": 60, "fire": 60, "build": 120, "stop": 90, "hit": 12, "death": 1, "wreck": 0}[p.action]
+		ticks = map[string]int{"idle": 90, "on": 90, "off": 90, "move": 60, "fly": 180, "land": 240, "aim": 60, "fire": 60, "build": 120, "stop": 90, "hit": 12,
+			"death": unitViewerFieldSettle + 20, "wreck": unitViewerFieldSettle + unitViewerFieldHold}[p.action]
 	}
 	press := map[string]string{"idle": "IDLE", "move": "MOVE", "fly": "MOVE", "land": "MOVE", "aim": "FIRE", "fire": "FIRE", "build": "BUILD", "stop": "BUILD", "hit": "HIT", "death": "DEATH", "wreck": "WRECK", "on": "IDLE", "off": "IDLE"}[p.action]
 	s.activateTool(press)
+	if p.action == "death" || p.action == "wreck" {
+		s.stageFieldNow(ticks)
+		s.refreshControls()
+		return nil
+	}
 	switch p.action {
 	case "land", "stop":
 		s.model.advance(180)
@@ -101,8 +111,13 @@ func runUnitViewerShot(opts Options, cs *contentSet) error {
 		return fmt.Errorf("nanolathe: unit viewer capture size: logical path <command line>, providers searched [--shot-size], expected WxH within 320x240..4096x4096")
 	}
 	s := &toolsScreen{}
-	s.show(&gameShell{cs: cs})
+	s.show(&gameShell{cs: cs, opts: opts})
 	defer s.release()
+	// A capture draws the field with the default presentation, never the
+	// player's saved choices, and lays the stage out at the capture's size
+	// before a field is staged at it.
+	s.fieldRender = unitViewerFieldRender(settings.DefaultPresentation(), settings.DefaultDisplay())
+	s.layout(float64(w), float64(h))
 	// A capture never reads the settings key (DESIGN_MODS_MUTATORS §15.5);
 	// --restrict gives the editor's draft, which the menu route compares
 	// with an empty saved set, so Apply shows its count.

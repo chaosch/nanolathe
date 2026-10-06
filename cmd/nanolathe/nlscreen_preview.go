@@ -45,6 +45,10 @@ type nlSceneKey struct {
 	// factor, stepped and framed in lockstep.
 	paired       bool
 	twinMutators string
+	// field is the unit viewer's field scene, staged from a unit, a
+	// severity and a run rather than from a fixed preset
+	// (unit_viewer_field.go). It is the zero value for every settings scene.
+	field nlFieldKey
 }
 
 // nlPreset is one staged scene and where the camera holds on it. The scenes
@@ -88,6 +92,15 @@ type nlPreset struct {
 	// shot is the second of the scene's clock an --nl-shot capture is taken
 	// at, for a scene whose moment matters; zero is the default.
 	shot float64
+	// centre frames the anchor in the middle of the picture, for a picture
+	// with no hero text beside it (the unit viewer's field); the settings
+	// scenes frame it right of centre and a little high.
+	centre bool
+	// continues stages the battle with the lobby's commander-death rule at
+	// "game continues" (rule 0, a retail lobby value), so a commander's
+	// death plays on its own rather than ending the battle
+	// [08 R-SKIR-01 §3].
+	continues bool
 }
 
 // nlEffectArtLimit is the preview's cap on effect art, in authored pixels
@@ -179,6 +192,9 @@ type nlPreviewInstance struct {
 	// time the scene takes a renderer (nlPreview.render).
 	waterMask *gpurender.PreparedWaterMask
 	sprites   []*formats.GAFFrame
+	// field is the unit viewer's field run when this is its scene
+	// (unit_viewer_field.go), or nil.
+	field *unitViewerFieldRun
 }
 
 type nlPreviewResult struct {
@@ -241,6 +257,10 @@ type nlPreview struct {
 	lastDrawn  time.Time
 	cadence    nlCadence
 	lastRender nlRenderSignature
+	// noCache closes a scene the moment it is replaced instead of keeping it
+	// paused for a revisit: the unit viewer's field never returns to an old
+	// run, and a retained battle would only hold memory.
+	noCache bool
 }
 
 func newNLPreview(opts Options, cs *contentSet) *nlPreview {
@@ -288,6 +308,9 @@ func (p *nlPreview) startLoad(key nlSceneKey) {
 // buildNLPreview stages a scene off the game goroutine: session, fixture,
 // client and lead-in ticks. Nothing here touches the graphics device.
 func buildNLPreview(opts Options, cs *contentSet, key nlSceneKey) (*nlPreviewInstance, error) {
+	if key.field.unit != "" {
+		return buildUnitViewerField(opts, cs, key)
+	}
 	inst, err := buildNLPreviewScene(opts, cs, key, key.mutators)
 	if err != nil || !key.paired {
 		return inst, err
@@ -308,16 +331,22 @@ func buildNLPreview(opts Options, cs *contentSet, key nlSceneKey) (*nlPreviewIns
 
 // buildNLPreviewScene stages one scene of key under the given mutators.
 func buildNLPreviewScene(opts Options, cs *contentSet, key nlSceneKey, mutators string) (inst *nlPreviewInstance, err error) {
+	preset, ok := nlPresets[key.preset]
+	if !ok {
+		return nil, fmt.Errorf("nanolathe: preview: no scene %q", key.preset)
+	}
+	return buildNLPreviewSceneWith(opts, cs, key, preset, mutators)
+}
+
+// buildNLPreviewSceneWith stages one scene of key from an explicit preset,
+// for a scene built from its key rather than taken from nlPresets.
+func buildNLPreviewSceneWith(opts Options, cs *contentSet, key nlSceneKey, preset nlPreset, mutators string) (inst *nlPreviewInstance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			inst, err = nil, fmt.Errorf("nanolathe: preview %s: %v", key.preset, r)
 		}
 	}()
 	started := time.Now()
-	preset, ok := nlPresets[key.preset]
-	if !ok {
-		return nil, fmt.Errorf("nanolathe: preview: no scene %q", key.preset)
-	}
 	scene := preset.scene
 	st, composed, err := stageNLSession(opts, cs, preset, key.gameplay, mutators)
 	if err != nil {
@@ -502,6 +531,10 @@ func stageNLSession(opts Options, cs *contentSet, preset nlPreset, rules gamepla
 		// Zero is a lobby value, so it is set after the defaults
 		// [08 "Skirmish configuration"].
 		request.value.Skirmish.LOSType = 0
+	}
+	if preset.continues {
+		// Rule 0 is a lobby value too [08 R-SKIR-01 §3].
+		request.value.Skirmish.CommanderDeath = int(session.CommanderDeathContinues)
 	}
 	// Keep the authored catalog available to roster selection while every
 	// preview, including the unmutated twin, owns its battle catalog.
@@ -695,8 +728,12 @@ func (inst *nlPreviewInstance) applyCamera(zoomScale float64) {
 		h := max(t.HeightAt(nlFixed(int32(fx)), nlFixed(int32(fz))), t.SeaLevelWorld())
 		fz -= float64(h.Int()) / 2
 	}
-	x += fx - 0.16*float64(inst.key.w)/zoom
-	z += fz + 0.08*float64(inst.key.h)/zoom
+	if inst.preset.centre {
+		x, z = x+fx, z+fz
+	} else {
+		x += fx - 0.16*float64(inst.key.w)/zoom
+		z += fz + 0.08*float64(inst.key.h)/zoom
+	}
 	vx := x - float64(cam.ViewW+camera.OriginX)/(2*zoom)
 	vz := z - float64(cam.ViewH)/(2*zoom)
 	if inst.snap {
@@ -787,7 +824,7 @@ func (p *nlPreview) retain(c nlCachedPreview) {
 	}
 	// A scene near the end of its loop needs a fresh opening, not an exhausted
 	// fight from the cache. Never retain two clients for the same scene key.
-	if c.inst.seconds() >= c.inst.preset.loop || (p.cur != nil && c.inst.key == p.cur.key) {
+	if p.noCache || c.inst.seconds() >= c.inst.preset.loop || (p.cur != nil && c.inst.key == p.cur.key) {
 		c.close()
 		return
 	}
