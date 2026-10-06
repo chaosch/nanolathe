@@ -71,7 +71,7 @@ func (p unitViewerShotPlan) apply(s *toolsScreen) error {
 	if ticks == 0 {
 		ticks = map[string]int{"idle": 90, "on": 90, "off": 90, "move": 60, "fly": 180, "land": 240, "aim": 60, "fire": 60, "build": 120, "stop": 90, "hit": 12, "death": 1, "wreck": 0}[p.action]
 	}
-	press := map[string]string{"idle": "IDLE", "move": "MOVE", "fly": "MOVE", "land": "MOVE", "aim": "AIM", "fire": "FIRE", "build": "BUILD", "stop": "BUILD", "hit": "HIT", "death": "DEATH", "wreck": "WRECK", "on": "IDLE", "off": "IDLE"}[p.action]
+	press := map[string]string{"idle": "IDLE", "move": "MOVE", "fly": "MOVE", "land": "MOVE", "aim": "FIRE", "fire": "FIRE", "build": "BUILD", "stop": "BUILD", "hit": "HIT", "death": "DEATH", "wreck": "WRECK", "on": "IDLE", "off": "IDLE"}[p.action]
 	s.activateTool(press)
 	switch p.action {
 	case "land", "stop":

@@ -480,14 +480,16 @@ row has room and otherwise take their caption widths:
   `StopMoving` [04 R-AIR-01 §3][04 R-AIR-01 §6]. The preview position is always
   landable, so the landing search and its random bearing are not taken. A zero
   `MaxVelocity` disables Fly: retail's integrator faults on it [04 §10.1].
-- **Aim** uses the selected active weapon's `AimPrimary`, `AimSecondary` or
-  `AimTertiary` with a fixed heading of 45 degrees and pitch of approximately 15
-  degrees. **Fire** requires both matching Aim and Fire callbacks. It waits for
-  an explicit nonzero Aim return, invokes Fire followed by authored `RockUnit`
-  when present, waits at least the selected weapon's compiled base reload
-  interval, then starts a fresh aim. The minimum repeat interval is one preview
-  tick; this timing is viewer policy, not predicted battle cadence. Aim alone
-  runs once and allows authored restore threads to continue.
+- **Fire** (one action; the user merged the former separate Aim action into
+  it on 2026-10-05) uses the selected active weapon's `AimPrimary`,
+  `AimSecondary` or `AimTertiary` with a fixed heading of 45 degrees and pitch
+  of approximately 15 degrees, and needs only that Aim callback. It waits for
+  an explicit nonzero Aim return, invokes the matching Fire callback followed
+  by authored `RockUnit` when present, waits at least the selected weapon's
+  compiled base reload interval, then starts a fresh aim. A script without the
+  Fire callback misses that start, as the battle's spawner does, and the loop
+  continues [04 R-CB-01 §2]. The minimum repeat interval is one preview tick;
+  this timing is viewer policy, not predicted battle cadence.
 - **Build** (builders) takes the mobile work handlers' path when `bmcode` is 1:
   the slot-form `StartBuilding` carrying the relative bearing to the work target
   [04 R-CB-01 §3], then the script-owned build-stance wait, then one synchronous
