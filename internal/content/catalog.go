@@ -691,6 +691,23 @@ func (c *Catalog) RestrictToCreatable(names []string) error {
 		}
 	}
 	sortUnitRecords(records)
+	if err := c.replaceUnitRecords(records); err != nil {
+		return err
+	}
+	// The catalog digest covers definition identity, and identity moved.
+	c.Hash = catalogHash(c)
+	return nil
+}
+
+// replaceUnitRecords installs a filtered record table, in the order given,
+// and rebuilds everything that depends on record positions: the first-name
+// index, the category registry with every definition's own and target masks,
+// and each record's unit index and per-definition Hash, which covers that
+// index [02 R-CAT-01 §5]. It is the rebuild both battle-entry filters share —
+// a campaign's UseOnlyUnits list (RestrictToCreatable) and the player's unit
+// restrictions (ApplyRestrictions) — and it leaves Catalog.Hash to the caller,
+// because the two filters stamp different identities.
+func (c *Catalog) replaceUnitRecords(records []*UnitDef) error {
 	c.unitRecords = records
 	c.Units = firstUnitNames(records)
 	reg, err := compileCategoryRecords(records, c.Units, c.compileLimits())
@@ -698,8 +715,6 @@ func (c *Catalog) RestrictToCreatable(names []string) error {
 		return err
 	}
 	c.Categories = reg
-	// The catalog digest covers definition identity, and identity moved.
-	c.Hash = catalogHash(c)
 	return nil
 }
 
