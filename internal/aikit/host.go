@@ -656,7 +656,7 @@ func (h *Host) buildObs(tick uint32, w *units.World, econ *economy.Service) {
 	// awaiting teardown counts as the allocator counts it. Queued requests
 	// are added in pass 1. A battle without caps has an empty list.
 	table := h.kit.Table
-	capped := len(table.Capped) > 0
+	capped := table != nil && len(table.Capped) > 0
 	if capped {
 		if len(o.Capped) != len(table.Capped) {
 			o.Capped = make([]CapCount, len(table.Capped))
