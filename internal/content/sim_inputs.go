@@ -66,8 +66,9 @@ type SimulationInputs struct {
 	digest     [32]byte
 	// selection is the request's map, extension, restriction and mutator
 	// selection as the freeze recorded it, its catalog and animation-table
-	// pointers cleared and its mutators in their canonical spelling. Admission compares a match
-	// configuration with it (DESIGN_MULTIPLAYER §8.8).
+	// pointers cleared and its mutators in their canonical spelling.
+	// Admission compares a match configuration with it (DESIGN_MULTIPLAYER
+	// §8.8).
 	selection SimulationInputRequest
 }
 

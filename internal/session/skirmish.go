@@ -728,8 +728,9 @@ func prepareSkirmishEntry(fs vfs.FSOps, cat *content.Catalog, cfg SkirmishConfig
 // Community sources the session keeps, the mutators it records, the builder
 // options, the AI overrides and the load observer; the front half consumed the
 // rest. The unit restrictions it records are the frozen inputs' own, the set
-// their catalog was prepared with. audio is the mount the presentation audio service resolves samples
-// from; it never reaches the simulation, and nil gives a silent service.
+// their catalog was prepared with. audio is the mount the presentation audio
+// service resolves samples from; it never reaches the simulation, and nil
+// gives a silent service.
 func composeSkirmish(entry skirmishEntry, options SkirmishEntryOptions, audio vfs.FSOps) (*Session, error) {
 	cfg, m, entryFeatures, inputs := entry.cfg, entry.mission, entry.features, entry.inputs
 	report := options.Progress
