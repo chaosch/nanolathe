@@ -227,6 +227,12 @@ func (a *unitViewerAnimation) buildStep() {
 			g.pad = -1
 			if !g.origin {
 				g.pad = a.script.modelPiece(int32(hang))
+				// A script piece at or beyond the model's piece count has no
+				// record, and the piece locator answers the unit's own
+				// position for it [04 R-COB-01 §3][04 R-REV-02].
+				if g.pad < 0 && a.geometry != nil && int(hang) >= len(a.geometry.Pieces) {
+					g.origin = true
+				}
 			}
 			if g.products != nil {
 				g.products.start(a.def.WorkerTime)
@@ -300,10 +306,11 @@ func (a *unitViewerAnimation) emitSpray(c *unitViewerProduct) {
 	case c != nil:
 		at := [3]numeric.Fixed{}
 		if !g.origin {
-			// TODO(question): where retail hangs a product whose build-info
-			// piece has no model object is untraced; settle it in the piece
-			// locator [04 R-REV-02]. Until then neither the product nor its
-			// spray is placed.
+			// An answer below the model's piece count but past the
+			// script's declared pieces addresses the record the link pass
+			// left in that slot [04 R-COB-01 §3]; cob.LinkPieces maps only
+			// declared pieces, so the preview places nothing for it. Stock
+			// scripts answer a declared piece.
 			if at, ok = unitViewerRootLocal(a.geometry, poses, g.pad); !ok {
 				return
 			}

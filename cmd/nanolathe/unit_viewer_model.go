@@ -292,8 +292,8 @@ func (m *unitViewerModel) attachment(parent string) *client.ModelPreviewAttachme
 	g := &m.anim.build
 	var placement client.ModelPreviewPlacement
 	if !g.origin {
-		// A pad answer that names no model piece places nothing; see the
-		// TODO(question) at the spray's target.
+		// A pad answer past the script's declared pieces but inside the
+		// model places nothing; see the spray's target.
 		if g.pad < 0 || g.pad >= len(m.geometry.Pieces) {
 			return nil
 		}

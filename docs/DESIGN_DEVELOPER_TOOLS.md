@@ -599,9 +599,13 @@ completed unit, without the completion-time activation, and its
 `BUILD_PERCENT_LEFT` reads its own fraction. That script runs once per
 preview tick after the factory's, as a later unit in the sweep. The pad's
 placement is resolved again for every record because a pad can turn
-(DESIGN_GPU_RENDERER §22.5). An answer that names a script piece with no
-model object places neither product nor spray; where retail hangs it is a
-`TODO(question)` in the spray target code. A building-class product is drawn
+(DESIGN_GPU_RENDERER §22.5). An answer naming a script piece at or beyond the
+model's piece count hangs the product at the factory origin, where the piece
+locator answers the unit's own position for such an index [04 R-COB-01 §3]
+[04 R-REV-02]. An answer below the model's piece count but past the script's
+declared pieces addresses the record the link pass left in that slot; the
+viewer's link map covers only declared pieces, so it places neither product
+nor spray there (stock scripts answer a declared piece). A building-class product is drawn
 at its pad like any other; the battle's cell snap of its unattached position
 has no map grid to snap to in the preview.
 
