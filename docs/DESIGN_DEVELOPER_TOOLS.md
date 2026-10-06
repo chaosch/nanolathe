@@ -432,7 +432,7 @@ lives in `unit_viewer_restrict.go`. Its controls are native panel controls,
 so they share focus, Tab and hit testing with the rest. The data column's
 list keeps 20 rows, and under it a *Restriction* block level with the stage's
 rows holds the selected unit's state, one note line, the On/Off switch, the
-count stepper with its readout, *Reset* and *Clear all*. The note says why a
+count stepper with its readout, and *Reset*. The note says why a
 `norestrict` unit or a commander is limited (with a padlock), that the entry
 covers all N records of a duplicated name, or that Shift steps by ten. The
 *Restricted only* box sits on the library's count line, each row draws its
@@ -445,17 +445,16 @@ The keyboard hint joins the stage's. The names' locks come from
 worker, so the editor locks exactly what battle entry refuses. Choices the
 design left to the viewer: the switch reads On for a cap and switches it
 Off; Shift with a step button or the wheel over the stepper moves to the next
-multiple of ten (No limit down gives 100 either way); *Reset* leaves the
-draft's entries for names the content lacks as they are; and a single unit's
-edit keeps the filtered list, so the selection never jumps, while *Reset*,
-*Clear all*, the box and the search filter again. Opened from the card the
+multiple of ten (No limit down gives 100 either way, and up gives 10); and a
+single unit's edit keeps the filtered list, so the selection never jumps,
+while *Reset*, the box and the search filter again. Opened from the card the
 heading reads *Unit restrictions* and Back hands the draft back; opened with
 Ctrl+U it starts from the running content's saved set, names it lacks
-included, and *Apply* with the changed-name count appears beside Back,
-moving the PREVIEW label aside, once the draft differs. Apply selects the set,
+included, and *Apply* with the changed-name count appears beside Back once
+the draft differs. Apply selects the set,
 saves the settings and refreshes the main menu's chip; Back discards. The
 editor tests (`TestUnitViewerRestrict*`) lock the row states, the stepper
-ends, Reset with a wacky and a commander name, Clear all, *Restricted only*
+ends, Reset emptying the set, *Restricted only*
 and both routes' draft, Apply and Back.
 
 **Build pictures.** Library rows and build-tree entries show

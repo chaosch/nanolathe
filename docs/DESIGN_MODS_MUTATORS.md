@@ -1603,9 +1603,9 @@ restricted: retail's screen does not offer it, and the bit has no other
 reader [05 R-SHARE-01 §9] [08 R-SKIR-01 §10]. An entry naming one is refused
 (§15.3). The reference install has fourteen such definitions, both
 commanders among them, and no stock definition authors `wacky`
-[05 R-SHARE-01 §9]. A `wacky` definition is restricted like any other; it
-differs only under the editor's *Reset*, which gives it 0 as retail's does
-(§15.9).
+[05 R-SHARE-01 §9]. A `wacky` definition is restricted like any other;
+retail's lobby treats it differently only in its seed and its *Reset*, and the
+editor's *Reset* returns it to *No limit* with every other unit (§15.9).
 
 **Nothing is seeded.** The empty set is the default and changes nothing:
 battle entry hands the compiled catalog through unaltered — the same catalog
@@ -1950,7 +1950,7 @@ manual root stack and the original game play the base set.
 
 **The Nanolathe screen card.** The Mutators tab of the Nanolathe screen
 ([DESIGN_INTERFACE_HUD_INPUT §3.17](DESIGN_INTERFACE_HUD_INPUT.md#317-the-nanolathe-screen))
-gains a *Unit restrictions* card after the mutator cards. Its control is a
+leads with a *Unit restrictions* card, before the mutator cards. Its control is a
 summary, not the editor, so it never grows with the catalogue: *No
 restrictions*, or the numbers removed and capped and up to four names with
 their states, then *and N more*; *Edit…* opens the unit viewer's editor over
@@ -1979,15 +1979,20 @@ a battle catalog or reaches the simulation.
   record carrying a name shows that name's state, and a record hidden by a
   duplicate name says the entry covers every record so named.
 - *Selected unit.* An *On/Off* switch, *On* being *No limit* and *Off* being 0,
-  and a count stepper over 0…100 with *No limit* above 100, as retail's slider
-  runs [08 R-SKIR-01 §10]: stepping down from *No limit* gives 100, and up from
-  100 gives *No limit*. A `norestrict` unit's controls are disabled, and a
-  commander's *Off* and 0, each saying why.
+  and a count stepper over retail's slider range, 0…100 with *No limit* above
+  100 [08 R-SKIR-01 §10]: stepping down from *No limit* gives 100, and up from
+  100 gives *No limit*. Unlike the slider, stepping up from *No limit* starts a
+  cap at 1 (user decision 2026-10-06), so a cap of five is five presses rather
+  than a count down from 100, and the plus button cycles. A `norestrict`
+  unit's controls are disabled, and a commander's *Off* and 0, each saying
+  why.
 - *Restricted only* narrows the library to names with an entry, together with
   the search.
-- *Reset* gives every name that is not locked 100, and 0 when the name is
-  `wacky`, as retail's *Reset* does [08 R-SKIR-01 §10]; a name that cannot be
-  removed keeps 100. *Clear all* empties the set.
+- *Reset* empties the set: every unit returns to *No limit*, `wacky` names
+  and entries the running content leaves out included (user decision
+  2026-10-06). Retail's *Reset* instead gives every row 100, and 0 to a
+  `wacky` definition [08 R-SKIR-01 §10], a board that reads as a cap on every
+  unit; the editor does not copy it.
 - A footer counts the names removed and capped.
 - *Entry and exit* (proposal R-P8). Opened from the card, the editor edits the
   Nanolathe screen's draft, and *Back* returns to the screen with it. Opened
@@ -2045,7 +2050,7 @@ checked under Strict 3.1 and under Modern unless the row says otherwise.
 | Sidecar: schema 2 with restrictions and schema 1 without; a save and load restores the restricted index space and selects the set; an unknown recorded unit refuses the load | `save`, `main` (retail tier) |
 | Settings: the per-mod layer replaces the base set whole; a name the content lacks is left out with the notice; a mod config naming `restrictions` is refused | `settings`, `modlibrary`, `main` |
 | Flags: `--restrict` replaces the saved set, `none`, the refusals of §15.5; capture and benchmark modes never read the key | `main`, `nanolathe-headless` |
-| Editor and card: row states, stepper ends, Reset with a `wacky` and a commander name, Clear all, *Restricted only*, draft and *Apply*/*Back* from both entries; captures of the card and the editor reviewed | `main`, `--shot` |
+| Editor and card: row states, stepper ends and the start at 1 from *No limit*, Reset emptying the set, *Restricted only*, draft and *Apply*/*Back* from both entries; captures of the card and the editor reviewed | `main`, `--shot` |
 
 ### 15.12 Work units
 

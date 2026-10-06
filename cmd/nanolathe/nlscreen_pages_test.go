@@ -10,8 +10,8 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/settings"
 )
 
-// The Unit restrictions card (docs/DESIGN_MODS_MUTATORS.md §15.9): it sits
-// after the mutator cards, summarises the draft against the running content
+// The Unit restrictions card (docs/DESIGN_MODS_MUTATORS.md §15.9): it leads
+// the mutator cards, summarises the draft against the running content
 // — the numbers removed and capped, four named entries, then how many more —
 // names in chips the saved entries the content leaves out, offers no
 // comparison, and the loadout line counts the set beside the mutators.
@@ -25,9 +25,9 @@ func TestNLRestrictionCardSummary(t *testing.T) {
 	s.stats.base, _ = g.cs.nlPreviewCatalog()
 
 	page := s.pages()[1]
-	card := page.cards[len(page.cards)-1]
+	card := page.cards[0]
 	if page.key != "mutators" || card.key != "restrictions" || card.compare != nil {
-		t.Fatalf("the last Mutators card is %s/%s (compare %v)", page.key, card.key, card.compare != nil)
+		t.Fatalf("the first Mutators card is %s/%s (compare %v)", page.key, card.key, card.compare != nil)
 	}
 	sum := s.restrictionSummary(s.draft.restrictions)
 	if sum.text != "2 removed, 2 capped" || len(sum.rows) != 4 || sum.more != 0 {

@@ -98,13 +98,6 @@ func (s *toolsScreen) drawHeader(dst *ebiten.Image) {
 	ts := screenkit.Style{Size: 20, Tracking: 0.1, Top: nlCream}
 	s.label(dst, title, screenkit.Rect{X: 306, Y: 27, W: 480, H: 29}, ts, true)
 	s.label(dst, s.contentName, screenkit.Rect{X: 306, Y: 58, W: 590, H: 20}, screenkit.Style{Size: 12, Top: nlDim}, false)
-	// Apply, when the menu route shows it, sits beside Back and moves the
-	// label aside.
-	preview := screenkit.Rect{X: 920, Y: 38, W: 90, H: 20}
-	if i := s.panel.Index("APPLY"); i >= 0 && s.panel.ActiveAt(i) {
-		preview.X = 798
-	}
-	s.label(dst, "PREVIEW", preview, screenkit.Style{Size: 11, Tracking: 0.12, Top: nlGreenText, Align: 2}, true)
 	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 306, Y: 52, W: math.Round(unitViewerMeasure(title, ts, true)) - 4, H: 2}), nlGreenText)
 	screenkit.Fill(dst, s.deviceRect(screenkit.Rect{X: 32, Y: 84, W: 1136, H: 1}), color.RGBA{123, 119, 86, 100})
 }
