@@ -150,8 +150,9 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 	fieldStatus, inField := s.fieldStatus()
 	if inField {
 		status = fieldStatus
-	} else if s.model.anim != nil && unitViewerHasPower(s.selected) && !s.model.anim.invalid {
-		if s.model.anim.activated() {
+	} else if a := s.model.anim; a != nil && unitViewerHasPower(s.selected) && !a.invalid && a.action != unitViewerWreck {
+		// The Wreck view draws the corpse, which has no activation state.
+		if a.activated() {
 			status += " / on"
 		} else {
 			status += " / off"
