@@ -4571,7 +4571,7 @@ catalog after `Catalog.ApplyMutators` with that one factor, so engine limits
 show (a Krogoth's hit points stop at 32767). Choosing a controls profile
 lists every row it would change, old then new.
 
-**Unit restrictions card.** The Mutators page ends with the *Unit
+**Unit restrictions card.** The Mutators page opens with the *Unit
 restrictions* card, whose contract is
 [DESIGN_MODS_MUTATORS §15.9](DESIGN_MODS_MUTATORS.md#159-editing-and-storage).
 Its control summarises the draft against the running content's catalog: the

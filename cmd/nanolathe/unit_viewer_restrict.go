@@ -52,8 +52,7 @@ type unitViewerRestrictName struct {
 	// content.Restrictions refuses (an empty name, or one carrying NUL, ','
 	// or '='); no stock unit has one.
 	invalid bool
-	wacky   bool // a record of the name authors wacky (§15.3)
-	records int  // retained records carrying the name
+	records int // retained records carrying the name
 }
 
 // unitViewerRestrict is the editor's state: the draft, what Apply compares it
@@ -84,9 +83,9 @@ func unitViewerRestrictKey(def *content.UnitDef) string {
 }
 
 // unitViewerRestrictNames reads every name of the library from the immutable
-// catalog: its records, whether any authors wacky, and why the catalog would
-// refuse to remove it — asked of content.CheckRestrictions itself, so the
-// editor locks exactly what battle entry would refuse.
+// catalog: its records, and why the catalog would refuse to remove it —
+// asked of content.CheckRestrictions itself, so the editor locks exactly what
+// battle entry would refuse.
 func unitViewerRestrictNames(cat *content.Catalog, entries []unitViewerEntry) (map[string]unitViewerRestrictName, []string) {
 	names := map[string]unitViewerRestrictName{}
 	var keys []string
@@ -102,7 +101,6 @@ func unitViewerRestrictNames(cat *content.Catalog, entries []unitViewerEntry) (m
 			n.invalid = removeAll.Set(key, 0) != nil
 		}
 		n.records++
-		n.wacky = n.wacky || e.Def.Wacky
 		names[key] = n
 	}
 	if cat != nil && !removeAll.IsZero() {
@@ -162,10 +160,12 @@ func (e *unitViewerRestrict) toggle(key string) bool {
 	return e.setValue(key, 0)
 }
 
-// step moves key's count as retail's slider runs, 0..100 with No limit
+// step moves key's count over retail's slider range, 0..100 with No limit
 // above: down from No limit gives 100 and up from 100 gives No limit
-// [08 R-SKIR-01 §10]. A coarse step goes to the next multiple of ten, a
-// viewer convenience for the long range.
+// [08 R-SKIR-01 §10]. Up from No limit starts a cap at 1, so a cap of five
+// is five presses rather than a count down from 100 (§15.9); the plus button
+// therefore cycles. A coarse step goes to the next multiple of ten, a viewer
+// convenience for the long range.
 func (e *unitViewerRestrict) step(key string, dir int, coarse bool) bool {
 	low := e.floor(key)
 	if low < 0 || dir == 0 {
@@ -173,40 +173,26 @@ func (e *unitViewerRestrict) step(key string, dir int, coarse bool) bool {
 	}
 	v := e.value(key)
 	next := v + dir
-	if coarse {
-		switch {
-		case dir < 0 && v == unitViewerNoLimit:
-			next = content.RestrictionMaxCount
-		case dir < 0:
-			next = (v - 1) / 10 * 10
-		case v >= content.RestrictionMaxCount:
-			next = unitViewerNoLimit
-		default:
-			next = (v/10 + 1) * 10
-		}
+	switch {
+	case dir > 0 && v == unitViewerNoLimit && coarse:
+		next = 10
+	case dir > 0 && v == unitViewerNoLimit:
+		next = 1
+	case !coarse:
+	case dir < 0 && v == unitViewerNoLimit:
+		next = content.RestrictionMaxCount
+	case dir < 0:
+		next = (v - 1) / 10 * 10
+	case v >= content.RestrictionMaxCount:
+		next = unitViewerNoLimit
+	default:
+		next = (v/10 + 1) * 10
 	}
 	next = max(low, min(unitViewerNoLimit, next))
 	if next == v {
 		return false
 	}
 	return e.setValue(key, next)
-}
-
-// reset is retail's Reset [08 R-SKIR-01 §10]: every name the content offers
-// that is not locked takes 100, or 0 when it is wacky, and a name that cannot
-// be removed keeps 100 (§15.9). A norestrict name, and the draft's entries
-// for names the running content lacks, are left as they are.
-func (e *unitViewerRestrict) reset() {
-	for _, key := range e.keys {
-		n := e.names[key]
-		switch {
-		case n.invalid || n.lock == content.RestrictionNoRestrict:
-		case n.wacky && n.lock != content.RestrictionRemovesCommander:
-			_ = e.draft.Set(key, 0)
-		default:
-			_ = e.draft.Set(key, content.RestrictionMaxCount)
-		}
-	}
 }
 
 // changed counts the names whose entry differs between the draft and the
@@ -403,8 +389,7 @@ func addRestrictControls(add func(kind gui.Kind, name, text string, x, y, width,
 	button("RSWITCH", "", 862, unitViewerActionRowY, 92)
 	button("RDOWN", "", 962, unitViewerActionRowY, 36)
 	button("RUP", "", 1132, unitViewerActionRowY, 36)
-	button("RRESET", "Reset", 862, unitViewerControlRowY, 149)
-	button("RCLEAR", "Clear all", 1019, unitViewerControlRowY, 149)
+	button("RRESET", "Reset", 862, unitViewerControlRowY, 306)
 	r := unitViewerRestrictOnlyR
 	add(gui.KindButton, "RESTRONLY", "", r.X, r.Y, r.W, r.H)
 	button("APPLY", "Apply", 902, 26, 132)
@@ -427,9 +412,8 @@ func (s *toolsScreen) refreshRestrictControls() {
 	low, v := e.floor(key), e.value(key)
 	grey("RSWITCH", low < 0 || (v != 0 && low > 0))
 	grey("RDOWN", low < 0 || v <= low)
-	grey("RUP", low < 0 || v >= unitViewerNoLimit)
-	grey("RRESET", e.names == nil)
-	grey("RCLEAR", e.draft.IsZero())
+	grey("RUP", low < 0)
+	grey("RRESET", e.draft.IsZero())
 	if i := p.Index("APPLY"); i >= 0 {
 		n := 0
 		if e.route == unitViewerRestrictMenu {
@@ -455,9 +439,9 @@ func (s *toolsScreen) activateRestrict(name string) bool {
 	case "RUP":
 		e.step(key, 1, s.shiftHeld)
 	case "RRESET":
-		e.reset()
-		s.refilterRestricted()
-	case "RCLEAR":
+		// Reset empties the set, every unit back to No limit. Retail's
+		// Reset instead gives every row 100 [08 R-SKIR-01 §10], a board that
+		// reads as caps everywhere; the editor does not copy it (§15.9).
 		e.draft = content.Restrictions{}
 		s.refilterRestricted()
 	case "RESTRONLY":

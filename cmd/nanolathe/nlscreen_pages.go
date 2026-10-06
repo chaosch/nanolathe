@@ -165,7 +165,7 @@ func (c *nlCatalogue) builtFrom(mods []modlibrary.Mod) bool {
 func (s *nlScreen) buildPages() []nlPage {
 	return []nlPage{
 		{key: "game", title: "Game", cards: s.gameCards()},
-		{key: "mutators", title: "Mutators", cards: append(s.mutatorCards(), s.restrictionCard())},
+		{key: "mutators", title: "Mutators", cards: append([]nlCard{s.restrictionCard()}, s.mutatorCards()...)},
 		{key: "graphics", title: "Graphics", cards: s.graphicsCards()},
 		{key: "effects", title: "Effects", cards: s.effectCards()},
 		{key: "controls", title: "Controls", cards: s.controlCards()},
@@ -374,7 +374,7 @@ func (s *nlScreen) mutatorCards() []nlCard {
 
 // ---------------------------------------------------------------- UNIT RESTRICTIONS
 
-// restrictionCard follows the mutator cards (docs/DESIGN_MODS_MUTATORS.md
+// restrictionCard leads the mutator cards (docs/DESIGN_MODS_MUTATORS.md
 // §15.9). Its control is a summary, not the editor, so it never grows with
 // the catalogue; Edit... opens the unit viewer's editor over the screen on the
 // draft, and Clear empties it. Arrows and the wheel step nothing: a set is
