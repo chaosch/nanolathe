@@ -138,3 +138,25 @@ func TestUnitViewerSettingsButtonsRespectUnavailableActions(t *testing.T) {
 		t.Fatal("animation pause changed the independent rotation control")
 	}
 }
+
+// The last unit, scrolled fully into view, sits in the bottom painted row; a
+// click there must select it. The native service hit-tests whole rows below a
+// two-pixel inset, so the painted rows and the scroll limit must agree with it.
+func TestUnitViewerBottomRowAtFullScrollIsClickable(t *testing.T) {
+	s := unitViewerUIFixture()
+	p := s.panel
+	list := p.Index("UNITS")
+	g := p.Window.Gadgets[list]
+	rows := unitViewerListRows(g)
+	if p.ListMaxTopAt(list) != len(s.filtered)-rows {
+		t.Fatalf("scroll limit %d leaves a different row count than the %d hit rows", p.ListMaxTopAt(list), rows)
+	}
+	p.ScrollTextListAt(list, float32(len(s.filtered)))
+	top := p.ListAt(list).Top()
+	x, y := float64(g.Rect.X+10), float64(g.Rect.Y+2)+(float64(rows)-0.5)*float64(g.ItemHeight)
+	s.updateInput(screenkit.Input{X: x, Y: y, Pressed: true, Down: true}, nil, false, 0)
+	s.updateInput(screenkit.Input{X: x, Y: y, Released: true}, nil, false, 0)
+	if top+rows-1 != len(s.filtered)-1 || s.selected != s.filtered[len(s.filtered)-1].Def {
+		t.Fatalf("bottom row at full scroll (top %d) did not select the last unit", top)
+	}
+}

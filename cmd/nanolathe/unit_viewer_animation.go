@@ -20,7 +20,6 @@ const (
 	unitViewerIdle     unitViewerAction = "Idle"
 	unitViewerMoving   unitViewerAction = "Move"
 	unitViewerFlying   unitViewerAction = "Fly"
-	unitViewerAiming   unitViewerAction = "Aim"
 	unitViewerFiring   unitViewerAction = "Fire"
 	unitViewerBuilding unitViewerAction = "Build"
 	unitViewerHit      unitViewerAction = "Hit"
@@ -81,12 +80,14 @@ func unitViewerAnimationAvailable(def *content.UnitDef, action unitViewerAction,
 		// The flight integrator divides by MaxVelocity without a guard; retail
 		// faults on zero [04 §10.1], so the preview refuses it.
 		return def.CanFly && def.MaxVelocity > 0
-	case unitViewerAiming, unitViewerFiring:
+	case unitViewerFiring:
+		// One action aims and fires. Only the aim is required: a weapon
+		// script without its Fire callback still fires in battle, where the
+		// start simply misses [04 R-CB-01 §2].
 		if content.IsWeaponInactive(unitViewerWeapon(def, weapon)) {
 			return false
 		}
-		return unitViewerHasCallback(def, unitViewerWeaponCallback("Aim", weapon)) &&
-			(action != unitViewerFiring || unitViewerHasCallback(def, unitViewerWeaponCallback("Fire", weapon)))
+		return unitViewerHasCallback(def, unitViewerWeaponCallback("Aim", weapon))
 	case unitViewerBuilding:
 		if !def.Builder {
 			return false
@@ -115,7 +116,7 @@ func unitViewerActionShown(def *content.UnitDef, action unitViewerAction) bool {
 		return def.BMCode != 0 && !def.CanFly
 	case unitViewerFlying:
 		return def.CanFly
-	case unitViewerAiming, unitViewerFiring:
+	case unitViewerFiring:
 		for weapon := 1; weapon <= 3; weapon++ {
 			if !content.IsWeaponInactive(unitViewerWeapon(def, weapon)) {
 				return true
@@ -185,15 +186,11 @@ func unitViewerUnavailableReason(def *content.UnitDef, action unitViewerAction, 
 			return "not an aircraft"
 		}
 		return "maxvelocity is zero"
-	case unitViewerAiming, unitViewerFiring:
+	case unitViewerFiring:
 		if content.IsWeaponInactive(unitViewerWeapon(def, weapon)) {
 			return fmt.Sprintf("weapon %d is inactive or missing", weapon)
 		}
-		name := unitViewerWeaponCallback("Aim", weapon)
-		if action == unitViewerFiring && unitViewerHasCallback(def, name) {
-			name = unitViewerWeaponCallback("Fire", weapon)
-		}
-		return "no " + name + " callback"
+		return "no " + unitViewerWeaponCallback("Aim", weapon) + " callback"
 	case unitViewerBuilding:
 		if def == nil || !def.Builder {
 			return "not a builder"
@@ -391,7 +388,7 @@ func newUnitViewerAnimation(def *content.UnitDef, mdl *model.Model, opts unitVie
 		a.fly = newUnitViewerFlight(def)
 		a.fly.order = unitViewerFlightTakeoff
 		a.note = "Fly / taking off"
-	case unitViewerAiming, unitViewerFiring:
+	case unitViewerFiring:
 		// The loop is a preview policy: retry only after this interval, then
 		// await a fresh aim. It is not a prediction of battle firing cadence.
 		a.reload = uint64(max(1, unitViewerWeapon(def, weapon).ReloadTime))
@@ -518,7 +515,9 @@ func (a *unitViewerAnimation) tick() {
 		if a.aimReady {
 			// Root Fire precedes optional RockUnit [04 R-CB-01 §2]. There
 			// are no projectile, burst, sound, resource or effect producers.
-			if !b.Fire(cob.WeaponSlot(a.weapon - 1)).Started {
+			// A script without this Fire callback misses the start, as the
+			// battle's spawner does, and RockUnit still follows.
+			if unitViewerHasCallback(a.def, unitViewerWeaponCallback("Fire", a.weapon)) && !b.Fire(cob.WeaponSlot(a.weapon-1)).Started {
 				a.stop("fire callback unavailable")
 				return
 			}
