@@ -497,10 +497,13 @@ row has room and otherwise take their caption widths:
   machine: raise activation, wait for the stance, query `QueryBuildInfo` for the
   pad, raise the building edge (`StartBuilding`, edge form), then the same
   per-step nano query [05 "Factory production lifecycle"]. Every work step is
-  admitted. While engaged the button reads **Stop**: the mobile path issues the
-  slot-form `StopBuilding` with four zero cells [04 R-CB-01 §2], and the factory
-  lowers the building edge and then activation, as a completed final product
-  does. Build restarts the same order.
+  admitted. A factory builds its real products on the pad and both paths draw
+  the nanolathe spray (below). While engaged the button reads **Stop**: the
+  mobile path issues the slot-form `StopBuilding` with four zero cells
+  [04 R-CB-01 §2], and the factory lowers the building edge and then
+  activation, as a completed final product does, and discards an unfinished
+  product. Build restarts the same order; a factory then rebuilds the
+  interrupted product from a fresh nanoframe.
 - **Hit** issues the normal-kind damage pair: the health falls first, then
   `HitByWeapon` with cos and sin of the direction at radius 400 through the
   shared table and the independent `TakeDamage` with the clamped post-hit
@@ -530,6 +533,14 @@ row has room and otherwise take their caption widths:
   Fly and factory Build raise and lower the same bit as the battle does; the
   button's indicator and the status show the live state.
 
+A factory's action row adds **Speed** after Build. It cycles 1×, 4× and 16×:
+the number of construction steps the product cycle applies per preview tick,
+because a large product takes minutes at normal speed. It changes nothing
+else: scripts, nano queries, the spray and the pulse keep the 30 Hz preview
+tick. The choice is a viewer preference for the open screen, kept across
+unit selections and reset when the viewer opens; it is never written to
+settings.
+
 The control row keeps Pause, which stops animation independently of rotation,
 Rotate, Reset view, Weapon and **Severity**, which cycles the Death and Wreck
 severities and replays either. Choosing an action again restarts it, except
@@ -543,7 +554,10 @@ retail value:
 | Input | Preview value |
 |---|---|
 | Aim heading and pitch | 45 degrees; about 15 degrees |
-| Build work target | 45 degrees off the builder's facing (the `StartBuilding` bearing) |
+| Build work target | 45 degrees off the builder's facing (the `StartBuilding` bearing); a mobile builder's spray target sits on the ground there, one fit radius from its origin, with the builder's own footprint and model-top box |
+| Factory products | the Build tab's retail list in order, every step admitted; a completed product holds the pad for 60 preview ticks (two seconds) before the next nanoframe starts |
+| Nanoframe identity | the product's sequence number in the open action (1, 2, …) and the preview tick, as the pulse's identifier and tick |
+| Spray randomness | a private generator with a fixed seed, restarted with each action |
 | Wind | one re-roll before the first tick: heading 45 degrees, speed 1050, the midpoint of the canonical fallback range 100–2000 [05 R-PROD-01 §3] |
 | Extractor footprint | every covered cell holds metal byte 127, so `SetSpeed` carries footprint cells × 128 |
 | Hit | direction byte `0x80`, from straight ahead [06 §9.1]; post-hit health half of `maxdamage` |
@@ -554,20 +568,98 @@ Engine ports read and write a detached copy of the unit's state: activation and
 armor drive the edge machine, the in-build stance, busy, yard-open and
 bugger-off flags read back what the script wrote, and health reads 100 until a
 hit (then the post-hit percentage) or a death (then 0) [04 §4.4][04 §4.7].
-Build percent left reads 0; other unbound reads return zero and random requests
+Build percent left reads 0, except in a factory product's own script, where it
+converts the product's remaining fraction as the battle's port does
+[04 §4.4]; other unbound reads return zero and random requests
 return their low bound without drawing. No world, allocator, authoritative RNG,
 projectile, resource, sound, debris or effect sink is connected, and no medium
 band is classified, so `setSFXoccupy` is never issued. The VM retains the
 existing detached model flags.
 
-For the later product and nanospray unit the animation exposes three read-only
-accessors: `building()` reports a construction order that has reached its stance
-and carries work; `nanoPiece()` is the model piece index of the latest
-`QueryNanoPiece` answer, mapped from the script piece through the strict name
-link, or −1 while no work step runs; and `padPiece()` is the factory's
-`QueryBuildInfo` piece as a model index, or −1 for a mobile builder, a factory
-that is not building or an answer that names no model piece. This round adds no
-product model and no spray drawing.
+The animation exposes three read-only accessors: `building()` reports a
+construction order that has reached its stance and carries work;
+`nanoPiece()` is the model piece index of the latest `QueryNanoPiece` answer,
+mapped from the script piece through the strict name link, or −1 while no
+work step runs; and `padPiece()` is the factory's `QueryBuildInfo` piece as a
+model index, or −1 for a mobile builder, a factory that is not building or an
+answer that names no model piece.
+
+**User-authorized product preview policy.** A factory's Build action
+constructs its real products, never a stand-in. The cycle takes the Build
+tab's entries in order and keeps the retail list only: a Modern-only entry,
+a record another definition hides and a discovery-only record are left out,
+and a product whose model will not load, or which the renderer refuses, is
+dropped and never retried. The status names every omission with its reason;
+nothing is substituted. When the building edge rises, the pad answer reaches
+the product as one signed byte, so an index of 128 or more, or an unanswered
+query, hangs it at the factory origin [04 R-FAC-02 §1]. A fresh nanoframe of
+the next product is then composed as the record's attachment, posed by its
+own presentation script: `Create` and the creation-time queries run as for a
+completed unit, without the completion-time activation, and its
+`BUILD_PERCENT_LEFT` reads its own fraction. That script runs once per
+preview tick after the factory's, as a later unit in the sweep. The pad's
+placement is resolved again for every record because a pad can turn
+(DESIGN_GPU_RENDERER §22.5). An answer that names a script piece with no
+model object places neither product nor spray; where retail hangs it is a
+`TODO(question)` in the spray target code. A building-class product is drawn
+at its pad like any other; the battle's cell snap of its unattached position
+has no map grid to snap to in the preview.
+
+Each preview tick of work applies the shared construction step with the
+factory's integer worker quantum and the product's `buildtime`, from a
+remaining fraction of one [05 R-WORK-01 §1][05 "Construction arithmetic"]:
+the fraction falls by quantum ÷ buildtime at working precision, clamps to
+0..1 and narrows to single precision, so a product completes after exactly
+`construction.WorkTicks` steps. A zero quantum or a stored zero commits
+nothing, issues no nano query and draws no spray [05 R-P0-06 §1]. Accepted
+work then queries `QueryNanoPiece` and emits one spray record, in the order of
+[05 R-P0-06 §6]. At zero the product's own activation runs for
+`activatewhenbuilt`, then the factory's building edge falls (`StopBuilding`)
+while activation stays raised [04 R-FAC-02 §3][05 "Factory production
+lifecycle"]. A battle product then leaves the pad under its own `GetBuilt`
+order while the factory's next placement waits for its exit; the viewer has
+no movement, so the completed product holds the pad for its hold interval
+instead. The order then returns to its stance test with activation still up,
+so no second `Activate` runs, queries the pad again, starts the next product
+and raises the building edge. The status reads "Building ARMPW 43% / 9.2 s
+left at 1x": the percentage is the one `BUILD_PERCENT_LEFT` implies, and the
+time is the steps left from `construction.WorkTicks` divided by the speed,
+truncated as the Build tab truncates; a zero quantum, a non-positive
+`buildtime` or a product over a day of work says so rather than guessing.
+During the hold it reads "Built ARMPW / next ARMROCK".
+
+**User-authorized nanospray preview policy.** Every accepted work step emits
+one emitter record as the battle's does [03 R-P0-19-P][03 R-STRIP-01 §2]: the
+source is the `QueryNanoPiece` piece origin, the target is a unit target's
+box — the product's position plus its footprint and model-top extents
+[05 R-WORK-01 §8] — and both are narrowed per axis to their 4/11..7/11 span.
+The record spawns five particles at once and five more on the next tick; each
+particle picks a source and a landing point, flies four world units per tick
+for `trunc(distance/4)` ticks (a zero-length hop is discarded) and shimmers up
+`0xa1..0xa7`, its nibble starting at one plus its spawn index modulo seven.
+A record is removed once its list empties; past 400 records the oldest is
+evicted. The picks come from the viewer's own generator, never the
+simulation or CRT stream; it is seeded with a fixed value for each action so
+captures repeat. Positions are kept in the factory's root-local frame, the
+frame of the attachment's placement, so the spray turns with the orbit as one
+body with factory and product, and a root piece animated by its script carries
+the spray as it carries the product. A mobile builder sprays into its
+stand-in target. Particles already in flight finish after Stop.
+
+Particles project through the record's own projection: the root piece's
+current state with the view orientation folded in, the pivot and the raster
+scale, as model vertices do; a source point lands within 0.01 output pixel of
+`ProjectedPieces` for the nano piece. Each mark is the battle's two-by-two
+pixel square at the preview's magnification — a battle pixel is one world
+unit, so a mark spans two world units of the projection, from the particle's
+point right and down — because that coverage is what makes the stream read as
+a spray [03 R-P0-19-P]. Marks are drawn at device resolution over the stage
+and clipped to it, in the stock palette the preview already uses. There is
+no depth test: strip 6 draws over grounded units and structures in the
+battle. An airborne builder's stream, which the battle draws beneath its hull,
+does not arise because the preview builds on the ground. Neither the battle's
+local-player coverage gate nor team-coloured nanolathe (DESIGN_GPU_RENDERER
+§37.1) applies to the viewer.
 
 The preview runs at 30 Hz with at most five ticks per host update, dropping
 excess elapsed time. Each thread retains the existing 4,096-instruction
@@ -639,11 +731,14 @@ displayed zoom and aspect. Final raster quantization and authored 30 Hz COB
 pose updates remain; this preview does not change simulation animation timing.
 
 The projected-geometry entry is intentionally for complete isolated models.
-It rejects explicit view scale, attached children, construction,
-cloak and special silhouette options rather than silently changing their
-ordinary preview contracts. `Scale` must remain zero; `PixelsPerUnit` supplies
-the scale. Each projected call also samples the supplied orientation without
-retaining the battle cache's small-angle threshold. No gameplay rule or new
+It rejects explicit view scale, and attached children, construction, cloak
+and special silhouette options for the previewed model itself, rather than
+silently changing their ordinary preview contracts. Only
+`ModelPreviewOptions.Attachment` composes a second model, which may be a
+nanoframe, into the record (DESIGN_GPU_RENDERER §22.5). `Scale` must remain
+zero; `PixelsPerUnit` supplies the scale. Each projected call also samples the
+supplied orientation without retaining the battle cache's small-angle
+threshold. No gameplay rule or new
 renderer preference selects this projection.
 
 Information comes only from the compiled definition, and every figure is a
@@ -728,6 +823,16 @@ stance gate before any nano query, the factory's activation, pad, building-edge
 and stop order, the Hit arguments, the `Killed` severity seed with the corpse
 chain and the substitute depth, the movement-rate tiers along the speed ramp,
 the flight takeoff and landing hooks, and the action row's availability.
+Product fixtures lock the cycle's retail order and reported omissions, a step
+count equal to `construction.WorkTicks` at every speed with the step's
+refusals and clamps, the edge order around a completion and its hold (no
+second `Activate`), the rebuilt interrupted product and the product's
+`BUILD_PERCENT_LEFT`; spray fixtures lock five particles per spawn tick over
+two ticks, their lifetime, colour shimmer and expiry, discarded zero-length
+hops, thirty private picks per record, the 4/11..7/11 narrowing, and that
+nothing sprays before the stance, after Stop, in Idle or without a target.
+With retail assets, ARMLAB and CORAP lock the spray target to
+`PiecePlacement` and the spray source to `ProjectedPieces`.
 Real-device fixtures cover separated sloped planes, stable near-coincident
 surfaces through a turn, shared-edge coverage, negative/large depth, byte
 carries and texture holes. Visually inspect factory pads and roof/wall edges
@@ -736,12 +841,18 @@ through full orbits and animation poses. Capture the actual screen with
 `armlab/build` or `armthund/weapons` selects a tab, and a capture waits up to
 600 frames for visible pictures to decode. `/action=<name>` presses an action
 before the capture and runs a fixed number of preview ticks without a clock
-(`/ticks=N`, `/severity=N` and `/weapon=N` adjust it): `armrad/action=off`,
-`armlab/action=build`, `armthund/action=land` or `armpw/action=wreck`. The
+(`/ticks=N`, `/severity=N`, `/weapon=N` and `/speed=1|4|16` adjust it):
+`armrad/action=off`, `armlab/action=build/ticks=300/speed=16`,
+`armthund/action=land` or `armpw/action=wreck`. The
 action round was checked on ARMRAD on and off, ARMSOLAR on, off and hit, ARMWIN
 and ARMMEX idle, ARMCK and ARMCOM building, ARMLAB building and stopped,
 ARMFIG and ARMTHUND flying, ARMTHUND landed, and ARMPW death at severities 25 and
-100 and its wreck, at 1440x900 and 1024x640. Check a commander, a factory's
+100 and its wreck, at 1440x900 and 1024x640. The product round was checked on
+ARMLAB early, mid-build, nearly complete and holding, CORAP building an
+aircraft, ARMVP and CORVP, the ARMHP hovercraft platform, the ARMSY shipyard,
+and ARMCK and ARMCOM spraying, at 1440x900, with CORAP at 1024x640; ARMLAB,
+CORAP, ARMVP, CORVP, ARMSY, CORSY, ARMAP, CORLAB and ARMHP each went on to a
+second product. Check a commander, a factory's
 Builds, a unit's Built-by times, an aircraft with a bomb, a multi-weapon
 unit, a building and a picture-less record (stock ARMSCORP) at 1440x900 and
 1024x640.
