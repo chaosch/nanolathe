@@ -42,11 +42,10 @@ var orderClassByID = func() []OrderClass {
 func orderClassTable() []OrderClass { return orderClassByID }
 
 // Build request kinds a queued order can hold, for the cap observation's
-// count of requests that have no record yet (capQueued).
+// count of requests that have no record yet (capQueued); 0 is none.
 const (
-	buildNone    uint8 = iota
-	buildFactory       // a factory product: its count, less the one in production
-	buildSite          // a mobile build: one request until its frame is placed
+	buildFactory uint8 = iota + 1 // a factory product: its count, less the one in production
+	buildSite                     // a mobile build: one request until its frame is placed
 )
 
 // orderBuildKindByID classifies the order table once, like orderClassByID.
