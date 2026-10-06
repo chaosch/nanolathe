@@ -107,6 +107,9 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 		k := min(1, 2048/max(stage.W, stage.H))
 		if img := s.model.draw(s.cs, s.selected, s.yaw, s.pitch, s.zoom, max(1, int(stage.W*k)), max(1, int(stage.H*k))); img != nil {
 			screenkit.Image(dst, img, stage, 1, false)
+			if clipped := s.clip(dst, s.viewRect); clipped != nil {
+				s.model.drawSpray(clipped, stage)
+			}
 		}
 	}
 	if s.art.frame != nil {

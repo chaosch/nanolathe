@@ -91,6 +91,7 @@ type toolsScreen struct {
 	action                 string
 	weapon                 int
 	severity               int  // index into unitViewerSeverities
+	speed                  int  // index into unitViewerSpeeds; kept across units
 	power                  int8 // explicit On/Off choice: 0 none, +1 on, -1 off
 	features               map[string]*content.FeatureDef
 	last                   time.Time
@@ -134,7 +135,7 @@ func (s *toolsScreen) show(g *gameShell) {
 	}
 	s.last = time.Time{}
 	s.action, s.weapon, s.animationPaused = "Idle", 1, false
-	s.severity, s.power = 0, 0
+	s.severity, s.power, s.speed = 0, 0, 0
 	s.initializeRetail(g)
 	s.query, s.top = "", 0
 	s.searchFocus, s.selectAll, s.spinning = true, false, true
@@ -235,6 +236,8 @@ func (s *toolsScreen) selectUnit(def *content.UnitDef) {
 	s.selected = def
 	s.model.selectUnit()
 	s.model.features = s.features
+	s.model.builds, s.model.hidden = s.tree.builds[def], s.tree.hidden
+	s.model.speed = unitViewerSpeeds[s.speed]
 	s.action, s.weapon, s.animationPaused = "Idle", 1, false
 	s.severity, s.power = 0, 0
 	s.refreshInfo()

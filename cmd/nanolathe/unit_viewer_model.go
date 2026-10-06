@@ -44,6 +44,24 @@ type unitViewerModel struct {
 	features map[string]*content.FeatureDef
 	wreck    unitViewerWreckModel
 	palette  *palette.Tables // the last record's palette, for an empty stage
+	// mount loads a factory's product models; builds and hidden are the
+	// selected unit's Build-tab entries and the hidden records. speed is the
+	// product cycle's preview speed.
+	mount  *vfs.FS
+	builds []unitViewerLink
+	hidden map[*content.UnitDef]bool
+	speed  int
+	// view is the last unit record's projection, for the spray overlay.
+	view unitViewerView
+}
+
+// unitViewerView is the projection, canvas and orientation of the last unit
+// record. The spray projects through exactly these.
+type unitViewerView struct {
+	ok                  bool
+	projection          client.ModelPreviewProjection
+	w, h                int
+	heading, tilt, bank uint16
 }
 
 // unitViewerWreckModel caches the corpse feature model the Wreck view draws,
@@ -73,6 +91,7 @@ func (m *unitViewerModel) selectUnit() {
 	m.def, m.geometry, m.anim = nil, nil, nil
 	m.action, m.weapon, m.severity, m.power = unitViewerIdle, 1, 0, 0
 	m.wreck = unitViewerWreckModel{}
+	m.builds, m.view = nil, unitViewerView{}
 }
 
 func (m *unitViewerModel) release() {
@@ -86,6 +105,7 @@ func (m *unitViewerModel) draw(cs *contentSet, def *content.UnitDef, yaw, pitch,
 	if def == nil || cs == nil || m.err != nil {
 		return nil
 	}
+	m.mount = cs.unmappedMount
 	key := unitViewerModelKey{def, m.anim.wreckFeature(), uint16(int64(yaw)), uint16(int64(pitch)), zoom, w, h}
 	if m.key == key && (m.image != nil || key.feature != nil) {
 		return m.image
@@ -109,6 +129,7 @@ func (m *unitViewerModel) draw(cs *contentSet, def *content.UnitDef, yaw, pitch,
 	heading, tilt, bank := unitViewerOrientation(key.yaw, key.pitch)
 	var record client.ModelPreviewRecord
 	var err error
+	m.view.ok = false
 	if m.anim == nil || m.anim.action != unitViewerWreck {
 		if unitViewerAllHidden(m.poses) {
 			// A death that exploded every piece leaves nothing to draw; the
@@ -195,6 +216,7 @@ func (m *unitViewerModel) ensureLoaded(cs *contentSet, def *content.UnitDef) boo
 	if def == nil || cs == nil || m.err != nil {
 		return false
 	}
+	m.mount = cs.unmappedMount
 	if m.radius == 0 {
 		mdl, err := model.Load(cs.unmappedMount, vfs.ResourcePath("objects3d", def.ObjectName, "3do"))
 		if err != nil {
@@ -243,7 +265,53 @@ func (m *unitViewerModel) record(def *content.UnitDef, heading, pitch, bank uint
 		Heading: heading, Pitch: pitch, Bank: bank,
 		Structure: def.BMCode == 0, KeyPlane: def.ZBuffer, PiecePoses: m.poses,
 	}
-	return m.recordProjected(opts, m.radius, m.orientedPivot(heading, pitch, bank), zoom)
+	opts.Attachment = m.attachment(opts.Model)
+	record, rw, rh, err := m.recordProjected(opts, m.radius, m.orientedPivot(heading, pitch, bank), zoom)
+	if err != nil && opts.Attachment != nil {
+		// A product the renderer refuses is reported and skipped by the next
+		// work step; the factory itself is still drawn.
+		m.anim.product().failed = err
+		opts.Attachment = nil
+		record, rw, rh, err = m.recordProjected(opts, m.radius, m.orientedPivot(heading, pitch, bank), zoom)
+	}
+	if err == nil {
+		m.view.heading, m.view.tilt, m.view.bank, m.view.ok = heading, pitch, bank, true
+	}
+	return record, rw, rh, err
+}
+
+// attachment is the factory's product on its pad: the battle's nanoframe
+// look at the remaining fraction, posed by its own script, placed where the
+// QueryBuildInfo piece hangs it. The pad is resolved again for every record
+// because pads can turn (DESIGN_GPU_RENDERER §22.5).
+func (m *unitViewerModel) attachment(parent string) *client.ModelPreviewAttachment {
+	c := m.anim.product()
+	if c == nil || c.failed != nil || m.preview == nil || m.geometry == nil {
+		return nil
+	}
+	g := &m.anim.build
+	var placement client.ModelPreviewPlacement
+	if !g.origin {
+		// A pad answer past the script's declared pieces but inside the
+		// model places nothing; see the spray's target.
+		if g.pad < 0 || g.pad >= len(m.geometry.Pieces) {
+			return nil
+		}
+		var err error
+		if placement, err = m.preview.PiecePlacement(parent, m.poses, m.geometry.Pieces[g.pad].Name); err != nil {
+			c.failed = err
+			return nil
+		}
+	}
+	return &client.ModelPreviewAttachment{
+		Model:     vfs.ResourcePath("objects3d", c.def.ObjectName, "3do"),
+		Structure: c.def.BMCode == 0, KeyPlane: c.def.ZBuffer,
+		PiecePoses:     c.anim.poses(),
+		Placement:      placement,
+		BuildRemaining: c.remaining,
+		NanoframeID:    c.id,
+		NanoframeTick:  uint32(m.anim.ticks),
+	}
 }
 
 // recordWreck draws the corpse as the battle draws a 3DO feature: through
@@ -278,6 +346,7 @@ func (m *unitViewerModel) recordProjected(opts client.ModelPreviewOptions, radiu
 		opts.Width, opts.Height = rw, rh
 		record, err = m.preview.RecordProjectedGeometry(opts, projection)
 	}
+	m.view.projection, m.view.w, m.view.h = projection, rw, rh
 	return record, rw, rh, err
 }
 
