@@ -1517,7 +1517,8 @@ fingerprint. Units 1–8 are implemented.
 
 ## 15. Unit restrictions
 
-**User-authorized 2026-10-05; design approved the same day, not implemented.** On 2026-10-05 the
+**User-authorized 2026-10-05; design approved the same day; units 1, 2 and 4
+of §15.12 implemented, unit 3 (Survival and the Modern AI) not yet.** On 2026-10-05 the
 user chose *Retail restrictions, every mode*: implement retail's multiplayer
 restriction rules once, offer them in
 skirmish and Survival beside the mutators, edit them in the unit viewer, and
@@ -2082,7 +2083,8 @@ Units 2 and 3 can run in parallel after unit 1; unit 4 follows unit 2.
    *Done when* the Survival, Classic and Modern AI rows of §15.11 pass and
    the arena's synchronous and asynchronous runs agree.
 4. **Editor, card and lines.** Owns `cmd/nanolathe/unit_viewer*.go`,
-   `nlscreen_pages.go`, `nlscreen.go` and `loading.go`, and the pointer
+   `nlscreen_pages.go`, `nlscreen.go`, `nlscreen_presets.go` (presets leave
+   `restrictions` out) and `loading.go`, and the pointer
    paragraphs in DESIGN_INTERFACE_HUD_INPUT §3.17 and DESIGN_DEVELOPER_TOOLS
    §7. Delivers the card, the editor and the loading-screen lines of §15.9.
    *Done when* the editor row of §15.11 passes and captures of the card and

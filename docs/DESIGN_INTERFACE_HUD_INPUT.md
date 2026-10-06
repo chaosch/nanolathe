@@ -4353,8 +4353,8 @@ rebuilt every frame. This is host presentation policy and changes nothing drawn.
 window keeps the header on one line. A tab row (*Game*, *Mutators*,
 *Graphics*, *Effects*, *Controls*) and *Back* / *Apply* (with the count of
 changed cards) head the screen; under the wordmark one line names the
-content, rules, renderer and mutators a battle started now would use, each
-part a jump to its card. The focused card fills the left: kicker, title, one
+content, rules, renderer, mutators and unit restrictions a battle started now
+would use, each part a jump to its card. The focused card fills the left: kicker, title, one
 control of its kind (lamp meter, throw switch, stepper, the three rule
 layers, side-by-side choices, or the content list), a description, a lock or
 renderer note, chips and *Compare*. The page's cards run along the bottom;
@@ -4570,6 +4570,28 @@ units with the scaled value before and after, read from a clone of the
 catalog after `Catalog.ApplyMutators` with that one factor, so engine limits
 show (a Krogoth's hit points stop at 32767). Choosing a controls profile
 lists every row it would change, old then new.
+
+**Unit restrictions card.** The Mutators page ends with the *Unit
+restrictions* card, whose contract is
+[DESIGN_MODS_MUTATORS §15.9](DESIGN_MODS_MUTATORS.md#159-editing-and-storage).
+Its control summarises the draft against the running content's catalog: the
+numbers removed and capped, the first four entries in key order with their
+pictures and states, then *and N more*; *Edit...* and *Clear* sit beneath it,
+and amber chips name the draft's entries the content leaves out, and saved
+entries that do not read, over at most two lines. It has no Compare, and the
+arrows and the wheel step nothing. The draft holds the set as its canonical
+string, so the draft stays comparable. *Edit...* pauses the screen's picture
+worker and opens the unit viewer's restriction editor over the screen
+(DESIGN_DEVELOPER_TOOLS §7); the viewer's Back hands the edited set back as a
+touched card, the screen's Apply writes it to the running content's layer
+through the shell's restriction selection, and the screen's Back discards it.
+While `--restrict` chose the run's set the card starts from that set and its
+note says an applied edit replaces it. No preset part holds `restrictions`:
+saving a preset leaves it out and applying one, an older preset that names it
+included, never changes it. `TestNLRestrictionCardSummary`,
+`TestUnitViewerRestrictCardRouteEditsScreenDraft` and
+`TestNLPresetsExcludeRestrictions` lock these; `--nl-shot-only restrictions`
+with `--restrict` entries captures the card.
 
 **Quiet audio.** Every settings preview is silent, including its visible battle,
 lead-in, restart and retirement. It has no playback binding and never changes the
