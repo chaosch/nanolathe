@@ -72,10 +72,13 @@ func skirmishBattleRequest(opts Options, cs *contentSet, cfg session.SkirmishCon
 	cfg = configWithBattleSeeds(cfg, source)
 	localOwner := session.LocalOwnerForConfig(cfg)
 	watching := localOwner >= 0 && localOwner < len(cfg.Players) && cfg.Players[localOwner].IsObserver()
+	// Skirmish and Survival battles carry the unit restrictions; a campaign
+	// mission keeps its own unit list (docs/DESIGN_MODS_MUTATORS.md §15.1).
 	return freshBattleRequest{value: headless.FreshBattleRequest{
 		Gameplay:         opts.Gameplay,
 		CommunitySources: communitySources(opts, cs),
 		Mutators:         opts.Mutators,
+		Restrictions:     opts.Restrictions,
 		AIOverrides:      opts.AIOverrides,
 		BuilderOptions:   sessionBuilderOptions(loadedSettings().BuilderOptions),
 		Kind:             kind, Map: cfg.MapName, Difficulty: cfg.Difficulty, Skirmish: cfg,

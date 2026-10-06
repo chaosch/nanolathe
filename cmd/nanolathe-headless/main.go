@@ -63,6 +63,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if !request.Mutators.IsZero() {
 		fmt.Fprintf(stderr, "nanolathe: mutators: %s\n", strings.Join(request.Mutators.Describe(), ", "))
 	}
+	// Restrictions likewise (docs/DESIGN_MODS_MUTATORS.md §15.5).
+	if !request.Restrictions.IsZero() {
+		fmt.Fprintf(stderr, "nanolathe: unit restrictions: %s\n", request.Restrictions.String())
+	}
 	// Profiling wraps the session but never enters it: the sampler is a host
 	// concern and the authoritative run is bit-identical with or without it
 	// [I6]. Elapsed wall time is reported alongside so a profile always comes
@@ -193,6 +197,11 @@ func parse(args []string, output io.Writer) (headless.Request, string, profileOp
 		mutatorArgs = append(mutatorArgs, text)
 		return nil
 	})
+	var restrictArgs []string
+	flags.Func("restrict", "unit restriction <unit>=<count>, repeatable: 0 removes the unit from a skirmish or Survival battle and 1..100 caps each player's units of it, in every gameplay mode; none selects no restrictions (docs/DESIGN_MODS_MUTATORS.md §15); only these flags select restrictions, never the settings file, so a run reproduces from its command line", func(text string) error {
+		restrictArgs = append(restrictArgs, text)
+		return nil
+	})
 	modSelector := "none"
 	flags.Func("mod", "installed mod to mount as the last content root, <id>, <id>@<version> or none (docs/DESIGN_MODS_MUTATORS.md §4.3); only this flag selects one, never the settings file, and nothing is fetched", func(text string) error {
 		if _, _, err := modlibrary.ParseSelector(text); err != nil {
@@ -302,6 +311,11 @@ func parse(args []string, output io.Writer) (headless.Request, string, profileOp
 		return request, reportPath, profiles, bench, err
 	}
 	request.Mutators = mutators
+	restrictions, err := resolveRestrictions(restrictArgs, request.Mission != "", bench.OutputDir != "")
+	if err != nil {
+		return request, reportPath, profiles, bench, err
+	}
+	request.Restrictions = restrictions
 	request.Content, request.ProfileFeatures = config.Content(), config.CommunitySources()
 	bench.Content, bench.ProfileFeatures = config.Content(), config.CommunitySources()
 	bench.UnitLimit = headless.SimBenchDefaultUnitLimit
@@ -384,6 +398,26 @@ func resolveMutators(args []string, benchmark bool) (content.Mutators, error) {
 		return content.Mutators{}, fmt.Errorf("nanolathe: invalid mutator: logical path <command line>, providers searched [mutator], expected %s: %w", expected, err)
 	}
 	return m, nil
+}
+
+// resolveRestrictions reads the --restrict flags
+// (docs/DESIGN_MODS_MUTATORS.md §15.5). Like the mutators, the displayless
+// command never reads the settings file's "restrictions" key, so a run
+// reproduces from its command line. A campaign mission keeps its own
+// authored unit list and the simulation-cost benchmark measures a fixed
+// scene, so both refuse the flag; names are checked against the running
+// content at battle entry.
+func resolveRestrictions(args []string, mission, benchmark bool) (content.Restrictions, error) {
+	if len(args) == 0 {
+		return content.Restrictions{}, nil
+	}
+	if mission {
+		return content.Restrictions{}, fmt.Errorf("nanolathe: unit restrictions do not apply to a campaign mission: logical path <command line>, providers searched [restrict], expected no --restrict with --mission")
+	}
+	if benchmark {
+		return content.Restrictions{}, fmt.Errorf("nanolathe: unit restrictions are not applied to the simulation-cost benchmark: logical path <command line>, providers searched [restrict], expected no --restrict with --sim-benchmark")
+	}
+	return headless.ParseRestrictFlags(args)
 }
 
 func writeReport(path string, stdout io.Writer, report headless.Report) error {
