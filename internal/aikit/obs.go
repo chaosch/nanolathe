@@ -1,6 +1,7 @@
 package aikit
 
 import (
+	"math"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/internal/orders"
@@ -39,6 +40,28 @@ var orderClassByID = func() []OrderClass {
 }()
 
 func orderClassTable() []OrderClass { return orderClassByID }
+
+// Build request kinds a queued order can hold, for the cap observation's
+// count of requests that have no record yet (capQueued); 0 is none.
+const (
+	buildFactory uint8 = iota + 1 // a factory product: its count, less the one in production
+	buildSite                     // a mobile build: one request until its frame is placed
+)
+
+// orderBuildKindByID classifies the order table once, like orderClassByID.
+var orderBuildKindByID = func() []uint8 {
+	table := orders.Table()
+	out := make([]uint8, len(table))
+	for i, d := range table {
+		switch d.Name {
+		case "BuildingBuild":
+			out[i] = buildFactory
+		case "MobileBuild", "VTOL_MobileBuild":
+			out[i] = buildSite
+		}
+	}
+	return out
+}()
 
 func classifyOrderName(name string) OrderClass {
 	switch name {
@@ -162,6 +185,26 @@ type Feature struct {
 	Defensive bool
 }
 
+// CapCount is the observer's standing against one capped definition's cap
+// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI restriction caps").
+type CapCount struct {
+	Info *UnitInfo
+	// Records is the allocator's own census of the observer's slice: its
+	// records of the definition, nanoframes and records awaiting teardown
+	// included [05 R-SHARE-01 §8]. Own lists none of the latter, so this is
+	// not a count of Own.
+	Records int32
+	// Queued is the observer's own build requests for the definition that
+	// have no record yet: factory-queue products not yet started and mobile
+	// builds whose frame is not yet placed.
+	Queued int32
+}
+
+// Left is how many more of the definition the observer may still ask for:
+// its cap less its records and its requests that have no record yet. Zero
+// or less means the allocator would refuse one more.
+func (c *CapCount) Left() int32 { return c.Info.Cap - c.Records - c.Queued }
+
 // Obs is one fair observation. The host rebuilds it into the same buffers
 // every think, so a brain must copy anything it wants to keep.
 type Obs struct {
@@ -188,6 +231,9 @@ type Obs struct {
 	// FeaturesTick is when. Map features there are in the owner's view.
 	Features     []Feature
 	FeaturesTick uint32
+	// Capped holds one record per capped definition (Table.Capped), in
+	// table order; empty when the battle caps nothing.
+	Capped []CapCount
 }
 
 // FeatureRadius and FeatureEvery bound Obs.Features.
@@ -284,6 +330,44 @@ func queueState(u *units.Unit, classes []OrderClass) (OrderClass, int32, string)
 		}
 	}
 	return class, n, target
+}
+
+// capQueued adds u's queued build requests for capped definitions that have
+// no record yet to capped (Obs.Capped, indexed by UnitInfo.capSlot - 1). A
+// factory product counts its queued number less the one whose frame the
+// factory has bound; a mobile build counts until its frame is placed.
+func capQueued(u *units.Unit, table *Table, capped []CapCount) {
+	q := orders.QueueOfUnit(u)
+	if q == nil {
+		return
+	}
+	kinds := orderBuildKindByID
+	for i, count := 0, q.PrimaryLen(); i < count; i++ {
+		node := q.PrimaryAt(i)
+		if node == nil || node.BuildDefKey == "" || int(node.ID) >= len(kinds) {
+			continue
+		}
+		var n int64
+		switch kinds[node.ID] {
+		case buildFactory:
+			n = int64(max(node.Param2, 1))
+			if node.Target != 0 {
+				n--
+			}
+		case buildSite:
+			if node.Target == 0 {
+				n = 1
+			}
+		}
+		if n <= 0 {
+			continue
+		}
+		if info := table.Lookup(node.BuildDefKey); info != nil && info.capSlot > 0 && int(info.capSlot) <= len(capped) {
+			c := &capped[info.capSlot-1]
+			// A malformed count saturates rather than wraps.
+			c.Queued = int32(min(int64(math.MaxInt32), int64(c.Queued)+n))
+		}
+	}
 }
 
 // buildProgress reports whether u is finished and its construction

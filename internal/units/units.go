@@ -2575,6 +2575,25 @@ func (w *World) LiveCountForPlayer(player int) int {
 	return w.liveCounters[player]
 }
 
+// DefinitionCount returns the allocator's census of def in player's slice:
+// the records whose definition identity is def's — nanoframes, completed
+// units and dead units whose teardown has not yet freed the record
+// [05 R-SHARE-01 §8]. It reads the pool's own counting function, the one the
+// per-definition gate compares with the definition's limit, so the answer is
+// exactly the number the next creation of def for player is tested against.
+// It writes nothing: a definition this world has never given an identity
+// holds no record and counts 0. Zero RNG draws.
+func (w *World) DefinitionCount(player int, def *content.UnitDef) int {
+	if w == nil || w.pool == nil || def == nil {
+		return 0
+	}
+	id, ok := w.defMap[def] // lookup only; never ranged (I1)
+	if !ok {
+		return 0
+	}
+	return w.pool.DefinitionCount(player, id)
+}
+
 // CreatedCountForPlayer returns the monotonic number of units allocated for a
 // player, including units later finalized.  It is the retail "ever created"
 // counter used by elimination sweeps [08 R-SKIR-01 §3].

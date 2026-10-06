@@ -265,11 +265,18 @@ func (s *Session) initSurvival(cfg SkirmishConfig) error {
 	if s.Build != nil {
 		rules = s.Build.Rules
 	}
+	// The catalog is the battle's restricted clone when the battle has unit
+	// restrictions, so the tier walk, which resolves every product through
+	// it, never reaches a removed unit or one only a removed builder makes,
+	// and an authored roster has already lost its removed entries
+	// (docs/DESIGN_MODS_MUTATORS.md §15.6). A capped unit stays in the pool:
+	// it is planned from the same draws, and the allocator refuses it at
+	// creation (survivalSpawn).
 	wavePool, err := survival.BuildScenarioPool(s.Catalog, func(menu *content.BuildMenuPage) []string {
 		return construction.BuildProducts(rules, menu)
 	})
 	if err != nil {
-		return err
+		return survivalRestricted(s.Restrictions, err)
 	}
 	st := &survivalState{
 		attacker: uint8(attacker),
@@ -278,7 +285,14 @@ func (s *Session) initSurvival(cfg SkirmishConfig) error {
 		pool:     wavePool,
 	}
 	if len(st.pool.Units) == 0 {
-		return fmt.Errorf("nanolathe: survival wave pool is empty: logical path %s, providers searched [catalog build menus], expected at least one armed mobile unit reachable from a commander", cfg.MapName)
+		return survivalRestricted(s.Restrictions, fmt.Errorf("nanolathe: survival wave pool is empty: logical path %s, providers searched [catalog build menus], expected at least one armed mobile unit reachable from a commander", cfg.MapName))
+	}
+	// Under a restriction set the walked pool must still open with an
+	// ordinary attacker, the rule an authored roster already meets (§5.1;
+	// BuildScenarioPool checks a roster's pool). An unrestricted battle's
+	// checks are unchanged.
+	if !s.Restrictions.IsZero() && s.Catalog.SurvivalRoster == nil && !survivalHasOpener(&st.pool) {
+		return survivalRestricted(s.Restrictions, fmt.Errorf("nanolathe: survival wave pool has no ordinary tier-1 attacker: logical path %s, providers searched [catalog build menus], expected a tier-1 ground, hover or amphibious unit that is not an authored infector", cfg.MapName))
 	}
 	st.phase = survivalGrace
 	st.phaseEnd = st.tuning.FirstWaveDelay
@@ -297,6 +311,42 @@ func (s *Session) initSurvival(cfg SkirmishConfig) error {
 	s.Survival = st
 	s.EnemyOwner = uint8(attacker)
 	return nil
+}
+
+// survivalHasOpener reports whether a wave pool can open: it holds a tier-1
+// ground, amphibious or hover unit that is not an authored infector, the
+// opening rule of an authored roster (DESIGN_SURVIVAL §5.1).
+func survivalHasOpener(p *survival.Pool) bool {
+	for _, u := range p.Units {
+		if u.Tier == 1 && u.Def != nil && !u.Def.NanolatheInfector && (u.Domain == survival.Ground || u.Domain == survival.Amphibious || u.Domain == survival.Hover) {
+			return true
+		}
+	}
+	return false
+}
+
+// survivalRestrictionsError is a Survival entry refusal under unit
+// restrictions: the existing diagnostic, naming the restriction set that
+// left the wave pool without what it needs (docs/DESIGN_MODS_MUTATORS.md
+// §15.6). It unwraps to that diagnostic.
+type survivalRestrictionsError struct {
+	restrictions content.Restrictions
+	err          error
+}
+
+func (e *survivalRestrictionsError) Error() string {
+	return "nanolathe: survival under unit restrictions " + e.restrictions.String() + ": " + strings.TrimPrefix(e.err.Error(), "nanolathe: ")
+}
+
+func (e *survivalRestrictionsError) Unwrap() error { return e.err }
+
+// survivalRestricted names the battle's restriction set in a Survival entry
+// refusal; without restrictions the refusal is returned unchanged.
+func survivalRestricted(r content.Restrictions, err error) error {
+	if err == nil || r.IsZero() {
+		return err
+	}
+	return &survivalRestrictionsError{restrictions: r, err: err}
 }
 
 // survivalClassFor returns the static regions of a definition's movement
@@ -813,7 +863,12 @@ func (s *Session) survivalSpawn(tick uint32) {
 		}
 		h, err := s.Units.Create(pu.Def, st.attacker, x, y, z)
 		if err != nil {
-			continue // a per-definition limit or failed creation drops this pick
+			// A per-definition limit — a unit restriction's cap reached on the
+			// attacker's own slice [05 R-SHARE-01 §8] — or a failed creation
+			// drops this pick: it used one of this tick's creations, the
+			// allocator drew nothing, and it is never retried, so the rest of
+			// the wave arrives as planned (docs/DESIGN_MODS_MUTATORS.md §15.6).
+			continue
 		}
 		u := s.Units.Unit(h)
 		if u == nil {

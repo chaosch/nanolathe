@@ -502,11 +502,12 @@ func (e *Economy) assign(b *core.Board, u *aikit.OwnUnit, c *commitment, best *c
 	}
 }
 
-// mexFor returns the cheapest land extractor a builder can make.
+// mexFor returns the cheapest land extractor a builder can make, of those
+// whose restriction cap leaves an allowance.
 func (e *Economy) mexFor(bi *aikit.UnitInfo) *aikit.UnitInfo {
 	var best *aikit.UnitInfo
 	for _, p := range bi.Builds {
-		if !p.Role.Has(aikit.RoleExtractor) || e.s.info[p.Index].water {
+		if !p.Role.Has(aikit.RoleExtractor) || e.s.info[p.Index].water || e.s.k.Allowance(p) <= 0 {
 			continue
 		}
 		if best == nil || p.Value < best.Value {
@@ -670,7 +671,9 @@ func (e *Economy) evalBuildings(b *core.Board, u *aikit.OwnUnit, bs *builderStat
 	}
 	for _, p := range bi.Builds {
 		si := &s.info[p.Index]
-		if p.Role.Has(aikit.RoleMobile) || si.geo || s.prodBlock[p.Index] > s.tick {
+		// A product whose restriction cap is used up is not a candidate
+		// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI restriction caps").
+		if p.Role.Has(aikit.RoleMobile) || si.geo || s.prodBlock[p.Index] > s.tick || s.k.Allowance(p) <= 0 {
 			continue
 		}
 		if p == bs.blockProd && bs.blockUntil > s.tick {

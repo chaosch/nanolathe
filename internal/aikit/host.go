@@ -1,6 +1,8 @@
 package aikit
 
 import (
+	"math"
+
 	"github.com/nanolathe-gg/nanolathe/internal/ai"
 	"github.com/nanolathe-gg/nanolathe/internal/economy"
 	"github.com/nanolathe-gg/nanolathe/internal/orders"
@@ -138,12 +140,65 @@ type Kit struct {
 	obs    *Obs
 	tags   []int32
 	inst   []*units.Unit // handle → the unit observed in that slot (observer.inst)
+	// capUsed counts, per Obs.Capped record, the requests this think has
+	// emitted for the definition; buildObs clears it for each think.
+	capUsed []int32
+}
+
+// Uncapped is Allowance's answer for a product without a cap.
+const Uncapped int32 = math.MaxInt32
+
+// Allowance is how many more of product this player may still request in
+// this think (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI restriction caps"):
+// for a capped definition, its cap less its records, less its own requests
+// that have no record yet — those already queued (Obs.Capped) and those this
+// think has emitted — and Uncapped for any other. A layer offers a product as
+// a candidate only while this is positive. It reads only the observation.
+func (k *Kit) Allowance(product *UnitInfo) int32 {
+	if k == nil || product == nil || product.capSlot <= 0 || k.obs == nil || int(product.capSlot) > len(k.obs.Capped) {
+		return Uncapped
+	}
+	i := product.capSlot - 1
+	left := k.obs.Capped[i].Left()
+	if i < int32(len(k.capUsed)) {
+		left -= k.capUsed[i]
+	}
+	return left
+}
+
+// capRequest is how many creations a command asks for that a cap counts:
+// the queued number of a factory request, one placement, one replacement.
+func capRequest(c *Command) int32 {
+	switch c.Kind {
+	case CmdProduce:
+		return max(c.Count, 1)
+	case CmdBuild, CmdReplace:
+		return 1
+	}
+	return 0
 }
 
 func (k *Kit) push(c Command, actors []pool.Handle) {
 	b := k.out
 	if b == nil {
 		return // outside a think (a brain's Init): nothing to apply it with
+	}
+	// A capped product is requested at most up to its allowance: a request
+	// past it is not emitted and a factory request queues only what is left,
+	// so a layer that did not check the allowance cannot ask for a creation
+	// the allocator would refuse (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI
+	// restriction caps").
+	var want, left int32
+	if c.Product != nil && c.Product.capSlot > 0 {
+		if want = capRequest(&c); want > 0 {
+			if left = k.Allowance(c.Product); left <= 0 {
+				return
+			}
+			if want > left {
+				want = left
+				c.Count = left
+			}
+		}
 	}
 	c.first = int32(len(b.actors))
 	for _, h := range actors {
@@ -156,6 +211,11 @@ func (k *Kit) push(c Command, actors []pool.Handle) {
 	c.count = int32(len(b.actors)) - c.first
 	if c.count == 0 {
 		return
+	}
+	if want > 0 && left != Uncapped {
+		if i := c.Product.capSlot - 1; i < int32(len(k.capUsed)) {
+			k.capUsed[i] += want
+		}
 	}
 	// The command acts on the target as observed; a different unit in the
 	// same slot by the time the batch applies makes it stale (cmd.go).
@@ -214,7 +274,8 @@ func (k *Kit) Build(builder pool.Handle, product *UnitInfo, x, z, spot, spacing 
 	k.push(Command{Kind: CmdBuild, Product: product, X: x, Z: z, Spot: spot, Spacing: spacing, Queued: queued}, one[:])
 }
 
-// Produce queues count units of product at a factory.
+// Produce queues count units of product at a factory; a capped product
+// queues at most its allowance (Allowance).
 func (k *Kit) Produce(factory pool.Handle, product *UnitInfo, count int32) {
 	var one [1]pool.Handle
 	one[0] = factory
@@ -553,6 +614,7 @@ func (h *Host) applyBatch(tick uint32, w *units.World) {
 		DroppedAPM: after.DroppedAPM - before.DroppedAPM,
 		Stale:      after.Stale - before.Stale,
 		Failed:     after.Failed - before.Failed,
+		Capped:     after.Capped - before.Capped,
 	}
 	for i := range after.Reasons {
 		h.kit.Last.Reasons[i] = after.Reasons[i] - before.Reasons[i]
@@ -589,6 +651,22 @@ func (h *Host) buildObs(tick uint32, w *units.World, econ *economy.Service) {
 		o.UnitLimit = int32(lim)
 	}
 	o.UnitCount = int32(w.LiveCountForPlayer(int(me)))
+	// Capped definitions: the allocator's census of this owner's slice,
+	// through the accessor that shares the gate's count, so a dead unit
+	// awaiting teardown counts as the allocator counts it. Queued requests
+	// are added in pass 1. A battle without caps has an empty list.
+	table := h.kit.Table
+	capped := table != nil && len(table.Capped) > 0
+	if capped {
+		if len(o.Capped) != len(table.Capped) {
+			o.Capped = make([]CapCount, len(table.Capped))
+			h.kit.capUsed = make([]int32, len(table.Capped))
+		}
+		for i, info := range table.Capped {
+			o.Capped[i] = CapCount{Info: info, Records: int32(w.DefinitionCount(int(me), info.Def))}
+			h.kit.capUsed[i] = 0
+		}
+	}
 
 	ob.walk = w.AppendLiveSliced(ob.walk[:0])
 	maxH := 0
@@ -613,7 +691,6 @@ func (h *Host) buildObs(tick uint32, w *units.World, econ *economy.Service) {
 	o.Own = o.Own[:0]
 	ob.sensors = ob.sensors[:0]
 	ob.jammers = ob.jammers[:0]
-	table := h.kit.Table
 	for _, u := range ob.walk {
 		if u.Owner != me {
 			if d := u.Def; d != nil && u.Activated && (d.RadarDistanceJam != 0 || d.SonarDistanceJam != 0) &&
@@ -638,6 +715,9 @@ func (h *Host) buildObs(tick uint32, w *units.World, econ *economy.Service) {
 		built, progress := buildProgress(u)
 		class, qlen, targetKey := queueState(u, classes)
 		ammo, queued := stockpileState(u)
+		if capped {
+			capQueued(u, table, o.Capped)
+		}
 		var target *UnitInfo
 		if targetKey != "" {
 			target = table.Lookup(targetKey)

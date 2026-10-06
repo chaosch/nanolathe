@@ -128,6 +128,8 @@ type state struct {
 
 	ready bool
 	me    int // index of this survivor in the scenario's team, -1 if absent
+	// kit is this think's kit, for the restriction allowance (caps.go).
+	kit *aikit.Kit
 	// Geometry, world units: the start site (the human's commander), this
 	// survivor's home (its start, moved out to blastClear from the site),
 	// the point its economy faces (outward from the site through its home)

@@ -83,8 +83,18 @@ type UnitInfo struct {
 	EnergyStore   int32
 	FootX, FootZ  int32
 	Depth         int32 // build-tree depth from a commander (0 = commander)
+	// Cap is the per-player cap unit restrictions put on the definition,
+	// immutable per battle: -1 for No limit, otherwise the limit field the
+	// allocator compares its census with [05 R-SHARE-01 §8]
+	// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI restriction caps").
+	Cap int32
 
 	Builds []*UnitInfo // products, authored order, filtered by the session's build rules
+
+	// capSlot is 1 + the definition's index in Table.Capped (and so in
+	// Obs.Capped), 0 when the table does not cap it. Only BuildTable sets
+	// it, so an info a test builds by hand is never capped.
+	capSlot int32
 }
 
 // EnergyPerMetal is the exchange rate used for Value. It is a planning
@@ -105,7 +115,11 @@ func (u *UnitInfo) Strength() int64 { return int64(u.DPS) * int64(u.HP) / 16 }
 
 // Table is the catalog summarized for one session's build rules.
 type Table struct {
-	Units             []*UnitInfo
+	Units []*UnitInfo
+	// Capped lists the definitions with a cap (UnitInfo.Cap >= 0), in table
+	// order; empty when the battle restricts nothing, so a battle without
+	// caps adds no observation work.
+	Capped            []*UnitInfo
 	byKey             map[string]*UnitInfo // lookup only; never ranged in a decision path (I1)
 	byDef             map[*content.UnitDef]*UnitInfo
 	defensiveFeatures map[*content.FeatureDef]bool
@@ -170,6 +184,12 @@ func BuildTable(cat *content.Catalog, rules construction.Rules) *Table {
 	}
 	t.computeAntiAir()
 	t.computeDepth()
+	for _, u := range t.Units {
+		if u.Cap >= 0 {
+			t.Capped = append(t.Capped, u)
+			u.capSlot = int32(len(t.Capped))
+		}
+	}
 	// Anti-air credited from the damage table is known only now: an armed
 	// aircraft that is mostly anti-air is a fighter, not a bomber — unless
 	// it drops bombs, which makes it a bomber whatever else it carries (the
@@ -264,8 +284,22 @@ func intercepts(def *content.UnitDef) bool {
 	return false
 }
 
+// definitionCap is the per-player cap the allocator's third test applies to
+// def: its limit field when set, false when the field holds the parser's -1
+// No limit [05 R-SHARE-01 §8]. A malformed negative limit refuses every
+// creation, as a cap of 0 would.
+func definitionCap(def *content.UnitDef) (int32, bool) {
+	if def == nil || !def.LimitEnabled || def.Limit == -1 {
+		return -1, false
+	}
+	return max(def.Limit, 0), true
+}
+
 func summarize(key string, def *content.UnitDef) *UnitInfo {
-	u := &UnitInfo{Key: key, Def: def, Side: def.Side}
+	u := &UnitInfo{Key: key, Def: def, Side: def.Side, Cap: -1}
+	if limit, ok := definitionCap(def); ok {
+		u.Cap = limit
+	}
 	u.Metal = numeric.TruncateFloat32ToLow32(def.BuildCostMetal)
 	u.Energy = numeric.TruncateFloat32ToLow32(def.BuildCostEnergy)
 	u.BuildTime = def.BuildTime
