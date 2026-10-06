@@ -1,10 +1,12 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/session"
+	"github.com/nanolathe-gg/nanolathe/internal/settings"
 )
 
 // TestLoadingStageMapping locks the two things the loading screen must not get
@@ -101,5 +103,34 @@ func TestRemasterProgressLifetime(t *testing.T) {
 		if l.remaster.Load() != nil {
 			t.Fatalf("early return left popup active (enabled=%v)", enabled)
 		}
+	}
+}
+
+// The loading screen's unit-restriction lines (docs/DESIGN_MODS_MUTATORS.md
+// §8.3, §15.9): the count a skirmish or Survival battle enters with, under the
+// mutators, and the notice naming saved entries the content leaves out; a
+// campaign mission draws neither, and a long notice ends with how many more.
+func TestLoadingRestrictionLines(t *testing.T) {
+	g := &gameShell{cs: restrictionTestContent(nil)}
+	file := settings.Defaults()
+	file.Restrictions = map[string]int{"armpw": 20, "corak": 0, "armflash": 0, "notaunit": 0}
+	g.applySettings(file)
+	g.loading = newLoadingState("Canal Crossing")
+	want := []string{"Restrictions: 2 removed, 1 capped", "Unit restrictions left out: notaunit=0 (not in this content)"}
+	if got := g.loadingRestrictionLines(); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("lines %q, want %q", got, want)
+	}
+	g.loading = newLoadingState("")
+	if got := g.loadingRestrictionLines(); len(got) != 0 {
+		t.Fatalf("a campaign mission draws %q", got)
+	}
+	omitted := []restrictionOmission{{unit: "a", reason: "gone"}, {unit: "b", reason: "gone"}, {unit: "c", reason: "gone"}}
+	measure := func(text string) int { return len(text) }
+	full := restrictionNoticeLine(omitted)
+	if got := fitRestrictionNotice(omitted, measure, len(full)); got != full {
+		t.Fatalf("a notice that fits became %q", got)
+	}
+	if got := fitRestrictionNotice(omitted, measure, len(full)-1); got != "Unit restrictions left out: a=0 (gone), b=0 (gone) and 1 more" {
+		t.Fatalf("a long notice became %q", got)
 	}
 }
