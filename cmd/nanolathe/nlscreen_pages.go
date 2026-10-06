@@ -36,19 +36,24 @@ type nlDraft struct {
 	// copy to the shell (DESIGN_INTERFACE_HUD_INPUT §3.6 "Rebinding").
 	keys          *input.KeyMap
 	interfaceType int
+	// restrictions is the unit restriction set's canonical String
+	// (docs/DESIGN_MODS_MUTATORS.md §15.9), "" for none: a string keeps the
+	// draft comparable, and two sets with equal strings are Equal.
+	restrictions string
 }
 
 type nlKind int
 
 const (
-	nlMeter      nlKind = iota // a row of lamps; the first is Off
-	nlSwitch                   // an Off/On throw switch
-	nlGroup                    // several related settings on one card
-	nlStepper                  // ◄ value ► with a notch per value
-	nlLayers                   // the three rule layers
-	nlHalves                   // big choices side by side
-	nlContent                  // the mod chooser
-	nlResolution               // monitor presets and custom dimensions
+	nlMeter        nlKind = iota // a row of lamps; the first is Off
+	nlSwitch                     // an Off/On throw switch
+	nlGroup                      // several related settings on one card
+	nlStepper                    // ◄ value ► with a notch per value
+	nlLayers                     // the three rule layers
+	nlHalves                     // big choices side by side
+	nlContent                    // the mod chooser
+	nlResolution                 // monitor presets and custom dimensions
+	nlRestrictions               // the unit restrictions' summary, edited in the unit viewer
 )
 
 type nlCard struct {
@@ -160,7 +165,7 @@ func (c *nlCatalogue) builtFrom(mods []modlibrary.Mod) bool {
 func (s *nlScreen) buildPages() []nlPage {
 	return []nlPage{
 		{key: "game", title: "Game", cards: s.gameCards()},
-		{key: "mutators", title: "Mutators", cards: s.mutatorCards()},
+		{key: "mutators", title: "Mutators", cards: append(s.mutatorCards(), s.restrictionCard())},
 		{key: "graphics", title: "Graphics", cards: s.graphicsCards()},
 		{key: "effects", title: "Effects", cards: s.effectCards()},
 		{key: "controls", title: "Controls", cards: s.controlCards()},
@@ -365,6 +370,178 @@ func (s *nlScreen) mutatorCards() []nlCard {
 		})
 	}
 	return cards
+}
+
+// ---------------------------------------------------------------- UNIT RESTRICTIONS
+
+// restrictionCard follows the mutator cards (docs/DESIGN_MODS_MUTATORS.md
+// §15.9). Its control is a summary, not the editor, so it never grows with
+// the catalogue; Edit... opens the unit viewer's editor over the screen on the
+// draft, and Clear empties it. Arrows and the wheel step nothing: a set is
+// not a list of values. It has no comparison scene, since a restriction
+// changes which units exist, not how a scene looks.
+func (s *nlScreen) restrictionCard() nlCard {
+	return nlCard{
+		key: "restrictions", label: "Unit restrictions", pics: []string{"corkrog", "armbrtha"}, kind: nlRestrictions,
+		get:  func(d *nlDraft) int { return min(1, len(d.restrictions)) },
+		set:  func(*nlDraft, int) {},
+		copy: func(to, from *nlDraft) { to.restrictions = from.restrictions },
+		valueText: func(d *nlDraft) string {
+			return s.restrictionSummary(d.restrictions).text
+		},
+		desc: func(*nlDraft, int) string {
+			return "Remove units, or cap how many each player may have, in skirmish and Survival under every rule set, Strict 3.1 included. " +
+				"Every player obeys them, computer players and Survival waves included. Campaign missions keep their own unit lists."
+		},
+		scene: func(*nlDraft, int) string { return "armor" },
+	}
+}
+
+// nlRestrictionsOf reads a draft's canonical spelling back into a set.
+func nlRestrictionsOf(text string) content.Restrictions {
+	var r content.Restrictions
+	if text == "" {
+		return r
+	}
+	for _, part := range strings.Split(text, ",") {
+		if e, err := content.ParseRestriction(part); err == nil {
+			_ = r.Set(e.Unit, e.Count)
+		}
+	}
+	return r
+}
+
+// nlLiveRestrictions is the set a skirmish started now would carry before
+// the content checks it: --restrict's for the run until the player applies
+// one, otherwise the running content's saved set, names it lacks included,
+// so Apply keeps them in the file (§15.5, §15.9).
+func nlLiveRestrictions(g *gameShell) content.Restrictions {
+	if g.opts.RestrictionsSet {
+		return g.opts.Restrictions
+	}
+	return g.restrictions.readable
+}
+
+// nlRestrictionSummary is the card's reading of a draft against the running
+// content.
+type nlRestrictionSummary struct {
+	text            string // "No restrictions", or "3 removed, 2 capped"
+	removed, capped int    // the entries the content takes
+	rows            []nlRestrictionRow
+	more            int      // entries taken beyond rows
+	leftOut         []string // chips: entries the running content leaves out
+}
+
+// nlRestrictionRow is one named entry of the summary.
+type nlRestrictionRow struct {
+	key, name, state string
+	removed          bool
+}
+
+// nlRestrictionSummaryKey is everything a summary reads.
+type nlRestrictionSummaryKey struct {
+	draft    string
+	catalog  *content.Catalog
+	shell    *gameShell
+	omitted  int
+	flagged  bool
+	computed bool
+}
+
+// nlRestrictionRowsShown is how many named entries the card lists before
+// "and N more" (§15.9).
+const nlRestrictionRowsShown = 4
+
+// restrictionSummary reads text against the running content's catalog: the
+// entries it takes, counted and the first four named, and chips for the
+// entries it leaves out — the draft's, and saved entries that do not read
+// (§15.3). Until the catalog has compiled every entry counts as taken. It is
+// kept until any input changes, since Draw asks for it every frame.
+func (s *nlScreen) restrictionSummary(text string) nlRestrictionSummary {
+	g := s.shell()
+	key := nlRestrictionSummaryKey{draft: text, shell: g, computed: true}
+	if g != nil {
+		key.catalog = s.stats.catalog(g.cs)
+		key.omitted, key.flagged = len(g.restrictions.omitted), g.opts.RestrictionsSet
+	}
+	if key == s.restrictSumKey {
+		return s.restrictSum
+	}
+	set := nlRestrictionsOf(text)
+	accepted := set
+	var issues []content.RestrictionIssue
+	if key.catalog != nil {
+		accepted, issues = key.catalog.CheckRestrictions(set)
+	}
+	var sum nlRestrictionSummary
+	for _, e := range accepted.Entries() {
+		if e.Count == 0 {
+			sum.removed++
+		} else {
+			sum.capped++
+		}
+		if len(sum.rows) == nlRestrictionRowsShown {
+			sum.more++
+			continue
+		}
+		row := nlRestrictionRow{key: e.Unit, name: strings.ToUpper(e.Unit), state: fmt.Sprintf("Max %d", e.Count), removed: e.Count == 0}
+		if row.removed {
+			row.state = "Removed"
+		}
+		if key.catalog != nil {
+			if def, ok := key.catalog.Unit(e.Unit); ok && strings.TrimSpace(def.Name) != "" {
+				row.name = strings.TrimSpace(def.Name)
+			}
+		}
+		sum.rows = append(sum.rows, row)
+	}
+	for _, issue := range issues {
+		count, _ := set.Count(issue.Unit)
+		sum.leftOut = append(sum.leftOut, fmt.Sprintf("%s=%d left out: %s", issue.Unit, count, restrictionReasonText(issue.Reason)))
+	}
+	// A saved entry that does not read stays in the file until an Apply
+	// writes the set; --restrict puts the saved set out of play.
+	if g != nil && !key.flagged {
+		for _, o := range g.restrictions.omitted {
+			if o.reason == "unreadable" {
+				sum.leftOut = append(sum.leftOut, fmt.Sprintf("%s=%d left out: %s", o.unit, o.count, o.reason))
+			}
+		}
+	}
+	sum.text = restrictionTallyText(sum.removed, sum.capped)
+	s.restrictSum, s.restrictSumKey = sum, key
+	return sum
+}
+
+// restrictionsLabel names the restriction count in the loadout line under
+// the wordmark, beside the mutators (§15.9).
+func (s *nlScreen) restrictionsLabel() string {
+	sum := s.restrictionSummary(s.draft.restrictions)
+	n := sum.removed + sum.capped
+	if n == 0 {
+		return "No restrictions"
+	}
+	return s.ui.text(nlTextKey{kind: "restrictions", i: n}, func() string { return restrictionCountText(n) })
+}
+
+// setRestrictionDraft puts r into the draft as the card's edit: it counts
+// toward Apply and is written to the running content's layer then.
+func (s *nlScreen) setRestrictionDraft(r content.Restrictions) {
+	next := s.draft
+	next.restrictions = r.String()
+	s.setCardDraft(s.restrictionCard(), next)
+}
+
+// editRestrictions opens the unit viewer's editor over the screen on the
+// draft; its Back hands the edited set back (proposal R-P8). The screen's
+// picture worker pauses while the editor runs its own.
+func (s *nlScreen) editRestrictions() {
+	g := s.shell()
+	if g == nil || toolsScreenInst == nil || toolsScreenInst.Active() {
+		return
+	}
+	s.art.pauseLoader()
+	toolsScreenInst.openRestrictionEditor(g, nlRestrictionsOf(s.draft.restrictions), s.setRestrictionDraft)
 }
 
 // ---------------------------------------------------------------- GRAPHICS

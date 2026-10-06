@@ -20,7 +20,9 @@ import (
 // installed mod's recommendations; the player saves their own. Applying one
 // can be limited to its rules, its graphics or its controls.
 
-// nlPresetScopes are the parts of a preset the player can apply alone.
+// nlPresetScopes are the parts of a preset the player can apply alone. No
+// part holds the unit restrictions: they are a match selection, like the
+// mutators, not a preference a preset carries (DESIGN_MODS_MUTATORS §15.9).
 var nlPresetScopes = []struct {
 	label string
 	paths func() []string
@@ -43,9 +45,10 @@ func nlGraphicsPaths() []string {
 }
 
 // nlControlsPaths are every other mod-scoped setting: keys, mouse, selection
-// and the interface preferences a controls profile assigns.
+// and the interface preferences a controls profile assigns — except the unit
+// restrictions, which are mod-scoped but belong to no preset.
 func nlControlsPaths() []string {
-	taken := map[string]bool{}
+	taken := map[string]bool{"restrictions": true}
 	for _, p := range append(nlGraphicsPaths(), "gameplay", "gameplayFeatures", "unitLimit") {
 		taken[p] = true
 	}
@@ -118,7 +121,14 @@ func nlCompletePreset(st settings.Settings) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return settings.Restrict(data, settings.ModScoped)
+	return settings.Restrict(data, nlPresetPaths())
+}
+
+// nlPresetPaths are the mod-scoped paths a preset saves: all of them but the
+// unit restrictions, so saving a preset never captures a match selection and
+// applying one never changes it (DESIGN_MODS_MUTATORS §15.9).
+func nlPresetPaths() []string {
+	return slices.DeleteFunc(slices.Clone(settings.ModScoped), func(p string) bool { return p == "restrictions" })
 }
 
 // draftSettings composes the same value Apply will write, without calling
@@ -265,6 +275,7 @@ func (s *nlScreen) applyPresetToDraft(e nlPresetEntry, scopes []bool) {
 	before := s.draftOf(current)
 	before.mod, before.controls, before.override = s.draft.mod, s.draft.controls, s.draft.override
 	before.fullscreen, before.mutators = s.draft.fullscreen, s.draft.mutators
+	before.restrictions = s.draft.restrictions
 	next, err := settings.Layer(current, patch)
 	if err != nil {
 		s.toast, s.toastLeft = err.Error(), 3
