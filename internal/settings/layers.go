@@ -17,7 +17,9 @@ import (
 // that mod. Each layer above the base is a patch: a partial settings document
 // in the file's own JSON shape, where objects merge key by key and every
 // other value replaces. Only the mod-scoped paths below may appear in a patch;
-// window, audio volume, mod and mutator choices are the player's alone.
+// window, audio volume, mod and mutator choices are the player's alone. Unit
+// restrictions are mod-scoped because they name one content set's units
+// (§15.9).
 
 // ModScoped lists the settings paths a mod may recommend and the player keeps
 // per mod. A path names a key or a whole subtree.
@@ -29,12 +31,13 @@ var ModScoped = []string{
 	"audio.soundMode", "audio.mixingBuffers", "audio.cdMode",
 	"keyBindings",
 	"skirmish.numPlayers",
+	"restrictions",
 }
 
 // atomicPaths compare and replace as a whole: a merge can neither drop a
 // key from one of these maps nor clear one of their optional fields, so a
 // layer that differs states them entire.
-var atomicPaths = []string{"gameplayFeatures", "keyBindings"}
+var atomicPaths = []string{"gameplayFeatures", "keyBindings", "restrictions"}
 
 // Preset is a named, saved set of mod-scoped settings the player can apply to
 // any mod (docs/DESIGN_MODS_MUTATORS.md §4.6).
@@ -69,12 +72,45 @@ func Layer(base Settings, patches ...json.RawMessage) (Settings, error) {
 		if _, ok := doc["keyBindings"]; ok {
 			out.KeyBindings = KeyBindings{}
 		}
+		// A layer that states a restriction set replaces the set below it
+		// whole, so a mod's set never merges with the base set
+		// (docs/DESIGN_MODS_MUTATORS.md §15.9).
+		if _, ok := doc["restrictions"]; ok {
+			out.Restrictions = nil
+		}
 		if err := json.Unmarshal(p, &out); err != nil {
 			return base, fmt.Errorf("settings: layer: %w", err)
 		}
 	}
 	out.Normalize()
 	return out, nil
+}
+
+// BaseLayer is the mod-scoped part of a complete settings block: the patch
+// that puts that block's own mod-scoped values back over the live settings
+// when a mod runs, so the file's base block keeps the original game's values
+// (docs/DESIGN_MODS_MUTATORS.md §4.6). It is Restrict over the block's JSON,
+// except that the restriction set is stated even when it is empty: the file
+// omits an empty set, and a patch that omitted it would leave the running
+// mod's set in the base block, which would then restrict the original game
+// (§15.9).
+func BaseLayer(s Settings) (json.RawMessage, error) {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+	patch, err := Restrict(data, ModScoped)
+	if err != nil || len(s.Restrictions) != 0 {
+		return patch, err
+	}
+	doc := map[string]any{}
+	if len(patch) != 0 {
+		if err := json.Unmarshal(patch, &doc); err != nil {
+			return nil, err
+		}
+	}
+	doc["restrictions"] = map[string]any{}
+	return json.Marshal(doc)
 }
 
 // Diff is the patch that turns baseline into effective on the given paths:
