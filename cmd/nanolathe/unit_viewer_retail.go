@@ -255,6 +255,10 @@ func (s *toolsScreen) activateTool(name string) {
 			a.setActivation(on)
 			s.model.refreshPose()
 		}
+	case "SPEED":
+		// The product cycle's preview speed; scripts keep 30 Hz.
+		s.speed = (s.speed + 1) % len(unitViewerSpeeds)
+		s.model.setSpeed(unitViewerSpeeds[s.speed])
 	case "WEAPON":
 		s.weapon = s.weapon%3 + 1
 		s.model.setAnimation(unitViewerAction(s.action), s.weapon)
@@ -292,6 +296,7 @@ var unitViewerActionButtons = []struct {
 	{"AIM", []string{"Aim"}},
 	{"FIRE", []string{"Fire"}},
 	{"BUILD", []string{"Build", "Stop"}},
+	{"SPEED", []string{"Speed 1x", "Speed 4x", "Speed 16x"}},
 	{"HIT", []string{"Hit"}},
 	{"DEATH", []string{"Death"}},
 	{"WRECK", []string{"Wreck"}},
@@ -314,7 +319,7 @@ func unitViewerButtonAction(name string, def *content.UnitDef) unitViewerAction 
 			return unitViewerFlying
 		}
 		return unitViewerMoving
-	case "POWER":
+	case "POWER", "SPEED":
 		return ""
 	}
 	return unitViewerAction(strings.ToUpper(name[:1]) + strings.ToLower(name[1:]))
@@ -326,6 +331,8 @@ func (s *toolsScreen) buttonSelected(name string) bool {
 		return s.spinning
 	case "POWER":
 		return s.model.anim.activated()
+	case "SPEED":
+		return false
 	case "MOVE":
 		return s.action == string(unitViewerMoving) || s.action == string(unitViewerFlying)
 	}
@@ -347,6 +354,7 @@ func (s *toolsScreen) refreshControls() {
 	}
 	s.panel.SetText("PAUSE", pause)
 	s.panel.SetText("WEAPON", fmt.Sprintf("Weapon %d", s.weapon))
+	s.panel.SetText("SPEED", fmt.Sprintf("Speed %dx", unitViewerSpeeds[s.speed]))
 	s.panel.SetText("SEVERITY", fmt.Sprintf("Severity %d", unitViewerSeverities[s.severity]))
 	grey := func(name string, off bool) {
 		s.panel.Window.Gadgets[s.panel.Index(name)].GrayedOut = 0
@@ -383,14 +391,19 @@ func (s *toolsScreen) refreshControls() {
 		i := s.panel.Index(b.name)
 		action := unitViewerButtonAction(b.name, def)
 		shown := def != nil && def.Script != nil && unitViewerActionShown(def, action)
-		if b.name == "POWER" {
+		available := b.name == "POWER" || unitViewerAnimationAvailable(def, action, s.weapon)
+		switch b.name {
+		case "POWER":
 			shown = unitViewerHasPower(def)
+		case "SPEED":
+			// The product cycle's speed belongs to a factory's Build.
+			shown = def != nil && def.Script != nil && unitViewerFactory(def) && unitViewerActionShown(def, unitViewerBuilding)
+			available = unitViewerAnimationAvailable(def, unitViewerBuilding, s.weapon)
 		}
 		s.panel.SetActiveAt(i, shown)
 		if !shown {
 			continue
 		}
-		available := b.name == "POWER" || unitViewerAnimationAvailable(def, action, s.weapon)
 		grey(b.name, !available)
 		width := 0.0
 		for _, label := range b.labels {
