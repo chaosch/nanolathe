@@ -114,7 +114,19 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 	}
 	stage := s.deviceRect(s.viewRect)
 	screenkit.Fill(dst, stage, color.RGBA{10, 14, 12, 255})
-	if s.selected != nil && s.loadErr == nil {
+	// Death and Wreck play in the field, a small real battle drawn at the
+	// stage's device size (unit_viewer_field.go); Wreck then hands the stage
+	// back to the turntable's corpse, possibly within this very frame.
+	if s.field.onStage() {
+		if img, fade, alpha := s.fieldFrame(); img != nil {
+			crisp := screenkit.Crisp(stage.W / float64(img.Bounds().Dx()))
+			screenkit.Image(dst, img, stage, 1, crisp)
+			if fade != nil {
+				screenkit.Image(dst, fade, stage, alpha, crisp)
+			}
+		}
+	}
+	if !s.field.onStage() && s.selected != nil && s.loadErr == nil {
 		k := min(1, 2048/max(stage.W, stage.H))
 		if img := s.model.draw(s.cs, s.selected, s.yaw, s.pitch, s.zoom, max(1, int(stage.W*k)), max(1, int(stage.H*k))); img != nil {
 			screenkit.Image(dst, img, stage, 1, false)
@@ -135,8 +147,12 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 	if s.model.anim.wreckFeature() != nil && s.model.wreck.err != nil && s.model.wreck.feature == s.model.anim.wreckFeature() {
 		status = "Wreck / model unavailable: " + s.model.wreck.err.Error()
 	}
-	if s.model.anim != nil && unitViewerHasPower(s.selected) && !s.model.anim.invalid {
-		if s.model.anim.activated() {
+	fieldStatus, inField := s.fieldStatus()
+	if inField {
+		status = fieldStatus
+	} else if a := s.model.anim; a != nil && unitViewerHasPower(s.selected) && !a.invalid && a.action != unitViewerWreck {
+		// The Wreck view draws the corpse, which has no activation state.
+		if a.activated() {
 			status += " / on"
 		} else {
 			status += " / off"
@@ -146,7 +162,10 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 		status += " (paused)"
 	}
 	s.label(dst, status, screenkit.Rect{X: 312, Y: 611, W: 448, H: 24}, screenkit.Style{Size: 12, Top: nlDim}, false)
-	s.label(dst, fmt.Sprintf("%.0f%%", 100*s.zoom), screenkit.Rect{X: 766, Y: 611, W: 68, H: 24}, screenkit.Style{Size: 12, Top: nlKicker, Align: 2}, false)
+	if !inField {
+		// The field's battle camera holds its own zoom.
+		s.label(dst, fmt.Sprintf("%.0f%%", 100*s.zoom), screenkit.Rect{X: 766, Y: 611, W: 68, H: 24}, screenkit.Style{Size: 12, Top: nlKicker, Align: 2}, false)
+	}
 	message := ""
 	switch {
 	case s.loadErr != nil:
@@ -157,11 +176,20 @@ func (s *toolsScreen) drawViewer(dst *ebiten.Image) {
 		message = "No restricted units match.\rTurn off Restricted only to list every unit."
 	case s.selected == nil:
 		message = "No matching units.\rTry another name or unit ID."
-	case s.model.err != nil:
+	case s.field.phase == unitViewerFieldStaging:
+		message = "Staging..."
+	case s.field.phase == unitViewerFieldFailed:
+		message = "No field for this death\r" + s.field.err
+	case !inField && s.model.err != nil:
 		message = "Model unavailable\r" + s.model.err.Error()
 	}
 	if message != "" {
-		for i, line := range retailWrapLines(message, unitViewerTextWidth, 468) {
+		// A carriage return starts a new line; each line wraps on its own.
+		var lines []string
+		for _, part := range strings.Split(message, "\r") {
+			lines = append(lines, retailWrapLines(part, unitViewerTextWidth, 468)...)
+		}
+		for i, line := range lines {
 			if i >= 10 {
 				break
 			}

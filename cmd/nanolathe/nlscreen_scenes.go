@@ -408,6 +408,22 @@ func nlKill(s *session.Session, u *units.Unit, wreck bool) {
 	s.Units.Destroy(u.Handle, units.DeathKilled)
 }
 
+// nlKillWith destroys a unit now with an explicit post-hit health and prior
+// health sample, the two unit inputs of the death severity [06 §12.1]: the
+// unit viewer's field chooses them so its unit's Killed script receives the
+// selected severity (unitViewerFieldDeathInputs). The current sample takes
+// the same value, so a 30-tick sampling boundary on the death tick, which
+// shifts the current sample into the prior one [04 §5.1], leaves the input
+// unchanged. Like nlKill it records no damage kind.
+func nlKillWith(s *session.Session, u *units.Unit, health int32, prior uint8) {
+	if u == nil || !u.Alive || u.Dying {
+		return
+	}
+	u.PriorSample, u.CurrentSample = prior, prior
+	u.Health = health
+	s.Units.Destroy(u.Handle, units.DeathKilled)
+}
+
 // nlPush queues an order record by descriptor name, the way the film
 // fixture's filmOrder does for moves.
 func nlPush(s *session.Session, u *units.Unit, name string, target pool.Handle, x, y, z numeric.Fixed) {

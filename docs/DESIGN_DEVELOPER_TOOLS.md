@@ -543,23 +543,25 @@ row has room and otherwise take their caption widths:
   `HitByWeapon` with cos and sin of the direction at radius 400 through the
   shared table and the independent `TakeDamage` with the clamped post-hit
   percentage [04 R-CB-01 §2][04 §5.1].
-- **Death** runs slot-end death handling's synchronous local `Killed` query on
-  the first tick through the battle's own query helper, seeding cell 0 with the
-  selected severity; a script with no `Killed` body takes the battle's
-  sanctioned substitute depth 1 [04 R-CB-01 §7][04 R-CB-01 §9]. The battle then
-  tears the script down, so playback stops: pieces the script exploded stay
-  hidden, other pieces keep their pose, and no debris, explosion or effect is
-  drawn because no sink is connected. A death that explodes every piece leaves
-  the stage empty. The status reports the returned corpse depth.
-- **Wreck** performs the same death and draws the feature its depth selects:
-  depth 1 is the authored `Corpse`, and each further step follows `featuredead`,
-  so depth 2 is the heap [06 §12.2]. The feature resolves through the immutable
-  catalog's feature table and its 3DO loads through the unit model path; it is
-  drawn as the battle draws a 3DO feature, through the structure path with the
-  height plane and its own fixed fit [03 R-REN-03A §2]. The status names the
-  feature and its reclaim metal. Depth 0, a broken chain, a sprite-only feature
-  or an unloadable model is reported in the status with an empty stage; nothing
-  is substituted.
+- **Death** plays the unit's real battle death in the field (below): the
+  stage leaves the turntable for a tiny real battle in which the selected
+  record stands alone and, after a one-second settle, dies through the
+  battle's own death path at the selected severity. Its `Killed` script,
+  death explosion, debris with their smoke and fire trails, and corpse are
+  the battle's own [06 §12.1][06 §12.2]. The field restarts seven seconds
+  after the death. The status names the corpse the death left, its depth in
+  the corpse chain and its reclaim metal, or says it left none.
+- **Wreck** plays the same field death and, once its hold has passed, hands
+  the stage back to the turntable with the corpse that death left: explosion
+  first, then the inspectable wreck. Depth 1 is the authored `Corpse`, and
+  each further step follows `featuredead`, so depth 2 is the heap
+  [06 §12.2]. The feature resolves through the immutable catalog's feature
+  table and its 3DO loads through the unit model path; it is drawn as the
+  battle draws a 3DO feature, through the structure path with the height plane
+  and its own fixed fit [03 R-REN-03A §2]. The status names the feature, its
+  depth and its reclaim metal. A death that left no corpse, a sprite-only
+  feature or an unloadable model is reported in the status with an empty
+  stage; nothing is substituted.
 - **On/Off** (definitions with `Activate` or `Deactivate`) drives the
   activation edge machine as an order does: `Activate` on the rising edge,
   `Deactivate` on the falling edge, nothing when the bit is unchanged
@@ -576,12 +578,59 @@ tick. The choice is a viewer preference for the open screen, kept across
 unit selections and reset when the viewer opens; it is never written to
 settings.
 
-The control row keeps Pause, which stops animation independently of rotation,
-Rotate, Reset view, Weapon and **Severity**, which cycles the Death and Wreck
-severities and replays either. Choosing an action again restarts it, except
-Fly and Build, whose buttons land or stop and resume within the same preview.
-Changing the selected unit restores Idle, weapon 1, the first severity and the
-creation activation state.
+The control row keeps Pause, which stops animation and the field
+independently of rotation, Rotate, Reset view, Weapon and **Severity**, which
+cycles the Death and Wreck severities and replays either in a fresh field.
+Choosing an action again restarts it, except Fly and Build, whose buttons land
+or stop and resume within the same preview. Changing the selected unit
+restores Idle, weapon 1, the first severity and the creation activation state.
+
+**User-authorized field preview policy (2026-10-06).** Death and Wreck stage
+"In the field", a small real battle on the viewer's stage, through the
+Nanolathe screen's live-preview machinery (DESIGN_INTERFACE_HUD_INPUT §3.17,
+`nlPreview`); `cmd/nanolathe/unit_viewer_field.go` owns it. Staging runs on
+that machinery's worker while the stage reads *Staging...*; each choice of
+Death or Wreck, and each Severity press, stages a fresh run. The battle is an
+ordinary skirmish composition on a stock map with no armies: the two start
+commanders stand at their own start positions out of frame, fog is lifted as
+the settings scenes lift it, the computer player is passive, no mutator or
+restriction applies, and the lobby's commander-death rule is "game
+continues" (rule 0), so a commander's death plays alone instead of
+eliminating its owner [08 R-SKIR-01 §3]. It runs under the player's gameplay
+mode and is drawn with the player's presentation choices through the same
+renderer path as the settings previews, at the stage's device size. Trees and
+other destructible features are cleared about the site's anchor, and the
+selected record is created by the ordinary allocator on the nearest spot the
+placement validator accepts, owned by the viewing player and holding
+position. An aircraft stands where that allocator creates it, on the ground.
+A record whose placement profile asks for water under it tries the water
+site first; whichever site comes first, a refusal moves the field to the
+other, and a refusal at both is reported with both reasons and nothing in the
+unit's place. A record hidden by a duplicate name is refused, since no battle
+creates it by name.
+
+The death goes through the battle's own path as the settings scenes' kills
+do: the unit's prior health sample and health are set, then its death is
+latched with no recorded damage kind, so the full pipeline runs the
+synchronous `Killed` query, the `explodeas` death explosion and the corpse,
+and nobody is credited [06 §12.1]. Severity is clamp(((−health·100) ÷
+maxdamage + prior sample) ÷ 2, 1, 100), with an unsigned divide and a
+truncating halving [06 §12.1]; the field takes the prior sample min(100,
+2 × severity) and the least-negative health that completes the selection —
+0 up to severity 50, then −⌈(2 × severity − 100) × maxdamage ÷ 100⌉ — so the
+script receives exactly 25, 50, 75 or 100. The current sample takes the same
+value, so a 30-tick sampling boundary on the death tick leaves the input
+unchanged [04 §5.1]. Retail reads the health as a signed 16-bit word, so a
+selection whose health would not fit (severity 100 above 32,768 hit points)
+tries smaller samples and is otherwise reported as unreachable rather than
+approximated. The corpse is read back from the battle: a feature of the
+unit's corpse chain on the footprint where it died, whose chain position is
+the depth reported. The field is presentation only: its battle is never
+saved, networked or seen by any other battle, and no setting is written.
+Another action, another unit, the history keys or Back close its battle so
+it holds no CPU; a run still staging is closed when it arrives, and closing
+the viewer waits for it. The field steps at the preview machinery's 30 Hz
+with at most two ticks per display frame.
 
 These explicit preview inputs stand in for battle and map state; none is a
 retail value:
@@ -596,7 +645,11 @@ retail value:
 | Wind | one re-roll before the first tick: heading 45 degrees, speed 1050, the midpoint of the canonical fallback range 100–2000 [05 R-PROD-01 §3] |
 | Extractor footprint | every covered cell holds metal byte 127, so `SetSpeed` carries footprint cells × 128 |
 | Hit | direction byte `0x80`, from straight ahead [06 §9.1]; post-hit health half of `maxdamage` |
-| Death severity | 25, 50, 75 or 100 |
+| Death severity | 25, 50, 75 or 100; the field's death takes the prior health sample min(100, 2 × severity) and the least-negative post-hit health that completes it [06 §12.1] |
+| Field site | Greenhaven at (2308, 4386), the settings blast scene's flat ground, cleared of destructible features from 480 pixels west to 480 east and from 400 north to 480 south; Coast To Coast at (2284, 1188), the naval scene's deep water, for units the ground refuses; seed 7 |
+| Field spot | the nearest spot to the site's anchor, within 24 rings of 16 pixels, that the placement validator accepts |
+| Field camera | the battle's still camera, centred on the unit's footprint placed 12% of the picture's height below its middle; zoom makes the picture's width span six footprints, between 0.75 and the detail view's 2 |
+| Field timing | one unseen lead-in tick, a one-second settle with the unit standing, the death, then a seven-second hold (by which stock debris has landed, burst and cleared) before Death restarts or Wreck hands over to the turntable |
 | World | flat ground at height 0 with no air sector grid, an empty yard whose admission always passes, a straight level route; the cruise goal lies 30,000 world units ahead |
 
 Engine ports read and write a detached copy of the unit's state: activation and
@@ -609,7 +662,8 @@ converts the product's remaining fraction as the battle's port does
 return their low bound without drawing. No world, allocator, authoritative RNG,
 projectile, resource, sound, debris or effect sink is connected, and no medium
 band is classified, so `setSFXoccupy` is never issued. The VM retains the
-existing detached model flags.
+existing detached model flags. All of this describes the turntable's
+presentation script; the field is a real battle and none of it applies there.
 
 The animation exposes three read-only accessors: `building()` reports a
 construction order that has reached its stance and carries work;
@@ -902,12 +956,35 @@ Builds, a unit's Built-by times, an aircraft with a bomb, a multi-weapon
 unit, a building and a picture-less record (stock ARMSCORP) at 1440x900 and
 1024x640.
 `--shot-unit-viewer @tools` retains the unused tools-menu prototype for capture.
-Captures create no battle and write no preferences. Review narrow and wide
+Captures write no preferences, and only a Death or Wreck capture creates a
+battle: its field. Review narrow and wide
 windows, buildings, mobile units and aircraft, plus search and drag states
 through the native window or the Ebitengine VM host. Run the ordinary fast
 and short retail landing gates,
 plus matching classic and modern live-battle performance checks for changes to
 the shared geometry collector.
+
+**Field verification.** Tests lock the field's death inputs against the
+battle's own severity arithmetic for maximum health from 1 to 40,000 (the
+Peewee's 250 hit points give 0 at samples 50 and 100, then −125 and −250),
+the refusal of an unreachable selection, Wreck's adoption of the field's
+corpse over the presentation script's answer and a new generation for every
+choice. With retail assets they lock the lifecycle — a severity-25 Peewee
+leaving `armpw_dead` at depth 1 with inputs that give 25, a fresh battle for
+the next severity, Death's restart after its hold, Idle closing the battle
+and leaving the restart to close on arrival, Wreck handing `armpw_heap` at
+depth 2 to the turntable, and the viewer's close joining a staging — and a
+ship staged on water. A Death or Wreck capture stages its field synchronously
+and runs `/ticks=N` field ticks from the field's first visible tick, so the
+death falls on tick 30; it never restarts. By default a death is caught 20
+ticks after it happens and a wreck just after the handover, as in
+`armpw/action=death/ticks=75/severity=4` or `corlab/action=wreck/severity=1`.
+The field round was checked on ARMPW at severities 25, 50 and 100 through the
+settle, the blast, the debris bursts, the cleared ground and the restart, its
+wreck at 25 and 100, CORLAB, ARMSOLAR, ARMCOM, ARMTHUND on the ground, ARMAH,
+and ARMROY and ARMSUB on water, at 1440x900, with the Death loop and the
+CORLAB wreck's handover also driven frame by frame through the live staging
+path at 1440x900 and 1024x640.
 
 ## 8. Developer unit spawning
 

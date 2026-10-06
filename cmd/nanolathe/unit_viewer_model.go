@@ -53,6 +53,9 @@ type unitViewerModel struct {
 	speed  int
 	// view is the last unit record's projection, for the spray overlay.
 	view unitViewerView
+	// gen counts action choices and unit selections; the field stages a
+	// fresh battle for each (unit_viewer_field.go).
+	gen uint64
 }
 
 // unitViewerView is the projection, canvas and orientation of the last unit
@@ -85,6 +88,7 @@ type unitViewerModelKey struct {
 }
 
 func (m *unitViewerModel) selectUnit() {
+	m.gen++
 	m.err, m.radius, m.image, m.key = nil, 0, nil, unitViewerModelKey{}
 	m.pivot, m.fitRoot = [3]numeric.Fixed{}, model.PieceState{}
 	m.poses, m.poseNote = nil, ""
@@ -234,6 +238,21 @@ func (m *unitViewerModel) advance(ticks int) {
 	for range ticks {
 		m.updateAnimation(1.0 / unitViewerTickRate)
 	}
+}
+
+// adoptFieldWreck shows the corpse the field's death left: the Wreck view
+// then draws that feature, at the depth its corpse chain gives it, instead
+// of the presentation script's own answer. A death that left no corpse
+// leaves the stage empty and says so; nothing is substituted
+// (DESIGN_DEVELOPER_TOOLS §7).
+func (m *unitViewerModel) adoptFieldWreck(cs *contentSet, def *content.UnitDef, corpse *content.FeatureDef, depth int) {
+	if !m.ensureLoaded(cs, def) || m.anim == nil || m.anim.action != unitViewerWreck {
+		return
+	}
+	a := m.anim
+	a.death.done, a.death.corpse, a.death.depth, a.death.field = true, corpse, int32(depth), true
+	a.note = a.wreckNote()
+	m.refreshPose()
 }
 
 // loadWreck loads and fits the corpse feature's 3DO through the same model

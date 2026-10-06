@@ -213,7 +213,9 @@ func (m *unitViewerModel) setAnimation(action unitViewerAction, weapon int) {
 		weapon = 1
 	}
 	// Explicitly choosing the current action replays it, including a stopped
-	// aim or fire preview (DESIGN_DEVELOPER_TOOLS §7).
+	// aim or fire preview (DESIGN_DEVELOPER_TOOLS §7); a Death or Wreck field
+	// is staged afresh for the new generation.
+	m.gen++
 	m.action, m.weapon = action, weapon
 	if m.geometry != nil {
 		m.anim = newUnitViewerAnimation(m.def, m.geometry, m.options())
