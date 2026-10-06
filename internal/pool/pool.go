@@ -264,6 +264,29 @@ func (p *Units) DefID(h Handle) uint16 {
 	return p.defID[idx]
 }
 
+// DefinitionCount is the census the allocator's per-definition gate compares
+// with a definition's limit [05 R-SHARE-01 §8]: the records in player's
+// slice, both ends inclusive, whose definition identity is defID. A record
+// keeps its identity from allocation until Free clears it, so the count
+// includes nanoframes, completed units and dead units whose teardown has not
+// yet run. It is the one counting function: both allocation paths call it
+// for their gate, and units.World.DefinitionCount reads it, so a reader sees
+// exactly the number the gate compares. It reads nothing else and writes
+// nothing; an unsliced pool, a player outside 0..9 and identity 0 count 0.
+func (p *Units) DefinitionCount(player int, defID uint16) int {
+	if p == nil || defID == 0 || player < 0 || player >= PlayerCount {
+		return 0
+	}
+	s := p.slices[player]
+	cnt := 0
+	for i := max(s.start, 0); i <= s.end && i < len(p.defID); i++ {
+		if p.defID[i] == defID {
+			cnt++
+		}
+	}
+	return cnt
+}
+
 // AllocForPlayerWithDef is the canonical per-player allocator [P0-16 §3.2]:
 // the sole allocation site for every creation path [01 §6.1]. If
 // limitEnabled and limit != -1, it first counts occupants in the player's
@@ -288,16 +311,8 @@ func (p *Units) AllocForPlayerWithDef(player int, defID uint16, limitEnabled boo
 		return 0, false
 	}
 	// Per-def limit gate [P0-16 §3.2]
-	if limitEnabled && limit != -1 {
-		cnt := 0
-		for i := s.start; i <= s.end && i < len(p.defID); i++ {
-			if p.defID[i] == defID {
-				cnt++
-			}
-		}
-		if int32(cnt) >= limit {
-			return 0, false
-		}
+	if limitEnabled && limit != -1 && int32(p.DefinitionCount(player, defID)) >= limit {
+		return 0, false
 	}
 	for i := s.start; i <= s.end && i < len(p.alive); i++ {
 		if !p.alive[i] && p.defID[i] == 0 {
@@ -334,16 +349,8 @@ func (p *Units) AllocForcedWithDef(player int, defID uint16, forced Handle, limi
 	if p.alive[idx] || p.defID[idx] != 0 {
 		return 0, false
 	}
-	if limitEnabled && limit != -1 {
-		cnt := 0
-		for i := s.start; i <= s.end && i < len(p.defID); i++ {
-			if p.defID[i] == defID {
-				cnt++
-			}
-		}
-		if int32(cnt) >= limit {
-			return 0, false
-		}
+	if limitEnabled && limit != -1 && int32(p.DefinitionCount(player, defID)) >= limit {
+		return 0, false
 	}
 	p.alive[idx] = true
 	p.defID[idx] = defID
