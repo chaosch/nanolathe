@@ -416,6 +416,9 @@ func runBattleView(launch, opts Options, cs *contentSet) error {
 func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Client, error) {
 	saved := loadedSettings()
 	opts.Gameplay = startupGameplay(opts, saved.Gameplay)
+	// The saved unit restrictions as this content takes them, unless
+	// --restrict chose the run's set (docs/DESIGN_MODS_MUTATORS.md §15.5).
+	opts.Restrictions = directViewRestrictions(opts, cs, saved)
 	scene, err := parseLiveScene(opts.LiveScene)
 	if err != nil {
 		return nil, nil, err

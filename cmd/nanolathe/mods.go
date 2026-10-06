@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -220,6 +221,197 @@ func mutatorText(label string, f content.Factor) string { return label + " x" + 
 func mutatorSummary(m content.Mutators) string { return strings.Join(m.DescribeASCII(), ", ") }
 
 func mutatorCount(m content.Mutators) int { return len(m.DescribeASCII()) }
+
+// ---------------------------------------------------------------------------
+// Unit restrictions (§15).
+
+// restrictionSetting is the running content's saved unit-restriction setting
+// and what that content makes of it (§15.3, §15.9).
+type restrictionSetting struct {
+	// saved is the settings key `restrictions` as the running content's
+	// layer states it, kept verbatim: an entry the content leaves out of its
+	// battles stays in the file and applies again whenever content that has
+	// the unit runs.
+	saved map[string]int
+	// readable is every saved entry that reads as a restriction, names the
+	// running content lacks included: the restriction editor's starting
+	// draft, so that applying it keeps those names in the file.
+	readable content.Restrictions
+	// omitted are the saved entries the running content leaves out of its
+	// battles, in key order, for the notices (restrictionNoticeLine).
+	omitted []restrictionOmission
+}
+
+// restrictionOmission is one saved entry the running content leaves out of
+// its battles, and why, in the few words a notice gives it (§15.3).
+type restrictionOmission struct {
+	unit   string // the saved key, verbatim
+	count  int
+	reason string
+}
+
+// restrictionReasonText is a catalog refusal in a notice's words.
+func restrictionReasonText(r content.RestrictionReason) string {
+	switch r {
+	case content.RestrictionUnknownUnit:
+		return "not in this content"
+	case content.RestrictionNoRestrict:
+		return "cannot be restricted"
+	case content.RestrictionRemovesCommander:
+		return "a commander cannot be removed"
+	}
+	return r.String()
+}
+
+// readableRestrictions splits a saved setting into the entries that read as
+// restrictions and those that do not — a key that is not its own canonical
+// spelling, a count outside 0..100 — each in key order. Each entry is read
+// on its own, so one bad entry never takes the others with it.
+func readableRestrictions(saved map[string]int) (content.Restrictions, []restrictionOmission) {
+	var readable content.Restrictions
+	var omitted []restrictionOmission
+	for _, key := range slices.Sorted(maps.Keys(saved)) {
+		one, err := content.ParseRestrictions(map[string]int{key: saved[key]})
+		if err != nil {
+			omitted = append(omitted, restrictionOmission{unit: key, count: saved[key], reason: "unreadable"})
+			continue
+		}
+		for _, e := range one.Entries() {
+			_ = readable.Set(e.Unit, e.Count) // already a valid stored spelling
+		}
+	}
+	return readable, omitted
+}
+
+// acceptRestrictions splits readable entries into the set a battle on the
+// running content takes and the entries its catalog refuses — no unit of
+// that name, a norestrict unit, a side's commander at 0 — with their
+// reasons, merged into omitted in key order (§15.3 "the settings key",
+// proposal R-P4). A saved preference never stops a game, so content whose
+// catalog cannot be compiled leaves every entry out. The catalog is asked for
+// only when some entry reads, so an empty setting never compiles one.
+func acceptRestrictions(readable content.Restrictions, omitted []restrictionOmission, catalog func() (*content.Catalog, error)) (content.Restrictions, []restrictionOmission) {
+	if readable.IsZero() {
+		return readable, omitted
+	}
+	var accepted content.Restrictions
+	cat, err := catalog()
+	if err != nil || cat == nil {
+		for _, e := range readable.Entries() {
+			omitted = append(omitted, restrictionOmission{unit: e.Unit, count: int(e.Count), reason: "content unavailable"})
+		}
+	} else {
+		var issues []content.RestrictionIssue
+		accepted, issues = cat.CheckRestrictions(readable)
+		for _, issue := range issues {
+			count, _ := readable.Count(issue.Unit)
+			omitted = append(omitted, restrictionOmission{unit: issue.Unit, count: int(count), reason: restrictionReasonText(issue.Reason)})
+		}
+	}
+	slices.SortStableFunc(omitted, func(a, b restrictionOmission) int { return strings.Compare(a.unit, b.unit) })
+	return accepted, omitted
+}
+
+// restrictionNoticeLine is the one-line notice naming saved entries the
+// running content leaves out (§8.3 line 3, §15.3); "" when it takes them
+// all.
+func restrictionNoticeLine(omitted []restrictionOmission) string {
+	if len(omitted) == 0 {
+		return ""
+	}
+	parts := make([]string, len(omitted))
+	for i, o := range omitted {
+		parts[i] = fmt.Sprintf("%s=%d (%s)", o.unit, o.count, o.reason)
+	}
+	return "Unit restrictions left out: " + strings.Join(parts, ", ")
+}
+
+// restrictionCountText is the chip's and the load dialog's count (§8.1,
+// §8.4).
+func restrictionCountText(n int) string {
+	if n == 1 {
+		return "1 restriction"
+	}
+	return fmt.Sprintf("%d restrictions", n)
+}
+
+// restrictionCatalog is the running content's immutable catalog the saved
+// setting is checked against: the one the Nanolathe screen and the unit
+// viewer read, compiled once per content set. A battle compiles its own
+// from the same content; the check reads only what both share — unit
+// names, norestrict and the sides' commanders.
+func (g *gameShell) restrictionCatalog() (*content.Catalog, error) {
+	if g == nil || g.cs == nil {
+		return nil, unavailableBattleContentError()
+	}
+	return g.cs.nlPreviewCatalog()
+}
+
+// resolveRestrictionSetting resolves the saved setting against the running
+// content and, unless --restrict chose the run's set, makes the result the
+// set every skirmish and Survival battle request carries (§15.5). It runs
+// whenever the setting changes or settings are applied to a shell, which is
+// also how a shell meets other content, so a battle enters with the saved
+// set as the running content takes it. Captures, films and benchmarks never
+// read the key (§15.5 "Reproduction"), so they never compile a catalog for
+// it.
+func (g *gameShell) resolveRestrictionSetting() {
+	readable, omitted := readableRestrictions(g.restrictions.saved)
+	g.restrictions.readable = readable
+	if g.opts.ignoresSavedSelection() {
+		g.restrictions.omitted = nil
+		return
+	}
+	set, omitted := acceptRestrictions(readable, omitted, g.restrictionCatalog)
+	g.restrictions.omitted = omitted
+	if !g.opts.RestrictionsSet {
+		g.opts.Restrictions = set
+	}
+}
+
+// selectRestrictions makes r the running content's restriction setting and
+// resolves it: a loaded skirmish's recorded set (proposal R-P6), and the
+// Nanolathe screen's Apply. The player's choice supersedes a --restrict flag
+// for the rest of the run, as the screen's mutators supersede --mutator. The
+// caller saves the settings, which writes the set to the running content's
+// layer (§15.9).
+func (g *gameShell) selectRestrictions(r content.Restrictions) {
+	g.restrictions.saved = nil
+	if !r.IsZero() {
+		g.restrictions.saved = r.Map()
+	}
+	g.opts.RestrictionsSet = false
+	g.resolveRestrictionSetting()
+}
+
+// restrictionNotice is the notice for saved entries the running content
+// leaves out, for the loading screen and the Nanolathe screen's card
+// (§8.3, §15.3); "" when the battles take them all, or when --restrict chose
+// the run's set and the saved one is not in force.
+func (g *gameShell) restrictionNotice() string {
+	if g == nil || g.opts.RestrictionsSet {
+		return ""
+	}
+	return restrictionNoticeLine(g.restrictions.omitted)
+}
+
+// directViewRestrictions is the set a direct --map battle enters with, before
+// its shell exists: the --restrict flag's when one was given, none for a
+// campaign mission, and otherwise the running content's saved setting as
+// that content takes it. There is no loading screen, so entries it leaves
+// out are named on standard error (§15.3, §15.5).
+func directViewRestrictions(opts Options, cs *contentSet, saved settings.Settings) content.Restrictions {
+	if opts.RestrictionsSet || opts.Mission != "" {
+		return opts.Restrictions
+	}
+	layers := &gameShell{opts: opts, cs: cs}
+	layers.restrictions.saved = layers.effectiveSettings(saved).Restrictions
+	layers.resolveRestrictionSetting()
+	if line := layers.restrictionNotice(); line != "" {
+		fmt.Fprintln(os.Stderr, "nanolathe: "+line)
+	}
+	return layers.opts.Restrictions
+}
 
 // ---------------------------------------------------------------------------
 // Gameplay minimum (§4.3).
@@ -457,7 +649,8 @@ func (g *gameShell) releaseAudio() {
 // ---------------------------------------------------------------------------
 // Main-menu button and status line (§8.1).
 
-// modStatusLine is the chip text: mod, gameplay layer and mutator count.
+// modStatusLine is the chip text: mod, gameplay layer, mutator count and,
+// with unit restrictions, their count (§8.1, §15.9).
 func (g *gameShell) modStatusLine() string {
 	name := "Total Annihilation"
 	if g.cs != nil && g.cs.manualRoots {
@@ -472,6 +665,9 @@ func (g *gameShell) modStatusLine() string {
 		line += " - 1 mutator"
 	default:
 		line += fmt.Sprintf(" - %d mutators", n)
+	}
+	if n := len(g.opts.Restrictions.Entries()); n > 0 {
+		line += " - " + restrictionCountText(n)
 	}
 	return line
 }
