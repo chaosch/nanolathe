@@ -173,6 +173,9 @@ func (s *shared) placeOf(u *aikit.OwnUnit) (int32, int32) {
 // water depth band holds the spot (the cheapest land one without naval).
 func (s *shared) spotMex(m *aikit.MapInfo, exts []*aikit.UnitInfo, sp *aikit.MetalSpot) *aikit.UnitInfo {
 	for _, x := range exts {
+		if s.k.Allowance(x) <= 0 {
+			continue // its restriction cap is used up
+		}
 		if s.p.Naval != 0 {
 			if fitsSpot(m, x, sp) {
 				return x
@@ -247,7 +250,7 @@ func (e *Economy) evalMexN(b *core.Board, u *aikit.OwnUnit, bs *builderState, d 
 				continue
 			}
 			for _, x := range exts {
-				if x.MetalMake > old.Info.MetalMake && fitsSpot(m, x, sp) && (mex == nil || x.MetalMake > mex.MetalMake) {
+				if x.MetalMake > old.Info.MetalMake && fitsSpot(m, x, sp) && (mex == nil || x.MetalMake > mex.MetalMake) && s.k.Allowance(x) > 0 {
 					mex = x
 				}
 			}

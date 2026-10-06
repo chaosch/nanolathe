@@ -2444,13 +2444,18 @@ knows:
 - `UnitInfo.Cap`, immutable per battle: −1 for *No limit*, otherwise the
   definition's `Limit` in the battle catalog. The table is built over that
   catalog, so a removed definition has no entry and no product list names it.
-- `Obs.Capped`, one record per capped definition in table order, holding the
-  definition's info and `Records`: the allocator's own census of the
-  observer's slice — records whose definition index is that definition,
-  nanoframes and records awaiting teardown included `[05 R-SHARE-01 §8]` —
-  read through a `units.World` accessor that shares the allocator gate's
-  counting function, so the number is exactly what the allocator will
-  compare. A battle without caps leaves the list empty and adds no work.
+- `Obs.Capped`, one record per capped definition in table order
+  (`Table.Capped`), holding the definition's info, `Records` and `Queued`.
+  `Records` is the allocator's own census of the observer's slice — records
+  whose definition index is that definition, nanoframes and records awaiting
+  teardown included `[05 R-SHARE-01 §8]` — read through a `units.World`
+  accessor (`DefinitionCount`) that shares the allocator gate's counting
+  function, so the number is exactly what the allocator will compare.
+  `Queued` is the observer's own requests for the definition that have no
+  record yet, read from its units' queues: a factory product's queued count
+  less the one whose frame the factory has bound, and a mobile build until
+  its frame is placed. A battle without caps leaves the list empty and adds
+  no work.
 
 "Its own" is the observer's slice: the allocator counts the creating
 player's records only, so in Survival a teammate's units do not count,
@@ -2459,29 +2464,42 @@ although the team shares sight and income
 
 **Decision.** A product's allowance is `Cap − Records − Pending`, where
 `Pending` is the brain's own outstanding requests for that definition that
-have no record yet — the factory requests and accepted build commitments it
-already tracks for its budget. Where the allowance is zero or less the
-economy, production and survival-defence layers do not offer the product as
-a candidate, and a factory request queues at most the allowance. The
-executor backs this up when it applies a batch after the persona's reaction
-window: a placement or factory-queue command whose product's live census has
-reached its cap is dropped as stale, like the executor's other
-revalidations, and spends nothing. Commands issued before the cap was
-reached follow the ordinary paths, including the allocator's refusal.
+have no record yet: those already in its queues (`Queued`) and those the
+current think has emitted. The host keeps the second count, so every brain
+reads the allowance from the kit (`Kit.Allowance`). Its requests are all in
+its queues by the next observation, because a think waits for the previous
+batch to apply. Where the allowance is zero or less the economy's extractor
+and building candidates, the production candidates and the survival layer's
+towers and wall pieces do not offer the product, and the survival layer ends
+a planned job whose allowance the economy's orders, issued first, used up.
+The kit backs this up at emission: a request past the allowance is not
+emitted, and a factory request queues at most the allowance. The executor
+backs it up again when it applies a batch after the persona's reaction
+window: a placement, factory-queue or replacement command whose product's
+live census has reached its cap is dropped as stale, like the executor's
+other revalidations, before it searches a site or spends anything
+(`ApplyStats.Capped`). Commands issued before the cap was reached follow the
+ordinary paths, including the allocator's refusal.
 
 **Boundaries and verification.** No random draw, resource charge, rule seam
 or saved state is added: the census is copied afresh each observation and a
 load rebuilds it, and the brain's reasoning stays a pure function of its
 observation, so the synchronous and asynchronous hosts still agree. Classic
-players never read the new fields, so no fingerprint lock moves. Tests: an
-`aikit` host test in which a capped definition's census reaches its cap — the
-brain stops offering it, its pending factory requests count against the
-allowance, and a stale queued command is dropped at application; a census
-test proving the accessor equals the allocator's count with a nanoframe and a
-dying record present; a retail-tier Survival battle in Strict 3.1 and Modern
-whose Modern buddy meets a cap on its own slice while its teammate's units of
-that type do not count; the Classic control of
-[DESIGN_MODS_MUTATORS §15.11](DESIGN_MODS_MUTATORS.md#1511-verification);
+players never read the new fields, so no fingerprint lock moves. Tests:
+`aikit.TestModernAIRestrictionCaps` (the census and the queued requests reach
+the cap, the think's own requests count against the allowance, a request
+past it is not emitted, and a stale command is dropped at application);
+`units.TestDefinitionCountIsTheAllocatorsCensus` (the accessor equals the
+allocator's count with a nanoframe and a dying record present);
+`aikit.TestModernAIMeetsRestrictionCapsRetail` (Modern AI skirmishes in
+Strict 3.1 and Modern whose players stay within every cap at every think,
+reach their extractor and factory-product caps, and play the same battle with
+synchronous and asynchronous hosts);
+`aikit.TestSurvivalBuddyMeetsItsOwnCapRetail` (a Survival battle in Strict 3.1
+and Modern whose Modern buddy reaches a cap on its own slice while its
+teammate holds as many of that type); the Classic control,
+`session.TestClassicComputerPlayerMeetsACapRetail`
+([DESIGN_MODS_MUTATORS §15.11](DESIGN_MODS_MUTATORS.md#1511-verification));
 and the existing synchronous/asynchronous arena comparison.
 
 ## 6. Research map

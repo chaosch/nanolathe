@@ -87,6 +87,10 @@ type ApplyStats struct {
 	// their class, and by starting a new one (layout.go).
 	RowExtend int32 `json:"row_extend,omitempty"`
 	RowNew    int32 `json:"row_new,omitempty"`
+	// Capped counts the placements and factory requests dropped as stale
+	// because the product's cap was reached in the reaction window (also
+	// counted in Stale; capReached).
+	Capped int32 `json:"capped,omitempty"`
 }
 
 // FailReason indexes ApplyStats.Reasons.
@@ -368,6 +372,27 @@ func (e *executor) actorOK(w *units.World, h pool.Handle, inst *units.Unit) *uni
 	return u
 }
 
+// capReached revalidates a creation request against unit restrictions at
+// apply time: the owner's live census of the product's definition — read
+// through the accessor that shares the allocator gate's count — has reached
+// the definition's cap [05 R-SHARE-01 §8]. The brain asked while it still had
+// an allowance, but records made in the reaction window can use it up; the
+// command is then stale, dropped like the executor's other revalidations
+// before it spends anything (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI
+// restriction caps"). A product without a cap is never stale this way.
+func (e *executor) capReached(c *Command, w *units.World) bool {
+	if c.Product == nil {
+		return false
+	}
+	limit, ok := definitionCap(c.Product.Def)
+	if !ok || int32(w.DefinitionCount(int(e.m.Player), c.Product.Def)) < limit {
+		return false
+	}
+	e.stats.Stale++
+	e.stats.Capped++
+	return true
+}
+
 // targetOK keeps every delayed target command tied to the observed instance,
 // including replacement and factory cleanup (docs/MODERN_AI_RESEARCH.md §2).
 func (e *executor) targetOK(w *units.World, c *Command) *units.Unit {
@@ -548,6 +573,9 @@ func (e *executor) execBuild(c *Command, b *batch, tick uint32, w *units.World) 
 		e.stats.Reasons[FailNoActor]++
 		return false
 	}
+	if e.capReached(c, w) {
+		return false
+	}
 	var cx, cz int32
 	var ok bool
 	e.keep = c.Keep
@@ -604,6 +632,9 @@ func (e *executor) execProduce(c *Command, b *batch, w *units.World) bool {
 		e.stats.Reasons[FailNoActor]++
 		return false
 	}
+	if e.capReached(c, w) {
+		return false
+	}
 	n := c.Count
 	if n < 1 {
 		n = 1
@@ -646,6 +677,9 @@ func (e *executor) execReplace(c *Command, b *batch, tick uint32, w *units.World
 	if old == nil || old.Owner != e.m.Player {
 		e.stats.Stale++
 		e.stats.Reasons[FailTarget]++
+		return false
+	}
+	if e.capReached(c, w) {
 		return false
 	}
 	p := e.placement(c.Product)

@@ -209,7 +209,9 @@ func (pr *Production) produce(b *core.Board, budget int) {
 		d.reset(s.tick, f.Info, f.X, f.Z)
 		for _, q := range f.Info.Builds {
 			si := &s.info[q.Index]
-			if !q.Role.Has(aikit.RoleMobile) {
+			// A product whose restriction cap is used up is not a candidate
+			// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI restriction caps").
+			if !q.Role.Has(aikit.RoleMobile) || k.Allowance(q) <= 0 {
 				continue
 			}
 			var c cand
