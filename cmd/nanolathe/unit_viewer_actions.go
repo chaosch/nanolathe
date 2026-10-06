@@ -6,6 +6,7 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/internal/cob"
 	"github.com/nanolathe-gg/nanolathe/internal/combat"
+	"github.com/nanolathe-gg/nanolathe/internal/construction"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/movement"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
@@ -77,13 +78,22 @@ func (a *unitViewerAnimation) moveStep() {
 // production state machine: raise activation, wait for the stance, query the
 // pad, raise the building edge, then the same per-step query
 // [05 "Factory production lifecycle"]. Every work step is assumed admitted.
+//
+// A factory's order builds its product cycle: each product starts as a fresh
+// nanoframe on the pad when the building edge rises, falls one construction
+// step per preview tick (times the preview speed), and at zero completes, the
+// building edge falls, and the completed product holds the pad until the next
+// one starts (DESIGN_DEVELOPER_TOOLS §7).
 type unitViewerBuild struct {
-	factory bool
-	state   unitViewerBuildState
-	request int // +1 start, -1 stop; served by the next order visit
-	since   uint64
-	nano    int // model piece of the last nano query, or -1
-	pad     int // model piece of the factory build-info query, or -1
+	factory  bool
+	state    unitViewerBuildState
+	request  int // +1 start, -1 stop; served by the next order visit
+	since    uint64
+	nano     int  // model piece of the last nano query, or -1
+	pad      int  // model piece of the factory build-info query, or -1
+	origin   bool // the build-info answer hangs the product at the factory origin
+	speed    int  // construction steps per preview tick
+	products *unitViewerProducts
 }
 
 type unitViewerBuildState uint8
@@ -92,6 +102,7 @@ const (
 	unitViewerBuildIdle unitViewerBuildState = iota
 	unitViewerBuildWaiting
 	unitViewerBuildWorking
+	unitViewerBuildHolding // a completed product holds the pad
 )
 
 // building reports whether the preview is carrying construction work: the
@@ -155,15 +166,19 @@ func (a *unitViewerAnimation) buildStep() {
 	case g.request < 0 && g.state != unitViewerBuildIdle:
 		if g.factory {
 			// Completion lowers the building edge; the drained queue then
-			// lowers activation in the same pump pass.
+			// lowers activation in the same pump pass. An unfinished
+			// product is discarded; particles already in flight finish.
 			a.script.setEdge(unitViewerBuildBit, false)
 			a.script.setEdge(unitViewerActivated, false)
+			if g.products != nil {
+				g.products.cancel()
+			}
 		} else {
 			// The slot-form StopBuilding writes four zero cells
 			// [04 R-CB-01 §2][R-ORDER-02 §2].
 			b.DeferredArgs("StopBuilding", 0, [4]int32{}, nil)
 		}
-		g.state, g.nano, g.pad = unitViewerBuildIdle, -1, -1
+		g.state, g.nano, g.pad, g.origin = unitViewerBuildIdle, -1, -1, false
 		a.note = "Build / stopped"
 	case g.request > 0 && g.state == unitViewerBuildIdle:
 		if g.factory {
@@ -177,6 +192,23 @@ func (a *unitViewerAnimation) buildStep() {
 		a.note = "Build / waiting for build stance"
 	}
 	g.request = 0
+	if g.state == unitViewerBuildHolding {
+		// The completed product leaves after the viewer's hold; the order
+		// then restarts at its stance test with activation still raised, so
+		// no second Activate runs [05 "Factory production lifecycle"].
+		c := g.products.current
+		if c != nil && c.failed != nil {
+			g.products.fail(c)
+			c = nil
+		}
+		if c != nil && c.hold > 1 {
+			c.hold--
+			a.note = a.productStatus()
+			return
+		}
+		g.products.current = nil
+		g.state, g.since = unitViewerBuildWaiting, a.ticks
+	}
 	if g.state == unitViewerBuildWaiting {
 		// An aircraft builder polls the stance and discards the verdict
 		// [05 R-P0-06 §1]; every other builder waits for the script's level.
@@ -187,20 +219,117 @@ func (a *unitViewerAnimation) buildStep() {
 			return
 		}
 		if g.factory {
-			g.pad = a.script.modelPiece(b.QueryBuildInfo().QueryValue())
+			// The answer reaches the carrier as one signed byte: 128 and
+			// above, and the unanswered -1, hang the product at the factory
+			// origin [04 R-FAC-02 §1].
+			hang := int8(uint8(b.QueryBuildInfo().QueryValue()))
+			g.origin = hang < 0
+			g.pad = -1
+			if !g.origin {
+				g.pad = a.script.modelPiece(int32(hang))
+				// A script piece at or beyond the model's piece count has no
+				// record, and the piece locator answers the unit's own
+				// position for it [04 R-COB-01 §3][04 R-REV-02].
+				if g.pad < 0 && a.geometry != nil && int(hang) >= len(a.geometry.Pieces) {
+					g.origin = true
+				}
+			}
+			if g.products != nil {
+				g.products.start(a.def.WorkerTime)
+			}
 			a.script.setEdge(unitViewerBuildBit, true)
 		}
 		g.state = unitViewerBuildWorking
 	}
 	if g.state == unitViewerBuildWorking {
-		g.nano = a.script.modelPiece(b.QueryNanoPiece().QueryValue())
-		// The status reads the same accessors the product and nanospray
-		// overlay will use.
-		a.note = "Build / nano " + a.pieceName(a.nanoPiece())
-		if g.factory {
-			a.note = "Build / pad " + a.pieceName(a.padPiece()) + " / nano " + a.pieceName(a.nanoPiece())
+		a.workStep()
+	}
+}
+
+// workStep is one state-3 visit: the product's construction steps, then for
+// accepted work the synchronous QueryNanoPiece and one spray record, then
+// completion when the fraction reaches zero [05 R-P0-06 §6]. A factory
+// without a product keeps the stance and nano query alone; nothing is
+// sprayed without a target.
+func (a *unitViewerAnimation) workStep() {
+	g := &a.build
+	var c *unitViewerProduct
+	if g.products != nil {
+		c = g.products.current
+		if c != nil && c.failed != nil {
+			// The renderer refused the product: report it and start the next.
+			g.products.fail(c)
+			c = g.products.start(a.def.WorkerTime)
 		}
 	}
+	if c != nil && !c.work(construction.WorkerQuantum(a.def.WorkerTime), g.speed) {
+		// A zero quantum or a stored zero commits nothing: no query, no
+		// segment [05 R-P0-06 §1].
+		g.nano = -1
+		a.note = a.productStatus()
+		return
+	}
+	g.nano = a.script.modelPiece(a.script.bridge.QueryNanoPiece().QueryValue())
+	a.emitSpray(c)
+	switch {
+	case c != nil && c.remaining == 0:
+		// Completion: the product's own activation, then the building edge
+		// falls [04 R-FAC-02 §3]; the product holds the pad.
+		if c.def.ActivateWhenBuilt && c.anim != nil && c.anim.script != nil && !c.anim.invalid {
+			c.anim.setActivation(true)
+		}
+		a.script.setEdge(unitViewerBuildBit, false)
+		c.hold = unitViewerProductHold
+		g.state = unitViewerBuildHolding
+		a.note = a.productStatus()
+	case g.products != nil:
+		a.note = a.productStatus()
+	case g.factory:
+		a.note = "Build / pad " + a.pieceName(a.padPiece()) + " / nano " + a.pieceName(a.nanoPiece())
+	default:
+		a.note = "Build / nano " + a.pieceName(a.nanoPiece())
+	}
+}
+
+// emitSpray submits one spray record for an accepted step: from the nano
+// piece into the product's box on its pad, or, for a mobile builder, into
+// the stand-in work target.
+func (a *unitViewerAnimation) emitSpray(c *unitViewerProduct) {
+	g := &a.build
+	poses := a.script.poses()
+	src, ok := unitViewerRootLocal(a.geometry, poses, g.nano)
+	if !ok {
+		return
+	}
+	var lo, hi [3]numeric.Fixed
+	switch {
+	case c != nil:
+		at := [3]numeric.Fixed{}
+		if !g.origin {
+			// An answer below the model's piece count but past the
+			// script's declared pieces addresses the record the link pass
+			// left in that slot [04 R-COB-01 §3]; cob.LinkPieces maps only
+			// declared pieces, so the preview places nothing for it. Stock
+			// scripts answer a declared piece.
+			if at, ok = unitViewerRootLocal(a.geometry, poses, g.pad); !ok {
+				return
+			}
+		}
+		lo, hi = unitViewerTargetBox(c.def, at)
+	case !g.factory:
+		lo, hi = unitViewerMobileTarget(a.def, a.reach)
+	default:
+		return
+	}
+	a.spray.emit(uint32(a.ticks), src, lo, hi)
+}
+
+// product is the factory's product on its pad, or nil.
+func (a *unitViewerAnimation) product() *unitViewerProduct {
+	if a == nil || a.action != unitViewerBuilding || a.build.products == nil {
+		return nil
+	}
+	return a.build.products.current
 }
 
 func (a *unitViewerAnimation) pieceName(index int) string {
