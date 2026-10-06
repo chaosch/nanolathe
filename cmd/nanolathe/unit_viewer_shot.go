@@ -10,7 +10,7 @@ import (
 )
 
 func unitViewerShotSyntax() error {
-	return fmt.Errorf("nanolathe: unit viewer capture: logical path <command line>, providers searched [--shot-unit-viewer], expected <unit ID>[/stats|/weapons|/build][/action=<idle|move|fly|land|aim|fire|build|stop|hit|death|wreck|on|off>][/ticks=N][/severity=N][/weapon=N][/speed=1|4|16]")
+	return fmt.Errorf("nanolathe: unit viewer capture: logical path <command line>, providers searched [--shot-unit-viewer], expected <unit ID>[/stats|/weapons|/build][/action=<idle|move|fly|land|aim|fire|build|stop|hit|death|wreck|on|off>][/ticks=N][/severity=N][/weapon=N][/speed=1|4|16][/only][/card][/query=<text>]")
 }
 
 // unitViewerShotPlan is a capture's scripted action: the buttons a user
@@ -103,15 +103,32 @@ func runUnitViewerShot(opts Options, cs *contentSet) error {
 	s := &toolsScreen{}
 	s.show(&gameShell{cs: cs})
 	defer s.release()
+	// A capture never reads the settings key (DESIGN_MODS_MUTATORS §15.5);
+	// --restrict gives the editor's draft, which the menu route compares
+	// with an empty saved set, so Apply shows its count.
+	s.restrict.draft = opts.Restrictions
 	var plan unitViewerShotPlan
 	if opts.ShotUnitViewer != "@tools" {
 		// "<unit ID>[/<tab>][/action=<name>][/ticks=N][/severity=N][/weapon=N]"
-		// captures a tab and, optionally, an action after N preview ticks.
+		// captures a tab and, optionally, an action after N preview ticks;
+		// /only turns Restricted only on, /card opens the editor as the
+		// Nanolathe screen's card does, and /query= types a search.
 		parts := strings.Split(opts.ShotUnitViewer, "/")
 		unit, t := parts[0], unitViewerTabStats
 		tabs := map[string]int{"": unitViewerTabStats, "stats": unitViewerTabStats, "weapons": unitViewerTabWeapons, "build": unitViewerTabBuild}
 		for _, part := range parts[1:] {
 			key, value, isOption := strings.Cut(strings.ToLower(part), "=")
+			switch {
+			case !isOption && key == "only":
+				s.restrict.only = true
+				continue
+			case !isOption && key == "card":
+				s.restrict.route, s.restrict.saved = unitViewerRestrictCard, s.restrict.draft
+				continue
+			case isOption && key == "query":
+				s.query = value
+				continue
+			}
 			if !isOption {
 				tab, ok := tabs[key]
 				if !ok {
@@ -131,7 +148,9 @@ func runUnitViewerShot(opts Options, cs *contentSet) error {
 		s.viewer, s.entries, s.infoTab = true, unitViewerEntries(cat), t
 		s.tree = unitViewerBuildTree(cat, s.entries)
 		s.features = cat.Features
+		s.restrict.names, s.restrict.keys = unitViewerRestrictNames(cat, s.entries)
 		s.buildPanel()
+		s.panel.SetText("SEARCH", s.query)
 		s.filter()
 		found := false
 		for _, entry := range s.entries {

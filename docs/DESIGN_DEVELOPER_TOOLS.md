@@ -349,6 +349,8 @@ views work and prove that observation leaves the battle unchanged.
 viewer is an unfinished, hidden preview: there is no main-menu Tools button
 or public shortcut listing. Ctrl+U at the main menu opens the viewer directly;
 the shortcut is inactive in child windows, modal dialogs and text editors.
+The Nanolathe screen's *Unit restrictions* card opens it as the restriction
+editor below; that card is the visible route (DESIGN_MODS_MUTATORS §15.9).
 This maintainer contract records the entry without advertising it in the UI.
 The searchable catalog and textured, rotatable unit model are inspired by the
 official Cavedog viewer. This is Nanolathe tooling, not a reconstruction of
@@ -392,7 +394,8 @@ Ctrl/Cmd+A arms replacement of its text; the native editor supplies caret,
 Home/End, Delete and Backspace behavior and its existing byte and width limits.
 Tab traverses the native controls;
 outside search, Space toggles rotation, R resets, Left/Right turn and +/- zoom.
-Esc or Back returns directly to the main menu. Closing consumes held keys
+Esc or Back returns directly to the main menu, or to the Nanolathe screen
+when its card opened the viewer. Closing consumes held keys
 and buttons until release. These constants are viewer preferences, not retail
 gameplay arithmetic.
 
@@ -423,6 +426,37 @@ suppresses input to the underlying menu. Catalog compilation runs in a host
 worker; closing joins it before the content can unmount. The same worker
 derives the build tree once per catalog load. GPU resources and model caches
 belong to this screen and are released on close.
+
+**Restriction editor.** The editor that DESIGN_MODS_MUTATORS §15.9 owns
+lives in `unit_viewer_restrict.go`. Its controls are native panel controls,
+so they share focus, Tab and hit testing with the rest. The data column's
+list keeps 20 rows, and under it a *Restriction* block level with the stage's
+rows holds the selected unit's state, one note line, the On/Off switch, the
+count stepper with its readout, *Reset* and *Clear all*. The note says why a
+`norestrict` unit or a commander is limited (with a padlock), that the entry
+covers all N records of a duplicated name, or that Shift steps by ten. The
+*Restricted only* box sits on the library's count line, each row draws its
+name's state on its ID line (a cap as a chip, *Removed* in red with the row
+and picture dimmed, a padlock with *Norestrict* or *Commander*; the ID shrinks
+a little beside a state before it would clip), and the library's footer
+counts the names removed and capped and the entries the content leaves out.
+The keyboard hint joins the stage's. The names' locks come from
+`Catalog.CheckRestrictions` over every name at 0, run once by the catalog
+worker, so the editor locks exactly what battle entry refuses. Choices the
+design left to the viewer: the switch reads On for a cap and switches it
+Off; Shift with a step button or the wheel over the stepper moves to the next
+multiple of ten (No limit down gives 100 either way); *Reset* leaves the
+draft's entries for names the content lacks as they are; and a single unit's
+edit keeps the filtered list, so the selection never jumps, while *Reset*,
+*Clear all*, the box and the search filter again. Opened from the card the
+heading reads *Unit restrictions* and Back hands the draft back; opened with
+Ctrl+U it starts from the running content's saved set, names it lacks
+included, and *Apply* with the changed-name count appears beside Back,
+moving the PREVIEW label aside, once the draft differs. Apply selects the set,
+saves the settings and refreshes the main menu's chip; Back discards. The
+editor tests (`TestUnitViewerRestrict*`) lock the row states, the stepper
+ends, Reset with a wacky and a commander name, Clear all, *Restricted only*
+and both routes' draft, Apply and Back.
 
 **Build pictures.** Library rows and build-tree entries show
 `unitpics/<unit name>.pcx` from the running content through the settings
@@ -849,7 +883,13 @@ through full orbits and animation poses. Capture the actual screen with
 before the capture and runs a fixed number of preview ticks without a clock
 (`/ticks=N`, `/severity=N`, `/weapon=N` and `/speed=1|4|16` adjust it):
 `armrad/action=off`, `armlab/action=build/ticks=300/speed=16`,
-`armthund/action=land` or `armpw/action=wreck`. The
+`armthund/action=land` or `armpw/action=wreck`. A capture never reads the
+saved restrictions: `--restrict` entries give the editor's draft against an
+empty saved set, so Apply shows its count; `/only` turns *Restricted only*
+on, `/card` opens the editor as the card does and `/query=<text>` types a
+search, as in `armpw/only` with `--restrict armpw=20 --restrict corak=0`. The
+editor was checked on a capped unit, a removed unit, a norestrict commander
+and *Restricted only*, on both routes, at 1440x900 and 1024x640. The
 action round was checked on ARMRAD on and off, ARMSOLAR on, off and hit, ARMWIN
 and ARMMEX idle, ARMCK and ARMCOM building, ARMLAB building and stopped,
 ARMFIG and ARMTHUND flying, ARMTHUND landed, and ARMPW death at severities 25 and

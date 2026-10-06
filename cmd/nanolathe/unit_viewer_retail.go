@@ -67,6 +67,7 @@ func (s *toolsScreen) buildPanel() {
 		button("WEAPON", "Weapon 1", 610, unitViewerControlRowY, 96)
 		button("SEVERITY", "Severity 25", 712, unitViewerControlRowY, 122)
 		button("BACK", "Back", 1040, 26, 128)
+		addRestrictControls(add, button)
 		// The ordinary slider builder synthesizes associated arrow buttons.
 		// Settings-sized controls keep their hit targets and painted extents
 		// identical; the native panel still computes thumb size and travel.
@@ -102,7 +103,7 @@ func (s *toolsScreen) buildPanel() {
 // row could be scrolled into view but never clicked.
 const (
 	unitViewerLibraryRows, unitViewerLibraryRowH = 9, 56
-	unitViewerInfoRows, unitViewerInfoRowH       = 25, 20
+	unitViewerInfoRows, unitViewerInfoRowH       = 20, 20
 )
 
 func unitViewerListHeight(rows, rowH int32) int32 { return rows*rowH + 2 }
@@ -232,6 +233,10 @@ func (s *toolsScreen) activateTool(name string) {
 	if s.shell != nil {
 		s.shell.playMenuCue("SmallButton")
 	}
+	if s.activateRestrict(name) {
+		s.refreshControls()
+		return
+	}
 	switch name {
 	case "BACK":
 		s.back()
@@ -349,6 +354,8 @@ func (s *toolsScreen) buttonSelected(name string) bool {
 	switch name {
 	case "SPIN":
 		return s.spinning
+	case "APPLY":
+		return true
 	case "POWER":
 		return s.model.anim.activated()
 	case "SPEED":
@@ -376,6 +383,7 @@ func (s *toolsScreen) refreshControls() {
 	s.panel.SetText("WEAPON", fmt.Sprintf("Weapon %d", s.weapon))
 	s.panel.SetText("SPEED", fmt.Sprintf("Speed %dx", unitViewerSpeeds[s.speed]))
 	s.panel.SetText("SEVERITY", fmt.Sprintf("Severity %d", unitViewerSeverities[s.severity]))
+	s.refreshRestrictControls()
 	grey := func(name string, off bool) {
 		s.panel.Window.Gadgets[s.panel.Index(name)].GrayedOut = 0
 		if off {

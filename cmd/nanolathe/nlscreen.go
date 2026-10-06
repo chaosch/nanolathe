@@ -139,6 +139,10 @@ type nlScreen struct {
 	saved   nlDraft
 	changed int
 	ui      nlUICache // memoized strings and wrapped text (nlscreen_ui_cache.go)
+	// restrictSum is the Unit restrictions card's last summary and what it
+	// was read from (restrictionSummary).
+	restrictSum    nlRestrictionSummary
+	restrictSumKey nlRestrictionSummaryKey
 }
 
 func newNLScreen(host func() *gameShell) *nlScreen {
@@ -348,6 +352,7 @@ func (s *nlScreen) snapshot(g *gameShell) nlDraft {
 		switchAlt:     g.switchAlt,
 		override:      g.lockOverridden(g.cs.mod),
 		interfaceType: g.interfaceType,
+		restrictions:  nlLiveRestrictions(g).String(),
 	}
 	if d.glowStrength < 0 {
 		d.glowStrength = settings.DefaultGlowStrength
@@ -572,6 +577,11 @@ func (s *nlScreen) applyDraft(g *gameShell, draft nlDraft, touched map[string]bo
 		}
 	}
 	g.opts.Mutators, g.mutatorSetting = next.mutators, next.mutators.Map()
+	// An edited restriction set becomes the running content's setting and
+	// is written to its layer (DESIGN_MODS_MUTATORS §15.9).
+	if touched["restrictions"] {
+		g.selectRestrictions(nlRestrictionsOf(draft.restrictions))
+	}
 	if next.gameplay != g.gameplay.Normalize() {
 		g.setGameplay(next.gameplay)
 	}
@@ -717,7 +727,7 @@ func (s *nlScreen) updateInput(in screenkit.Input, dt float64) {
 }
 
 func (s *nlScreen) step(c nlCard, v, d int) {
-	if s.cardUnavailable(c) != "" {
+	if s.cardUnavailable(c) != "" || c.kind == nlRestrictions {
 		return
 	}
 	if c.kind == nlResolution {
@@ -929,7 +939,8 @@ func (s *nlScreen) Draw(screen *ebiten.Image) {
 }
 
 // drawLoadout is the one line that says what a battle started now would
-// run: content, rules, renderer and mutators. Each part jumps to its card.
+// run: content, rules, renderer, mutators and unit restrictions. Each part
+// jumps to its card.
 func (s *nlScreen) drawLoadout(screen *ebiten.Image, pages []nlPage) {
 	u := s.u()
 	d := &s.draft
@@ -946,6 +957,7 @@ func (s *nlScreen) drawLoadout(screen *ebiten.Image, pages []nlPage) {
 		{s.ui.text(nlTextKey{kind: "rules", a: gameplayLabel(d.gameplay)}, func() string { return gameplayLabel(d.gameplay) + " rules" }), "game", "rules", "loadout-gamerules"},
 		{renderer, "graphics", "renderer", "loadout-graphicsrenderer"},
 		{s.mutatorsLabel(d.mutators), "mutators", "", "loadout-mutators"},
+		{s.restrictionsLabel(), "mutators", "restrictions", "loadout-restrictions"},
 	}
 	x, y := 60*u, 96*u
 	bf := s.fonts.Body
@@ -1668,6 +1680,8 @@ func (s *nlScreen) drawHero(screen *ebiten.Image, page nlPage, card *nlCard, idx
 		y = s.heroHalves(screen, card, v, x, y, a)
 	case nlContent:
 		y = s.heroContent(screen, card, v, x, y, a)
+	case nlRestrictions:
+		y = s.heroRestrictions(screen, x, y, a)
 	}
 	if card.kind != nlGroup && s.cardUnavailable(*card) != "" {
 		screenkit.Fill(screen, screenkit.Rect{X: x - 4*u, Y: controlTop - 4*u, W: 648 * u, H: y - controlTop + 8*u}, color.RGBA{8, 12, 8, 145})
@@ -1712,6 +1726,9 @@ func (s *nlScreen) drawHero(screen *ebiten.Image, page nlPage, card *nlCard, idx
 	}
 	// Chips and compare.
 	cx := x
+	if card.kind == nlRestrictions {
+		s.heroRestrictionChips(screen, x, y, a)
+	}
 	for _, c := range card.chips {
 		cx += s.chip(screen, c, cx, y, a) + 8*u
 	}
@@ -1815,6 +1832,10 @@ func (s *nlScreen) cardNote(card nlCard, v int) string {
 				return fmt.Sprintf("Locks the rules to %s or newer.", gameplayLabel(min))
 			}
 		}
+	case nlRestrictions:
+		if g := s.shell(); g != nil && g.opts.RestrictionsSet {
+			return "The command line set this run's restrictions; an edit applied here replaces them."
+		}
 	}
 	return ""
 }
@@ -1829,15 +1850,126 @@ func firstUnlocked(s *nlScreen) int {
 }
 
 func (s *nlScreen) chip(screen *ebiten.Image, text string, x, y, a float64) float64 {
+	return s.chipTone(screen, text, x, y, a, color.RGBA{198, 235, 192, 255}, color.RGBA{47, 74, 48, 255}, nlGreen)
+}
+
+// chipTone is a chip in the given ink, edge and lamp colours.
+func (s *nlScreen) chipTone(screen *ebiten.Image, text string, x, y, a float64, ink, edge, lamp color.RGBA) float64 {
 	u := s.u()
-	st := screenkit.Style{Size: 10.5 * u, Top: alphaC(color.RGBA{198, 235, 192, 255}, a)}
+	st := screenkit.Style{Size: 10.5 * u, Top: alphaC(ink, a)}
 	tw := s.fonts.Body.Measure(text, st) + 24*u
 	r := screenkit.Rect{X: x, Y: y, W: tw, H: 30 * u}
 	screenkit.Fill(screen, r, color.RGBA{10, 18, 10, uint8(205 * a)})
-	screenkit.Outline(screen, r, 1*u, alphaC(color.RGBA{47, 74, 48, 255}, a))
-	screenkit.Disc(screen, x+10*u, y+15*u, 3*u, alphaC(nlGreen, a))
+	screenkit.Outline(screen, r, 1*u, alphaC(edge, a))
+	screenkit.Disc(screen, x+10*u, y+15*u, 3*u, alphaC(lamp, a))
 	s.fonts.Body.Draw(screen, text, x+17*u, y+20*u, st)
 	return tw
+}
+
+// heroRestrictions is the Unit restrictions card's control: a summary of
+// the draft — the numbers removed and capped and up to four entries with
+// their pictures and states, then how many more — with Edit... and Clear in
+// its heading row, so the card keeps the height of the others
+// (DESIGN_MODS_MUTATORS §15.9).
+func (s *nlScreen) heroRestrictions(screen *ebiten.Image, x, y, a float64) float64 {
+	u := s.u()
+	df, bf := s.fonts.Display, s.fonts.Body
+	sum := s.restrictionSummary(s.draft.restrictions)
+	rows := (len(sum.rows) + 1) / 2
+	h := 86 * u
+	if rows > 0 {
+		h = 62*u + float64(rows)*44*u
+		if sum.more > 0 {
+			h += 22 * u
+		}
+	}
+	box := screenkit.Rect{X: x, Y: y, W: 600 * u, H: h}
+	s.well(screen, box, a)
+	// The actions, right-aligned in the heading row.
+	cw := df.Measure("Clear", screenkit.Style{Size: 14 * u, Tracking: 0.12, Upper: true}) + 36*u
+	clear := screenkit.Rect{X: box.X + box.W - 16*u - cw, Y: box.Y + 12*u, W: cw, H: 36 * u}
+	s.settingButton(screen, "restrict-clear", clear, "Clear", s.draft.restrictions == "", func() {
+		s.setRestrictionDraft(content.Restrictions{})
+	})
+	ew := df.Measure("Edit...", screenkit.Style{Size: 14 * u, Tracking: 0.12, Upper: true}) + 36*u
+	s.button(screen, "restrict-edit", screenkit.Rect{X: clear.X - 10*u - ew, Y: clear.Y, W: ew, H: 36 * u}, "Edit...", false, false, s.editRestrictions)
+	df.Draw(screen, s.ui.upperCase(sum.text), box.X+24*u, box.Y+40*u, screenkit.Style{Size: 24 * u, Tracking: 0.04, Top: alphaC(nlCream, a), Shadow: 0.06})
+	if rows == 0 {
+		bf.Draw(screen, "Every unit is open to every player.", box.X+24*u, box.Y+66*u, screenkit.Style{Size: 11.5 * u, Top: alphaC(nlDim, a)})
+	}
+	for i, r := range sum.rows {
+		col, row := i%2, i/2
+		rr := screenkit.Rect{X: box.X + 16*u + float64(col)*288*u, Y: box.Y + 58*u + float64(row)*44*u, W: 280 * u, H: 40 * u}
+		screenkit.Fill(screen, rr, color.RGBA{8, 12, 8, uint8(170 * a)})
+		pic := screenkit.Rect{X: rr.X + 3*u, Y: rr.Y + 3*u, W: 34 * u, H: 34 * u}
+		alpha := a
+		if r.removed {
+			alpha = 0.4 * a
+		}
+		if img := s.art.pic(r.key); img != nil {
+			screenkit.Image(screen, img, pic, alpha, false)
+		}
+		stateStyle := screenkit.Style{Size: 10.5 * u, Tracking: 0.1, Top: alphaC(nlGreenText, a), Upper: true, Align: 2}
+		if r.removed {
+			stateStyle.Top = alphaC(color.RGBA{226, 150, 128, 255}, a)
+		}
+		stateW := df.Measure(r.state, stateStyle)
+		df.Draw(screen, r.state, rr.X+rr.W-10*u, rr.Y+25*u, stateStyle)
+		// A long name shrinks a little before it is cut.
+		st := screenkit.Style{Size: 12 * u, Top: alphaC(nlBody, a), Shadow: 0.1}
+		room := rr.W - 46*u - stateW - 14*u
+		for st.Size > 9.5*u && bf.Measure(r.name, st) > room {
+			st.Size -= 0.5 * u
+		}
+		name := r.name
+		if bf.Measure(name, st) > room {
+			runes := []rune(name)
+			for len(runes) > 1 && bf.Measure(string(runes)+"…", st) > room {
+				runes = runes[:len(runes)-1]
+			}
+			name = strings.TrimSpace(string(runes)) + "…"
+		}
+		bf.Draw(screen, name, rr.X+46*u, rr.Y+25*u, st)
+	}
+	if sum.more > 0 {
+		more := s.ui.text(nlTextKey{kind: "restrictions more", i: sum.more}, func() string { return fmt.Sprintf("and %d more", sum.more) })
+		bf.Draw(screen, more, box.X+24*u, box.Y+box.H-16*u, screenkit.Style{Size: 11 * u, Top: alphaC(nlDim, a)})
+	}
+	return box.Y + box.H
+}
+
+// heroRestrictionChips names the entries the running content leaves out of
+// its battles (DESIGN_MODS_MUTATORS §15.3), in amber, over at most two lines.
+func (s *nlScreen) heroRestrictionChips(screen *ebiten.Image, x, y, a float64) {
+	u := s.u()
+	chips := s.restrictionSummary(s.draft.restrictions).leftOut
+	ink, edge := color.RGBA{255, 222, 150, 255}, color.RGBA{120, 96, 40, 255}
+	cx, line := x, 0
+	for i, text := range chips {
+		st := screenkit.Style{Size: 10.5 * u}
+		tw := s.fonts.Body.Measure(text, st) + 24*u
+		if cx > x && cx+tw > x+640*u {
+			cx, line = x, line+1
+		}
+		rest := len(chips) - i
+		if line == 1 && rest > 1 {
+			// The last line ends with the count of the rest when they would
+			// not all fit.
+			total := cx
+			for _, t := range chips[i:] {
+				total += s.fonts.Body.Measure(t, st) + 32*u
+			}
+			if total > x+640*u {
+				more := fmt.Sprintf("and %d more left out", rest)
+				s.chipTone(screen, more, cx, y+float64(line)*38*u, a, ink, edge, nlAmber)
+				return
+			}
+		}
+		if line > 1 {
+			return
+		}
+		cx += s.chipTone(screen, text, cx, y+float64(line)*38*u, a, ink, edge, nlAmber) + 8*u
+	}
 }
 
 // heroProfileChanges lists what applying the chosen profile would change:
