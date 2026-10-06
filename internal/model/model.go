@@ -22,6 +22,11 @@ type Primitive struct {
 	// remaining faces without losing that source identity [02 "Model archive
 	// (3DO)"][03 §2.4].
 	SourceIndex int32
+	// UV, when set, places a textured quad's four corners inside its texture
+	// as fractions of the default corner extents (0 = column or row zero,
+	// 65535 = the last), replacing retail's corner-to-corner default. Retail
+	// models never set it; the quad-split measurement prototype does.
+	UV *[4][2]uint16
 }
 
 // Piece is one object/piece of a 3DO model [03 §2.4] [fmt 3do].

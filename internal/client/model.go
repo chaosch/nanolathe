@@ -111,6 +111,9 @@ func expandModelFromFSStrict(fs *vfs.FS, name string) (*unitModel, error) {
 	if compiled == nil || len(compiled.Pieces) == 0 {
 		return nil, fmt.Errorf("model %q: empty compiled geometry", path)
 	}
+	if quadSplitPrototype {
+		compiled = splitModelQuads(compiled)
+	}
 	byName := make(map[string]int, len(compiled.Pieces))
 	for i, piece := range compiled.Pieces {
 		byName[strings.ToLower(piece.Name)] = i
