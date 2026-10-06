@@ -83,6 +83,16 @@ type FreshBattleRequest struct {
 	// gameplay mode (docs/DESIGN_MODS_MUTATORS.md §6). The zero value applies
 	// none, so a request that names none composes the unchanged battle.
 	Mutators content.Mutators
+	// Restrictions are the battle's unit restrictions, forwarded to the
+	// skirmish entry options, which apply them to the entry's catalog clone
+	// before the mutators in every gameplay mode
+	// (docs/DESIGN_MODS_MUTATORS.md §15). A campaign mission takes none, and
+	// a request that names some for one is refused rather than run without
+	// them. A host resolves a saved preference against the running content
+	// before it builds the request (§15.3), so an entry the content cannot
+	// take is the command line's, and composition refuses it with the
+	// --restrict diagnostic. The zero value restricts nothing.
+	Restrictions content.Restrictions
 	// AIOverrides are the Modern AI computer players' configured parameters,
 	// forwarded to the session entry options
 	// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI computer player"). The
@@ -155,6 +165,10 @@ type Request struct {
 	// Mutators are the battle's global multipliers; the report prints the
 	// canonical set the session bound (docs/DESIGN_MODS_MUTATORS.md §6.6).
 	Mutators content.Mutators
+	// Restrictions are the battle's unit restrictions, from the command
+	// line's --restrict flags; the report prints the canonical set the
+	// session bound (docs/DESIGN_MODS_MUTATORS.md §15.5).
+	Restrictions content.Restrictions
 	// Mod names the installed mod mounted as the last of Roots,
 	// `<id>@<version>`, for the report; empty when none is mounted. The host
 	// resolves and mounts it; the runner only reports it (§6.6).
@@ -240,6 +254,7 @@ func RunWithContent(request Request, fs vfs.FSOps, catalog *content.Catalog) (Re
 		FS:               fs,
 		Catalog:          catalog,
 		Mutators:         request.Mutators,
+		Restrictions:     request.Restrictions,
 	})
 	if err != nil {
 		return Report{}, err
@@ -261,14 +276,22 @@ func ComposeFreshBattle(request FreshBattleRequest) (FreshBattle, error) {
 	}
 
 	cfg.Gameplay = request.Gameplay
+	if kind == ScenarioCampaign && !request.Restrictions.IsZero() {
+		// A mission is entered under its own authored unit list
+		// (docs/DESIGN_MODS_MUTATORS.md §15.1 "Not campaign missions").
+		return FreshBattle{}, diagnostic("session load failed: unit restrictions do not apply to a campaign mission", identity, nil, "a skirmish or Survival map, or no unit restrictions")
+	}
 	var sess *session.Session
 	switch kind {
 	case ScenarioCampaign:
 		sess, err = session.NewMissionWithEntryOptions(request.FS, request.Catalog, identity, request.Difficulty, request.SimulationSeed, request.CRTSeed, session.MissionEntryOptions{BuilderOptions: request.BuilderOptions, CommunitySources: request.CommunitySources, Gameplay: request.Gameplay, SelectedSide: request.SelectedSide, SelectedSideSet: request.SelectedSideSet, ContentLimits: request.ContentLimits, Mutators: request.Mutators, AIOverrides: request.AIOverrides}, request.Progress)
 	case ScenarioDirectOTA, ScenarioSkirmish, ScenarioSurvival:
-		sess, err = session.NewSkirmishWithEntryOptions(request.FS, request.Catalog, cfg, session.SkirmishEntryOptions{BuilderOptions: request.BuilderOptions, CommunitySources: request.CommunitySources, Progress: request.Progress, ContentLimits: request.ContentLimits, Mutators: request.Mutators, AIOverrides: request.AIOverrides, AutomatedPlayers: request.AutomatedPlayers, SimArt: request.SimArt})
+		sess, err = session.NewSkirmishWithEntryOptions(request.FS, request.Catalog, cfg, session.SkirmishEntryOptions{BuilderOptions: request.BuilderOptions, CommunitySources: request.CommunitySources, Progress: request.Progress, ContentLimits: request.ContentLimits, Mutators: request.Mutators, Restrictions: request.Restrictions, AIOverrides: request.AIOverrides, AutomatedPlayers: request.AutomatedPlayers, SimArt: request.SimArt})
 	default:
 		err = fmt.Errorf("headless: unsupported fresh battle kind %q", kind)
+	}
+	if refusal := (*content.RestrictionsError)(nil); errors.As(err, &refusal) {
+		return FreshBattle{}, restrictionDiagnostic(refusal)
 	}
 	if err != nil {
 		return FreshBattle{}, diagnostic("session load failed: "+err.Error(), identity, providersFromOps(request.FS), "a valid skirmish map or campaign mission")
@@ -449,6 +472,67 @@ type diagnosticError struct {
 	logical   string
 	providers []string
 	expected  string
+}
+
+// RestrictNone is the --restrict value that selects an explicitly empty set
+// (docs/DESIGN_MODS_MUTATORS.md §15.5, proposal R-P11).
+const RestrictNone = "none"
+
+// ParseRestrictFlags reads the --restrict values both commands take, in the
+// order given: each is the flag spelling content.ParseRestriction reads, or
+// RestrictNone alone for an explicitly empty set. A malformed entry, a unit
+// given twice and none beside an entry are refused with the command line's
+// diagnostic. Whether each unit exists is the running content's question,
+// which battle entry answers (restrictionDiagnostic).
+func ParseRestrictFlags(args []string) (content.Restrictions, error) {
+	refuse := func(arg, detail string) error {
+		return fmt.Errorf("nanolathe: invalid unit restriction %q: logical path <command line>, providers searched [restrict], expected <unit>=<count> with a canonical unit key and a count of 0..%d, each unit once, or %s alone: %s", arg, content.RestrictionMaxCount, RestrictNone, detail)
+	}
+	var r content.Restrictions
+	none := false
+	for _, arg := range args {
+		if arg == RestrictNone {
+			if len(args) != 1 {
+				return content.Restrictions{}, refuse(arg, "none beside another --restrict")
+			}
+			none = true
+			continue
+		}
+		entry, err := content.ParseRestriction(arg)
+		if err != nil {
+			return content.Restrictions{}, refuse(arg, err.Error())
+		}
+		if _, given := r.Count(entry.Unit); given {
+			return content.Restrictions{}, refuse(arg, "the unit was given twice")
+		}
+		if err := r.Set(entry.Unit, entry.Count); err != nil {
+			return content.Restrictions{}, refuse(arg, err.Error())
+		}
+	}
+	if none {
+		return content.Restrictions{}, nil
+	}
+	return r, nil
+}
+
+// restrictionDiagnostic is the command line's refusal of an entry the
+// running content cannot take (docs/DESIGN_MODS_MUTATORS.md §15.3): it names
+// every refused entry, as for a bad --ai-player row.
+func restrictionDiagnostic(e *content.RestrictionsError) error {
+	what := "unit restriction "
+	if len(e.Issues) > 1 {
+		what = "unit restrictions "
+	}
+	expected := "a unit the running content defines that is not marked norestrict"
+	entries := make([]string, len(e.Issues))
+	for i, issue := range e.Issues {
+		count, _ := e.Restrictions.Count(issue.Unit)
+		entries[i] = fmt.Sprintf("%s=%d", issue.Unit, count)
+		if issue.Reason == content.RestrictionRemovesCommander {
+			expected = fmt.Sprintf("a unit the running content defines that is not marked norestrict, and a count of 1..%d for a side's commander, which every player starts with", content.RestrictionMaxCount)
+		}
+	}
+	return diagnostic(what+strings.Join(entries, ", "), "--restrict", []string{"unit catalog"}, expected)
 }
 
 func diagnostic(what, logical string, providers []string, expected string) error {
