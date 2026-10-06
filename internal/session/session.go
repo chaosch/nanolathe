@@ -139,7 +139,13 @@ type Session struct {
 	// Mutators is the set battle entry applied to Catalog, fixed for the whole
 	// battle (docs/DESIGN_MODS_MUTATORS.md §6.3). It is recorded here only so
 	// reports and the save sidecar can read it; no phase consults it.
-	Mutators             content.Mutators
+	Mutators content.Mutators
+	// Restrictions is the unit-restriction set battle entry applied to
+	// Catalog before the mutators, fixed for the whole battle
+	// (docs/DESIGN_MODS_MUTATORS.md §15.5). It is recorded here only so
+	// reports and the save sidecar can read it; no phase consults it, since
+	// the allocator reads each capped definition's own limit field.
+	Restrictions         content.Restrictions
 	playerBuilderOptions [10]orders.BuilderOptions
 	builderOptionsReady  bool
 	// Rules is the bound gameplay rule set, one implementation per seam.
