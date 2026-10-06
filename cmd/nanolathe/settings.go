@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 
 	"github.com/nanolathe-gg/nanolathe/internal/ai"
@@ -73,6 +74,12 @@ func (g *gameShell) applySettings(s settings.Settings) {
 	g.setGameplay(startupGameplay(g.opts, s.Gameplay))
 	g.gameplayFeatures = s.GameplayFeatures
 	g.modSetting, g.mutatorSetting = s.Mod, s.Mutators
+	// The unit restrictions are the running content's layer's, resolved
+	// against that content: entries it cannot take are left out of its
+	// battles with a notice and kept in the file
+	// (docs/DESIGN_MODS_MUTATORS.md §15.3, §15.9).
+	g.restrictions.saved = maps.Clone(s.Restrictions)
+	g.resolveRestrictionSetting()
 	g.modernAISetting = s.ModernAI
 	g.controlsOffered = s.ControlsOffered
 	// Unknown actions and unreadable chords are dropped here; the file keeps
@@ -227,6 +234,7 @@ func (g *gameShell) liveSettings() settings.Settings {
 		ContentProfile:   g.baseSettings.ContentProfile,
 		Mod:              g.modSetting,
 		Mutators:         g.mutatorSetting,
+		Restrictions:     g.restrictions.saved,
 		ModernAI:         g.modernAISetting,
 		ControlsOffered:  g.controlsOffered,
 		ModLockOverrides: g.lockOverrides,

@@ -199,12 +199,26 @@ func TestUnitViewerAnimationFireWaitsForSelectedAimAndBaseReload(t *testing.T) {
 	if a.poses()[0].Tx != 2 || a.stopped {
 		t.Fatalf("fire preview did not repeat after a fresh aim: %s", a.note)
 	}
-	// Aim alone uses the same callback and continues its authored threads,
-	// while never dispatching Fire.
-	a = unitViewerPlay(def, mdl, unitViewerAiming, 2)
+}
+
+// Aim and Fire are one action. A script without the selected weapon's Fire
+// callback misses that start, as the battle's spawner does; RockUnit still
+// follows and the loop keeps aiming [04 R-CB-01 §2].
+func TestUnitViewerAnimationFireWithoutFireCallbackKeepsAiming(t *testing.T) {
+	def, mdl := unitViewerAnimationFixture(
+		viewerScriptFixture{"Create", []uint32{viewerReturn}},
+		viewerScriptFixture{"AimPrimary", []uint32{viewerPush, 1, viewerReturn}},
+		viewerScriptFixture{"RockUnit", []uint32{viewerStatic, 0, viewerPush, 1, 0x10031000, viewerPopStatic, 0,
+			viewerStatic, 0, viewerMoveNow, 0, 0, viewerReturn}},
+	)
+	def.Weapon1Def.ReloadTime = 2
+	if !unitViewerAnimationAvailable(def, unitViewerFiring, 1) {
+		t.Fatal("Fire required a Fire callback the battle does not require")
+	}
+	a := unitViewerPlay(def, mdl, unitViewerFiring, 1)
 	unitViewerAdvance(a, 20)
-	if a.stopped || !a.aimReady || a.poses()[0].Tx != 0 || !a.poses()[2].Hidden {
-		t.Fatalf("aim-only playback fired or stopped: %s", a.note)
+	if a.stopped || a.poses()[0].Tx < 2 {
+		t.Fatalf("Fire without a Fire callback stopped or never repeated its recoil: %+v, %s", a.poses()[0], a.note)
 	}
 }
 
@@ -214,13 +228,13 @@ func TestUnitViewerAnimationAvailabilityAndFailedAim(t *testing.T) {
 		viewerScriptFixture{"AimPrimary", []uint32{viewerPush, 0, viewerReturn}},
 		viewerScriptFixture{"FirePrimary", []uint32{viewerHide, 2, viewerReturn}},
 	)
-	for _, action := range []unitViewerAction{unitViewerIdle, unitViewerMoving, unitViewerFlying, unitViewerAiming, unitViewerFiring, unitViewerBuilding, unitViewerHit, unitViewerDeath, unitViewerWreck} {
+	for _, action := range []unitViewerAction{unitViewerIdle, unitViewerMoving, unitViewerFlying, unitViewerFiring, unitViewerBuilding, unitViewerHit, unitViewerDeath, unitViewerWreck} {
 		if unitViewerAnimationAvailable(nil, action, 1) || unitViewerAnimationAvailable(&content.UnitDef{}, action, 1) {
 			t.Fatal("missing script advertised an animation")
 		}
 	}
 	if !unitViewerAnimationAvailable(def, unitViewerFiring, 1) || unitViewerAnimationAvailable(def, unitViewerMoving, 1) ||
-		unitViewerAnimationAvailable(def, unitViewerAiming, 0) || unitViewerAnimationAvailable(def, unitViewerAiming, 4) || unitViewerAnimationAvailable(def, unitViewerFiring, 2) {
+		unitViewerAnimationAvailable(def, unitViewerFiring, 0) || unitViewerAnimationAvailable(def, unitViewerFiring, 4) || unitViewerAnimationAvailable(def, unitViewerFiring, 2) {
 		t.Fatal("callback/weapon availability was inferred instead of checked")
 	}
 	for _, tc := range []struct {

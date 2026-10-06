@@ -2,18 +2,21 @@ package main
 
 // The save sidecar's host half, per docs/DESIGN_MODS_MUTATORS.md §7: what
 // the shell records beside every bank it writes, and what a load does with
-// a sidecar it finds — switch mod, select the recorded mutators and rule
-// set, and restore under the recorded Community and unit limit.
+// a sidecar it finds — switch mod, select the recorded mutators, unit
+// restrictions and rule set, and restore under the recorded Community and
+// unit limit (§15.5 for the restrictions).
 
 import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/internal/community"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/gameplay"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
+	"github.com/nanolathe-gg/nanolathe/internal/mission"
 	"github.com/nanolathe-gg/nanolathe/internal/modfetch"
 	"github.com/nanolathe-gg/nanolathe/internal/modlibrary"
 	"github.com/nanolathe-gg/nanolathe/internal/save"
@@ -32,11 +35,21 @@ func refuseLoad(format string, args ...any) error {
 	return &saveLoadRefusal{message: fmt.Sprintf(format, args...)}
 }
 
-// loadFailureMessage is what the load dialog shows for a failed load.
+// loadFailureMessage is what the load dialog shows for a failed load. A
+// restore that refused the save's recorded unit restrictions names the
+// entries the running content cannot take (§15.3, §15.5).
 func loadFailureMessage(err error) string {
 	var refusal *saveLoadRefusal
 	if errors.As(err, &refusal) {
 		return refusal.message
+	}
+	var restrictions *content.RestrictionsError
+	if errors.As(err, &restrictions) {
+		parts := make([]string, len(restrictions.Issues))
+		for i, issue := range restrictions.Issues {
+			parts[i] = fmt.Sprintf("%s (%s)", issue.Unit, restrictionReasonText(issue.Reason))
+		}
+		return "This game's unit restrictions name units this content cannot take: " + strings.Join(parts, ", ")
 	}
 	return retailInvalidSaveMessage
 }
@@ -151,6 +164,10 @@ func sidecarModName(m *save.SidecarMod) string {
 // shell to select afterwards (§7.3 steps 3–6).
 type sidecarSelection struct {
 	mutators content.Mutators
+	// restrictions are a skirmish save's unit restrictions, which the
+	// restore checks against its catalog and applies before the mutators
+	// (§15.5).
+	restrictions content.Restrictions
 	// gameplay is the rule set to bind: the recorded name when this build
 	// can select it, else its recorded base (P7).
 	gameplay gameplay.Mode
@@ -164,7 +181,11 @@ func resolveSidecarSelection(sc save.Sidecar) (sidecarSelection, error) {
 	if err != nil {
 		return sidecarSelection{}, refuseLoad("This game was saved with mutators this build does not know: %v", err)
 	}
-	out := sidecarSelection{mutators: mutators, sources: session.SidecarCommunitySources(sc.Community), entry: sc.Community}
+	restrictions, err := content.ParseRestrictions(sc.Restrictions)
+	if err != nil {
+		return sidecarSelection{}, refuseLoad("This game's unit restrictions cannot be read: %s", strings.TrimPrefix(err.Error(), "content: "))
+	}
+	out := sidecarSelection{mutators: mutators, restrictions: restrictions, sources: session.SidecarCommunitySources(sc.Community), entry: sc.Community}
 	// A sidecar written before mod configs names the per-mod tables this
 	// build no longer carries. Its recorded entry table is the complete
 	// value the battle ran under, so it stands in as that source's base and
@@ -197,11 +218,29 @@ func resolveSidecarSelection(sc save.Sidecar) (sidecarSelection, error) {
 // own (P6): the mutators, and the rule set the restored battle is bound to,
 // so the chip, a restart of the battle and the next new battle all match
 // the game that was loaded. The mod was already selected by mounting it.
-func (g *gameShell) selectFromSidecar(sel sidecarSelection, mod settings.ModSelection) {
+// restored is the restored battle, nil for a campaign continuation. A
+// restored skirmish's unit restrictions, none included, become the running
+// content's restriction setting (proposal R-P6); a campaign game says
+// nothing about them, since a mission keeps its own unit list (§15.1), so
+// it leaves the setting as it was.
+func (g *gameShell) selectFromSidecar(sel sidecarSelection, mod settings.ModSelection, restored *session.Session) {
 	g.opts.Mutators, g.mutatorSetting = sel.mutators, sel.mutators.Map()
 	g.gameplay, g.opts.Gameplay = sel.gameplay.Normalize(), sel.gameplay.Normalize()
 	g.modSetting = mod
+	if restored != nil && (restored.Mission == nil || restored.Mission.Type != mission.TypeCampaign) {
+		g.selectRestrictions(restored.Restrictions)
+	}
 	g.saveSettings()
+}
+
+// continuationRestrictionsRefusal refuses a between-missions save whose
+// sidecar records unit restrictions: the next mission is entered under its
+// own unit list, so the pairing is malformed (§15.1, §15.5).
+func continuationRestrictionsRefusal(sel sidecarSelection) error {
+	if sel.restrictions.IsZero() {
+		return nil
+	}
+	return refuseLoad("This campaign save records unit restrictions, which campaign missions do not take")
 }
 
 // postLoadWarnings shows the sidecar's warnings (§7.3 steps 3 and 7) on the
@@ -268,8 +307,9 @@ func installSaveSidecarLine(window *gui.Window) {
 }
 
 // saveSidecarLine is the line's text for the save at bankPath: the mod and,
-// when any are active, the mutators. An installed mod is named as the Mods
-// screen names it; one that is not installed by its id and version.
+// when any are active, the mutators and the count of unit restrictions
+// (§8.4). An installed mod is named as the Mods screen names it; one that is
+// not installed by its id and version.
 func saveSidecarLine(bankPath string) string {
 	sc, ok, err := save.ReadSidecar(bankPath)
 	if err != nil {
@@ -292,8 +332,12 @@ func saveSidecarLine(bankPath string) string {
 			}
 		}
 	}
+	line := name
 	if m, err := content.ParseMutators(sc.Mutators); err == nil && !m.IsZero() {
-		return name + " - " + mutatorSummary(m)
+		line += " - " + mutatorSummary(m)
 	}
-	return name
+	if n := len(sc.Restrictions); n > 0 {
+		line += " - " + restrictionCountText(n)
+	}
+	return line
 }

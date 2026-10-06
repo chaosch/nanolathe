@@ -15,17 +15,25 @@ import (
 
 // The save sidecar is a Nanolathe file beside a retail bank that records the
 // match selection the bank was written under: the mod, content profile, rule
-// set, Community sources and entry table, unit limit and mutators
-// (docs/DESIGN_MODS_MUTATORS.md §7). The bank's bytes are unchanged; the
+// set, Community sources and entry table, unit limit, mutators and unit
+// restrictions (docs/DESIGN_MODS_MUTATORS.md §7, §15.5). The bank's bytes are unchanged; the
 // retail enumerator lists only `*.SAV`, so the sidecar never shows as a save.
 
 // SidecarSuffix is appended to the bank's full file name:
 // `SAVEGAME/<name>.SAV` gets `SAVEGAME/<name>.SAV.nanolathe.json` (§7.1).
 const SidecarSuffix = ".nanolathe.json"
 
-// SidecarSchema is the one layout this build reads and writes. A sidecar with
-// another schema is refused rather than half-read (§7.3).
+// SidecarSchema is the layout of every sidecar that records no unit
+// restrictions, so older builds keep reading those saves (§7.2).
 const SidecarSchema = 1
+
+// SidecarSchemaRestrictions is the layout of a sidecar that records unit
+// restrictions (§15.5, proposal R-P7). A build that reads only schema 1
+// refuses it, where it would otherwise load the bank without the
+// restrictions and misread the definition indices it was written with. This
+// build reads both; a sidecar with any other schema is refused rather than
+// half-read (§7.3).
+const SidecarSchemaRestrictions = 2
 
 // sidecarMaxBytes bounds a read: a sidecar is a few kilobytes at most.
 const sidecarMaxBytes = 1 << 20
@@ -113,6 +121,10 @@ type Sidecar struct {
 	Community       SidecarCommunity  `json:"community"`
 	UnitLimit       int               `json:"unitLimit"`
 	Mutators        map[string]string `json:"mutators"`
+	// Restrictions are the battle's unit restrictions, canonical unit key to
+	// count, e.g. {"armkrog": 0, "armpw": 20} (§15.5); absent when it had
+	// none. Their presence alone makes the file schema 2.
+	Restrictions map[string]int `json:"restrictions,omitempty"`
 	// AI is the Modern AI controllers' record (session.AIControllers),
 	// kept as raw JSON so this package stays ignorant of its shape; absent
 	// when the battle had no computer player.
@@ -124,8 +136,15 @@ func SidecarPath(bankPath string) string { return bankPath + SidecarSuffix }
 
 // WriteSidecar writes the sidecar of the bank at bankPath through a
 // temporary file and a rename, so a reader never sees half a file (§7.1).
+// It is schema 2 when it records unit restrictions and schema 1 otherwise
+// (§15.5).
 func WriteSidecar(bankPath string, s Sidecar) error {
 	s.Schema = SidecarSchema
+	if len(s.Restrictions) != 0 {
+		s.Schema = SidecarSchemaRestrictions
+	} else {
+		s.Restrictions = nil
+	}
 	if s.Mutators == nil {
 		s.Mutators = map[string]string{}
 	}
@@ -159,7 +178,9 @@ func WriteSidecar(bankPath string, s Sidecar) error {
 // as with every retail save and every older Nanolathe save, reports false
 // and no error (§7.3 step 1). A sidecar that exists but cannot be read, or
 // that another schema wrote, is an error: loading it as if it were absent
-// would silently drop the selection it records.
+// would silently drop the selection it records. So is a schema 1 sidecar
+// that names unit restrictions, or a schema 2 one without a non-empty set
+// (§15.5).
 func ReadSidecar(bankPath string) (Sidecar, bool, error) {
 	path := SidecarPath(bankPath)
 	file, err := os.Open(path)
@@ -181,7 +202,18 @@ func ReadSidecar(bankPath string) (Sidecar, bool, error) {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Sidecar{}, false, sidecarError(path, err.Error())
 	}
-	if s.Schema != SidecarSchema {
+	var present struct {
+		Restrictions json.RawMessage `json:"restrictions"`
+	}
+	if err := json.Unmarshal(data, &present); err != nil {
+		return Sidecar{}, false, sidecarError(path, err.Error())
+	}
+	switch {
+	case s.Schema == SidecarSchema && present.Restrictions != nil:
+		return Sidecar{}, false, sidecarError(path, "schema 1 with unit restrictions")
+	case s.Schema == SidecarSchemaRestrictions && len(s.Restrictions) == 0:
+		return Sidecar{}, false, sidecarError(path, "schema 2 without unit restrictions")
+	case s.Schema != SidecarSchema && s.Schema != SidecarSchemaRestrictions:
 		return Sidecar{}, false, sidecarError(path, fmt.Sprintf("schema %d", s.Schema))
 	}
 	return s, true, nil
@@ -198,5 +230,5 @@ func RemoveSidecar(bankPath string) error {
 }
 
 func sidecarError(path, what string) error {
-	return fmt.Errorf("nanolathe: save sidecar unreadable: %s: logical path %s, providers searched [save directory], expected a schema %d Nanolathe sidecar", what, path, SidecarSchema)
+	return fmt.Errorf("nanolathe: save sidecar unreadable: %s: logical path %s, providers searched [save directory], expected a schema %d Nanolathe sidecar, or schema %d with unit restrictions", what, path, SidecarSchema, SidecarSchemaRestrictions)
 }

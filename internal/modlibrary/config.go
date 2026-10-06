@@ -207,6 +207,12 @@ func parseConfigDocument(data []byte) (Metadata, error) {
 		if !settingsPathExists(lock) {
 			return Metadata{}, fail(fmt.Sprintf("mod config lock %q names no setting", lock), MetadataFile+" locks", "dotted paths into the settings document, such as gameplay or presentation.waterSurface")
 		}
+		// A lock would hold the player's unit restrictions at the base set
+		// for this mod, which is a recommendation by another route; the set
+		// is the player's own choice (docs/DESIGN_MODS_MUTATORS.md §15.9).
+		if lock == "restrictions" || strings.HasPrefix(lock, "restrictions.") {
+			return Metadata{}, fail(fmt.Sprintf("mod config lock %q names the unit restrictions", lock), MetadataFile+" locks", "a setting a mod may recommend; unit restrictions are the player's own choice")
+		}
 		config.Locks = append(config.Locks, lock)
 	}
 	meta := Metadata{
@@ -280,6 +286,9 @@ func gameplayRank(mode gameplay.Mode) int {
 // not carry, with where the value belongs instead. They are the match
 // selection (§3), which the player and the rules section choose, the
 // keyboard block, which is the keys section, and the file's own bookkeeping.
+// Unit restrictions are part of the match selection: a config cannot
+// recommend them, although the player keeps them per mod (§15.9, proposal
+// R-P5).
 var reservedSettingsKeys = []struct{ key, belongs string }{
 	{"gameplay", "rules.gameplay"},
 	{"gameplayFeatures", "rules.communityFeatures"},
@@ -287,6 +296,7 @@ var reservedSettingsKeys = []struct{ key, belongs string }{
 	{"keyBindings", "the keys section"},
 	{"mod", "the player's own choice"},
 	{"mutators", "the player's own choice"},
+	{"restrictions", "the player's own choice"},
 	{"contentProfile", "the player's own choice"},
 	{"modernAI", "the player's own choice"},
 	{"controlsOffered", "the settings file's own bookkeeping"},

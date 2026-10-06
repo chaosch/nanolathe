@@ -113,6 +113,7 @@ func TestParseConfigDocumentRefusals(t *testing.T) {
 		"unit limit setting":      {`{` + head + `,"settings":{"unitLimit":500}}`, "rules.communityFeatures.unitLimit"},
 		"key setting":             {`{` + head + `,"settings":{"keyBindings":{}}}`, "the keys section"},
 		"mod setting":             {`{` + head + `,"settings":{"mod":{"id":"x"}}}`, "player's own choice"},
+		"restrictions setting":    {`{` + head + `,"settings":{"restrictions":{"armpw":0}}}`, `names "restrictions"`},
 		"unknown keys key":        {`{` + head + `,"keys":{"layout":"x"}}`, "keys section"},
 		"unknown keyboard":        {`{` + head + `,"keys":{"profile":"dvorak"}}`, "keyboard profile"},
 		"unknown action":          {`{` + head + `,"keys":{"bindings":{"teleport":["t"]}}}`, "not a rebindable action"},
@@ -120,6 +121,7 @@ func TestParseConfigDocumentRefusals(t *testing.T) {
 		"unknown lock":            {`{` + head + `,"locks":["presentation.sparkle"]}`, "names no setting"},
 		"lock past a leaf":        {`{` + head + `,"locks":["switchAlt.x"]}`, "names no setting"},
 		"repeated lock":           {`{` + head + `,"locks":["gameplay","gameplay"]}`, "twice"},
+		"restrictions lock":       {`{` + head + `,"locks":["restrictions"]}`, "unit restrictions"},
 		"trailing document":       {`{` + head + `}{}`, "reading mod"},
 	} {
 		_, err := ParseMetadata([]byte(tc.doc))

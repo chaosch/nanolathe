@@ -655,6 +655,42 @@ func TestMutatorsAndModRoundTrip(t *testing.T) {
 	}
 }
 
+// The `restrictions` key is stored and round-tripped verbatim, like the
+// mutators (docs/DESIGN_MODS_MUTATORS.md §15.9): this package does not
+// import content, so an entry its reader will leave out — a key that is not
+// canonical, a count outside 0..100, a unit no content defines — survives a
+// save; an empty set is omitted from the file and loads as none.
+func TestRestrictionsRoundTripVerbatim(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	want := Defaults()
+	want.Restrictions = map[string]int{"armkrog": 0, "armpw": 20, "ArmFlash": 3, "notaunit": 101}
+	if err := want.SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Restrictions, want.Restrictions) {
+		t.Fatalf("round trip = %v, want %v", got.Restrictions, want.Restrictions)
+	}
+	empty := Defaults()
+	empty.Restrictions = map[string]int{}
+	if err := empty.SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte(`"restrictions"`)) {
+		t.Fatalf("an empty set must be omitted:\n%s", data)
+	}
+	if got, err = LoadFrom(path); err != nil || got.Restrictions != nil {
+		t.Fatalf("an absent set loaded as %v (%v)", got.Restrictions, err)
+	}
+}
+
 // The `modernAI` block is stored and round-tripped verbatim, like the
 // mutators: this package does not know the brain's keys, so an entry the
 // desktop command will refuse still survives a save. A value may be written

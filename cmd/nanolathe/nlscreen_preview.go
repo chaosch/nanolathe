@@ -476,6 +476,10 @@ func stageNLSession(opts Options, cs *contentSet, preset nlPreset, rules gamepla
 	scene := preset.scene
 	opts.Map, opts.Seed = scene.Map, int64(scene.Seed)
 	opts.Gameplay, opts.GameplaySet = rules, true
+	// A scene shows how a setting looks on the full catalog: unit
+	// restrictions change which units exist, not how a scene looks, and its
+	// fixture stages units by name (docs/DESIGN_MODS_MUTATORS.md §15.9).
+	opts.Restrictions = content.Restrictions{}
 	opts.Mutators = content.Mutators{}
 	if mutators != "" {
 		m, err := content.ParseMutators(parseMutatorPairs(mutators))

@@ -183,6 +183,11 @@ type gameShell struct {
 	// (docs/DESIGN_MODS_MUTATORS.md §4.3, §6).
 	modSetting     settings.ModSelection
 	mutatorSetting map[string]string
+	// restrictions is the running content's saved unit-restriction setting
+	// and what that content makes of it (mods.go,
+	// docs/DESIGN_MODS_MUTATORS.md §15.9). Like mutatorSetting it is
+	// written back verbatim, and a --restrict flag never overwrites it.
+	restrictions restrictionSetting
 	// modernAISetting is the saved modernAI block, written back unchanged:
 	// no screen edits it, and a --ai flag never overwrites it
 	// (docs/DESIGN_SESSIONS_AI_SAVE.md "Modern AI computer player").

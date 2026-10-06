@@ -100,10 +100,10 @@ func (g *gameShell) fileSettings(live settings.Settings) settings.Settings {
 	if key == "" {
 		return live
 	}
-	base, err := toSettingsPatch(g.baseSettings)
-	if err == nil {
-		base, err = settings.Restrict(base, settings.ModScoped)
-	}
+	// The base layer states the base block's unit restrictions even when
+	// there are none, so the original game never takes the running mod's
+	// set (docs/DESIGN_MODS_MUTATORS.md §15.9).
+	base, err := settings.BaseLayer(g.baseSettings)
 	out := live
 	if err == nil {
 		out, err = settings.Layer(live, base)
@@ -142,10 +142,6 @@ func (g *gameShell) fileSettings(live settings.Settings) settings.Settings {
 	}
 	out.ModSettings = patches
 	return out
-}
-
-func toSettingsPatch(s settings.Settings) (json.RawMessage, error) {
-	return json.Marshal(s)
 }
 
 // contentMod is the mod the running content mounted, nil for the original
