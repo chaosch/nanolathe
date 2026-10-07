@@ -124,7 +124,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(shaderSource)
+	shader := cstring(waterShaderSource + "\n" + shaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -184,6 +184,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	for i, t := range textures {
 		if b.texture(handle, int32(i), int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload texture %d", i)
+		}
+		runtime.KeepAlive(t)
+	}
+	for _, extra := range []struct {
+		slot    int32
+		texture meshscene.Texture
+	}{{5, scene.WaterMask}, {6, scene.ModelPalette}} {
+		t := extra.texture
+		if len(t.RGBA) > 0 && b.texture(handle, extra.slot, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+			return nil, fmt.Errorf("metalproto: upload texture %d", extra.slot)
 		}
 		runtime.KeepAlive(t)
 	}

@@ -81,7 +81,7 @@ func Load(opts LoadOptions) (*Scene, error) {
 	if err != nil {
 		return nil, err
 	}
-	scene := &Scene{Name: "retail committed-pose replay", Atlas: art.texture, Metadata: map[string]any{}}
+	scene := &Scene{Name: "retail committed-pose replay", Atlas: art.texture, ModelPalette: art.palette, Metadata: map[string]any{}}
 	census := make([]meshCensus, len(models))
 	for i, m := range models {
 		scene.Meshes = append(scene.Meshes, compileMesh(m, art, pal, opts.QuadMultiplier, &census[i]))

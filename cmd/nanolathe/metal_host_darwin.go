@@ -78,11 +78,12 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)
 	cl.SetFocused(true)
-	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{LoadOptions: meshscene.LoadOptions{Map: opts.Map, QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
+	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
 	}
-	host := &metalBattleHost{shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
+	prepareMetalScene(scene, sess.World)
+	host := &metalBattleHost{scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	scene.Live = host
 	scene.Metadata["logical_surface"] = []int{logicalW, logicalH}
 	scene.Metadata["prototype_limits"] = "one battle per launch; fixed drawable; native world effects and annotation depth remain prototype approximations"
@@ -118,6 +119,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 }
 
 type metalBattleHost struct {
+	scene                         *meshscene.Scene
 	shell                         *gameShell
 	cl                            *client.Client
 	battle                        *battleSession
@@ -242,6 +244,7 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	for i := range dirty {
 		h.frame.OverlayDirty[i] = uint32(dirty[i])
 	}
+	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2)
 	return h.frame, nil
 }
 func (h *metalBattleHost) Close() map[string]any {

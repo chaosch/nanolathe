@@ -56,6 +56,7 @@ type Scene struct {
 	Name                     string
 	Meshes                   []Mesh
 	Atlas                    Texture
+	ModelPalette             Texture
 	Terrain                  Texture
 	WaterMask                Texture // production projected wet/dry/shore mask; zero disables the layer
 	WaterMaskStep            int

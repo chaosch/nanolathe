@@ -55,8 +55,8 @@ func modelFrameRGBA(f *formats.GAFFrame, pal *palette.Tables) []byte {
 		if i >= w*h {
 			break
 		}
-		c := pal.Base[index]
-		copy(rgba[4*i:4*i+3], c[:3])
+		// Retain the physical index, so BLUE resolves the authored table before shade.
+		rgba[4*i] = index
 		if i >= len(f.Transparent) || !f.Transparent[i] {
 			rgba[4*i+3] = 255
 		}
@@ -97,7 +97,7 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 			continue
 		}
 		out.Color = [4]float32{1, 1, 1, 1}
-		out.Params = [4]float32{2, float32(selection.Material), 1, 0}
+		out.Params = [4]float32{2, float32(selection.Material), 1, float32(selection.Color)}
 		if selection.Glint != 0 {
 			out.Params[2] = float32(selection.Glint-1) / 100
 		}
