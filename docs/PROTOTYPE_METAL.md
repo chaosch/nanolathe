@@ -1439,3 +1439,53 @@ measured frames with no interval above 9 ms (opening only, no completed match).
 Still open: GPU time in large full-simulation views, live palette reload when
 gamma changes mid-battle, and geometric slab edge coverage. Results, captures
 and tools: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round3/`.
+
+### Fourth round: fixes from play (2026-10-07)
+
+A manual match turned up four defects in the playable host; all are fixed on
+this branch and checked in live or offscreen runs.
+
+**Returning by click left the game unfocused.** After switching to another
+app, a click back into the window brought the process to the front but AppKit
+never saw the mouse-down (the bridge consumes clicks in the view), so `NSApp`
+stayed inactive and the window never became key. The client's focus therefore
+stayed false: trackpad pan, wheel zoom, edge scrolling and the Modern resource
+double-click (all focus-gated) stopped while ordinary clicks still worked,
+until the next Cmd-Tab. Reproduced with synthetic input and an input trace
+(focus loss, click back, precise scrolls arriving with the camera unmoved);
+a mouse-down that arrives while the app is inactive or the window is not key
+now also goes through `sendEvent`, after which focus returns and the same
+scrolls pan the camera. Diagnostics: `NANOLATHE_METAL_FOCUS_LOG=1` prints
+AppKit's focus state; `NANOLATHE_METAL_INPUT_TRACE=<file>` writes one JSON line
+per host step with scroll, pinch, focus or button-down input, the camera
+before and after, and the camera-input gates.
+
+**`+fps` drew nothing.** The command toggled the shell's flag but only the
+Ebitengine host drew the panel. The Metal host now draws it as the last HUD
+quad (over the cursor, as production does) in the production layout, with this
+renderer's lanes: present interval, worker `Next` and packing, render-thread
+encode, GPU span and waits. They overlap and are not additive. The run loop
+reads completed native rows each poll and pairs them with the Go-side phases
+of the same present.
+
+**Selection boxes crossed their units.** The retained foreground drew every
+selected-unit quad after the world, so lines ran over the unit body; production
+draws the quad in the unit's painter slot immediately before the model
+[03 R-WATER-01 §1] rule 5. The client now hands the quads to the host
+(`SetExternalSelection`, `RetainedSelections`), which rasterizes them with the
+HUD line code and tags them with the unit's composition slot (a grouped unit
+uses its group's). The native commit walk draws them in that slot's paint band
+after its shadow and before its body, depth-tested at the band's far edge, so
+the body covers them and earlier ranks do not.
+
+**Gamma changes reached only the HUD.** The world bakes the display palette at
+load. Since the palette is `min(255, base × factor)` per channel, the host
+passes the new-over-load factor ratio and the final pass scales the finished
+world by it. A run switched from 0.833 to 1.0 at frame 60 matches a run loaded
+at 1.0 within 2 levels on 99.99% of pixels (6 everywhere); colours clamped under
+the old factor stay approximate. `NANOLATHE_METAL_OFFSCREEN=1` and
+`NANOLATHE_METAL_TEST_GAMMA=frame:value` script such checks without a window.
+
+Still open: GPU time in large full-simulation views (needs an idle host to
+measure), unit labels (health bars, group digits) drawn in the HUD over effects
+and fog rather than before strip 9, and a complete match.
