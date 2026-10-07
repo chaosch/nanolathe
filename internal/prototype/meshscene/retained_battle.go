@@ -1,6 +1,7 @@
 package meshscene
 
 import (
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/internal/session"
@@ -73,4 +74,14 @@ func (r *RetainedBattle) Report() map[string]any {
 
 func (r *RetainedBattle) SetDitheredFog(enabled bool) {
 	r.source.scene.DitheredFog = enabled
+}
+
+// SetSourceEffects forwards the four currently supported source treatments:
+// blast rings, vegetation shimmer, wreck glow and wreck shimmer. Other Enhanced
+// switches still need their own native implementation.
+func (r *RetainedBattle) SetSourceEffects(e drawlist.Effects) {
+	r.source.effects = e
+	if r.source.sprites != nil {
+		r.source.sprites.SetSourceEffects(e)
+	}
 }

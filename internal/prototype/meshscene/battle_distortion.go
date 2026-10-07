@@ -47,6 +47,9 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 	}
 	start := len(dst)
 	for _, v := range current.Effects {
+		if !b.effects.BlastRings {
+			break
+		}
 		if !b.explosionVisible(v, current) {
 			continue
 		}
@@ -92,7 +95,7 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 	b.counts["blast_rings"] = len(dst) - start
 	wrecks := 0
 	for _, v := range current.Features {
-		if wrecks >= 32 {
+		if !b.effects.WreckShimmer || wrecks >= 32 {
 			break
 		}
 		if v.Model == "" || !v.WreckHeatKnown || v.Y < current.Visibility.SeaLevel || !battleFeatureVisible(current, v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
@@ -108,10 +111,12 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 			continue
 		}
 		p := spritePosition(v.X, v.Y, v.Z)
+		old := spritePrevious(b.previousFeatures, v.InstanceID, p)
 		p[0] += rect[0] + rect[2]*0.5
+		old[0] += rect[0] + rect[2]*0.5
 		width, height := min(max(rect[2]*0.55, 12), 40), min(max(rect[3]*0.85, 32), 64)
 		heat := 1 - age/300
-		d := Distortion{Previous: p, Current: p, Shape: [4]float32{width, height * 0.5, 0.55 * heat * heat, 1}, Params: [4]float32{float32(current.Tick % 3600), float32((v.CX*13 + v.CZ*7) & 255), rect[1] + rect[3]*0.65}}
+		d := Distortion{Previous: old, Current: p, Shape: [4]float32{width, height * 0.5, 0.55 * heat * heat, 1}, Params: [4]float32{float32(current.Tick % 3600), float32((v.CX*13 + v.CZ*7) & 255), rect[1] + rect[3]*0.65, age + 1}}
 		if !distortionVisible(d, camera, viewport) {
 			b.counts["wreck_heat_culled"]++
 			continue
@@ -122,7 +127,7 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 	b.counts["wreck_heat_plumes"] = wrecks
 	trees := 0
 	for _, v := range current.Features {
-		if trees >= 128 {
+		if !b.effects.FireShimmer || trees >= 128 {
 			break
 		}
 		if !v.IsBurning || v.Model != "" && v.Filename == "" || !battleFeatureVisible(current, v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) || v.RuntimeLive && v.EventSeqName == "" {

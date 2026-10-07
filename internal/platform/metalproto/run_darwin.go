@@ -204,7 +204,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var packing livePacking
 	if scene.Live != nil {
 		liveRows = make([]liveRow, len(rows))
-		packing.spans = make([]meshSpan, len(scene.Meshes)*3)
+		packing.spans = make([]meshSpan, len(scene.Meshes)*nativeSpanPasses)
 		packing.cursor = make([]uint32, len(scene.Meshes))
 	}
 	var before, after runtime.MemStats

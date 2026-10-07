@@ -26,6 +26,7 @@ func (s *battleSource) appendDetachedDebris(pub *battlePublication, current *fra
 			continue
 		}
 		span := s.beginInstance(pub, battleEntityKey{kind: 4, id: uint64(v.Slot)}, mesh)
+		pub.frame.Instances[len(pub.frame.Instances)-1].Phase = PhaseEffects
 		now := pub.frame.Current[span.offset : span.offset+span.count]
 		clear(now)
 		piece := m.Pieces[v.PieceIndex]

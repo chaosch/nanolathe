@@ -11,6 +11,7 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/clock"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/internal/platform/benchlock"
@@ -134,6 +135,7 @@ type metalBattleHost struct {
 	cachedFrame, cachedPrevious   *frame.Frame
 	cached                        bool
 	ditheredFog                   bool
+	effects                       drawlist.Effects
 	steps, inputs                 uint64
 	cursorX, cursorY              int
 	cursorObserved                bool
@@ -182,6 +184,11 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	view := h.cl.CameraViewFor(h.cl.PresentationDigest())
 	camera := [3]float32{float32(view.X + float64(h.width)/(2*view.Factor)), float32(view.Z + float64(h.height)/(2*view.Factor)), float32(view.Factor * 2)}
 	previous, cur := h.cl.PresentedFramePair()
+	if effects := h.cl.Effects(); !h.cached || effects != h.effects {
+		h.world.SetSourceEffects(effects)
+		h.effects = effects
+		h.cached = false
+	}
 	if dithered := h.cl.DitheredFog(); dithered != h.ditheredFog {
 		h.world.SetDitheredFog(dithered)
 		h.ditheredFog = dithered

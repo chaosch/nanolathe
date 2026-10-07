@@ -61,7 +61,11 @@ kernel void interpolate_poses(device const float4x4* endpoints [[buffer(0)]],dev
  }
  // Mat4[3] is metadata, not part of the affine basis. Shade always follows
  // the current endpoint; Mat4[15] retains its current visibility marker.
- m[0].w=b[0].w;m[3].w=b[3].w;poses[at]=m;
+ m[0].w=b[0].w;m[3].w=b[3].w;
+ // Tagged live model origins follow the same endpoint interpolation as XYZ.
+ // Equal lanes remain exact, preserving the integer face ties of still units.
+ m[1].w=alpha<=0?a[1].w:alpha>=1||a[1].w==b[1].w?b[1].w:mix(a[1].w,b[1].w,alpha);
+ m[2].w=a[2].w>0.5&&b[2].w>0.5?1:0;poses[at]=m;
 }
 struct Out { float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float heightKey; float keyOrigin [[flat]]; float shadeRow; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; };
 float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
@@ -90,7 +94,8 @@ vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device c
  Out o={}; o.position=project(w,u);o.uv=v.uv;
  if(v.material!=0){Material material=materials[v.material];uint frame=material.kind==1?min(uint(max(visual.state.x,0.0)),max(material.frameCount,1u)-1):0;float4 rect=frames[material.firstFrame+frame];o.uv=mix(rect.xy,rect.zw,v.uv);}
  if(u.visual.x>0.5){o.state=visual.state;o.bounds=visual.bounds;o.outline=visual.outline;o.emission=visual.emission;}
- o.heightKey=floor(w.y-visual.bounds.w);o.keyOrigin=visual.bounds.w;
+ float keyOrigin=m[2].w>0.5?m[1].w:visual.bounds.w;
+ o.heightKey=floor(w.y-keyOrigin);o.keyOrigin=keyOrigin;
  // Production SHD uses the model-space light before final world-Z reflection.
  float3 shadeNormal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);
  uint shadeRow=uint(int(dot(shadeNormal,float3(-0.8,1,0.25))*5.0))&31;
@@ -101,7 +106,7 @@ fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[te
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
  float4 tex=atlas.sample(s,in.uv);if(tex.a<0.02)discard_fragment();
  if(in.state.z>0 && in.world.y>mix(in.bounds.y,in.bounds.x,clamp(in.state.z,0.0,1.0)))discard_fragment();
- float opacity=all(in.state==float4(0))?1:clamp(in.state.y,0.0,1.0);
+ float opacity=u.mode.w>0.5||all(in.state==float4(0))?1:clamp(in.state.y,0.0,1.0);
  // Interpolate SHD rows before truncation and the true-colour scale clamp.
  float3 light=float3(in.shadeRow<0?1.0:min(0.06875*floor(in.shadeRow),2.0));
  if(u.timing.w>0.5&&u.mode.x<0.5)for(uint i=0;i<8;i++){
@@ -125,7 +130,7 @@ fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[te
  float projectedY=(in.position.y-u.viewport.y*0.5)/u.camera.z;
  float depthHeight=u.mode.x>0.5?2.5:2.0;
  out.depth=clamp(0.5-(projectedY+modelY*depthHeight)*0.00001,0.001,0.999);
- float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
+ float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,u.mode.w>0.5?alpha:0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
 }
 vertex Out terrain_vertex(uint v [[vertex_id]],constant Uniforms& u [[buffer(3)]]) {
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
@@ -163,6 +168,14 @@ fragment MRT sprite_fragment(SpriteOut in [[stage_in]],texture2d<float> atlas [[
 struct Screen { float4 p [[position]];float2 uv; };
 vertex Screen screen_vertex(uint v [[vertex_id]]) {
  float2 p=float2((v<<1)&2,v&2);Screen o;o.p=float4(p*2-1,0,1);o.uv=float2(p.x,1-p.y);return o;
+}
+struct DepthOnly { float depth [[depth(any)]]; };
+fragment DepthOnly clear_depth_fragment() { DepthOnly out;out.depth=1;return out; }
+// Resolve only covered pixels from the completed native subject. Applying
+// opacity here prevents rear faces and equal-height winners from accumulating.
+fragment ModelMRT subject_resolve_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]],depth2d<float> depth [[texture(2)]],constant float& opacity [[buffer(0)]]) {
+ uint2 at=uint2(in.p.xy);float4 c=color.read(at);if(c.a<0.001)discard_fragment();
+ ModelMRT out;out.color=c*opacity;out.glow=float4(emission.read(at).rgb*opacity,0);out.depth=depth.read(at);return out;
 }
 kernel void blur(texture2d<float,access::sample> src [[texture(0)]],texture2d<float,access::write> dst [[texture(1)]],constant float2& direction [[buffer(0)]],uint2 p [[thread_position_in_grid]]) {
  if(any(p>=uint2(dst.get_width(),dst.get_height())))return;
@@ -253,13 +266,15 @@ fragment float4 distortion_fragment(DistortionOut in [[stage_in]],texture2d<floa
   if(r<0.001)discard_fragment();float envelope=1-band*band;shift=d/r*(band*envelope*envelope*3.5*strength);
  }else{
   // DESIGN_GPU_RENDERER §27: same authored drifting/widening plume profile.
-  float rise=(1-in.local.y)*0.5;float t=clock*0.20943951+in.params.y;
+  float rise=(1-in.local.y)*0.5;float t=(in.params.x+u.timing.x+in.params.y)*0.20943951;
   float center=sin(rise*5.0-t*0.5)*0.13*rise;
   float across=(in.local.x-center)/(0.58+0.42*rise);
   if(rise<=0||rise>=1||abs(across)>=1)discard_fragment();
   float edge=1-across*across;float sine=sin(rise*3.14159265);float envelope=edge*edge*sine*sine;
   float wave=sin(rise*18.0-t*2.0+across*2.5)+0.35*sin(rise*33.0-t*3.0-across*4.0);
-  shift=float2(wave,0.24*sin(rise*22.0-t*2.0+across*3.0))*envelope*1.8*in.shape.z;
+  float strength=in.shape.z;
+  if(in.params.w>0){float age=max(in.params.w+u.timing.x-1,0.0);strength=0.55*pow(max(1-age/300,0.0),2.0);}
+  shift=float2(wave,0.24*sin(rise*22.0-t*2.0+across*3.0))*envelope*1.8*strength;
  }
  float2 uv=(in.position.xy+shift*u.camera.z)/u.viewport.xy;return float4(source.sample(s,clamp(uv,float2(0),float2(1))).rgb,1);
 }

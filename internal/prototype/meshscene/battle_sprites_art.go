@@ -9,6 +9,7 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/vfs"
 )
@@ -53,7 +54,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 	if fs == nil || pal == nil || cat == nil {
 		return nil, fmt.Errorf("nanolathe: prototype sprite preparation failed: logical path battle sprites, providers searched [arguments], expected VFS, palette and catalog")
 	}
-	b := &BattleSprites{sequences: make(map[string]*spriteSequence), sequenceLookups: make(map[spriteSequenceName]*spriteSequence), missing: make(map[string]string), counts: make(map[string]int), previousEffects: make(map[uint64][4]float32), previousProjectiles: make(map[uint64][4]float32), previousBeams: make(map[uint64][4]float32)}
+	b := &BattleSprites{effects: drawlist.AllEffects(), previousFeatures: make(map[uint64][4]float32), sequences: make(map[string]*spriteSequence), sequenceLookups: make(map[spriteSequenceName]*spriteSequence), missing: make(map[string]string), counts: make(map[string]int), previousEffects: make(map[uint64][4]float32), previousProjectiles: make(map[uint64][4]float32), previousBeams: make(map[uint64][4]float32)}
 	for i, c := range pal.Base {
 		b.colors[i] = [4]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255, 1}
 	}

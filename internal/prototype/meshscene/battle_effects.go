@@ -181,6 +181,9 @@ func wreckCooling(f frame.FeatureView, tick uint32) [3]float32 {
 	return [3]float32{0.75*red + 0.15*flash, 0.20*amber + 0.55*flash, 0.015*amber + 0.42*flash}
 }
 func (b *BattleSprites) appendWreckLights(dst []Light, f *frame.Frame, camera [3]float32, viewport [2]int) []Light {
+	if !b.effects.WreckGlow {
+		return dst
+	}
 	for _, v := range f.Features {
 		if !v.WreckHeatKnown || v.Model == "" || v.Y < f.Visibility.SeaLevel || !battleFeatureVisible(f, v, b.spectator) || !battlePointVisible(f, v.X, v.Y, v.Z, b.spectator) {
 			continue

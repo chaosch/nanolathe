@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/model"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -19,6 +20,7 @@ import (
 const battlePeriod = time.Second / 30
 
 type battleSource struct {
+	effects                                           drawlist.Effects
 	scene                                             *Scene
 	sess                                              *session.Session // accessed only during preparation or by worker
 	fs                                                *vfs.FS
@@ -69,7 +71,7 @@ type battleTickRecord struct {
 }
 
 func newBattleSource(scene *Scene, sess *session.Session, fs *vfs.FS, models []*model.Model, indices map[string]int, originY float32, viewport [2]int) *battleSource {
-	return &battleSource{scene: scene, sess: sess, fs: fs, models: models, modelIndices: indices, originY: originY, viewport: viewport, camera: scene.Camera, stop: make(chan struct{}), done: make(chan struct{}), missingModels: map[string]int{}}
+	return &battleSource{effects: drawlist.AllEffects(), scene: scene, sess: sess, fs: fs, models: models, modelIndices: indices, originY: originY, viewport: viewport, camera: scene.Camera, stop: make(chan struct{}), done: make(chan struct{}), missingModels: map[string]int{}}
 }
 func (s *battleSource) noteMissing(name string) { s.missingModels[name]++ }
 func (s *battleSource) publishInitial() error {

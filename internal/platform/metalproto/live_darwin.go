@@ -5,6 +5,7 @@ package metalproto
 import (
 	"fmt"
 	"math"
+	"slices"
 	"unsafe"
 
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
@@ -15,6 +16,20 @@ type nativeInput struct {
 	PauseToggle      uint32
 }
 type meshSpan struct{ Start, Count uint32 }
+
+const nativeSpanPasses = 9 // all, shadows, reserved, three body phases, three outlines
+// Native CPU draw records refer to the mesh-packed instance table.
+type cloakDraw struct{ Mesh, Instance, Group, Phase uint32 }
+type cloakSubject struct {
+	id    uint64
+	depth float32
+	phase uint32
+}
+type cloakMember struct {
+	draw    cloakDraw
+	subject uint64
+	order   uint32
+}
 
 // Same scalar/pointer layout as NMLiveUpload. Slices are copied synchronously;
 // the native ring never retains a pointer into Go memory after the call.
@@ -34,8 +49,15 @@ type liveUpload struct {
 	OverlayWidth, OverlayHeight                                                                           uint32
 	OverlayDirty                                                                                          [4]uint32
 	GroundSpriteCount                                                                                     uint32
+	Cloaks                                                                                                uintptr
+	CloakCount, AirCount                                                                                  uint32
 }
 type livePacking struct {
+	phases                      []uint32
+	cloaks                      []cloakDraw
+	cloakSubjects               []cloakSubject
+	cloakMembers                []cloakMember
+	cloakIndices                map[uint64]int
 	spriteOrder                 []orderedSprite
 	sprites                     []meshscene.Sprite
 	spans                       []meshSpan
@@ -55,16 +77,14 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 216 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 232 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.Previous) != len(f.Current) || len(f.Current) > math.MaxInt32 || len(f.Instances) > math.MaxInt32 || len(f.Sprites) > math.MaxInt32 || len(f.Overlay) > math.MaxInt32 || f.Alpha < 0 || f.Alpha > 1 || math.IsNaN(float64(f.Alpha)) {
 		return u, r, fmt.Errorf("metalproto: invalid live frame topology or alpha")
 	}
-	for i := range p.cursor {
-		p.spans[i] = meshSpan{}
-		p.cursor[i] = 0
-	}
+	clear(p.spans)
+	clear(p.cursor)
 	for _, instance := range f.Instances {
 		if instance.Mesh < 0 || instance.Mesh >= len(scene.Meshes) || instance.PoseOffset < 0 || instance.PoseOffset > len(f.Current) || scene.Meshes[instance.Mesh].Pieces > len(f.Current)-instance.PoseOffset {
 			return u, r, fmt.Errorf("metalproto: live instance has invalid mesh or pose span")
@@ -84,9 +104,14 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		p.offsets = p.offsets[:len(f.Instances)]
 		p.visuals = p.visuals[:len(f.Instances)]
 	}
+	p.phases = slices.Grow(p.phases[:0], len(f.Instances))[:len(f.Instances)]
 	for _, instance := range f.Instances {
+		if instance.Phase > meshscene.PhaseAir {
+			return u, r, fmt.Errorf("metalproto: invalid model phase")
+		}
+		p.phases[p.cursor[instance.Mesh]] = instance.Phase
 		p.offsets[p.cursor[instance.Mesh]] = uint32(instance.PoseOffset)
-		p.visuals[p.cursor[instance.Mesh]] = instance.Visual
+		p.visuals[p.cursor[instance.Mesh]] = instance.InterpolatedVisual(f.Alpha)
 		p.cursor[instance.Mesh]++
 	}
 	lights := f.Lights
@@ -151,49 +176,81 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	r.OverlayQuads = len(f.Overlay)
 	r.OverlayBytes = len(f.Overlay) * 64
 	r.UploadBytes = uint64(len(f.Current))*128 + uint64(len(f.Instances))*68 + uint64(len(f.Distortions))*64 + uint64(r.FogBytes) + uint64(r.OverlayBytes) + uint64(r.OverlayTextureBytes) + uint64(len(f.Sprites))*96 + uint64(len(lights))*32
-	for i, span := range p.spans[:len(p.cursor)] {
-		if span.Count == 0 || len(scene.Meshes[i].Indices) == 0 {
-			continue
+
+	p.cloaks = p.cloaks[:0]
+	p.cloakSubjects = p.cloakSubjects[:0]
+	if visualPasses {
+		p.prepareCloaks(f)
+	}
+	u.Cloaks, u.CloakCount = pointer(p.cloaks), uint32(len(p.cloaks))
+	r.CloakSubjects = len(p.cloakSubjects)
+	for _, phase := range p.phases {
+		if phase == meshscene.PhaseAir {
+			u.AirCount++
+			r.AirInstances++
 		}
-		r.ModelDraws++
+	}
+	for i, span := range p.spans[:len(p.cursor)] {
 		r.ModelVertices += uint64(len(scene.Meshes[i].Vertices)) * uint64(span.Count)
 		r.ModelIndices += uint64(len(scene.Meshes[i].Indices)) * uint64(span.Count)
 	}
-	if visualPasses {
-		p.selectors = p.selectors[:0]
-		for pass := 1; pass <= 2; pass++ {
-			for mesh, span := range p.spans[:len(p.cursor)] {
-				out := meshSpan{Start: uint32(len(p.selectors))}
-				for j := uint32(0); j < span.Count; j++ {
-					v := p.visuals[span.Start+j]
-					eligible := v.State[3] > 0
-					if pass == 2 {
-						eligible = v.State[2] > 0 && v.Outline[3] > 0
-					}
-					if eligible {
-						p.selectors = append(p.selectors, j)
-						out.Count++
-					}
-				}
-				p.spans[pass*len(p.cursor)+mesh] = out
+	p.selectors = p.selectors[:0]
+	for pass := 1; pass < nativeSpanPasses; pass++ {
+		for mesh, span := range p.spans[:len(p.cursor)] {
+			out := meshSpan{Start: uint32(len(p.selectors))}
+			for j := uint32(0); j < span.Count; j++ {
+				at := span.Start + j
+				v := p.visuals[at]
+				phase := p.phases[at]
+				opaque := !visualPasses || v.State[1] >= 1 || v.State == [4]float32{}
+				eligible := false
 				if pass == 1 {
-					r.ShadowInstances += int(out.Count)
-					r.ShadowIndices += uint64(len(scene.Meshes[mesh].Indices)) * uint64(out.Count)
-					if out.Count > 0 && len(scene.Meshes[mesh].Indices) > 0 {
-						r.ShadowDraws++
-					}
-				} else {
-					r.Constructing += int(out.Count)
-					r.OutlineIndices += uint64(len(scene.Meshes[mesh].EdgeIndices)) * uint64(out.Count)
-					if out.Count > 0 && len(scene.Meshes[mesh].EdgeIndices) > 0 {
-						r.OutlineDraws++
-					}
+					eligible = visualPasses && v.State[3] > 0
+				}
+				if pass >= 3 && pass <= 5 {
+					eligible = opaque && phase == uint32(pass-3)
+				}
+				if pass >= 6 {
+					eligible = visualPasses && opaque && phase == uint32(pass-6) && v.State[2] > 0 && v.Outline[3] > 0
+				}
+				if eligible {
+					p.selectors = append(p.selectors, j)
+					out.Count++
 				}
 			}
+			p.spans[pass*len(p.cursor)+mesh] = out
+			if pass == 1 {
+				r.ShadowInstances += int(out.Count)
+				r.ShadowIndices += uint64(len(scene.Meshes[mesh].Indices)) * uint64(out.Count)
+				if out.Count > 0 && len(scene.Meshes[mesh].Indices) > 0 {
+					r.ShadowDraws++
+				}
+			} else if pass >= 6 {
+				r.Constructing += int(out.Count)
+				r.OutlineIndices += uint64(len(scene.Meshes[mesh].EdgeIndices)) * uint64(out.Count)
+				if out.Count > 0 && len(scene.Meshes[mesh].EdgeIndices) > 0 {
+					r.OutlineDraws++
+				}
+			} else if pass >= 3 && out.Count > 0 && len(scene.Meshes[mesh].Indices) > 0 {
+				r.ModelDraws++
+			}
 		}
-		u.Selectors = pointer(p.selectors)
-		r.UploadBytes += uint64(len(p.selectors)) * 4
 	}
+	for _, d := range p.cloaks {
+		if len(scene.Meshes[d.Mesh].Indices) > 0 {
+			r.ModelDraws++
+		}
+		v := p.visuals[d.Instance]
+		if visualPasses && v.State[2] > 0 && v.Outline[3] > 0 {
+			r.Constructing++
+			r.OutlineIndices += uint64(len(scene.Meshes[d.Mesh].EdgeIndices))
+			if len(scene.Meshes[d.Mesh].EdgeIndices) > 0 {
+				r.OutlineDraws++
+			}
+		}
+	}
+	u.Selectors = pointer(p.selectors)
+	r.UploadBytes += uint64(len(p.selectors))*4 + uint64(len(p.cloaks))*16
 	if r.GroundSprites > 0 {
 		r.SpriteDraws++
 	}

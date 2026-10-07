@@ -24,8 +24,11 @@ type metalModelCapture struct {
 
 func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattle, sess *session.Session, modelName string, width, height int, fs vfs.FSOps) (meshscene.LiveSource, error) {
 	name := strings.ToLower(strings.TrimSpace(modelName))
-	if scene == nil || world == nil || sess == nil || sess.Catalog == nil || sess.Snapshot == nil || width <= 0 || height <= 0 || (name != "armsolar" && name != "armcom" && name != "armcom-ground") {
-		return nil, fmt.Errorf("nanolathe: Metal model capture requires retained assets, an opening session, positive dimensions and armsolar, armcom or armcom-ground")
+	if strings.HasPrefix(name, "armflash-wreck") {
+		return newMetalWreckCapture(scene, world, sess, name, width, height)
+	}
+	if scene == nil || world == nil || sess == nil || sess.Catalog == nil || sess.Snapshot == nil || width <= 0 || height <= 0 || (name != "armsolar" && name != "armcom" && name != "armcom-ground" && name != "armcom-cloaked" && name != "armcom-underlay" && name != "armcom-tree" && name != "armcom-air") {
+		return nil, fmt.Errorf("nanolathe: Metal model capture requires retained assets, an opening session, positive dimensions and a supported model capture name")
 	}
 	opening := sess.Snapshot.Current()
 	if opening == nil || opening.Tick != 0 {
@@ -46,12 +49,13 @@ func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattl
 	unit.Pieces = slices.Clone(commander.Pieces)
 	poseSource := "opening committed commander PieceView lanes"
 	var groundFeatures []frame.FeatureView
-	if name == "armcom-ground" {
+	if name == "armcom-ground" || name == "armcom-tree" || name == "armcom-air" {
+		tall := name != "armcom-ground"
 		// Presentation fixture only: overlap the opening pose with the nearest
-		// actual short sprite feature to inspect [03 R-RAST-01 §6] ordering.
+		// actual sprite feature to inspect [03 R-RAST-01 §6–7] ordering.
 		nearest := math.MaxFloat64
 		for _, feature := range opening.Features {
-			if feature.Height >= 10 || feature.Filename == "" || feature.RuntimeLive {
+			if (feature.Height >= 10) != tall || feature.Filename == "" || feature.RuntimeLive {
 				continue
 			}
 			dx, dz := float64(feature.X-unit.X), float64(feature.Z-unit.Z)
@@ -61,10 +65,18 @@ func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattl
 			}
 		}
 		if len(groundFeatures) == 0 {
-			return nil, fmt.Errorf("nanolathe: ground overlap capture requires an opening short sprite feature")
+			return nil, fmt.Errorf("nanolathe: ground overlap capture requires a suitable opening sprite feature")
 		}
 		unit.X, unit.Y, unit.Z = groundFeatures[0].X, groundFeatures[0].Y, groundFeatures[0].Z
-		poseSource += "; presentation-only relocation onto nearest actual short feature"
+		poseSource += "; presentation-only relocation onto nearest matching actual feature"
+		if tall {
+			unit.Z -= 16 * 65536
+			poseSource += "; 16-world-pixel rearward overlap offset"
+		}
+		if name == "armcom-air" {
+			unit.MoverMode = 2
+			poseSource += "; detached pass-B mode override, not an aircraft flight state"
+		}
 	}
 	if name == "armsolar" {
 		def, ok := sess.Catalog.Unit(name)
@@ -84,9 +96,13 @@ func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattl
 			BMCode: def.BMCode != 0, ZBuffer: def.ZBuffer, NoShadow: def.NoShadow,
 			CanHover: def.CanHover, Floater: def.Floater, Digger: def.Digger,
 			OwnerColor: commander.OwnerColor, OwnerColorKnown: commander.OwnerColorKnown,
-			Activated: true,
+			Activated: true, MoverMode: 1,
 		}
 		poseSource = "production unit-bound COB Create and Activate via actualActivatedModelPose"
+	}
+	if name == "armcom-cloaked" {
+		unit.Cloaked = true
+		poseSource += "; detached cloak flag override"
 	}
 	// Construct a minimal owned frame rather than retaining borrowed slices
 	// from the session publication. Local ownership admits the model normally.
@@ -126,6 +142,10 @@ func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattl
 	camera = [3]float32{(minX + maxX) / 2, (minY + maxY) / 2, min(float32(6), float32(width)*0.8/max(maxX-minX, 1), float32(height)*0.8/max(maxY-minY, 1))}
 	live = world.Frame(fixed, fixed, camera)
 	live.Alpha = 1
+	if name == "armcom-underlay" {
+		live.Instances[0].Visual.State[1] = 0
+		poseSource += "; zero-opacity body with unchanged shadow"
+	}
 	// The fixture inspects model ownership and base colour, without unrelated
 	// fog, light or GUI layers; only the requested overlap feature remains.
 	live.Fog = meshscene.FogFrame{}
@@ -133,7 +153,7 @@ func newMetalModelCapture(scene *meshscene.Scene, world *meshscene.RetainedBattl
 	if len(groundFeatures) == 0 {
 		live.Sprites = nil
 	}
-	fixture := map[string]any{"model": name, "model_resource": unit.Model, "pose_source": poseSource, "source_tick": opening.Tick, "camera": camera, "viewport": [2]int{width, height}, "fixed_frame_pair": true, "pieces": len(unit.Pieces), "ground_features": len(groundFeatures)}
+	fixture := map[string]any{"model": name, "model_resource": unit.Model, "pose_source": poseSource, "source_tick": opening.Tick, "camera": camera, "viewport": [2]int{width, height}, "fixed_frame_pair": true, "pieces": len(unit.Pieces), "feature_count": len(groundFeatures), "mover_mode": unit.MoverMode, "cloaked": unit.Cloaked}
 	if scene.Metadata == nil {
 		scene.Metadata = make(map[string]any)
 	}

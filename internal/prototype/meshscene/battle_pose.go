@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/content"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/model"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -133,7 +134,9 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			s.noteMissing(u.Model)
 			continue
 		}
-		if !battleInView(u.X, u.Y, u.Z, camera, s.viewport) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport)) {
+		presenter, _ := battleUnitPresenter(u, unitSlots)
+		priorPresenter := previousUnits[presenter.InstanceID]
+		if !battleInView(presenter.X, presenter.Y, presenter.Z, camera, s.viewport) && (priorPresenter == nil || !battleInView(priorPresenter.X, priorPresenter.Y, priorPresenter.Z, camera, s.viewport)) {
 			census.CulledModels++
 			continue
 		}
@@ -143,14 +146,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		key := battleEntityKey{kind: 1, id: u.InstanceID}
 		s.appendUnit(pub, key, mesh, u, prior, old)
 		s.applyUnitVisual(pub, u, current)
-		// A keyed parent's cloak commits the attached image once [03 R-REN-03D §4].
-		// Approximate that propagation with each child's native opacity.
-		for depth, parent := 0, unitSlots[u.Carrier]; parent != nil && depth < len(unitSlots); depth, parent = depth+1, unitSlots[parent.Carrier] {
-			if parent.Cloaked {
-				pub.frame.Instances[len(pub.frame.Instances)-1].Visual.State[1] = 0.5
-				break
-			}
-		}
+		s.applyUnitSubject(pub, u, unitSlots)
 		census.SubmittedUnits++
 	}
 	for id := range previousUnits {
@@ -219,6 +215,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 		key := battleEntityKey{kind: 3, id: p.PresentationID}
 		span := s.beginInstance(pub, key, mesh)
+		pub.frame.Instances[len(pub.frame.Instances)-1].Phase = PhaseEffects
 		s.poseScratch.projectileInto(pub.frame.Current[span.offset:span.offset+span.count], s.models[mesh], p, current.Tick)
 		s.copyPriorOrSnap(pub, span, key, old, func(dst []Mat4) {
 			if prior != nil {
@@ -346,6 +343,10 @@ func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitVie
 		}
 		s.transforms[piece] = model.ComposeInto(m, s.states, piece, s.transforms[piece], &s.compose)
 		dst[piece] = battleAffine(s.transforms[piece], u.X, u.Y, u.Z)
+		// Carry the origin with the pose endpoint selected by copyPriorOrSnap.
+		// Otherwise sinking changes integer face keys even at an equal display
+		// pose. These homogeneous-row lanes never participate in XYZ products.
+		dst[piece][7], dst[piece][11] = float32(u.Y)/65536, 1
 		// The unused homogeneous row carries presentation-only base-shade
 		// admission; XYZ transforms never read it [03 R-REN-03A §4].
 		if u.BMCode || (s.states[piece].DontCache && u.BuildRemaining <= 0) {
@@ -420,6 +421,7 @@ func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
 }
 
 type battleSpriteAdapter interface {
+	SetSourceEffects(drawlist.Effects)
 	Append([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
 	Distortions([]Distortion, *frame.Frame, *frame.Frame, [3]float32, [2]int) []Distortion
 	Report() map[string]any

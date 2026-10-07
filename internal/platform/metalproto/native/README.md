@@ -92,7 +92,7 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 216-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 232-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
 owns pose input and computed output, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
@@ -128,6 +128,12 @@ Thus static poses retain their original corner heights without normalization
 noise. The current endpoint's `Mat4[3]` base-shade flag and `Mat4[15]` visibility
 marker are preserved, with visibility still suppressed whenever either endpoint
 is hidden. These flags are not interpolated rotation or translation data.
+Live units and 3DO features also tag `Mat4[11]=1` and store their endpoint
+model-origin Y in `Mat4[7]`. When both endpoints are tagged, the compute pass
+interpolates that origin on the GPU with the position; integer corner-height
+keys subtract this displayed origin. Untagged replay/projectile/debris poses
+keep their existing visual-origin fallback. XYZ products ignore these row lanes.
+This avoids changing face ownership merely because a wreck is sinking.
 
 This is an Enhanced presentation approximation under DESIGN_GPU_RENDERER §5.3,
 with no simulation writes or RNG. The per-piece hierarchy was composed before
@@ -194,22 +200,25 @@ so that both paths can consume the same live scene topology.
 
 `Options.VisualPasses` selects these presentation additions. The CLI owns the
 default. When disabled, no shadow mask or additional HDR target is allocated,
-no new render passes run and fog/distortion payloads are not copied. Existing
-lighting, sprite bodies and bloom remain. Replay retains its original synthetic
+fog/distortion payloads are not copied and cloak subjects are not isolated.
+The grounded/effects/airborne ordering remains. Existing lighting, sprite bodies
+and bloom remain. Replay retains its original synthetic
 light and ring workload; these new passes run only for live scenes.
 
 Enabled live pass order is:
 
 1. Eligible mesh instances draw into a full-size R8 shadow mask under maximum
    blending. Models with no shadow flag are absent from its sparse instance list.
-2. Flat painted TNT renders with that mask. Four inverse half-height-shear
-   iterations query the immutable R32F height field to write terrain surface depth
-   without changing the painted terrain UVs. Model bodies then render with
-   construction reveal, team UV, owner-admitted cloak opacity and cooling tint.
-3. Constructing instances alone draw their original authored edge pairs as native
-   lines. Subdividing the body mesh creates no extra outline edges. Sprites follow
-   with ordinary depth testing and no depth writes. Sprite emission includes the
-   production bright-texel threshold; smoke with zero supplied emission stays dark.
+2. Flat painted TNT renders with that mask and no scene-depth writes. Short
+   sprite features follow in source order, then grounded model bodies/outlines.
+3. Projectile/debris models and the remaining sprite batch follow. Airborne
+   units (committed MoverMode other than 1) render last on a fresh depth plane.
+   Opaque frames keep all three phases in one render encoder: a fullscreen
+   depth-only draw clears pass B's depth without colour/emission stores and
+   reloads. Frames with cloaked subjects split encoders to resolve scratch.
+   Constructing instances use original authored edge pairs; subdivision creates
+   no extra outlines. Sprites depth-test without writing depth. Sprite emission
+   keeps the production bright-texel threshold; smoke stays non-emissive.
 4. Existing two half-size bloom compute passes run when Effects is enabled.
 5. Color and bloom resolve into HDR world color. An active real-distortion frame
    copies that immutable image into a second HDR target, then draws one ordered
@@ -233,16 +242,22 @@ These are prototype display approximations, not new retail claims:
 
 - Construction clips continuous world Y from min to max bounds. Native edge
   lines approximate retail's row endpoint outlines and can differ at joins.
-- Cloak alpha blends each ordinary depth-tested mesh surface. It is not a single
-  resolved subject-image ALP blend, so overlapping faces may blend differently.
+- Cloak first renders opaque geometry into reusable private colour/emission/depth
+  targets, then resolves each covered pixel once with half opacity and native
+  scene depth. A keyed presenter and its direct Cargo share that resolve in
+  published Cargo order. This fixes per-triangle alpha accumulation but is not
+  destination-palette ALP or staged wrapped byte-height composition. Keyless
+  parent cached/live lane separation remains approximate; direct cargo is opaque.
+  Missing-parent models retain independent child handling. Only roots and their
+  direct published cargo are traversed, as in the current production present walk.
 - Shadows are opaque geometric triangle footprints at a vertical sampled-terrain
   receiver, offset five world pixels in X, with fixed 35 percent darkness.
   Maximum blending prevents stacked darkness. Texture alpha is not a silhouette
   cutout; construction is not applied to the shadow. Retail mobile image copies,
   structure projected placement, body punch and palette ALP are not reproduced.
-- Four inverse terrain iterations with bilinear samples approximate the painted
-  terrain's original projection. Steep slopes, liquid depth and sentinel cells
-  need capture review; no terrain tessellation changes the photograph.
+- Painted terrain has no reconstructed scene depth. The immutable height field
+  remains only for geometric shadow receivers; water and submerged model
+  appearance still need their own presentation implementation.
 - Real distortion retains **two** extra full-size RGBA16F world targets and a
   full-size R8 shadow mask, 17 bytes per output pixel. The immutable snapshot
   copies the whole viewport on active frames, unlike production's clipped-region
@@ -301,7 +316,7 @@ captured before Cocoa can interpret them as contextual-menu input. Playable
 mode hides the system cursor while the production HUD draws its own cursor.
 Command-Q closes the window so the run can drain and write its report.
 
-The synchronous live upload is 216 bytes. It includes a 64-byte-per-quad HUD
+The synchronous live upload is 232 bytes. It includes a 64-byte-per-quad HUD
 stream copied into the reusable three-slot native resource ring. The initial
 overlay atlas uploads once at texture slot 3; model/terrain/sprite remain slots
 0/1/2. A nonzero changed `LiveFrame.OverlayVersion` uploads `OverlayTexture`;
@@ -376,7 +391,30 @@ Short sprite features (authored height below 10) carry Current.w=1. Go packs
 these in publication order at the beginning of the sprite upload, preserving
 each feature's shadow/body order. NMLiveUpload.ground_sprite_count marks the
 prefix; the native encoder draws it between TNT and the models, with no depth
-writes. Other sprites draw after models and are stably sorted at display alpha
-using the same biased/clamped anchor depth as the vertex shader. This fixes the
-short-feature pass and interpolation ordering, not the remaining tall-feature,
-strip-phase, airborne or cloak subject-composition approximations.
+writes. Other sprites draw between grounded and airborne models and are stably
+sorted at display alpha using the biased/clamped anchor depth of the vertex
+shader. Tall-feature row ordering and individual strip barriers remain approximate.
+
+The upload includes 16-byte CPU cloak-member records (mesh, packed instance,
+subject group, phase) and an airborne-instance count. There are nine mesh-span
+lanes: all instances, shadows, one reserved lane, three body phases, and three
+outline phases. Selectors need at most three entries per submitted instance.
+Cloaked members bypass the opaque body/outline lists but retain ordinary shadows.
+Their records are copied synchronously into each in-flight slot. Opaque mesh
+instances stay batched. Shared cloak scratch is allocated lazily at first use,
+20 bytes per drawable pixel: two RGBA16F targets plus Depth32F. A serial GPU queue
+and tracked resources order scratch reuse; it remains resident until shutdown.
+Capture drains live commands and runs the same path. The native info record
+reports its bytes. No cloak means no scratch allocation.
+
+
+Fresh wreck body emission is sampled while packing each displayed frame, using
+committed age plus alpha like the production client. Wreck plume strength and
+heat clock use that same fractional age on the GPU. The authored cell phase is
+added in ticks before conversion to radians. Plume anchors interpolate matched
+feature identities, snapping only new identities. Wreck light positions/strength
+still sample committed ticks, and plume bounds remain prepared neutral bounds.
+The production HUD host forwards the existing independent BlastRings,
+FireShimmer, WreckGlow and WreckShimmer switches and invalidates its cached
+publication when they change. Other Enhanced effect controls remain unsupported
+by the native world; this is not a complete settings implementation.

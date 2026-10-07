@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/nanolathe-gg/nanolathe/internal/content"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
@@ -15,6 +16,8 @@ import (
 // scratch. Append and Report must run on the session worker; Texture may be
 // borrowed by the renderer for its one-time upload [I6].
 type BattleSprites struct {
+	effects                                              drawlist.Effects
+	previousFeatures                                     map[uint64][4]float32
 	spectator                                            bool
 	featureModelBounds                                   map[string][4]float32
 	texture                                              Texture
@@ -39,7 +42,8 @@ type BattleSprites struct {
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
 
-func (b *BattleSprites) SetSpectator(on bool) { b.spectator = on }
+func (b *BattleSprites) SetSpectator(on bool)                { b.spectator = on }
+func (b *BattleSprites) SetSourceEffects(e drawlist.Effects) { b.effects = e }
 
 // SetFeatureModelBounds copies prepared projected model bounds, relative to the
 // world anchor, before the session worker starts (GPU design §28).
@@ -207,10 +211,16 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	if current == nil {
 		return dst, lights
 	}
+	clear(b.previousFeatures)
 	clear(b.previousEffects)
 	clear(b.previousProjectiles)
 	clear(b.previousBeams)
 	if previous != nil {
+		for _, v := range previous.Features {
+			if v.InstanceID != 0 && v.Model != "" {
+				b.previousFeatures[v.InstanceID] = spritePosition(v.X, v.Y, v.Z)
+			}
+		}
 		for _, v := range previous.Effects {
 			if v.PresentationID != 0 {
 				b.previousEffects[v.PresentationID] = spritePosition(v.X, v.Y, v.Z)

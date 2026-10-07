@@ -985,3 +985,127 @@ Current binaries, launch command, hashes, manifests and captures are retained at
 Runs are `battle-1500-fog-01`, `opening-01`, `solar-01`, `commander-01`,
 `ground-early-01`, `ground-late-01` and `replay-01`. The earlier `metal-match`
 package remains available for comparison.
+
+
+## Airborne composition, cloak and wreck stability follow-up
+
+The prototype now draws grounded models, effects and airborne subjects in the
+production broad order. Committed MoverMode chooses the unit pass; attached
+subjects inherit the presenting carrier. Air starts a fresh depth plane. Opaque
+frames keep one tile render encoder, using a depth-only fullscreen reset before
+aircraft, avoiding two extra HDR attachment store/load cycles.
+
+Cloaked subjects render opaque into shared scratch first, then resolve once at
+50% opacity. This prevents rear faces and equal-height surfaces accumulating
+opacity. Keyed carriers include their direct published cargo in the same
+resolve, parent first and then cargo order. Admission belongs to the carrier;
+self-carrier sentinels remain roots. Deeper chains follow the production walk's
+omission. Native height ownership, keyless cached/live separation, destination
+palette ALP and tall-feature row barriers remain approximations. Scratch is
+allocated only on first cloak: two RGBA16F images plus Depth32F, 20 bytes per
+physical pixel (23.44 MiB at 1280×960, about 147 MiB at the large battle size).
+It stays resident until shutdown. The live descriptor is now 232 bytes.
+
+The user's flashing/jiggling wreck report exposed a reproducible depth bug.
+Integer face-height keys subtracted the current tick's origin from an
+interpolated vertex. A sinking model could therefore exchange face ownership
+even when its displayed pose was unchanged. The model origin now travels in
+unused homogeneous matrix-row metadata with the actual selected pose endpoint,
+and the GPU interpolates it alongside position. This adds no upload bytes and
+keeps static integer ties exact. Untagged replay/projectile/debris poses keep
+their prior fallback. Geometry, normals and quaternions read only XYZ lanes.
+
+A detached diagnostic uses the authored ARM Flash corpse, placed at the opening
+commander location. The control and a symmetric half-pixel sinking pair render
+the same displayed pose. Before the fix, 124 pixels on the hull changed; after
+the fix, every pixel matches. Effects are disabled in this fixture, establishing
+a model-depth defect independently of intentional heat shimmer. This does not
+prove every reported flicker is gone. Reproduce with `--metal-model-capture
+armflash-wreck` and `armflash-wreck-sink` at 1280×960.
+
+Wreck body cooling and plume strength now sample fractional display age using
+the production cooling arithmetic; the heat cell phase is added in ticks before
+conversion to radians. The plume interpolates the previous/current feature
+anchor rather than jumping ahead of a sinking body. Existing production HUD
+switches for wreck glow, wreck shimmer, vegetation shimmer and blast rings now
+reach the native source builder. Other Enhanced settings still need native
+implementations. Wreck light position/colour remain committed-tick samples,
+plume bounds remain neutral-model bounds, and overlapping distortions still
+sample one immutable world image. Those limitations remain explicit.
+
+### Visual review and allocation work
+
+The opaque commander and activated Solar remain pixel-identical to the prior
+corrected build. The cloak diagnostic matches one blend of the opaque model and
+its shadow-preserving background within one 8-bit RGB level at all 19,909 covered
+pixels. The aircraft-over-tree capture uses the ordinary opening pose relocated
+onto a real tall feature, with a detached pass-B selector; it is an ordering
+fixture, not a simulated flight. The single-encoder depth reset matches the
+separate-pass control capture exactly. Root inspected these captures, the final
+battle, the production HUD opening and the wreck diagnostic. Attached cargo
+cloak has code review but no dedicated visual fixture yet.
+
+A reviewed delegated change caches prepared sprite sequence lookup by raw bank
+and entry, preserving normalization, default-bank behavior, missing art and
+negative lookups. It removes repeated key building and a duplicate first-frame
+lookup. The profiled 60-second baseline allocated 52.96 million Go objects;
+the final fixed-camera run allocated 6.56 million (about 88% fewer). Process-wide
+allocated bytes fell from 6.88 GB to 6.12 GB; these include simulation and
+publication, not only rendering. Mean publication preparation was 4.47 ms in
+the baseline and 3.60 ms in the final run. This is not an isolated cache-only
+experiment because composition and wreck fixes also changed.
+
+### Measurements and recommendation
+
+Sequential M3 Pro runs used GOMAXPROCS=2, Town & Country, three 500-unit armies,
+seed 7, 1200 lead-in ticks, player 1 visibility, zoom 1.35, 5× face subdivision,
+doubled model atlas dimensions, 3456×2234 output, 240 warmup frames and 7200
+measured frames. All listed runs held that camera. The production HUD opening
+used The Pass, the Modern computer, 2880×1800, 120 warmup and 1800 measured frames.
+
+| Case | Presented Hz | GPU mean / p99 | Presentation p99 / max |
+|---|---:|---:|---:|
+| Profiled preceding build | 119.27 | 6.27 / 6.99 ms | 8.340 / 95.83 ms |
+| First split-encoder composition candidate | 117.61 | 7.68 / 15.96 ms | 16.666 / 125.00 ms |
+| Opaque encoder optimization | 118.49 | 6.90 / 13.59 ms | 8.340 / 120.83 ms |
+| Final wreck-corrected build | 119.93 | 6.25 / 6.97 ms | 8.340 / 25.00 ms |
+| Production HUD opening | 119.14 | 4.18 / 6.64 ms | 8.339 / 54.16 ms |
+
+The final battle delivered 99.958% of intervals within 8.75 ms, no measured
+worker deadline misses during ticks 1262–3063, all presentation timestamps,
+all GPU commands complete, no native error and no input overflow. Separate
+census maxima were 1502 units, 1123 moving, 51 nanoframes, 139 projectiles,
+631 effects and 38 burning features. Submission reached 843 model instances,
+557305 body triangles, 2254 sprites, 71 airborne models and 39 distortions;
+no cloaked subjects occurred in this performance run. Peak Metal allocation
+was 854 MiB and ending Go heap 1109 MiB, separately measured. The shared model
+atlas remains 32 MiB. The opening was captured before the final one-tick heat
+clock alignment; its three static model fixtures are unaffected by that change.
+
+Run `battle-1500-03` was interrupted by camera zoom input (including zoom 0.1),
+so its smoother timings are retained as diagnostics but excluded from the
+fixed-camera comparison. The following `battle-1500-04` is the final measurement.
+
+Profiling the preceding build showed some long presentation gaps after normal
+GPU completion; drawable blocking followed several slots later. Metal memory
+was steady at those stalls, and aggregate Go GC pause was about 1.18 ms for the
+whole measured baseline. This narrows investigation but does not establish a
+compositor/driver cause. The final run is smoother, yet preceding candidates
+still stalled and the opening had a 54 ms gap: do not claim the cache or wreck
+fix solved pacing, steady 120 Hz, or 144 Hz. A display scheduling trace and
+publication lifetime/allocation work are more useful next than speculative
+native buffer changes.
+
+Keep using this as the playable experiment with the production HUD and controls.
+It demonstrates retained 5× geometry and shared atlases with useful 120 Hz
+headroom, while the remaining costs are native resource ownership, macOS-only
+bridge maintenance, full-screen cloak scratch and unresolved fidelity/pacing.
+Continue manual matches and subject/terrain/effect comparisons before replacing
+the shipping renderer. No full victory/defeat match was completed in this
+iteration. Both Go commands and the Objective-C bridge built; Metal shader
+compilation and runtime captures succeeded. No tests were added or run, and the
+prototype remains unmerged.
+
+Binaries, launcher, native source, hashes, commands, captures and reports are in
+`/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-composition/`.
+Earlier `metal-match` and `metal-motion` packages are preserved.

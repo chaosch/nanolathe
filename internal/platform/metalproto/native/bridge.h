@@ -11,6 +11,7 @@ int nm_assets(void* renderer,const NMAssets* assets);
 int nm_texture(void* renderer,int slot,int width,int height,const void* rgba);
 int nm_configure(void* renderer,const float* camera,const float* rect,int pose_count);
 int nm_frame(void* renderer,const void* previous,const void* next,float alpha,double seconds);
+typedef struct { uint32_t mesh,instance,group,phase; } NMCloakDraw;
 // Pointer-only upload descriptor; all data is copied before this call returns.
 typedef struct {
  const void *previous,*current,*offsets,*spans,*sprites,*lights,*visuals,*distortions,*fog,*selectors,*overlay;
@@ -22,6 +23,8 @@ typedef struct {
  uint64_t overlay_version;
  uint32_t overlay_width,overlay_height,overlay_dirty[4];
  uint32_t ground_sprite_count;
+ const NMCloakDraw* cloaks;
+ uint32_t cloak_count,air_count;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings

@@ -10,19 +10,27 @@ import (
 // Attachments use their already committed world pose [04 R-UNIT-06 §3]. Their
 // draw admission belongs to the carrier and piece-less cargo is suppressed
 // [03 R-RAST-01 §7]. Native shared depth approximates the carrier's staged key
-// image; it does not apply the parent's ALP once to a flattened child composite.
-func battleModelUnitVisible(f *frame.Frame, u frame.UnitView, units map[pool.Handle]*frame.UnitView, spectator bool) bool {
-	for depth := 0; u.Carrier != 0 && u.Carrier != u.Slot; depth++ {
-		if u.CarriedPiece < 0 || depth >= len(units) {
-			return false
-		}
-		parent := units[u.Carrier]
-		if parent == nil {
-			return false
-		}
-		u = *parent
+// image; native keyed cargo shares the parent's single opacity resolve.
+// Match the existing present walk: a root and its direct published cargo.
+// Deeper carrier chains have no independent present in that walk.
+func battleUnitPresenter(u frame.UnitView, units map[pool.Handle]*frame.UnitView) (frame.UnitView, bool) {
+	if u.Carrier == 0 || u.Carrier == u.Slot {
+		return u, true
 	}
-	return battleUnitVisible(f, u, spectator)
+	parent := units[u.Carrier]
+	if parent == nil || (parent.Carrier != 0 && parent.Carrier != parent.Slot) || u.CarriedPiece < 0 {
+		return u, false
+	}
+	for _, slot := range parent.Cargo {
+		if slot == u.Slot {
+			return *parent, true
+		}
+	}
+	return u, false
+}
+func battleModelUnitVisible(f *frame.Frame, u frame.UnitView, units map[pool.Handle]*frame.UnitView, spectator bool) bool {
+	presenter, ok := battleUnitPresenter(u, units)
+	return ok && battleUnitVisible(f, presenter, spectator)
 }
 
 func battleModelBounds(m *model.Model, matrices []Mat4, originY float32) (float32, float32) {
@@ -76,15 +84,17 @@ func (s *battleSource) applyFeatureVisual(pub *battlePublication, feature frame.
 	if feature.Y >= f.Visibility.SeaLevel {
 		instance.Visual.State[3] = 1
 	}
-	if !feature.WreckHeatKnown || feature.Y < f.Visibility.SeaLevel || !battlePointVisible(f, feature.X, feature.Y, feature.Z, s.spectator) {
+	if !s.effects.WreckGlow || !feature.WreckHeatKnown || feature.Y < f.Visibility.SeaLevel || !battlePointVisible(f, feature.X, feature.Y, feature.Z, s.spectator) {
 		return
 	}
 	age := float32(f.Tick - feature.WreckBornTick)
 	if age >= 180 {
 		return
 	}
-	// Reuse Enhanced's committed-age cooling policy (DESIGN_GPU_RENDERER §28),
+	instance.CoolingAge = age + 1
+	// Reuse Enhanced's cooling policy (DESIGN_GPU_RENDERER §28),
 	// without adding a random draw or assigning a birth to unmarked instances.
+	// Packing samples the fractional display age from this immutable metadata.
 	flash := max(1-age/6, 0)
 	cool := max(1-age/180, 0)
 	red, amber := cool*cool, cool*cool*cool*cool
@@ -116,4 +126,52 @@ func (s *battleSource) featureModelBounds() map[string][4]float32 {
 		bounds[battleModelKey(m.Name)] = [4]float32{loX, loY, hiX - loX, hiY - loY}
 	}
 	return bounds
+}
+
+// Pass selection follows the presenting carrier's committed mode. Keyed cargo
+// shares its parent's final cloak resolve [03 R-RAST-01 §7][03 R-REN-03D §4].
+// Native subject depth still approximates the staged byte-height composition.
+func (s *battleSource) applyUnitSubject(pub *battlePublication, u frame.UnitView, units map[pool.Handle]*frame.UnitView) {
+	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
+	presenter, _ := battleUnitPresenter(u, units)
+	subject := u
+	instance.Visual.State[1] = 1
+	if u.Cloaked {
+		instance.Visual.State[1] = 0.5
+	}
+	if u.Carrier != 0 && u.Carrier != u.Slot {
+		if _, resolved := s.modelIndices[battleModelKey(presenter.Model)]; resolved {
+			// Keyless/direct cargo writes ordinary opaque polygons [03 R-REN-03A §4].
+			instance.Visual.State[1] = 1
+			if presenter.ZBuffer || presenter.BuildRemaining > 0 {
+				subject = presenter
+				if presenter.Cloaked {
+					instance.Visual.State[1] = 0.5
+				}
+				for order, slot := range presenter.Cargo {
+					if slot == u.Slot {
+						instance.SubjectOrder = uint32(order + 1)
+						break
+					}
+				}
+			}
+		}
+	}
+	if presenter.MoverMode != 1 {
+		instance.Phase = PhaseAir
+	}
+	instance.Subject = subject.InstanceID
+}
+
+// InterpolatedVisual samples only presentation cooling; the publication remains
+// immutable and no simulation clock or state is touched (GPU design §28).
+func (i Instance) InterpolatedVisual(alpha float32) ModelVisual {
+	v := i.Visual
+	if i.CoolingAge > 0 {
+		age := max(i.CoolingAge+min(max(alpha, 0), 1)-1, 0)
+		flash, cool := max(1-age/6, 0), max(1-age/180, 0)
+		red, amber := cool*cool, cool*cool*cool*cool
+		v.Emission = [4]float32{.75*red + .15*flash, .20*amber + .55*flash, .015*amber + .42*flash, 1}
+	}
+	return v
 }

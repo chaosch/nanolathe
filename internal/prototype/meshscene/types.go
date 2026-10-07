@@ -28,10 +28,22 @@ type Texture struct {
 
 // Mat4 uses column-major storage, with world x right, y up, z down-screen.
 type Mat4 [16]float32
+
+// Phase is presentation-only: grounded subjects, effects, then airborne subjects.
+const (
+	PhaseGround uint32 = iota
+	PhaseEffects
+	PhaseAir
+)
+
 type Instance struct {
-	Mesh       int
-	PoseOffset int
-	Visual     ModelVisual
+	CoolingAge   float32 // committed wreck age plus one; zero means no cooling treatment
+	Phase        uint32
+	Subject      uint64 // keyed carrier and cargo share one cloak resolve
+	SubjectOrder uint32 // parent first, then published Cargo order
+	Mesh         int
+	PoseOffset   int
+	Visual       ModelVisual
 }
 type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
