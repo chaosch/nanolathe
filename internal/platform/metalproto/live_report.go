@@ -10,12 +10,13 @@ import (
 )
 
 type liveRow struct {
-	Seconds                                                                   float64
-	Alpha                                                                     float32
-	Tick                                                                      uint32
-	NextMS, PrepMS                                                            float64
-	Instances, Poses, Sprites, Lights, DroppedLights, ModelDraws, SpriteDraws int
-	ModelVertices, ModelIndices, UploadBytes                                  uint64
+	Seconds                                                                         float64
+	Alpha                                                                           float32
+	Tick                                                                            uint32
+	NextMS, PrepMS                                                                  float64
+	Instances, Poses, Sprites, Lights, DroppedLights, ModelDraws, SpriteDraws       int
+	ModelVertices, ModelIndices, UploadBytes, ShadowIndices, OutlineIndices         uint64
+	Distortions, FogBytes, Constructing, ShadowInstances, ShadowDraws, OutlineDraws int
 }
 
 func quantities(values []float64) map[string]any {
@@ -37,7 +38,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 	for i, r := range rows {
 		next[i] = r.NextMS
 		prep[i] = r.PrepMS
-		for name, value := range map[string]float64{"instances": float64(r.Instances), "poses": float64(r.Poses), "sprites": float64(r.Sprites), "lights": float64(r.Lights), "dropped_lights": float64(r.DroppedLights), "model_draws": float64(r.ModelDraws), "sprite_draws": float64(r.SpriteDraws), "model_vertices": float64(r.ModelVertices), "model_triangles": float64(r.ModelIndices / 3), "sprite_triangles": float64(r.Sprites * 2), "dynamic_upload_bytes": float64(r.UploadBytes)} {
+		for name, value := range map[string]float64{"distortions": float64(r.Distortions), "fog_upload_bytes": float64(r.FogBytes), "constructing_instances": float64(r.Constructing), "shadow_instances": float64(r.ShadowInstances), "shadow_draws": float64(r.ShadowDraws), "outline_draws": float64(r.OutlineDraws), "shadow_triangles": float64(r.ShadowIndices / 3), "outline_edges": float64(r.OutlineIndices / 2), "instances": float64(r.Instances), "poses": float64(r.Poses), "sprites": float64(r.Sprites), "lights": float64(r.Lights), "dropped_lights": float64(r.DroppedLights), "model_draws": float64(r.ModelDraws), "sprite_draws": float64(r.SpriteDraws), "model_vertices": float64(r.ModelVertices), "model_triangles": float64(r.ModelIndices / 3), "sprite_triangles": float64(r.Sprites * 2), "dynamic_upload_bytes": float64(r.UploadBytes)} {
 			counts[name] = append(counts[name], value)
 		}
 	}
@@ -49,7 +50,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 	report["live_source_next"] = percentiles(next)
 	report["live_cpu_prep"] = percentiles(prep)
 	report["live_frame_counts"] = stats
-	report["live_distortion"] = false
+	report["live_distortion"] = report["visual_passes"]
 	for _, key := range []string{"pose_upload_bytes_per_frame", "triple_pose_buffer_bytes", "model_draw_calls_per_frame", "model_vertices_instanced", "model_indices_drawn", "model_triangles_drawn"} {
 		delete(report, key)
 	}
@@ -58,7 +59,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 	report["final_tick"] = final.Tick
 	report["final_model_triangles"] = final.ModelIndices / 3
 	report["final_sprite_triangles"] = final.Sprites * 2
-	report["approximations"] = []string{"LiveSource publishes immutable committed presentation frame pairs; native copies synchronously; Run does not close the source", "Column-wise matrix lerp can lose rigidity; pieces hidden at either endpoint are suppressed", "Live projection uses z minus half-height with independent z+2*y conventional depth; flat terrain backdrop, no retail composition or unit shadow lane", "Depth-tested billboards use source order, premultiplied alpha/additive blending, no depth writes; backend preserves supplied sprite order; battle adapter sorts by anchor depth, not per-pixel depth", "Live lighting uses at most the first 32 supplied sources; actual sprite emission feeds bloom; synthetic sources/rings are disabled; real effect distortion omitted", "Sprite Params.w is normalized clip-depth bias, negative toward camera", "Host timer cap skips missed slots after stalls; vsync/backpressure determine display cadence", "Native CPU encoding includes buffer growth and memory copies; GPU span covers encoded GPU passes; both are separate from LiveSource.Next and Go packing; Objective-C allocation counts are unavailable", "Presentation callbacks have a bounded 250ms drain outside measurement; missing timestamps excluded and counted"}
+	report["approximations"] = []string{"LiveSource publishes immutable committed presentation frame pairs; native copies synchronously; Run does not close the source", "Column-wise matrix lerp can lose rigidity; pieces hidden at either endpoint are suppressed", "Live projection uses z minus half-height with independent z+2*y conventional depth; flat painted TNT with four-iteration inverse shear height depth; max-blend geometric terrain shadows, no retail byte-key composition", "Depth-tested billboards use source order, premultiplied alpha/additive blending, no depth writes; backend preserves supplied sprite order; battle adapter sorts by anchor depth, not per-pixel depth", "Live lighting uses at most the first 32 supplied sources; bright supplied sprite emission and model cooling emission feed bloom; synthetic sources/rings disabled; real bounded distortion quads sample one immutable post-bloom world snapshot before fog", "VisualPasses false disables model state, height depth, shadow, outlines, real distortion and fog; team material lookup remains; old lighting/bloom composition remains", "Construction reveal is continuous world-Y clipping; outlines use authored retained edges, not retail row endpoints", "Cloak is premultiplied surface alpha with ordinary mesh depth, not one resolved subject-image ALP blend; geometry order can expose alpha overlap", "Geometric shadow is fixed 35 percent coverage with five-world-pixel X offset and sampled terrain receiver; maximum blending prevents stacked darkness; no texture-alpha silhouette or retail punch/placement", "Real distortion allocates two full-frame HDR post targets and copies the entire immutable post-bloom image when sources exist; one bounded quad batch, no per-pixel effect loop; later source coverage wins; fog samples original projected coordinates afterward", "Fog uses bilinear supplied RGBA modulation, not retail palette arithmetic", "Sprite Params.w is normalized clip-depth bias, negative toward camera", "Host timer cap skips missed slots after stalls; vsync/backpressure determine display cadence", "Native CPU encoding includes buffer growth and memory copies; GPU span covers encoded GPU passes; both are separate from LiveSource.Next and Go packing; Objective-C allocation counts are unavailable", "Presentation callbacks have a bounded 250ms drain outside measurement; missing timestamps excluded and counted"}
 }
 func writeLiveRows(dir string, rows []liveRow, warmup int) error {
 	f, err := os.Create(filepath.Join(dir, "live-frames.csv"))
@@ -67,11 +68,11 @@ func writeLiveRows(dir string, rows []liveRow, warmup int) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	if err = w.Write([]string{"frame", "warmup", "tick", "source_seconds", "alpha", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes"}); err != nil {
+	if err = w.Write([]string{"frame", "warmup", "tick", "source_seconds", "alpha", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes", "distortions", "fog_upload_bytes", "constructing_instances", "shadow_instances", "shadow_draws", "outline_draws", "shadow_triangles", "outline_edges"}); err != nil {
 		return err
 	}
 	for i, r := range rows {
-		if err = w.Write([]string{strconv.Itoa(i), strconv.FormatBool(i < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.Seconds, 'f', 9, 64), strconv.FormatFloat(float64(r.Alpha), 'f', 9, 64), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes)}); err != nil {
+		if err = w.Write([]string{strconv.Itoa(i), strconv.FormatBool(i < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.Seconds, 'f', 9, 64), strconv.FormatFloat(float64(r.Alpha), 'f', 9, 64), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes), fmt.Sprint(r.Distortions), fmt.Sprint(r.FogBytes), fmt.Sprint(r.Constructing), fmt.Sprint(r.ShadowInstances), fmt.Sprint(r.ShadowDraws), fmt.Sprint(r.OutlineDraws), fmt.Sprint(r.ShadowIndices / 3), fmt.Sprint(r.OutlineIndices / 2)}); err != nil {
 			return err
 		}
 	}
