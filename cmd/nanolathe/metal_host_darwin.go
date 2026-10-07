@@ -120,6 +120,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 
 type metalBattleHost struct {
 	scene                         *meshscene.Scene
+	composer                      *metalModelComposer
 	shell                         *gameShell
 	cl                            *client.Client
 	battle                        *battleSession
@@ -245,6 +246,14 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.frame.OverlayDirty[i] = uint32(dirty[i])
 	}
 	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2)
+	if h.composer == nil {
+		h.composer = newMetalModelComposer(h.scene)
+	}
+	composition, err := h.composer.Prepare(h.cl, h.world, &h.frame, cur, h.width*2, h.height*2)
+	if err != nil {
+		return meshscene.LiveFrame{}, err
+	}
+	h.frame.Composition, h.frame.Composed = composition, true
 	return h.frame, nil
 }
 func (h *metalBattleHost) Close() map[string]any {
