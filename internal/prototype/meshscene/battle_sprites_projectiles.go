@@ -31,7 +31,7 @@ func spriteBeamCenter(v frame.ProjectileView) [4]float32 {
 	return [4]float32{(h[0] + t[0]) * 0.5, (h[1] + t[1]) * 0.5, (h[2] + t[2]) * 0.5, 1}
 }
 
-func (b *BattleSprites) appendProjectiles(dst []Sprite, current *frame.Frame, camera [3]float32, viewport [2]int) []Sprite {
+func (b *BattleSprites) appendProjectiles(dst []Sprite, lights []Light, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
 	options := render.ProjectileDispatchOptions{
 		FrameCount: func(v frame.ProjectileView) (int, bool) {
 			name := spriteProjectileName(v.RenderType, v.Selector, false)
@@ -52,6 +52,10 @@ func (b *BattleSprites) appendProjectiles(dst []Sprite, current *frame.Frame, ca
 	}
 	for _, v := range current.Projectiles {
 		b.counts["projectiles_seen"]++
+		if !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
+			b.counts["projectiles_visibility_rejected"]++
+			continue
+		}
 		if v.BurstRemaining != 0 {
 			b.counts["burst_schedulers_skipped"]++
 			continue
@@ -80,6 +84,12 @@ func (b *BattleSprites) appendProjectiles(dst []Sprite, current *frame.Frame, ca
 		}
 		if d.RenderType == render.RenderTypeBeam {
 			dst = b.appendBeam(dst, v, d, camera, viewport)
+			p := spriteBeamCenter(v)
+			h, t := spritePosition(v.X, v.Y, v.Z), spritePosition(v.TailX, v.TailY, v.TailZ)
+			length := float32(math.Hypot(float64(h[0]-t[0]), float64((h[2]-h[1]*0.5)-(t[2]-t[1]*0.5))))
+			c := b.colors[b.logical[uint8(d.Color)]]
+			lights = b.appendLight(lights, p, min(max(length*0.6, 48), 160), 0.8, [3]float32{c[0], c[1], c[2]}, camera, viewport)
+			b.counts["beam_lights"]++
 			continue
 		}
 		if d.FrameAsset == nil {
@@ -109,8 +119,9 @@ func (b *BattleSprites) appendProjectiles(dst []Sprite, current *frame.Frame, ca
 			continue
 		}
 		dst = b.appendSprite(dst, a, old, p, [4]float32{1, 1, 1, 1}, 1, camera, viewport, "projectile_sprites")
+		lights = b.appendArtLight(lights, a, p, b.sequenceExtent(content.DefaultEffectBank, name), "projectile", current.Tick, camera, viewport)
 	}
-	return dst
+	return dst, lights
 }
 
 func (b *BattleSprites) appendBeam(dst []Sprite, v frame.ProjectileView, d render.ProjectileDraw, camera [3]float32, viewport [2]int) []Sprite {
