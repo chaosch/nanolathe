@@ -290,6 +290,10 @@ and this report are committed; retail images and raw run artifacts remain local.
 
 ## Live battle continuation
 
+This section records the first live implementation. The later visual-pass
+continuation below supersedes its list of omitted passes and its recommendation
+to add them; the original measurements remain useful as a historical baseline.
+
 The next experiment connects the retained backend to the existing
 `headless.ComposeSimBenchBattle` fixture on Town & Country: three computer
 armies, ordinary production/orders/weapons/deaths, Modern gameplay and seed 7.
@@ -525,3 +529,167 @@ CSV records, JSON census/timing reports and a captured `final.png`. Retail-deriv
 artifacts remain outside version control. The durable directory also includes a prebuilt `run-live.sh` launcher and both
 required binaries for this Mac. The branch is committed and retained
 for iteration; no production landing or tests are claimed.
+
+
+## Visual-pass continuation
+
+The next user-authorized throwaway iteration adds retained team materials,
+construction reveal and outlines, cloak opacity and attached-unit admission,
+terrain height occlusion, geometric unit/wreck shadows, fog, detached whole-piece
+debris, explosion rings, burning-tree shimmer and cooling wrecks. It also replaces
+generic effect lights with explicit authored explosion/fire/projectile/wreck
+sources. Smoke stops supplying its own glow. All inputs come from committed
+frames, immutable content or existing Enhanced presentation policy; authoritative
+simulation code is unchanged.
+
+Team logo frames share the same atlas with ordinary unit textures. The 496
+texture names now resolve through 497 material records (including reserved zero)
+and 650 UV rectangles, yet the doubled model atlas remains **32 MiB**. Meshes,
+material tables, edge indices, atlas and terrain heights upload once. Per-frame
+copies contain poses, instance state, sprites, up to 32 chosen lights, bounded
+distortion descriptors and optional fog pixels. Original authored edges remain
+independent of the 5× surface subdivision.
+
+The new native order is shadow coverage, terrain/body/outline/sprite HDR color
+and emission, bloom, world resolve, one immutable distortion snapshot/batch,
+then fog. The blast and plume displacement profiles reuse
+[DESIGN_GPU_RENDERER §25–28](DESIGN_GPU_RENDERER.md#25-explosion-distortion).
+Root review corrected the plume's bottom-center offset and replaced the first
+shadow mask's eight-byte HDR pixels with one-byte R8 pixels. Shadows use maximum
+blending so overlapping casters do not repeatedly darken the terrain. There are
+still two additional full-resolution HDR post targets; a frame with distortion
+copies the full world snapshot. Clipped regions and target reuse remain useful
+future optimizations.
+
+### Visual scope and remaining approximations
+
+The native captures show three team colors, shadows, live fire and combat,
+construction outlines/revealed surfaces, and detached pieces. Ring/heat counters
+prove the native batch was submitted. A still capture cannot establish the
+quality of every temporal effect. This is still an approximate modern renderer:
+
+- Construction uses continuous world-height clipping and authored mesh edges,
+  rather than the retail five-stage raster reveal and scanline endpoints.
+- Cloak uses per-surface alpha and normal depth; cargo follows published poses
+  and carrier admission, without the retail staged subject-image composition.
+- Terrain height uses a four-iteration inverse shear for depth under the painted
+  TNT background; shadows use a constant 35% geometric footprint and fixed
+  five-pixel offset. Texture cutouts, soft aircraft shadows and retail body punch
+  are not reproduced.
+- Fog samples authored Gray/Black GAF masks every eight world pixels and applies
+  scalar RGB gray modulation; it does not reproduce destination-palette ALP.
+- Matrix-column interpolation can shrink rotating parts. Billboards use anchor
+  depth and may clip incorrectly against tall terrain/geometry. Whole-piece
+  debris snaps because its published slot has no allocation identity; paired
+  shatter triangles and their trails remain omitted.
+- Ordinary animated model textures, water/reflections, scorch/trails, smoke
+  scattering, segmented-beam CRT geometry, secondary projectile replacement,
+  palette flash discs, projectile lenses, HUD/order input and audio remain owed.
+  Light selection uses 32 strongest sources rather than the shipping family's
+  reserved budgets. Neutral-pose bounds approximate wreck plume extents.
+
+No tests were added or run. Root reviewed the agent diffs, checked blast/plume
+constants and material/frame bounds, compiled the Go host with cgo disabled and
+the Objective-C bridge with warnings enabled, then compiled shaders on the actual
+Metal device through real battle runs. The experiment remains isolated on its
+branch and has not passed production landing gates.
+
+
+### Re-measured visual-pass results
+
+These sequential runs use the same M3 Pro, Go/purego/Metal setup, Town & Country,
+Modern three-army fixture, seed 7, tick 1200 lead-in, `GOMAXPROCS=2`, 240 warmup
+frames and 3,600 measured frames. Every row uses 5× face subdivision and doubled
+model-atlas dimensions. The binary's source tree matches `a82d6212` (built just
+before that integration commit); the final native bridge is `223dd3440`. Binary
+hashes and exact flags are preserved in the artifact manifest. These are local
+single-run observations, not confidence intervals.
+
+| Case | Actual presented Hz | p99 present interval | GPU mean / p99 | Peak Metal allocation |
+|---|---:|---:|---:|---:|
+| 3 × 250, 1920×1080, all new passes | 119.7 | 8.340 ms | 5.79 / 6.78 ms | 533 MiB |
+| 3 × 500, 3456×2234, all new passes | 119.9 | 8.340 ms | 6.51 / 6.92 ms | 849 MiB |
+| Same Retina setup, new passes disabled | 120.0 | 8.340 ms | 6.11 / 6.59 ms | 721 MiB |
+| 3 × 500, Retina, ordinary player 1 with fog | 120.0 | 8.340 ms | 5.96 / 6.54 ms | 863 MiB |
+
+The new-pass toggle isolates model visual state, height depth, shadows, outlines,
+distortion and fog. Team material lookup, debris, the revised light selection and
+scene preparation remain active in both sides. On this pair the passes cost
+0.40 ms mean GPU span and 127 MiB peak Metal allocation. Compared with the earlier
+complete native baseline (5.61 ms GPU mean, 690 MiB), the entire visual iteration
+adds about 0.90 ms and 158 MiB. The ordinary player view submits fewer hidden
+objects, so its lower GPU span is not a measure of fog being free.
+
+All visible runs had zero missed 30 Hz worker deadlines during measurement.
+The 1080p and full Retina runs recorded all 3,600 presentation callbacks; the
+no-pass and fog runs each lacked three timestamps, which are excluded. Their
+measured intervals fall within 105% of the 120 Hz budget 99.72%, 99.94%, 99.97%
+and 99.97% of the time respectively. Occasional 16.67 ms intervals remain;
+this is near-steady 120 Hz, not a promise of zero dropped refreshes. P99 motion
+step error was 0.71 ms in the full Retina run and 0.91 ms with fog. Submission
+to presentation still has roughly 32 ms median latency, plus the one-tick
+presentation buffer; input-to-photon latency has not been measured.
+
+The full Retina battle again reached 1,485 live units and 1,086 moving units,
+44 nanoframes, 213 projectiles, 830 effects, 6,353 strip objects and 24 burning
+features in the measured window. Submitted native maxima include 937 model
+instances, 629,310 body triangles, 872 model shadows, 23 construction outlines,
+90 detached whole-piece instances, 10 hot wreck models and 38 distortion quads.
+These are separate maxima, not one frame; conservative model culling and hidden
+pieces mean submitted triangles are not a count of visible pixels. The pass
+census and captures agree that the new paths are exercised. Cloaked units were
+zero in this fixture; cloak and carrier-specific composition are implemented
+approximations that still need their own visual scenes.
+
+At an offscreen 144 Hz target the large Retina battle averaged **143.9
+submissions/s**, with GPU mean/p99 **6.46/7.83 ms** and p99 submission interval
+8.43 ms. Only 78.0% of intervals fit 105% of the 6.94 ms budget. There was one
+missed worker deadline. No display is involved, and this Mac's panel is limited
+to 120 Hz. This supports 144 Hz as a next optimization target, not a steady
+144 Hz claim.
+
+Fog currently uploads the complete 1092×1092 RGBA image, 4.55 MiB, every display
+frame. Total dynamic copies rise from 1.408 MiB/frame in the spectator run to
+5.429 MiB/frame with fog (about 652 MiB/s at 120 Hz). Native encode p99 rises
+from 0.243 to 0.738 ms. On the worker, pose/sprite/fog preparation averages
+5.76 ms without fog and 7.36 ms with it, still at 30 Hz. Retaining unchanged
+fog texture regions and storing scalar coverage would address both copying and
+memory. End-of-run Go heap is 717 MiB for the full spectator and 993 MiB for the
+fog case; this is separate from Metal allocation and includes retained CPU assets
+and temporary publication data.
+
+### Recommendation after the visual passes
+
+Continue with this retained Metal/purego design: the extra world passes fit the
+120 Hz target on a real battle with the enlarged geometry workload. The shared
+unit atlas is effective, and the vertex/fragment pipeline handles materials,
+pose sampling, reveal, depth, lighting and real refraction without uploading
+unit geometry per frame.
+
+Next prioritize resource lifetime and visible correctness: retain changed fog
+regions, replace full-frame distortion copies with clipped work/target reuse,
+release upload-only CPU assets, and bound the 225 MiB sprite atlas. Resolve
+billboard/transparent-subject depth and cloak/cargo composition, then integrate
+the existing HUD and order input. Rigid transform interpolation and lower queue
+latency remain worthwhile. Water, remaining weapon/effect families and broader
+maps must be measured before replacing the shipping renderer. No new
+cross-platform abstraction is justified by this Mac-only result yet.
+
+A 24-instance replay smoke and a short real-battle effects-off smoke also
+completed without native errors. The latter exposed an incorrect report flag
+(the distortion count and native draw were correctly disabled); `97d869de` fixes
+that report and the replay visual-pass label without changing rendering. The
+final review binary passed the effects-off smoke again and is the saved launcher
+version. The measured binary is also retained so results remain reproducible.
+
+### Visual-pass artifacts and reproduction
+
+Raw runs are in `/tmp/nanolathe-metal-visual-runs/`. Durable captures, CSV/JSON
+records, a report, binary hashes and a prebuilt launcher are under
+`/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-passes/`.
+The earlier `metal-live` artifacts remain unchanged. Existing commands above now
+enable the added passes by default; use `--visual-passes=false` for the native
+comparison, `--view-player=1` for ordinary visibility/fog and `--effects=false`
+to disable lighting, bloom and distortion. Team atlas lookup stays enabled in
+the pass comparison. The prebuilt launcher accepts the same options and starts
+an interactive spectator session by default.
