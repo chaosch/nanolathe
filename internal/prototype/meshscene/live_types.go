@@ -35,6 +35,8 @@ type LiveFrame struct {
 	Instances         []Instance
 	Sprites           []Sprite
 	Lights            []Light
+	Distortions       []Distortion
+	Fog               FogFrame
 	Camera            [3]float32
 	Alpha             float32
 	Tick              uint32
@@ -46,4 +48,41 @@ type BattleOptions struct {
 	Seed               uint32
 	Width, Height      int
 	Zoom               float32
+	ViewPlayer         int // -1 omniscient; otherwise committed perspective 0..9
 }
+
+// Material is a 16-byte immutable texture binding. Index zero is reserved.
+// Kind 1 selects the clamped instance team frame; Kind 0 selects its first frame.
+// UVs in TextureFrames include the atlas texel-centre convention.
+type Material struct{ FirstFrame, FrameCount, Kind, Reserved uint32 }
+
+// ModelVisual is 64 bytes copied with each instance. State is team frame,
+// opacity, build remaining, shadow enabled. Bounds is world min Y, max Y,
+// ground Y, reserved. Outline is RGBA; Emission is RGB plus strength.
+// The all-zero value means a plain opaque instance with no extra passes.
+type ModelVisual struct{ State, Bounds, Outline, Emission [4]float32 }
+
+// HeightField is load-time immutable terrain height in world units, one sample
+// per grid cell. Rect maps sample centres into world X/Z; no sim pointer escapes.
+type HeightField struct {
+	Width, Height int
+	Values        []float32
+	Rect          [4]float32
+}
+
+// FogFrame carries detached RGBA8 fog modulation: RGB multiply final world
+// colour, A is unused. Empty data disables fog. Rect is in projected world X,
+// Z-minus-half-height coordinates, matching the committed fog cache.
+type FogFrame struct {
+	Width, Height int
+	RGBA          []byte
+	Rect          [4]float32
+}
+
+// Distortion is 64 bytes. Positions are world xyz, with GPU interpolation.
+// Kind Shape.w=0 is a blast: Shape.xyz=end radius, band half-width, base strength;
+// Params.x is committed age in ticks. Kind 1 is a heat plume: Shape.xyz=half
+// width, half height, strength; Params.xyz=committed clock ticks, phase, Y offset.
+// The GPU samples clock/age at Params.x+Alpha-1, freezing when Alpha is 1.
+// Source order is blast rings, wreck heat, vegetation heat; later coverage wins.
+type Distortion struct{ Previous, Current, Shape, Params [4]float32 }

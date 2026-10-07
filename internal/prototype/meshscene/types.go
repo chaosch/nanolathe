@@ -2,7 +2,7 @@
 // It is presentation-only and does not replace any gameplay or retail contract.
 package meshscene
 
-// Vertex is 48 bytes. Position and normal are model-local, UV is normalized in
+// Vertex is 64 bytes. Position and normal are model-local, UV is normalized in
 // the shared model atlas, and Piece selects the instance's rigid transform.
 type Vertex struct {
 	Position [3]float32
@@ -10,11 +10,14 @@ type Vertex struct {
 	UV       [2]float32
 	Color    [3]float32
 	Piece    uint32
+	Material uint32 // zero uses direct atlas UV; otherwise index into Scene.Materials
+	Reserved [3]uint32
 }
 type Mesh struct {
 	Name        string
 	Vertices    []Vertex
 	Indices     []uint32
+	EdgeIndices []uint32 // original authored edges, independent of face subdivision
 	Pieces      int
 	SourceFaces int
 }
@@ -28,15 +31,19 @@ type Mat4 [16]float32
 type Instance struct {
 	Mesh       int
 	PoseOffset int
+	Visual     ModelVisual
 }
 type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
-	Name        string
-	Meshes      []Mesh
-	Atlas       Texture
-	Terrain     Texture
-	SpriteAtlas Texture
-	Live        LiveSource // nil retains the original recorded-pose workload
+	Name          string
+	Meshes        []Mesh
+	Atlas         Texture
+	Terrain       Texture
+	SpriteAtlas   Texture
+	Materials     []Material
+	TextureFrames [][4]float32
+	HeightField   HeightField
+	Live          LiveSource // nil retains the original recorded-pose workload
 	// Terrain rectangle in world x,z; it is a flat 2D backdrop.
 	TerrainRect [4]float32
 	Instances   []Instance
