@@ -16,6 +16,8 @@ import (
 // scratch. Append and Report must run on the session worker; Texture may be
 // borrowed by the renderer for its one-time upload [I6].
 type BattleSprites struct {
+	spriteSources                                        []SpriteSource
+	spriteSourceTick                                     uint32
 	effects                                              drawlist.Effects
 	previousFeatures                                     map[uint64][4]float32
 	spectator                                            bool
@@ -208,9 +210,15 @@ func (b *BattleSprites) appendLight(dst []Light, p [4]float32, radius, strength 
 // snap to their committed point instead of inventing a matching key [I6].
 func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
 	clear(b.counts)
+	// Metadata follows the original output indices, including a caller's
+	// unclassified prefix. Exact uint64 identities stay outside the GPU ABI.
+	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
+	clear(b.spriteSources)
+	b.spriteSourceTick = 0
 	if current == nil {
 		return dst, lights
 	}
+	b.spriteSourceTick = current.Tick
 	clear(b.previousFeatures)
 	clear(b.previousEffects)
 	clear(b.previousProjectiles)
@@ -234,7 +242,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 		}
 	}
 	white := spriteArt{cell: 0, width: 2, height: 2}
-	for _, v := range current.Features {
+	for fi, v := range current.Features {
 		b.counts["features_seen"]++
 		if !battleFeatureVisible(current, v, b.spectator) {
 			b.counts["features_visibility_rejected"]++
@@ -311,6 +319,13 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			}
 			start := len(dst)
 			dst = b.appendSprite(dst, a, p, p, color, emission, camera, viewport, kind)
+			for i := start; i < len(dst); i++ {
+				sourceKind := SpriteSourceFeatureBody
+				if shadow {
+					sourceKind = SpriteSourceFeatureShadow
+				}
+				b.spriteSources = append(b.spriteSources, SpriteSource{Kind: sourceKind, FeatureID: v.InstanceID, FeatureIndex: uint32(fi), Transparent: trans && !v.RuntimeLive})
+			}
 			if v.Height < 10 {
 				// Short features precede all subjects [03 R-RAST-01 §6].
 				for i := start; i < len(dst); i++ {
@@ -320,6 +335,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			}
 		}
 	}
+	featureEnd := len(dst)
 	for _, v := range current.Effects {
 		b.counts["effects_seen"]++
 		if !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
@@ -408,6 +424,12 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 		}
 	}
 	dst, lights = b.appendProjectiles(dst, lights, current, camera, viewport)
+	// Includes fills, strips and specialized beam/projectile appenders. The
+	// production producer engine replaces this whole fallback source family.
+	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
+	for i := featureEnd; i < len(dst); i++ {
+		b.spriteSources[i] = SpriteSource{Kind: SpriteSourceFallbackEffect}
+	}
 	lights = b.appendWreckLights(lights, current, camera, viewport)
 	// Preserve publication order here. The native packer keeps short features
 	// in that order before models, then sorts other sprites at displayed alpha.

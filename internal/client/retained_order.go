@@ -23,15 +23,19 @@ const (
 	RetainedModelsAir
 )
 
-// RetainedModelOrder is a model-only view of the production painter walk.
-// Rank is monotonic across barriers, with gaps for non-model world subjects.
+// RetainedModelOrder is a model/feature-sprite view of the production walk.
+// Rank is monotonic across barriers; sprite features occupy the existing gaps.
 // Group identifies a keyed parent staging image, including the presentation
 // policy's factory occupants (DESIGN_PRESENTATION_CLIENT §5). Zero is separate.
 type RetainedModelOrder struct {
-	Kind, GroupKind uint8
-	ID, GroupID     uint64
-	Rank, Phase     uint32
-	Row             int32
+	Kind, GroupKind            uint8
+	ID, GroupID                uint64
+	Rank, Phase                uint32
+	Row                        int32
+	FeatureIndex               uint32 // zero-based committed Features index; not a temporal identity
+	Sprite                     bool   // feature uses native sprite references rather than a model slot
+	FeatureBody, FeatureShadow bool
+	Submerged                  bool // production Enhanced seabed promotion, before ordinary feature passes
 }
 
 // RetainedModelOrderer owns presentation scratch, and may only be used by one
@@ -61,7 +65,7 @@ func (o *RetainedModelOrderer) Prepare(c *Client, cur *frame.Frame) []RetainedMo
 		if f.Height >= 10 || !win.admitsCell(f.CX, f.CZ) || !featureVisibleForFrame(cur, *f) {
 			continue
 		}
-		o.feature(c, *f, RetainedModelsShortFeatures, featureBucketRow(f.CZ, c.cam.Z))
+		o.feature(c, *f, uint32(i), RetainedModelsShortFeatures, featureBucketRow(f.CZ, c.cam.Z))
 	}
 	b.fineUnitOrder = true
 	b.indexChildren(cur.Units)
@@ -78,7 +82,9 @@ func (o *RetainedModelOrderer) Prepare(c *Client, cur *frame.Frame) []RetainedMo
 	for i := range cur.Features {
 		f := &cur.Features[i]
 		if f.Height >= 10 && win.admitsCell(f.CX, f.CZ) && tallFeatureVisibleForFrame(cur, *f) {
-			b.add(worldDrawable{row: featureBucketRow(f.CZ, c.cam.Z), feature: f, index: -1})
+			// This private bucket walk uses index for the feature ordinal too;
+			// it never invokes production geometry's unit-index consumers.
+			b.add(worldDrawable{row: featureBucketRow(f.CZ, c.cam.Z), feature: f, index: int32(i)})
 		}
 	}
 	b.indexFactoryOccupants(win)
@@ -92,7 +98,7 @@ func (o *RetainedModelOrderer) Prepare(c *Client, cur *frame.Frame) []RetainedMo
 				o.unit(c, d, RetainedModelsGround)
 			}
 		} else if d.feature != nil {
-			o.feature(c, *d.feature, RetainedModelsGround, d.row)
+			o.feature(c, *d.feature, uint32(d.index), RetainedModelsGround, d.row)
 		}
 	}
 	if !c.strategicView() {
@@ -106,17 +112,29 @@ func (o *RetainedModelOrderer) Prepare(c *Client, cur *frame.Frame) []RetainedMo
 	return o.order
 }
 
-func (o *RetainedModelOrderer) feature(c *Client, f frame.FeatureView, phase uint32, row int32) {
+func (o *RetainedModelOrderer) feature(c *Client, f frame.FeatureView, index, phase uint32, row int32) {
 	o.rank++
-	// Sprite features occupy their ordinary painter positions but contribute no
-	// model, so a future sprite interleave can use these same rows and barriers.
 	if f.Filename != "" || (f.Model == "" && f.SeqName != "") {
+		// Match drawFeature's runtime gates without resolving/advancing its
+		// shared animated rest cursor a second time [03 R-RAST-01 §6][I6].
+		cursor := !f.RuntimeLive || f.EventSeqName != ""
+		bodyName, shadowName := f.SeqName, f.SeqNameShad
+		if f.EventSeqName != "" {
+			bodyName, shadowName = f.EventSeqName, f.EventSeqNameShad
+		}
+		body := cursor && f.Filename != "" && bodyName != ""
+		shadow := cursor && c.featureShadows && (!f.RuntimeLive || f.ShadowEnabled) && f.Filename != "" && shadowName != ""
+		submerged := c.enhanced && c.effects.SeabedTreated() && !c.strategicView() &&
+			c.terrain != nil && !c.terrain.LavaWorld && c.terrain.SeaLevel != 0 &&
+			!f.Blocking && !f.RuntimeLive && !f.IsBurning && f.Height < 10 &&
+			f.Y >= 0 && int64(f.Y)+int64(max(f.Height, 0))*65536 < int64(c.terrain.SeaLevelWorld())
+		o.order = append(o.order, RetainedModelOrder{Kind: RetainedModelFeature, ID: f.InstanceID, FeatureIndex: index, Rank: o.rank, Phase: phase, Row: row, Sprite: true, FeatureBody: body, FeatureShadow: shadow, Submerged: submerged})
 		return
 	}
 	if m := c.modelForFeature(f); m == nil || m.compiled == nil {
 		return
 	}
-	o.order = append(o.order, RetainedModelOrder{Kind: RetainedModelFeature, ID: f.InstanceID, Rank: o.rank, Phase: phase, Row: row})
+	o.order = append(o.order, RetainedModelOrder{Kind: RetainedModelFeature, ID: f.InstanceID, FeatureIndex: index, Rank: o.rank, Phase: phase, Row: row})
 }
 
 func (o *RetainedModelOrderer) unit(c *Client, d worldDrawable, phase uint32) {

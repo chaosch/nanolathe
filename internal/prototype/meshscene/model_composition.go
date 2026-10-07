@@ -22,11 +22,17 @@ type ModelSlot struct {
 // Kind is unit=1, feature=2, projectile=3, debris=4. GroupKind/GroupID identify
 // an explicitly staged production subject; zero falls back to Instance.Subject.
 // Phase is short features=0, ground rows=1, effects=2, airborne rows=3.
+// Kind 2 requires FeatureIndex for composition lookup; ID preserves the actual
+// published identity even when zero, and never substitutes an ordinal for it.
 type ModelOrder struct {
-	Kind, GroupKind uint8
-	ID, GroupID     uint64
-	Rank, Phase     uint32
-	Row             int32
+	Kind, GroupKind            uint8
+	ID, GroupID                uint64
+	Rank, Phase                uint32
+	Row                        int32
+	FeatureIndex               uint32 // zero-based committed feature ordinal; this publication only
+	Sprite                     bool
+	FeatureBody, FeatureShadow bool
+	Submerged                  bool
 }
 
 const (
@@ -44,6 +50,7 @@ type ModelPaint struct {
 	Row               int32
 	Kind              uint8
 	ID                uint64
+	FeatureIndex      uint32
 }
 
 type ModelComposition struct {
@@ -52,7 +59,9 @@ type ModelComposition struct {
 	Slots                   []ModelSlot
 	AtlasWidth, AtlasHeight int
 	Paint                   []ModelPaint
-	SubjectPixels           []uint64 // aligned to Slots; bounded rectangle area, not covered texels
+	FeatureSprites          []FeatureSpritePaint // ordered zero-based ORIGINAL live.Sprites references
+	SpriteSources           []SpriteSource       // aligned to original live.Sprites, before native filtering
+	SubjectPixels           []uint64             // aligned to Slots; bounded rectangle area, not covered texels
 	TotalPixels             uint64
 	UnorderedInstances      int // absent production rank, including deliberately gated subjects
 }
@@ -88,10 +97,11 @@ type ModelComposer struct {
 	seen           []bool
 	instanceGroups []int
 	composition    ModelComposition
+	featureSources map[uint32]featureSpriteSources
 }
 
 func NewModelComposer(scene *Scene) *ModelComposer {
-	c := &ModelComposer{groups: make(map[modelGroupKey]int), instances: make(map[modelInstanceKey]int)}
+	c := &ModelComposer{groups: make(map[modelGroupKey]int), instances: make(map[modelInstanceKey]int), featureSources: make(map[uint32]featureSpriteSources)}
 	if scene == nil {
 		return c
 	}
@@ -145,6 +155,7 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 	out.InstanceRanks = resizeComposition(out.InstanceRanks, len(live.Instances))
 	clear(out.InstanceRanks)
 	out.Slots, out.Paint, out.SubjectPixels = out.Slots[:0], out.Paint[:0], out.SubjectPixels[:0]
+	out.FeatureSprites, out.SpriteSources = out.FeatureSprites[:0], out.SpriteSources[:0]
 	out.AtlasWidth, out.AtlasHeight, out.TotalPixels, out.UnorderedInstances = 0, 0, 0, 0
 	c.seen = resizeComposition(c.seen, len(live.Instances))
 	clear(c.seen)
@@ -156,7 +167,7 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		}
 		c.instances[modelInstanceKey{instance.Mesh, instance.PoseOffset}] = i
 	}
-	if len(live.Instances) == 0 {
+	if len(live.Instances) == 0 && len(live.Sprites) == 0 {
 		return *out, nil
 	}
 	if retained == nil || retained.previous == nil || current == nil || retained.previous.frame.Tick != current.Tick || live.Tick != current.Tick {
@@ -169,8 +180,25 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		}
 		return cmp.Compare(a.Rank, b.Rank)
 	})
+	sources, err := retained.SpriteSources(live)
+	if err != nil {
+		return ModelComposition{}, err
+	}
+	// Own the sidecar through the next Prepare even if the adapter prepares a
+	// subsequent publication before this composition is copied to native.
+	out.SpriteSources = append(out.SpriteSources, sources...)
+	if err := c.prepareFeatureSprites(c.order); err != nil {
+		return ModelComposition{}, err
+	}
 	for _, entry := range c.order {
-		span, ok := retained.previous.byID[battleEntityKey{entry.Kind, entry.ID}]
+		if entry.Sprite {
+			continue
+		}
+		keyID := entry.ID
+		if entry.Kind == 2 {
+			keyID = uint64(entry.FeatureIndex) + 1
+		}
+		span, ok := retained.previous.byID[battleEntityKey{entry.Kind, keyID}]
 		if !ok {
 			continue // topology/culling must not manufacture a replacement subject
 		}
@@ -202,7 +230,7 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 			if instance.Visual.State == [4]float32{} {
 				opacity = 1
 			}
-			c.work = append(c.work, modelSlotWork{rect[0], rect[1], rect[2], rect[3], opacity, ModelPaint{Rank: entry.Rank, Phase: entry.Phase, Row: entry.Row, Kind: entry.Kind, ID: entry.ID}})
+			c.work = append(c.work, modelSlotWork{rect[0], rect[1], rect[2], rect[3], opacity, ModelPaint{Rank: entry.Rank, Phase: entry.Phase, Row: entry.Row, Kind: entry.Kind, ID: entry.ID, FeatureIndex: entry.FeatureIndex}})
 		} else {
 			w := &c.work[group]
 			w.x0, w.y0, w.x1, w.y1 = min(w.x0, rect[0]), min(w.y0, rect[1]), max(w.x1, rect[2]), max(w.y1, rect[3])
