@@ -58,6 +58,7 @@ type ModelComposition struct {
 	InstanceRanks           []uint32 // production member order, including factory children
 	Slots                   []ModelSlot
 	AtlasWidth, AtlasHeight int
+	ProjectileSlots         []uint32 // production body markers, including zero for culled retained slots
 	Paint                   []ModelPaint
 	FeatureSprites          []FeatureSpritePaint // ordered zero-based ORIGINAL live.Sprites references
 	SpriteSources           []SpriteSource       // aligned to original live.Sprites, before native filtering
@@ -94,6 +95,7 @@ type ModelComposer struct {
 	work           []modelSlotWork
 	order          []ModelOrder
 	packing        []int
+	pageWidth      int
 	seen           []bool
 	instanceGroups []int
 	composition    ModelComposition
@@ -304,8 +306,7 @@ func (c *ModelComposer) screenBounds(instance Instance, live *LiveFrame, width, 
 	return rect, true, nil
 }
 
-// pack uses a stable descending-height/width shelf order. Every bounded power
-// of two width is considered; the smallest resulting power-of-two page wins.
+// pack uses stable descending-height/width shelves with a persistent page width.
 func (c *ModelComposer) pack() error {
 	const limit = 8192
 	out := &c.composition
@@ -328,20 +329,20 @@ func (c *ModelComposer) pack() error {
 		}
 		return cmp.Compare(wb.x1-wb.x0, wa.x1-wa.x0)
 	})
-	bestWidth, bestHeight, bestArea := 0, 0, limit*limit+1
-	for width := compositionPowerOfTwo(minWidth); width <= limit; width *= 2 {
-		height := c.shelves(width, false)
-		if height > limit {
-			continue
-		}
-		height = compositionPowerOfTwo(height)
-		if area := width * height; area < bestArea {
-			bestWidth, bestHeight, bestArea = width, height, area
-		}
+	// Keep the page aspect stable across frames. Choosing a new aspect every
+	// frame made the native grow-only textures retain max(width)*max(height),
+	// far larger than any one requested page. Rows need no power-of-two size.
+	bestWidth := max(c.pageWidth, 2048, compositionPowerOfTwo(minWidth))
+	bestHeight := c.shelves(bestWidth, false)
+	for bestHeight > limit && bestWidth < limit {
+		bestWidth *= 2
+		bestHeight = c.shelves(bestWidth, false)
 	}
-	if bestWidth == 0 {
+	if bestWidth > limit || bestHeight > limit {
 		return fmt.Errorf("all %d subjects (%d rectangle pixels) in one atlas up to 8192 by 8192", len(c.work), out.TotalPixels)
 	}
+	bestHeight = (bestHeight + 63) &^ 63
+	c.pageWidth = bestWidth
 	c.shelves(bestWidth, true)
 	out.AtlasWidth, out.AtlasHeight = bestWidth, bestHeight
 	return nil

@@ -69,6 +69,10 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 	if err != nil {
 		return err
 	}
+	if device, ok := report["device"].(map[string]any); ok {
+		metadata["display_scale"] = device["layer_contents_scale"]
+		metadata["window_units"] = "physical pixels"
+	}
 	report["production_benchmark"] = host.Close()
 	if err := battleBenchmarkWriteJSON(filepath.Join(options.Directory, "report.json"), report); err != nil {
 		return err
@@ -82,7 +86,7 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 		"go_version": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "gomaxprocs": runtime.GOMAXPROCS(0),
 		"build": build, "revision": os.Getenv("NANOLATHE_BENCH_REVISION"), "rows": host.rows,
 		"alloc_bytes": memory["alloc_bytes"], "mallocs": memory["mallocs"], "gc": memory["gc"], "gc_pause_ns": memory["gc_pause_ns"],
-		"timing_scope": "host wall work and start-of-work cadence; Submit includes native backpressure; native GPU and presented timestamps live in report.json and frames.csv"}
+		"timing_scope": "host wall work and start-of-work cadence; PaceWait brackets deadline computation and sleep; Submit includes native backpressure; native GPU and presented timestamps live in report.json and frames.csv"}
 	if err := battleBenchmarkWriteJSON(filepath.Join(options.Directory, "frames.json"), common); err != nil {
 		return err
 	}
@@ -96,11 +100,13 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 }
 
 type metalBenchmarkSource struct {
+	visuals                  metalVisuals
 	b                        *battleSession
 	c                        *client.Client
 	world                    *meshscene.RetainedBattle
 	scene                    *meshscene.Scene
 	composer                 *metalModelComposer
+	shadows                  *metalShadowComposer
 	hud                      *metalhud.Foreground
 	step                     func()
 	census                   func() any
@@ -163,6 +169,9 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		h.atlasEpoch += h.atlasVersion + 1
 		h.atlasVersion = 0
 	}
+	if err := h.visuals.Prepare(h.c, &h.frame, h.options.Width, h.options.Height, 1); err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	quads, texture, version, err := h.hud.Prepare(h.c.RecordRetainedForeground())
 	if err != nil {
 		return meshscene.LiveFrame{}, err
@@ -181,6 +190,13 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		return meshscene.LiveFrame{}, err
 	}
 	h.frame.Composition, h.frame.Composed = composition, true
+	if h.shadows == nil {
+		h.shadows = newMetalShadowComposer(h.world)
+	}
+	h.frame.Shadows, err = h.shadows.Prepare(h.c, h.world, &h.frame, current, h.options.Width, h.options.Height, h.composer.order)
+	if err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	h.row.Record = benchmarkElapsed(start)
 	if h.draw >= h.options.TPS*2 {
 		start := time.Now()

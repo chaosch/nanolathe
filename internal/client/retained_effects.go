@@ -8,6 +8,7 @@ import "github.com/nanolathe-gg/nanolathe/internal/drawlist"
 type RetainedEffectBatch struct {
 	List             drawlist.List
 	ProjectileModels bool
+	ProjectileOrder  []RetainedProjectileModel // aligned to the successful projectile Model commands
 }
 
 // RetainedEffects preserves the model/feature barriers of drawCommittedWorld.
@@ -64,11 +65,19 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 	// Neither stepping nor creation is repeated by native replay [04 R-COB-04 §2].
 	c.stepDebrisTrails(cur)
 	record := func(projectiles bool, draw func()) RetainedEffectBatch {
+		batch := RetainedEffectBatch{ProjectileModels: projectiles}
+		previousOrder := c.retainedProjectileOrder
+		c.retainedProjectileOrder = nil
+		if projectiles {
+			c.retainedProjectileOrder = &batch.ProjectileOrder
+		}
+		defer func() { c.retainedProjectileOrder = previousOrder }()
 		c.list.Reset()
 		c.emitWorldBegin()
 		draw()
 		c.emitWorldEnd()
-		return RetainedEffectBatch{List: c.list.Clone(), ProjectileModels: projectiles}
+		batch.List = c.list.Clone()
+		return batch
 	}
 	out.BeforeFeatures = []RetainedEffectBatch{record(false, func() {
 		c.drawTerrainPrep()

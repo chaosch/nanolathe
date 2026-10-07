@@ -14,6 +14,7 @@ import (
 func (p *livePacking) prepareComposition(f meshscene.LiveFrame, u *liveUpload) error {
 	p.compositionDraws = p.compositionDraws[:0]
 	p.compositionPaint = p.compositionPaint[:0]
+	p.seabed = p.seabed[:0]
 	if !f.Composed {
 		return nil
 	}
@@ -36,8 +37,32 @@ func (p *livePacking) prepareComposition(f meshscene.LiveFrame, u *liveUpload) e
 	}
 	slices.SortStableFunc(p.compositionDraws, func(a, b cloakDraw) int { return cmp.Compare(a.Phase, b.Phase) })
 	for _, paint := range c.Paint {
+		if f.StockEffects != nil && paint.Kind == 3 {
+			continue
+		}
 		p.compositionPaint = append(p.compositionPaint, [4]uint32{paint.Slot, paint.Phase, paint.Rank, 0})
 	}
+	if f.StockEffects != nil {
+		for i, slot := range c.ProjectileSlots {
+			p.compositionPaint = append(p.compositionPaint, [4]uint32{slot, 2, uint32(i), 2})
+		}
+	}
+	for _, paint := range c.FeatureSprites {
+		if int(paint.Source) >= len(p.spritePacked) {
+			return fmt.Errorf("metalproto: feature sprite outside publication")
+		}
+		if paint.Submerged {
+			p.seabed = append(p.seabed, p.spritePacked[paint.Source])
+			continue
+		}
+		p.compositionPaint = append(p.compositionPaint, [4]uint32{p.spritePacked[paint.Source] + 1, paint.Phase, paint.Rank, 1})
+	}
+	slices.SortStableFunc(p.compositionPaint, func(a, b [4]uint32) int {
+		if a[1] != b[1] {
+			return cmp.Compare(a[1], b[1])
+		}
+		return cmp.Compare(a[2], b[2])
+	})
 	u.CompositionSlots = pointer(c.Slots)
 	u.CompositionSelectors = pointer(p.compositionSelectors)
 	u.CompositionDraws = pointer(p.compositionDraws)

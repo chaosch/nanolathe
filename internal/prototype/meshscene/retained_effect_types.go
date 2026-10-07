@@ -16,6 +16,7 @@ const (
 	EffectOpGeometry
 	EffectOpRetainedModel
 	EffectOpGround
+	EffectOpSmoke
 )
 
 // EffectLensSample carries the production executor's cropped destination and
@@ -82,14 +83,40 @@ type EffectCounts struct {
 // factor min(2,1+row/30) and coverage in alpha. Normal sprites retain their
 // ordinary palette colors and half-alpha. No glow is baked into body pixels.
 type EffectLayer struct {
-	Quads          []OverlayQuad
-	Ops            []EffectOp
-	Lenses         []EffectLens
-	Models         []EffectGeometry
-	RetainedModels []drawlist.Model
-	Sources        []EffectSources
-	Counts         EffectCounts
-	Ground         []EffectGround
+	Quads           []OverlayQuad
+	Ops             []EffectOp
+	Lenses          []EffectLens
+	Models          []EffectGeometry
+	RetainedModels  []drawlist.Model
+	ProjectileOrder []EffectProjectileModel // aligned to RetainedModels, preserved through culling
+	Sources         []EffectSources
+	Counts          EffectCounts
+	Ground          []EffectGround
+	Smoke           []EffectSmoke
+}
+
+// EffectSmoke preserves the production tinted-smoke receiver (§23.2). Quad
+// contains the four clipped RECORD corners after the world replay transform,
+// before framebuffer clipping; its alpha remains one half. Selection carries
+// the transformed sprite anchor XY, max frame extent and absolute height.
+// Bounds is the full art's normalized UV rectangle, so filtered taps cannot
+// read neighboring atlas resources. Quad.Params.x selects the production
+// fractional-detail filter; Params.yz retains the physical clipped span before
+// world replay's minimum one-pixel raster expansion. Positions, spans and
+// heights are logical pixels until native packing. Light selection is
+// independent of glow and terrain controls.
+type EffectSmoke struct {
+	Quad              OverlayQuad
+	Selection, Bounds [4]float32
+}
+
+// EffectProjectileModel names an actual recorded standalone call. Member is
+// parent=0 or first header child=1. The retained projectile slot contains both
+// pieces: resolve it at the parent marker once, then acknowledge the child
+// marker without resolving the combined slot a second time [03 §5.4].
+type EffectProjectileModel struct {
+	ID     uint64
+	Member uint32
 }
 
 // EffectGround is an 80-byte replay operand. CentreAxis is centre/along vector,

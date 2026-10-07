@@ -56,27 +56,47 @@ type liveUpload struct {
 	RulesCount, MaterialCount                                                                                        uint32
 	CompositionSlots, CompositionSelectors, CompositionDraws, CompositionPaint                                       uintptr
 	CompositionSlotCount, CompositionDrawCount, CompositionPaintCount, CompositionWidth, CompositionHeight, Composed uint32
+	RetainedLights                                                                                                   uintptr
+	RetainedLightCount, LightControls                                                                                uint32
+	Effects                                                                                                          uintptr
+	GlowVertices                                                                                                     uintptr
+	GlowCount, GlowEnabled                                                                                           uint32
+	GlowParams                                                                                                       meshscene.RetainedGlowParameters
+	GroundEffects                                                                                                    uintptr
+	Shadows                                                                                                          nativeShadowUpload
+	WaterObjects                                                                                                     uintptr
+	WaterSources                                                                                                     uintptr
 }
 type livePacking struct {
-	compositionSelectors, sourcePacked []uint32
-	compositionDraws                   []cloakDraw
-	compositionPaint                   [][4]uint32
-	rules                              []meshscene.ModelRules
-	materialOffsets                    []uint32
-	materials                          []meshscene.NativeModelMaterial
-	phases                             []uint32
-	cloaks                             []cloakDraw
-	cloakSubjects                      []cloakSubject
-	cloakMembers                       []cloakMember
-	cloakIndices                       map[uint64]int
-	spriteOrder                        []orderedSprite
-	sprites                            []meshscene.Sprite
-	spans                              []meshSpan
-	cursor, offsets                    []uint32
-	visuals                            []meshscene.ModelVisual
-	selectors                          []uint32
-	overlayVersion                     uint64
-	overlayWidth, overlayHeight        int
+	waterPacking                                     waterObjectsPacking
+	waterUpload                                      nativeWaterObjectsUpload
+	waterSourcesUpload                               nativeWaterSourcesUpload
+	waterObjects                                     []meshscene.WaterObject
+	seabed                                           []uint32
+	groundPacking                                    groundEffectsPacking
+	groundUpload                                     nativeGroundUpload
+	shadowPacking                                    ShadowPacking
+	stockPacking                                     effectsPacking
+	stockUpload                                      nativeEffectsUpload
+	compositionSelectors, sourcePacked, spritePacked []uint32
+	compositionDraws                                 []cloakDraw
+	compositionPaint                                 [][4]uint32
+	rules                                            []meshscene.ModelRules
+	materialOffsets                                  []uint32
+	materials                                        []meshscene.NativeModelMaterial
+	phases                                           []uint32
+	cloaks                                           []cloakDraw
+	cloakSubjects                                    []cloakSubject
+	cloakMembers                                     []cloakMember
+	cloakIndices                                     map[uint64]int
+	spriteOrder                                      []orderedSprite
+	sprites                                          []meshscene.Sprite
+	spans                                            []meshSpan
+	cursor, offsets                                  []uint32
+	visuals                                          []meshscene.ModelVisual
+	selectors                                        []uint32
+	overlayVersion                                   uint64
+	overlayWidth, overlayHeight                      int
 }
 
 func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, seconds float64, visualPasses, effects bool) (liveUpload, liveRow, error) {
@@ -88,7 +108,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 400 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 632 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -175,8 +195,13 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 			return u, r, fmt.Errorf("metalproto: invalid overlay blend selector")
 		}
 	}
-	groundSprites := p.orderSprites(f.Sprites, f.Alpha, f.Camera)
-	u = liveUpload{Rules: pointer(p.rules), MaterialOffsets: pointer(p.materialOffsets), Materials: pointer(p.materials), RulesCount: uint32(len(f.ModelRules)), MaterialCount: uint32(len(p.materials)), Water: f.Water, GroundSpriteCount: uint32(groundSprites), Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(p.sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
+	groundSprites := 0
+	if f.Composed {
+		groundSprites = p.orderCompositionSprites(f)
+	} else {
+		groundSprites = p.orderSprites(f.Sprites, f.Alpha, f.Camera)
+	}
+	u = liveUpload{Rules: pointer(p.rules), MaterialOffsets: pointer(p.materialOffsets), Materials: pointer(p.materials), RulesCount: uint32(len(f.ModelRules)), MaterialCount: uint32(len(p.materials)), Water: f.Water, GroundSpriteCount: uint32(groundSprites), Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(p.sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(p.sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
 	if f.OverlayVersion != 0 && f.OverlayVersion != p.overlayVersion {
 		t := f.OverlayTexture
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || uint64(t.Width)*uint64(t.Height)*4 != uint64(len(t.RGBA)) {
@@ -219,10 +244,63 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		p.prepareCloaks(f)
 	}
 	u.Cloaks, u.CloakCount = pointer(p.cloaks), uint32(len(p.cloaks))
+	if stock := f.StockEffects; stock != nil {
+		var err error
+		p.stockUpload, err = p.stockPacking.Prepare(stock.Layers, stock.Atlas, stock.Version, stock.Dirty, stock.Scale)
+		if err != nil {
+			return u, r, err
+		}
+		p.groundUpload, err = p.groundPacking.Prepare(stock.Layers, stock.Scale)
+		if err != nil {
+			return u, r, err
+		}
+		u.GroundEffects = uintptr(unsafe.Pointer(&p.groundUpload))
+		u.Effects = uintptr(unsafe.Pointer(&p.stockUpload))
+		u.GlowVertices = pointer(stock.Glow.Vertices)
+		u.GlowCount = uint32(len(stock.Glow.Vertices))
+		u.GlowEnabled = 1
+		u.GlowParams = stock.Glow.Parameters
+	}
+	u.RetainedLights = pointer(f.Lighting.Lights)
+	u.RetainedLightCount = uint32(len(f.Lighting.Lights))
+	u.LightControls = f.LightControls
+	if u.RetainedLightCount > 64 {
+		return u, r, fmt.Errorf("metalproto: production light count exceeds shared budget")
+	}
 	if err := p.prepareComposition(f, &u); err != nil {
 		return u, r, err
 	}
 	r.UploadBytes += uint64(len(f.Composition.Slots)*48 + len(p.compositionSelectors)*4 + len(p.compositionDraws)*16 + len(p.compositionPaint)*16)
+	if f.Composed {
+		if len(f.WaterObjects) != len(f.Instances) {
+			return u, r, fmt.Errorf("metalproto: water objects differ from instances")
+		}
+		p.waterObjects = slices.Grow(p.waterObjects[:0], len(f.Instances))[:len(f.Instances)]
+		for i, o := range f.WaterObjects {
+			p.waterObjects[p.sourcePacked[i]] = o
+		}
+		var err error
+		p.waterUpload, err = p.waterPacking.Prepare(p.waterObjects, p.seabed, f.WaterObjectScales[0], f.WaterObjectScales[1], f.WaterObjectScales[2])
+		if err != nil {
+			return u, r, err
+		}
+		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+		p.waterSourcesUpload, err = p.waterPacking.PrepareSources(f.WaterSources, f.WaterObjectScales[2])
+		if err != nil {
+			return u, r, err
+		}
+		u.WaterSources = uintptr(unsafe.Pointer(&p.waterSourcesUpload))
+	}
+	var shadowErr error
+	u.Shadows, shadowErr = p.shadowPacking.Prepare(f.Shadows, p.sourcePacked)
+	if shadowErr != nil {
+		return u, r, shadowErr
+	}
+	if f.LightControls&1 != 0 {
+		r.Lights = len(f.Lighting.Lights)
+		r.DroppedLights = 0
+	}
+	r.UploadBytes += uint64(len(f.Lighting.Lights)) * 64
 	r.CloakSubjects = len(p.cloakSubjects)
 	for _, phase := range p.phases {
 		if phase == meshscene.PhaseAir {

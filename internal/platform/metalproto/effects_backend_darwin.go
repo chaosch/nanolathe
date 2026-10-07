@@ -27,7 +27,7 @@ type nativeEffectsLens struct {
 	Reserved     [2]uint32
 }
 
-// nativeEffectsUpload matches NMEffectsUpload (136 bytes on the supported
+// nativeEffectsUpload matches NMEffectsUpload (152 bytes on the supported
 // 64-bit host). Its uintptr values borrow packing storage until the synchronous
 // nm_live_frame copy returns; the host must keep effectsPacking alive then.
 type nativeEffectsUpload struct {
@@ -36,6 +36,8 @@ type nativeEffectsUpload struct {
 	QuadCount, VertexCount, SampleCount, LensCount, OpCount, LayerCount, Width, Height               uint32
 	Dirty                                                                                            [4]uint32
 	ModelSubmitted, ModelSuppressed, ProjectileModels, SourceCount, QuadSpanFaces, SupersampleModels uint32
+	Smoke                                                                                            uintptr
+	SmokeCount, Reserved                                                                             uint32
 }
 
 type effectsPacking struct {
@@ -48,6 +50,7 @@ type effectsPacking struct {
 	atlas          []byte
 	sources        []meshscene.EffectSources
 	retainedModels []drawlist.Model
+	smoke          []meshscene.EffectSmoke
 }
 
 // Prepare scales the logical client picture exactly once. Native replay reads
@@ -56,7 +59,7 @@ type effectsPacking struct {
 // the stock body pass does not manufacture Enhanced emission from them.
 func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene.Texture, version uint64, dirty [4]uint32, scale float32) (nativeEffectsUpload, error) {
 	var out nativeEffectsUpload
-	if unsafe.Sizeof(out) != 136 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.EffectVertex{}) != 48 || unsafe.Sizeof(nativeEffectsSample{}) != 48 || unsafe.Sizeof(nativeEffectsLens{}) != 32 || unsafe.Sizeof(nativeEffectsOp{}) != 16 || unsafe.Sizeof(nativeEffectsLayer{}) != 16 {
+	if unsafe.Sizeof(out) != 152 || unsafe.Sizeof(meshscene.EffectSmoke{}) != 96 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.EffectVertex{}) != 48 || unsafe.Sizeof(nativeEffectsSample{}) != 48 || unsafe.Sizeof(nativeEffectsLens{}) != 32 || unsafe.Sizeof(nativeEffectsOp{}) != 16 || unsafe.Sizeof(nativeEffectsLayer{}) != 16 {
 		return out, fmt.Errorf("metalproto: effects upload ABI mismatch")
 	}
 	if scale <= 0 || math.IsNaN(float64(scale)) || math.IsInf(float64(scale), 0) {
@@ -72,9 +75,22 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 	p.atlas = atlas.RGBA
 	p.sources = p.sources[:0]
 	p.retainedModels = p.retainedModels[:0]
+	p.smoke = p.smoke[:0]
 	var bodySlot uint32
 	var groundBase uint32
 	for _, layer := range layers {
+		smokeBase := len(p.smoke)
+		for _, smoke := range layer.Smoke {
+			for i := range smoke.Quad.Rect {
+				smoke.Quad.Rect[i] *= scale
+			}
+			for i := range smoke.Selection {
+				smoke.Selection[i] *= scale
+			}
+			smoke.Quad.Params[1] *= scale
+			smoke.Quad.Params[2] *= scale
+			p.smoke = append(p.smoke, smoke)
+		}
 		qbase, lbase := len(p.quads), len(p.lenses)
 		for _, q := range layer.Quads {
 			for j := range q.Rect {
@@ -126,6 +142,11 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 				return out, fmt.Errorf("metalproto: invalid effects op span")
 			}
 			switch op.Kind {
+			case meshscene.EffectOpSmoke:
+				if op.First > len(layer.Smoke) || op.Count > len(layer.Smoke)-op.First {
+					return out, fmt.Errorf("metalproto: smoke receiver span outside layer")
+				}
+				p.ops = append(p.ops, nativeEffectsOp{Kind: 5, First: uint32(smokeBase + op.First), Count: uint32(op.Count)})
 			case meshscene.EffectOpGround:
 				if op.First > len(layer.Ground) || op.Count > len(layer.Ground)-op.First {
 					return out, fmt.Errorf("metalproto: ground marker outside layer")
@@ -151,14 +172,24 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 					}
 				}
 			case meshscene.EffectOpRetainedModel:
+				if len(layer.ProjectileOrder) != len(layer.RetainedModels) {
+					return out, fmt.Errorf("metalproto: projectile identities differ from retained model markers")
+				}
 				if op.First > len(layer.RetainedModels) || op.Count > len(layer.RetainedModels)-op.First {
 					return out, fmt.Errorf("metalproto: retained projectile marker outside layer")
 				}
-				for _, model := range layer.RetainedModels[op.First : op.First+op.Count] {
+				for i, model := range layer.RetainedModels[op.First : op.First+op.Count] {
+					identity := layer.ProjectileOrder[op.First+i]
+					if identity.ID == 0 || identity.Member > 1 {
+						return out, fmt.Errorf("metalproto: invalid retained projectile identity/member")
+					}
 					marker := nativeEffectsOp{Kind: 3, First: bodySlot, Count: 1}
 					if model.ShadowOnly {
 						marker.Reserved = 1
 					} else {
+						if identity.Member == 1 {
+							marker.Reserved = 2 // already included in the parent's combined retained slot
+						}
 						bodySlot++
 					}
 					p.ops = append(p.ops, marker)
@@ -179,7 +210,7 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 			out.SourceCount += uint32(len(src.Art) + len(src.Lines) + len(src.Nano) + len(src.Flashes) + len(src.Halos))
 		}
 	}
-	for _, n := range []int{len(p.quads), len(p.vertices), len(p.samples), len(p.lenses), len(p.ops), len(p.layers), len(p.retainedModels)} {
+	for _, n := range []int{len(p.quads), len(p.vertices), len(p.samples), len(p.lenses), len(p.ops), len(p.layers), len(p.retainedModels), len(p.smoke)} {
 		if n > math.MaxInt32 {
 			return out, fmt.Errorf("metalproto: effects upload count exceeds native range")
 		}
@@ -187,6 +218,7 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 	out.Quads, out.Vertices, out.Samples, out.Lenses, out.Ops, out.Layers, out.Atlas = pointer(p.quads), pointer(p.vertices), pointer(p.samples), pointer(p.lenses), pointer(p.ops), pointer(p.layers), pointer(p.atlas)
 	out.QuadCount, out.VertexCount, out.SampleCount, out.LensCount, out.OpCount, out.LayerCount = uint32(len(p.quads)), uint32(len(p.vertices)), uint32(len(p.samples)), uint32(len(p.lenses)), uint32(len(p.ops)), uint32(len(p.layers))
 	out.ProjectileModels = uint32(len(p.retainedModels))
+	out.Smoke, out.SmokeCount = pointer(p.smoke), uint32(len(p.smoke))
 	out.Width, out.Height, out.Version, out.Dirty = uint32(atlas.Width), uint32(atlas.Height), version, dirty
 	return out, nil
 }

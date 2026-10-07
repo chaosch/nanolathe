@@ -23,7 +23,7 @@ var shaderSource string
 type bridge struct {
 	pointerCapture func(uintptr, int32) int32
 	create         func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
-	mesh           func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr) int32
+	mesh           func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, uintptr, int32) int32
 	assets         func(uintptr, uintptr) int32
 	texture        func(uintptr, int32, int32, int32, uintptr) int32
 	configure      func(uintptr, uintptr, uintptr, int32) int32
@@ -124,7 +124,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(waterShaderSource + "\n" + shaderSource)
+	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + shaderSource + "\n" + shadowShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -155,7 +155,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if len(offsets) == 0 && scene.Live == nil {
 			continue
 		}
-		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals)) == 0 {
+		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals), pointer(m.PrimitiveCenters), int32(len(m.PrimitiveCenters))) == 0 {
 			return nil, fmt.Errorf("metalproto: upload mesh %s", m.Name)
 		}
 		runtime.KeepAlive(m)
@@ -245,6 +245,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			deadline = time.Now()
 			entry = deadline
 		}
+		waitStart := time.Now()
 		if opts.FPS > 0 && i > 0 {
 			// Keep animation on started, but skip missed presentation slots.
 			// A stall must not be repaid by submitting a catch-up burst.
@@ -259,6 +260,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				time.Sleep(delay)
 			}
 		}
+		drawStart := time.Now()
 		if i == opts.Warmup {
 			if opts.Benchmark != nil {
 				before = measurement.before
@@ -271,11 +273,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if opts.Benchmark != nil {
 			seconds = float64(i) / float64(opts.FPS)
 		}
-		var drawStart time.Time
 		var hostRow BenchmarkFrame
 		if opts.Benchmark != nil {
-			drawStart = time.Now()
-			hostRow = hostTiming.begin(i, entry, drawStart)
+			hostRow = hostTiming.beginPaced(i, entry, waitStart, drawStart)
 		}
 		var status int32
 		var frameMetrics liveRow

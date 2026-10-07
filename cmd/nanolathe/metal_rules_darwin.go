@@ -11,7 +11,7 @@ import (
 
 // applyMetalModelRules borrows only the host's pinned current publication.
 // Unit/feature policy stays in the production client; projectiles retain their
-// direct keyless, shadowless model path [03 §5.4][03 R-COMP-02 §6].
+// direct keyless model path [03 §5.4][03 R-COMP-02 §6].
 func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame) []meshscene.ModelRules {
 	if world == nil || live == nil || current == nil {
 		return nil
@@ -22,7 +22,7 @@ func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, li
 		units[current.Units[i].InstanceID] = &current.Units[i]
 	}
 	for i := range current.Features {
-		features[current.Features[i].InstanceID] = &current.Features[i]
+		features[uint64(i)+1] = &current.Features[i]
 	}
 	return world.ApplyModelRules(live, func(kind uint8, id uint64) meshscene.ModelRules {
 		resolved := client.RetainedModelRules{KeyBias: render.NanoframeHeightBias}
