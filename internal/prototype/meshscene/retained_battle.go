@@ -1,6 +1,8 @@
 package meshscene
 
 import (
+	"time"
+
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -13,6 +15,24 @@ import (
 type RetainedBattle struct {
 	source   *battleSource
 	previous *battlePublication
+	// Timings splits the last Frame build in milliseconds: maps, units,
+	// features, projectiles, sprites, debris, fog, census, materials (diagnostic).
+	Timings              [9]float64
+	UnitPose, UnitVisual float64
+}
+
+// sectionTiming is a diagnostic split timer for publication builds.
+type sectionTiming struct {
+	mark         time.Time
+	ms           [9]float64
+	pose, visual time.Duration
+}
+
+func (t *sectionTiming) begin() { t.mark = time.Now(); t.ms = [9]float64{}; t.pose, t.visual = 0, 0 }
+func (t *sectionTiming) split(i int) {
+	now := time.Now()
+	t.ms[i] = float64(now.Sub(t.mark)) / 1e6
+	t.mark = now
 }
 
 func RetainBattle(opts BattleOptions, fs *vfs.FS, sess *session.Session) (*Scene, *RetainedBattle, error) {
@@ -62,6 +82,9 @@ func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32
 	}
 	pub := r.source.buildPublication(previous, current, camera, old)
 	r.source.applyStandaloneMaterials(pub, current)
+	r.source.timing.split(8)
+	r.Timings = r.source.timing.ms
+	r.UnitPose, r.UnitVisual = float64(r.source.timing.pose)/1e6, float64(r.source.timing.visual)/1e6
 	r.previous = pub
 	return pub.frame
 }

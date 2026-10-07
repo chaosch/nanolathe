@@ -40,6 +40,8 @@ type battleSource struct {
 	palette                                           *palette.Tables
 	fogGray, fogBlack                                 [4]*formats.GAFEntry
 	poseScratch                                       battlePoseScratch
+	timing                                            sectionTiming
+	materialCache                                     map[modelMaterialCacheKey][]NativeModelMaterial
 	latest                                            atomic.Pointer[battlePublication]
 	mu                                                sync.Mutex // short camera/lifecycle exchange; never held while stepping
 	camera                                            [3]float32

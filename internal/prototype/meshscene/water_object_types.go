@@ -31,7 +31,13 @@ type WaterSourceCounts struct{ Sprites, Lines int }
 // so stock sources may use all remaining vertices, not only their reserve
 // (water_reflections.go; DESIGN_GPU_RENDERER §26.4, §32.2).
 func NewWaterSources(layers []EffectLayer, palette [256][4]byte, lookup func(*formats.GAFFrame) ([4]float32, error)) ([]WaterSource, WaterSourceCounts, error) {
-	var out []WaterSource
+	return AppendWaterSources(nil, layers, palette, lookup)
+}
+
+// AppendWaterSources is NewWaterSources appending into dst[:0], so a presenter
+// can reuse last draw's storage once native submission has copied it.
+func AppendWaterSources(dst []WaterSource, layers []EffectLayer, palette [256][4]byte, lookup func(*formats.GAFFrame) ([4]float32, error)) ([]WaterSource, WaterSourceCounts, error) {
+	out := dst[:0]
 	var counts WaterSourceCounts
 	transform := func(w drawlist.WorldSpace) (record, factor float32) {
 		record = float32(camera.ZoomOf(w.Step)) / float32(camera.ZoomUnit)

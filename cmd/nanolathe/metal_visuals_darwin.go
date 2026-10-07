@@ -3,6 +3,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
@@ -16,7 +18,11 @@ import (
 // ordinary stock passes and production Enhanced lighting/glow without rerunning
 // presentation RNG or compiling the retained unit meshes a second time [I6].
 type metalVisuals struct {
-	adapter        *metalhud.Foreground
+	adapter *metalhud.Foreground
+	effects metalEffectRecorder
+	water   []meshscene.WaterSource
+	// parts: record+adapter, lighting/glow sources, glow frame, water (ms, diagnostic).
+	parts          [4]float64
 	lighting       *gpurender.RetainedLighting
 	glow           *gpurender.RetainedGlow
 	palette        [256][4]byte
@@ -40,7 +46,10 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 		v.epoch += v.version + 1
 		v.version = 0
 	}
-	recorded, err := recordMetalEffects(cl, v.adapter)
+	mark := time.Now()
+	split := func(i int) { now := time.Now(); v.parts[i] = float64(now.Sub(mark)) / 1e6; mark = now }
+	recorded, err := v.effects.record(cl, v.adapter)
+	split(0)
 	if err != nil {
 		return err
 	}
@@ -86,6 +95,7 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 			}
 		}
 	}
+	split(1)
 	k := float32(1)
 	step := float32(camera.ZoomOf(world.Step)) / float32(camera.ZoomUnit)
 	if step > 0 {
@@ -128,11 +138,17 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	v.frame.Glow.Parameters = meshscene.RetainedGlowParameters(parameters)
 	v.frame.Glow.Parameters.Blur[0] *= scale
 	v.frame.Glow.Parameters.Blur[1] = min(v.frame.Glow.Parameters.Blur[1]*scale, float32(24.0/2.5))
-	waterSources, _, err := metalWaterSources(cl, v.adapter, v.layers[:])
+	split(2)
+	waterSources, _, err := metalWaterSources(v.water, cl, v.adapter, v.layers[:])
 	if err != nil {
 		return err
 	}
+	if waterSources != nil {
+		v.water = waterSources
+	}
 	live.WaterSources = waterSources
 	live.StockEffects = &v.frame
+	split(3)
+	v.parts[2], v.parts[3] = v.effects.recordMS, v.effects.adaptMS
 	return nil
 }

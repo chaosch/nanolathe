@@ -78,6 +78,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		matrixCapacity = max(matrixCapacity, len(old.frame.Current)+128)
 	}
 	pub := &battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: make([]Mat4, 0, matrixCapacity), Previous: make([]Mat4, 0, matrixCapacity), Instances: make([]Instance, 0, len(current.Units)+len(current.Projectiles))}, byID: make(map[battleEntityKey]battlePoseSpan, len(current.Units)+len(current.Projectiles))}
+	s.timing.begin()
 	census := battleCensus{Tick: current.Tick, Units: len(current.Units), Projectiles: len(current.Projectiles), Effects: len(current.Effects), Features: len(current.Features), Strips: len(current.Strips), Fragments: len(current.Fragments), Debris: len(current.Debris)}
 	previousUnits := make(map[uint64]*frame.UnitView, len(current.Units))
 	previousFeatures := map[uint64]*frame.FeatureView{}
@@ -102,6 +103,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	for i := range current.Units {
 		unitSlots[current.Units[i].Slot] = &current.Units[i]
 	}
+	s.timing.split(0)
 	currentUnits := make(map[uint64]bool, len(current.Units))
 	for _, u := range current.Units {
 		currentUnits[u.InstanceID] = true
@@ -146,9 +148,14 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			prior = nil
 		}
 		key := battleEntityKey{kind: 1, id: u.InstanceID}
+		t0 := time.Now()
 		s.appendUnit(pub, key, mesh, u, prior, old)
+		t1 := time.Now()
 		s.applyUnitVisual(pub, u, current)
+		t2 := time.Now()
 		s.applyUnitSubject(pub, u, unitSlots)
+		s.timing.pose += t1.Sub(t0)
+		s.timing.visual += t2.Sub(t1)
 		census.SubmittedUnits++
 	}
 	for id := range previousUnits {
@@ -156,6 +163,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.Deaths++
 		}
 	}
+	s.timing.split(1)
 	for fi, f := range current.Features {
 		if f.IsBurning {
 			census.BurningFeatures++
@@ -198,6 +206,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		s.applyFeatureVisual(pub, f, current)
 		census.SubmittedFeatures++
 	}
+	s.timing.split(2)
 	for _, p := range current.Projectiles {
 		// The ordinary dispatcher skips burst schedulers and recognizes only
 		// these three model families; an authored Model cannot override the
@@ -236,12 +245,16 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		})
 		census.SubmittedProjectiles++
 	}
+	s.timing.split(3)
 	if s.sprites != nil {
 		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(nil, nil, previous, current, camera, s.viewport)
 		pub.frame.Distortions = s.sprites.Distortions(nil, previous, current, camera, s.viewport)
 	}
+	s.timing.split(4)
 	census.SubmittedDebris = s.appendDetachedDebris(pub, current, camera, s.spectator)
+	s.timing.split(5)
 	pub.frame.Fog = s.appendFog(current, old)
+	s.timing.split(6)
 	pub.fogSource, pub.fogVersion = current.Fog.Source, current.Fog.Version
 	census.SubmittedDistortions = len(pub.frame.Distortions)
 	census.SubmittedModels = len(pub.frame.Instances)
@@ -260,6 +273,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 	}
 	pub.census = census
+	s.timing.split(7)
 	return pub
 }
 

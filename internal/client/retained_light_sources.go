@@ -29,7 +29,17 @@ type RetainedLightSources struct {
 // not rasterize models or rebuild unit meshes; packet admission remains exact.
 // It changes no observer history and consumes no presentation or session RNG.
 func (c *Client) RecordRetainedLightSources() RetainedLightSources {
+	return c.recordRetainedLightSources(nil)
+}
+
+// recordRetainedLightSources copies into storage's reusable lists and slices
+// when storage is non-nil; the result is then valid until the next call.
+func (c *Client) recordRetainedLightSources(storage *RetainedEffectStorage) RetainedLightSources {
 	var out RetainedLightSources
+	if storage != nil {
+		out.Art, out.Leaves, out.Wrecks = storage.art[:0], storage.leaves[:0], storage.wrecks[:0]
+		defer func() { storage.art, storage.leaves, storage.wrecks = out.Art, out.Leaves, out.Wrecks }()
+	}
 	if c == nil || c.cam == nil {
 		return out
 	}
@@ -62,7 +72,7 @@ func (c *Client) RecordRetainedLightSources() RetainedLightSources {
 		}
 	}
 	c.emitWorldEnd()
-	out.Short = c.list.Clone()
+	out.Short = c.cloneRetained(storage, func(s *RetainedEffectStorage) *drawlist.List { return &s.short })
 	c.list.Reset()
 	c.emitWorldBegin()
 	// The feature tail within each pass-A row retains source enumeration order;
@@ -80,7 +90,7 @@ func (c *Client) RecordRetainedLightSources() RetainedLightSources {
 		}
 	}
 	c.emitWorldEnd()
-	out.Ground = c.list.Clone()
+	out.Ground = c.cloneRetained(storage, func(s *RetainedEffectStorage) *drawlist.List { return &s.ground })
 	for _, list := range []*drawlist.List{&out.Short, &out.Ground} {
 		list.VisitLightSources(func(s drawlist.Sprite) { out.Art = append(out.Art, s) })
 		list.VisitSprites(func(s drawlist.Sprite) { out.Leaves = append(out.Leaves, s) })

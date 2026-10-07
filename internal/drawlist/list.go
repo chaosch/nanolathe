@@ -653,6 +653,8 @@ type List struct {
 
 	classicImages    []*ClassicModelImage
 	classicImageNext int
+	// store is CloneInto's reusable copy storage; nil until first used.
+	store *cloneStore
 }
 
 // RecordClear appends the frame-clear marker in record order. It carries no

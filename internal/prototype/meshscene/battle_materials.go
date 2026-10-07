@@ -25,6 +25,21 @@ type ModelMaterialResolver interface {
 	Resolve(piece, primitive int, current bool) (ModelMaterialSelection, bool)
 }
 
+// ModelMaterialKeyer is optionally implemented by a resolver whose selections
+// are a pure function of a comparable key: no animated cursor and no per-draw
+// input. A walk with an equal key over the same mesh reuses the earlier result.
+type ModelMaterialKeyer interface {
+	CacheKey() (any, bool)
+}
+
+type modelMaterialCacheKey struct {
+	key  any
+	mesh int
+}
+
+// modelMaterialCacheLimit bounds keys kept after texture-generation changes.
+const modelMaterialCacheLimit = 4096
+
 type ModelMaterialRequest struct {
 	Model            string
 	Piece, Primitive int
@@ -97,6 +112,26 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	var prepared ModelMaterialResolver
 	if s.materialSource != nil && s.materialSource.Prepare != nil {
 		prepared = s.materialSource.Prepare(q)
+	}
+	// Cached walks are shared read-only: native packing copies them.
+	var cacheKey modelMaterialCacheKey
+	cacheable := false
+	if keyer, ok := prepared.(ModelMaterialKeyer); ok {
+		if key, ok := keyer.CacheKey(); ok {
+			cacheKey, cacheable = modelMaterialCacheKey{key, instance.Mesh}, true
+			if cached, ok := s.materialCache[cacheKey]; ok {
+				instance.Materials = cached
+				return
+			}
+		}
+	}
+	if cacheable {
+		defer func() {
+			if s.materialCache == nil || len(s.materialCache) >= modelMaterialCacheLimit {
+				s.materialCache = make(map[modelMaterialCacheKey][]NativeModelMaterial)
+			}
+			s.materialCache[cacheKey] = instance.Materials
+		}()
 	}
 	for i, slot := range mesh.MaterialSlots {
 		q.Piece, q.Primitive = slot.Piece, slot.Primitive
