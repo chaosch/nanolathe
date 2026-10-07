@@ -9,7 +9,6 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
-	"github.com/nanolathe-gg/nanolathe/internal/effects"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/vfs"
 )
@@ -18,9 +17,14 @@ type spriteArt struct {
 	cell, width, height, xoff, yoff int
 	hold                            int32
 	hue                             [3]float32
+	emission                        [3]float32
 	identity                        *formats.GAFFrame
 }
-type spriteSequence struct{ frames []spriteArt }
+type spriteSequence struct {
+	frames []spriteArt
+	extent float32
+	cycle  uint64
+}
 type spriteCell struct {
 	region atlasRegion
 	rgba   []byte
@@ -38,8 +42,7 @@ type spriteBankCensus struct {
 // NewBattleSprites resolves immutable art before the measured loop. The bank
 // set follows content's SimArt requests; feature bodies/shadows and all event
 // frames are prepared from authored names [05 R-FEAT-01 §10][06 R-WFX-01 §1].
-// Animated rest features deliberately retain their first frame in this
-// experiment; the production rest cursor is presentation-owned [03 §4.4].
+// Rest animation samples the definition-shared authored cycle [03 §4.4].
 // When featureNames are provided, only those placed feature roots plus every
 // battle-catalog unit corpse and their authored successor closure are loaded.
 // All catalog units cover future factory products without predicting gameplay.
@@ -54,9 +57,6 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 		b.colors[i] = [4]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255, 1}
 	}
 	b.logical = pal.Logical
-	for i := range b.flashSides {
-		b.flashSides[i] = effects.FlashTableSides(i)
-	}
 	// nil means all entries/all frames of a default or weapon effect bank.
 	requests := map[string]map[string]bool{content.DefaultEffectBank: nil}
 	for _, w := range cat.Weapons {
@@ -84,7 +84,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 		for _, name := range []string{f.SeqName, f.SeqNameShad} {
 			if name = content.CanonicalKey(name); name != "" {
 				if _, exists := requests[bank][name]; !exists {
-					requests[bank][name] = false
+					requests[bank][name] = f.Animating != 0
 				}
 			}
 		}
@@ -149,32 +149,11 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 				}
 				w, h := int(f.Width), int(f.Height)
 				census.MaxWidth, census.MaxHeight = max(census.MaxWidth, w), max(census.MaxHeight, h)
-				rgba := make([]byte, w*h*4)
-				var hue [3]float32
-				var weight float32
-				for pixel := 0; pixel < w*h; pixel++ {
-					if pixel >= len(f.Pixels) || pixel >= len(f.Transparent) || f.Transparent[pixel] {
-						continue
-					}
-					c := pal.Base[f.Pixels[pixel]]
-					copy(rgba[pixel*4:pixel*4+3], c[:3])
-					rgba[pixel*4+3] = 255
-					brightness := float32(max(c[0], max(c[1], c[2]))) / 255
-					weight += brightness
-					for channel := 0; channel < 3; channel++ {
-						hue[channel] += float32(c[channel]) / 255 * brightness
-					}
-				}
-				if weight > 0 {
-					for channel := range hue {
-						hue[channel] /= weight
-					}
-				}
-				b.alternateChildrenOmitted += spriteAlternateChildren(f)
-				// PlainPixels already contains the ordinary composite graph. ALP
-				// children need destination-index access absent from this RGBA host.
-				// TODO(question): port destination-dependent GAF ALP children to the
-				// native composite; until then decoded plain children alone draw [fmt gaf].
+				rgba := spriteFrameRGBA(f, pal)
+				b.alternateChildrenPrepared += spriteAlternateChildren(f)
+				hue, emission := spriteEmission(rgba)
+				seq.extent = max(seq.extent, float32(max(f.Width, f.Height)))
+				seq.cycle += uint64(max(meta.Frames[i].Value, 1))
 				b.rawSpritePixels += int64(w) * int64(h)
 				census.RawPixels += int64(w) * int64(h)
 				var minX, minY int
@@ -206,7 +185,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 				// Top-left after cropping is anchor-oldOffset+min: subtract min
 				// from the offset so every retained texel keeps its authored point.
 				// The dispatch identity keeps the original authored canvas metadata.
-				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset) - minX, yoff: int(f.YOffset) - minY, hold: max(int32(meta.Frames[i].Value), 1), hue: hue, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
+				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset) - minX, yoff: int(f.YOffset) - minY, hold: max(int32(meta.Frames[i].Value), 1), hue: hue, emission: emission, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
 				b.framesLoaded++
 				census.Frames++
 			}
