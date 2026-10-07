@@ -10,6 +10,14 @@ float2 nm_wo_world(float2 pixel,constant Uniforms& u){return (pixel-u.viewport.x
 vertex nm_wo_Reflection nm_wo_reflection_vertex(uint vid [[vertex_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const ModelRules* rules [[buffer(10)]],device const ModelSlot* slots [[buffer(13)]],device const uint* slotSelectors [[buffer(14)]],device const nm_wo_Object* objects [[buffer(18)]],constant WaterUniform& water [[buffer(9)]],constant float4& control [[buffer(19)]]){
  nm_wo_Reflection o={};o.position=float4(2,2,2,1);
  Vertex v=vertices[vid];float4x4 m=poses[offsets[0]+v.piece];uint selector=slotSelectors[0];if(m[3].w<.5||selector==0)return o;
+ // Production records a reflection only after positive original-view face
+ // admission. The cross-column (cofactor) transform maps its authored face
+ // normal without assuming the fixed-point endpoint basis is orthonormal.
+ // Dot with cross(screen-X,screen-Y), where screen-Y=world-Z-height/2.
+ // This is the planar retained-face sign before production integer rounding;
+ // folded rings remain part of the retained face-mapping limit above.
+ float3 n=cross(m[1].xyz,m[2].xyz)*v.n.x+cross(m[2].xyz,m[0].xyz)*v.n.y+cross(m[0].xyz,m[1].xyz)*v.n.z;
+ float heightScale=u.mode.x>.5?.5:1.0;if(dot(n,float3(0,-1,-heightScale))<=0)return o;
  ModelSlot slot=slots[selector-1];float3 w=(m*float4(float3(v.p),1)).xyz;float sea=objects[0].params.y;
  float4 original=project(w,u);float2 source=float2((original.x+1)*.5,(1-original.y)*.5)*u.viewport.xy;
  o.source=slot.atlas.xy+(source-slot.screen.xy)*slot.atlas.zw/slot.screen.zw;o.lo=slot.atlas.xy;o.hi=o.lo+slot.atlas.zw;
@@ -51,8 +59,8 @@ fragment float4 nm_wo_reflection_resolve(nm_wo_Screen in [[stage_in]],texture2d<
  float2 q=in.position.xy+float2(ripple*(.65+water.phase.w*.65)*control.y,0);
  float4 c=nm_wo_sample(source,soft,q,.5,0)+nm_wo_sample(source,soft,q+float2(control.y,0),.25,0)+nm_wo_sample(source,soft,q-float2(control.y,0),.25,0);
  c+=nm_wo_weighted(source,soft,floor(q)+.5,0,.25);
- const float horizontal[4]={.12,.09,.06,.03};for(uint i=0;i<4;i++){float2 d=float2(i+1,0);c+=nm_wo_weighted(source,soft,floor(q+d)+.5,0,horizontal[i])+nm_wo_weighted(source,soft,floor(q-d)+.5,0,horizontal[i]);}
- const float vertical[2]={.06,.015};for(uint i=0;i<2;i++){float2 d=float2(0,i+1);c+=nm_wo_weighted(source,soft,floor(q+d)+.5,0,vertical[i])+nm_wo_weighted(source,soft,floor(q-d)+.5,0,vertical[i]);}
+ const float horizontal[4]={.12,.09,.06,.03};for(uint i=0;i<4;i++){float2 d=float2((i+1)*control.z,0);c+=nm_wo_weighted(source,soft,floor(q+d)+.5,0,horizontal[i])+nm_wo_weighted(source,soft,floor(q-d)+.5,0,horizontal[i]);}
+ const float vertical[2]={.06,.015};for(uint i=0;i<2;i++){float2 d=float2(0,(i+1)*control.z);c+=nm_wo_weighted(source,soft,floor(q+d)+.5,0,vertical[i])+nm_wo_weighted(source,soft,floor(q-d)+.5,0,vertical[i]);}
  c.rgb*=float3(.76,.88,.94);return c*(.25*coverage);
 }
 struct nm_wo_Commit {float4 position [[position]];float2 source;float4 screen [[flat]],atlas [[flat]];float opacity [[flat]],underwater [[flat]];};
@@ -90,4 +98,18 @@ fragment float4 nm_wo_surface_fragment(nm_wo_Screen in [[stage_in]],texture2d<fl
  if(u.lightControl.y>.5)color=nm_light_ground_resolve(color,groundField.sample(linear,uv).rgb);
  if(u.visual.x>.5)color.rgb*=1-shadows.sample(linear,uv).r;
  return color;
+}
+
+struct nm_wo_StockVertex {float4 positionHeight,uv,color,bounds;};
+struct nm_wo_StockOut {float4 position [[position]];float2 uv;float4 color [[flat]],bounds [[flat]];float height;float kind [[flat]];};
+vertex nm_wo_StockOut nm_wo_stock_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const nm_wo_StockVertex* vertices [[buffer(0)]],constant Uniforms& u [[buffer(3)]]){
+ const uint fan[6]={0,1,2,0,2,3};nm_wo_StockVertex v=vertices[iid*4+fan[vid]];nm_wo_StockOut o;o.position=float4(v.positionHeight.x/u.viewport.x*2-1,1-v.positionHeight.y/u.viewport.y*2,0,1);o.uv=v.uv.xy;o.height=v.positionHeight.z;o.kind=v.positionHeight.w;o.color=v.color;o.bounds=v.bounds;return o;
+}
+fragment nm_wo_Source nm_wo_stock_source(nm_wo_StockOut in [[stage_in]],texture2d<float> atlas [[texture(0)]]){
+ // Surface impacts/billboards admit height zero; interpolated beam strokes
+ // drop the part at or below sea. Neither source has model wave/blur ramps.
+ bool sprite=in.kind<1.5;if(sprite?in.height<0:in.height<=0)discard_fragment();
+ float4 c=in.color;
+ if(sprite){if(any(in.uv<in.bounds.xy)||any(in.uv>=in.bounds.zw))discard_fragment();constexpr sampler nearest(coord::pixel,address::clamp_to_edge,filter::nearest);float4 tex=atlas.sample(nearest,in.uv);if(tex.a<.5)discard_fragment();c=float4(tex.rgb,1);}
+ c*=1-smoothstep(64.0,160.0,in.height);nm_wo_Source out;out.color=c;out.soft=float4(0,0,0,c.a);return out;
 }
