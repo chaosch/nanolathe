@@ -14,16 +14,14 @@ func applyMetalWaterObjects(cl *client.Client, world *meshscene.RetainedBattle, 
 	if cl == nil || world == nil || live == nil || current == nil {
 		return nil
 	}
-	units := make(map[uint64]frame.UnitView, len(current.Units))
-	features := make(map[uint64]frame.FeatureView, len(current.Features))
-	projectiles := make(map[uint64]frame.ProjectileView, len(current.Projectiles))
-	for _, v := range current.Units {
+	units := make(map[uint64]*frame.UnitView, len(current.Units))
+	projectiles := make(map[uint64]*frame.ProjectileView, len(current.Projectiles))
+	for i := range current.Units {
+		v := &current.Units[i]
 		units[v.InstanceID] = v
 	}
-	for i, v := range current.Features {
-		features[uint64(i)+1] = v
-	}
-	for _, v := range current.Projectiles {
+	for i := range current.Projectiles {
+		v := &current.Projectiles[i]
 		projectiles[v.PresentationID] = v
 	}
 	resolved := world.ApplyModelRules(live, func(kind uint8, id uint64) meshscene.ModelRules {
@@ -31,15 +29,15 @@ func applyMetalWaterObjects(cl *client.Client, world *meshscene.RetainedBattle, 
 		switch kind {
 		case 1:
 			if v, ok := units[id]; ok {
-				r = cl.RetainedUnitWaterObject(v, current.Tick)
+				r = cl.RetainedUnitWaterObject(*v, current.Tick)
 			}
 		case 2:
-			if v, ok := features[id]; ok {
-				r = cl.RetainedFeatureWaterObject(v)
+			if id > 0 && id <= uint64(len(current.Features)) {
+				r = cl.RetainedFeatureWaterObject(current.Features[id-1])
 			}
 		case 3:
 			if v, ok := projectiles[id]; ok {
-				r = cl.RetainedProjectileWaterObject(v)
+				r = cl.RetainedProjectileWaterObject(*v)
 			}
 		}
 		var p [4]float32

@@ -17,12 +17,8 @@ func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, li
 		return nil
 	}
 	units := make(map[uint64]*frame.UnitView, len(current.Units))
-	features := make(map[uint64]*frame.FeatureView, len(current.Features))
 	for i := range current.Units {
 		units[current.Units[i].InstanceID] = &current.Units[i]
-	}
-	for i := range current.Features {
-		features[uint64(i)+1] = &current.Features[i]
 	}
 	return world.ApplyModelRules(live, func(kind uint8, id uint64) meshscene.ModelRules {
 		resolved := client.RetainedModelRules{KeyBias: render.NanoframeHeightBias}
@@ -32,8 +28,8 @@ func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, li
 				resolved = cl.RetainedUnitRules(*unit, current.Tick)
 			}
 		case 2: // Retained battle feature publication identity.
-			if feature := features[id]; feature != nil {
-				resolved = cl.RetainedFeatureRules(*feature)
+			if id > 0 && id <= uint64(len(current.Features)) {
+				resolved = cl.RetainedFeatureRules(current.Features[id-1])
 			}
 		}
 		return metalModelRules(resolved)
