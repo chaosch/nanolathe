@@ -9,6 +9,7 @@ type LiveSource interface {
 }
 
 type Input struct {
+	Events      []NativeEvent
 	PanX, PanZ  float32 // held arrow/WASD axes, -1..1
 	Zoom        float32 // accumulated wheel delta
 	PauseToggle bool
@@ -31,6 +32,7 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	Overlay           []OverlayQuad
 	Previous, Current []Mat4
 	Instances         []Instance
 	Sprites           []Sprite
@@ -43,6 +45,9 @@ type LiveFrame struct {
 }
 
 type BattleOptions struct {
+	Playable   bool
+	Difficulty int
+	ComputerAI string // classic or modern; host selection only
 	LoadOptions
 	ArmySize, Preticks int
 	Seed               uint32

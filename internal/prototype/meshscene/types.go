@@ -35,6 +35,8 @@ type Instance struct {
 }
 type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
+	Playable      bool
+	OverlayAtlas  Texture
 	Name          string
 	Meshes        []Mesh
 	Atlas         Texture
