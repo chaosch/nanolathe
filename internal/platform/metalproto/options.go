@@ -9,4 +9,5 @@ type Options struct {
 	Width, Height, Frames, Warmup, FPS      int
 	Offscreen, VSync, Effects, VisualPasses bool
 	OutputDir, LibraryPath                  string
+	Benchmark                               *BenchmarkOptions
 }
