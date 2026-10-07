@@ -10,7 +10,7 @@ import (
 )
 
 type liveRow struct {
-	OverlayQuads, OverlayBytes                                                      int
+	OverlayQuads, OverlayBytes, OverlayTextureBytes                                 int
 	Seconds                                                                         float64
 	Alpha                                                                           float32
 	Tick                                                                            uint32
@@ -39,7 +39,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 	for i, r := range rows {
 		next[i] = r.NextMS
 		prep[i] = r.PrepMS
-		for name, value := range map[string]float64{"overlay_quads": float64(r.OverlayQuads), "overlay_upload_bytes": float64(r.OverlayBytes), "distortions": float64(r.Distortions), "fog_upload_bytes": float64(r.FogBytes), "constructing_instances": float64(r.Constructing), "shadow_instances": float64(r.ShadowInstances), "shadow_draws": float64(r.ShadowDraws), "outline_draws": float64(r.OutlineDraws), "shadow_triangles": float64(r.ShadowIndices / 3), "outline_edges": float64(r.OutlineIndices / 2), "instances": float64(r.Instances), "poses": float64(r.Poses), "sprites": float64(r.Sprites), "lights": float64(r.Lights), "dropped_lights": float64(r.DroppedLights), "model_draws": float64(r.ModelDraws), "sprite_draws": float64(r.SpriteDraws), "model_vertices": float64(r.ModelVertices), "model_triangles": float64(r.ModelIndices / 3), "sprite_triangles": float64(r.Sprites * 2), "dynamic_upload_bytes": float64(r.UploadBytes)} {
+		for name, value := range map[string]float64{"overlay_texture_upload_bytes": float64(r.OverlayTextureBytes), "overlay_quads": float64(r.OverlayQuads), "overlay_upload_bytes": float64(r.OverlayBytes), "distortions": float64(r.Distortions), "fog_upload_bytes": float64(r.FogBytes), "constructing_instances": float64(r.Constructing), "shadow_instances": float64(r.ShadowInstances), "shadow_draws": float64(r.ShadowDraws), "outline_draws": float64(r.OutlineDraws), "shadow_triangles": float64(r.ShadowIndices / 3), "outline_edges": float64(r.OutlineIndices / 2), "instances": float64(r.Instances), "poses": float64(r.Poses), "sprites": float64(r.Sprites), "lights": float64(r.Lights), "dropped_lights": float64(r.DroppedLights), "model_draws": float64(r.ModelDraws), "sprite_draws": float64(r.SpriteDraws), "model_vertices": float64(r.ModelVertices), "model_triangles": float64(r.ModelIndices / 3), "sprite_triangles": float64(r.Sprites * 2), "dynamic_upload_bytes": float64(r.UploadBytes)} {
 			counts[name] = append(counts[name], value)
 		}
 	}
@@ -69,11 +69,11 @@ func writeLiveRows(dir string, rows []liveRow, warmup, firstFrame int) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	if err = w.Write([]string{"frame", "warmup", "tick", "source_seconds", "alpha", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes", "distortions", "fog_upload_bytes", "constructing_instances", "shadow_instances", "shadow_draws", "outline_draws", "shadow_triangles", "outline_edges", "overlay_quads", "overlay_upload_bytes"}); err != nil {
+	if err = w.Write([]string{"frame", "warmup", "tick", "source_seconds", "alpha", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes", "distortions", "fog_upload_bytes", "constructing_instances", "shadow_instances", "shadow_draws", "outline_draws", "shadow_triangles", "outline_edges", "overlay_quads", "overlay_upload_bytes", "overlay_texture_upload_bytes"}); err != nil {
 		return err
 	}
 	for i, r := range rows {
-		if err = w.Write([]string{strconv.Itoa(i + firstFrame), strconv.FormatBool(i+firstFrame < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.Seconds, 'f', 9, 64), strconv.FormatFloat(float64(r.Alpha), 'f', 9, 64), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes), fmt.Sprint(r.Distortions), fmt.Sprint(r.FogBytes), fmt.Sprint(r.Constructing), fmt.Sprint(r.ShadowInstances), fmt.Sprint(r.ShadowDraws), fmt.Sprint(r.OutlineDraws), fmt.Sprint(r.ShadowIndices / 3), fmt.Sprint(r.OutlineIndices / 2), fmt.Sprint(r.OverlayQuads), fmt.Sprint(r.OverlayBytes)}); err != nil {
+		if err = w.Write([]string{strconv.Itoa(i + firstFrame), strconv.FormatBool(i+firstFrame < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.Seconds, 'f', 9, 64), strconv.FormatFloat(float64(r.Alpha), 'f', 9, 64), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes), fmt.Sprint(r.Distortions), fmt.Sprint(r.FogBytes), fmt.Sprint(r.Constructing), fmt.Sprint(r.ShadowInstances), fmt.Sprint(r.ShadowDraws), fmt.Sprint(r.OutlineDraws), fmt.Sprint(r.ShadowIndices / 3), fmt.Sprint(r.OutlineIndices / 2), fmt.Sprint(r.OverlayQuads), fmt.Sprint(r.OverlayBytes), fmt.Sprint(r.OverlayTextureBytes)}); err != nil {
 			return err
 		}
 	}
