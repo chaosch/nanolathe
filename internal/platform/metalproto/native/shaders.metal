@@ -167,3 +167,15 @@ fragment float4 distortion_fragment(DistortionOut in [[stage_in]],texture2d<floa
  }
  float2 uv=(in.position.xy+shift*u.camera.z)/u.viewport.xy;return float4(source.sample(s,clamp(uv,float2(0),float2(1))).rgb,1);
 }
+
+// Display-pixel HUD batch. It is composed after final world/fog, without depth.
+struct OverlayQuad { float4 rect,uv,color,params; };
+struct OverlayOut { float4 position [[position]]; float2 uv; float4 color; uint textureKind [[flat]]; };
+vertex OverlayOut overlay_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const OverlayQuad* quads [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
+ const float2 corners[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
+ OverlayQuad q=quads[iid];float2 pixels=q.rect.xy+corners[v]*q.rect.zw;OverlayOut out;out.position=float4(pixels.x/u.viewport.x*2-1,1-pixels.y/u.viewport.y*2,0,1);out.uv=mix(q.uv.xy,q.uv.zw,corners[v]);out.color=q.color;out.textureKind=uint(q.params.x);return out;
+}
+fragment float4 overlay_fragment(OverlayOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],texture2d<float> terrain [[texture(1)]],texture2d<float> fog [[texture(2)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
+ float4 tex=in.textureKind==1?terrain.sample(s,in.uv):in.textureKind==2?fog.sample(s,in.uv):atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;return float4(tex.rgb*in.color.rgb*alpha,alpha);
+}

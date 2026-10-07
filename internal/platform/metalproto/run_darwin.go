@@ -29,6 +29,8 @@ type bridge struct {
 	frame     func(uintptr, uintptr, uintptr, float32, float64) int32
 	liveFrame func(uintptr, uintptr) int32
 	input     func(uintptr, uintptr)
+	events    func(uintptr, uintptr, int32) int32
+	playable  func(uintptr, int32)
 	drain     func(uintptr)
 	rows      func(uintptr, uintptr, int32) int32
 	capture   func(uintptr, uintptr) int32
@@ -73,10 +75,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if opts.Height == 0 {
 		opts.Height = 1080
 	}
-	if opts.Frames == 0 {
-		opts.Frames = 600
-	}
-	if opts.Width < 1 || opts.Height < 1 || opts.Frames < 1 || opts.Warmup < 0 || opts.FPS < 0 || opts.Frames+opts.Warmup > math.MaxInt32 {
+	interactive := opts.Frames == 0
+	if opts.Width < 1 || opts.Height < 1 || opts.Frames < 0 || opts.Warmup < 0 || opts.FPS < 0 || opts.Frames > math.MaxInt32-opts.Warmup || interactive && opts.Offscreen {
 		return nil, fmt.Errorf("metalproto: invalid dimensions or frame counts")
 	}
 	if opts.OutputDir == "" {
@@ -112,6 +112,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.frame, lib, "nm_frame")
 	purego.RegisterLibFunc(&b.liveFrame, lib, "nm_live_frame")
 	purego.RegisterLibFunc(&b.input, lib, "nm_input")
+	purego.RegisterLibFunc(&b.events, lib, "nm_events")
+	purego.RegisterLibFunc(&b.playable, lib, "nm_playable")
 	purego.RegisterLibFunc(&b.drain, lib, "nm_drain")
 	purego.RegisterLibFunc(&b.rows, lib, "nm_rows")
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
@@ -119,13 +121,22 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
 	shader := cstring(shaderSource)
 	errorText := make([]byte, 8192)
-	handle := b.create(int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), boolInt(opts.VisualPasses && scene.Live != nil), int32(opts.Frames+opts.Warmup), pointer(shader), pointer(errorText), int32(len(errorText)))
+	capacity := opts.Frames + opts.Warmup
+	if interactive {
+		capacity = 8192
+	}
+	nativeCapacity := capacity
+	if interactive {
+		nativeCapacity = -capacity
+	}
+	handle := b.create(int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), boolInt(opts.VisualPasses && scene.Live != nil), int32(nativeCapacity), pointer(shader), pointer(errorText), int32(len(errorText)))
 	runtime.KeepAlive(shader)
 	runtime.KeepAlive(errorText)
 	if handle == 0 {
 		return nil, fmt.Errorf("metalproto: initialize: %s", terminated(errorText))
 	}
 	defer b.destroy(handle)
+	b.playable(handle, boolInt(scene.Playable))
 	var vertexBytes, indexBytes, instanceBytes, drawnVertices, drawnIndices, drawCalls uint64
 	for i, m := range scene.Meshes {
 		var offsets []uint32
@@ -161,6 +172,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	textures := []meshscene.Texture{scene.Atlas, scene.Terrain}
 	if scene.Live != nil {
 		textures = append(textures, scene.SpriteAtlas)
+		if len(scene.OverlayAtlas.RGBA) > 0 {
+			textures = append(textures, scene.OverlayAtlas)
+		}
 	}
 	for i, t := range textures {
 		if b.texture(handle, int32(i), int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
@@ -176,7 +190,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		return nil, fmt.Errorf("metalproto: allocate pose buffers")
 	}
 	runtime.KeepAlive(scene)
-	rows := make([]nativeRow, opts.Frames+opts.Warmup)
+	rows := make([]nativeRow, capacity)
+	events := make([]meshscene.NativeEvent, 8192)
 	var liveRows []liveRow
 	var packing livePacking
 	if scene.Live != nil {
@@ -193,7 +208,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if opts.FPS > 0 {
 		interval = time.Duration(float64(time.Second) / float64(opts.FPS))
 	}
-	for i := 0; i < len(rows); i++ {
+	for i := 0; interactive || i < len(rows); i++ {
 		if opts.FPS > 0 && i > 0 {
 			// Keep animation on started, but skip missed presentation slots.
 			// A stall must not be repaid by submitting a catch-up burst.
@@ -212,11 +227,17 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		seconds := time.Since(started).Seconds()
 		var status int32
+		var frameMetrics liveRow
 		if scene.Live != nil {
 			var input nativeInput
 			b.input(handle, uintptr(unsafe.Pointer(&input)))
+			eventCount := int(b.events(handle, pointer(events), int32(len(events))))
+			runtime.KeepAlive(events)
+			if eventCount < 0 || eventCount > len(events) {
+				return nil, fmt.Errorf("metalproto: invalid native event count")
+			}
 			nextStart := time.Now()
-			live, err := scene.Live.Next(seconds, meshscene.Input{PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0})
+			live, err := scene.Live.Next(seconds, meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0})
 			nextMS := float64(time.Since(nextStart)) / float64(time.Millisecond)
 			if err != nil {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
@@ -228,7 +249,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			metrics.NextMS = nextMS
 			metrics.PrepMS = float64(time.Since(prepStart)) / float64(time.Millisecond)
-			liveRows[i] = metrics
+			frameMetrics = metrics
 			status = b.liveFrame(handle, uintptr(unsafe.Pointer(&upload)))
 			runtime.KeepAlive(live)
 			runtime.KeepAlive(packing)
@@ -249,6 +270,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if status == 0 {
 			return nil, fmt.Errorf("metalproto: frame %d could not be encoded", i)
 		}
+		if scene.Live != nil {
+			liveRows[i%capacity] = frameMetrics
+		}
 		actual++
 	}
 	submittedAt := time.Now()
@@ -256,7 +280,20 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	runtime.ReadMemStats(&after)
 	n := int(b.rows(handle, pointer(rows), int32(len(rows))))
 	runtime.KeepAlive(rows)
+	if n < 0 || n > len(rows) || n > actual {
+		return nil, fmt.Errorf("metalproto: invalid native timing count")
+	}
 	rows = rows[:n]
+	firstFrame := actual - n
+	if scene.Live != nil {
+		// Native and Go records share the submission sequence; rotate only once,
+		// after exit, rather than draining the GPU while the match is running.
+		ordered := make([]liveRow, n)
+		for i := range ordered {
+			ordered[i] = liveRows[(firstFrame+i)%capacity]
+		}
+		liveRows = ordered
+	}
 	for i, r := range rows {
 		if r.Status != 4 {
 			return nil, fmt.Errorf("metalproto: command buffer %d failed with status %d", i, r.Status)
@@ -277,8 +314,15 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		return nil, fmt.Errorf("metalproto: final PNG readback failed")
 	}
 	runtime.KeepAlive(capture)
-	measured := rows[opts.Warmup:]
+	skipWarmup := max(opts.Warmup-firstFrame, 0)
+	measured := rows[skipWarmup:]
 	report := makeReport(measured, opts, scene, device)
+	report["interactive"] = interactive
+	report["total_frames_submitted"] = actual
+	report["retained_frames"] = n
+	report["first_retained_frame"] = firstFrame
+	report["timing_capacity_frames"] = capacity
+	report["retained_overlay_atlas_bytes"] = len(scene.OverlayAtlas.RGBA)
 	report["submission_elapsed_seconds"] = submittedAt.Sub(measuredStart).Seconds()
 	report["go_allocations"] = after.Mallocs - before.Mallocs
 	report["go_allocated_bytes"] = after.TotalAlloc - before.TotalAlloc
@@ -306,14 +350,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["model_triangles_drawn"] = drawnIndices / 3
 	report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA)
 	if scene.Live != nil {
-		report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA) + len(scene.SpriteAtlas.RGBA)
-		addLiveReport(report, liveRows[opts.Warmup:n])
-		if err := writeLiveRows(opts.OutputDir, liveRows[:n], opts.Warmup); err != nil {
+		report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA) + len(scene.SpriteAtlas.RGBA) + len(scene.OverlayAtlas.RGBA)
+		addLiveReport(report, liveRows[skipWarmup:])
+		if err := writeLiveRows(opts.OutputDir, liveRows, opts.Warmup, firstFrame); err != nil {
 			return nil, err
 		}
 	}
 	report["terrain_triangles_drawn"] = 2
-	if err := writeArtifacts(opts.OutputDir, report, rows, opts.Warmup); err != nil {
+	if err := writeArtifacts(opts.OutputDir, report, rows, opts.Warmup, firstFrame); err != nil {
 		return nil, err
 	}
 	return report, nil
@@ -384,6 +428,9 @@ func validate(s *meshscene.Scene) error {
 	textures := []meshscene.Texture{s.Atlas, s.Terrain}
 	if s.Live != nil {
 		textures = append(textures, s.SpriteAtlas)
+		if len(s.OverlayAtlas.RGBA) > 0 {
+			textures = append(textures, s.OverlayAtlas)
+		}
 	}
 	for _, t := range textures {
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || int64(t.Width)*int64(t.Height)*4 != int64(len(t.RGBA)) {

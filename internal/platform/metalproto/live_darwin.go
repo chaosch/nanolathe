@@ -24,11 +24,11 @@ type nativeAssets struct {
 	Rect                                     [4]float32
 }
 type liveUpload struct {
-	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors uintptr
-	Camera, FogRect                                                                          [4]float32
-	Alpha                                                                                    float32
-	PoseCount, InstanceCount, SpriteCount, LightCount, DistortionCount, FogWidth, FogHeight  uint32
-	Seconds                                                                                  float64
+	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors, Overlay     uintptr
+	Camera, FogRect                                                                                       [4]float32
+	Alpha                                                                                                 float32
+	PoseCount, InstanceCount, SpriteCount, LightCount, DistortionCount, FogWidth, FogHeight, OverlayCount uint32
+	Seconds                                                                                               float64
 }
 type livePacking struct {
 	spans           []meshSpan
@@ -46,10 +46,10 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 152 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 168 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
-	if len(f.Previous) != len(f.Current) || len(f.Current) > math.MaxInt32 || len(f.Instances) > math.MaxInt32 || len(f.Sprites) > math.MaxInt32 || f.Alpha < 0 || f.Alpha > 1 || math.IsNaN(float64(f.Alpha)) {
+	if len(f.Previous) != len(f.Current) || len(f.Current) > math.MaxInt32 || len(f.Instances) > math.MaxInt32 || len(f.Sprites) > math.MaxInt32 || len(f.Overlay) > math.MaxInt32 || f.Alpha < 0 || f.Alpha > 1 || math.IsNaN(float64(f.Alpha)) {
 		return u, r, fmt.Errorf("metalproto: invalid live frame topology or alpha")
 	}
 	for i := range p.cursor {
@@ -87,7 +87,19 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if len(f.Distortions) > 192 || f.Fog.Width < 0 || f.Fog.Height < 0 || uint64(f.Fog.Width)*uint64(f.Fog.Height)*4 != uint64(len(f.Fog.RGBA)) {
 		return u, r, fmt.Errorf("metalproto: invalid visual payload")
 	}
-	u = liveUpload{Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(f.Sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
+	for _, q := range f.Overlay {
+		for _, lane := range [4][4]float32{q.Rect, q.UV, q.Color, q.Params} {
+			for _, value := range lane {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					return u, r, fmt.Errorf("metalproto: non-finite overlay quad")
+				}
+			}
+		}
+		if q.Params[0] != 0 && q.Params[0] != 1 && q.Params[0] != 2 {
+			return u, r, fmt.Errorf("metalproto: invalid overlay texture selector")
+		}
+	}
+	u = liveUpload{Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(f.Sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
 	r.Seconds = seconds
 	r.Alpha = f.Alpha
 	r.Tick = f.Tick
@@ -98,7 +110,9 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	r.DroppedLights = len(f.Lights) - len(lights)
 	r.Distortions = len(f.Distortions)
 	r.FogBytes = len(f.Fog.RGBA)
-	r.UploadBytes = uint64(len(f.Current))*128 + uint64(len(f.Instances))*68 + uint64(len(f.Distortions))*64 + uint64(r.FogBytes) + uint64(len(f.Sprites))*96 + uint64(len(lights))*32
+	r.OverlayQuads = len(f.Overlay)
+	r.OverlayBytes = len(f.Overlay) * 64
+	r.UploadBytes = uint64(len(f.Current))*128 + uint64(len(f.Instances))*68 + uint64(len(f.Distortions))*64 + uint64(r.FogBytes) + uint64(r.OverlayBytes) + uint64(len(f.Sprites))*96 + uint64(len(lights))*32
 	for i, span := range p.spans[:len(p.cursor)] {
 		if span.Count == 0 || len(scene.Meshes[i].Indices) == 0 {
 			continue
