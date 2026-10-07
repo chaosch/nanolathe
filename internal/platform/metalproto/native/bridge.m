@@ -44,12 +44,14 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @property NSUInteger compositionSlotCount,compositionDrawCount,compositionPaintCount;
 @property BOOL composed;
 @property uint32_t terrainFlags;
+@property id<MTLBuffer> projections,projectionFlags;
+@property vector_float4 projectionView;
 @property NSUInteger spriteCount,groundSpriteCount,distortionCount,overlayCount,cloakCount,airCount;
 @property id<MTLTexture> fog,overlayAtlas;
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==648,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==656,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -138,6 +140,7 @@ static void serviceRunLoop(NMRenderer* r) {
  r->runLoopPumps++;
  for(int i=0;i<8;i++){CFRunLoopRunResult result=CFRunLoopRunInMode(kCFRunLoopDefaultMode,0,true);if(result!=kCFRunLoopRunHandledSource)break;r->runLoopSources++;}
 }
+static void nmProjectionBind(NMRing*,id<MTLRenderCommandEncoder>,NSUInteger);
 static BOOL nmRetainedProjectile(NMRenderer*,NMRing*,id<MTLCommandBuffer>,const void*,uint32_t,uint32_t);
 void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int visualPasses,int capacity,const char* shader,char* error,int errorSize) {
  @autoreleasepool {
@@ -367,7 +370,7 @@ static void drawMeshes(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* rin
  NSUInteger meshIndex=0;const uint32_t* spans=ring.spans.bytes;
  for(NMMesh* m in r.meshes){NSUInteger index=meshIndex++;NSUInteger at=(visualPass*r.meshes.count+index)*2;NSUInteger count=ring?spans[at+1]:m.instanceCount;NSUInteger start=ring?spans[index*2]:0;BOOL outline=visualPass==2||visualPass>=6;NSUInteger indices=outline?m.edgeCount:m.indexCount;if(count==0||indices==0)continue;
  [enc setVertexBuffer:m.primitiveCenters offset:0 atIndex:15];[enc setVertexBuffer:m.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring?ring.instances:m.instances offset:start*4 atIndex:1];[enc setVertexBuffer:ring?ring.visuals:m.visuals offset:start*64 atIndex:5];[enc setVertexBuffer:ring?ring.rules:r.emptyLights offset:ring?start*112:0 atIndex:10];[enc setVertexBuffer:ring?ring.materialOffsets:r.emptyLights offset:ring?start*4:0 atIndex:12];[enc setVertexBuffer:visualPass?ring.selectors:r.emptyLights offset:visualPass?spans[at]*4:0 atIndex:8];
- nmFacesBind(ring,enc,start);if(ring.groups)[enc setVertexBuffer:ring.groups.instanceGroups offset:start*16 atIndex:20];
+ nmProjectionBind(ring,enc,start);nmFacesBind(ring,enc,start);if(ring.groups)[enc setVertexBuffer:ring.groups.instanceGroups offset:start*16 atIndex:20];
  [enc drawIndexedPrimitives:outline?MTLPrimitiveTypeLine:MTLPrimitiveTypeTriangle indexCount:indices indexType:MTLIndexTypeUInt32 indexBuffer:outline?m.edges:m.indices indexBufferOffset:0 instanceCount:count];}
 }
 static void encodeOverlay(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
@@ -391,9 +394,9 @@ static MTLRenderPassDescriptor* worldPass(NMRenderer* r,BOOL clearDepth) {
  p.depthAttachment.texture=r.depthImage;p.depthAttachment.loadAction=clearDepth?MTLLoadActionClear:MTLLoadActionLoad;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;return p;
 }
 static void modelBindings(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer> poses,NMRing* ring,NMUniforms u) {
- nmGroupsBind(ring,enc);nmFacesBind(ring,enc,0);[enc setFragmentBuffer:ring?ring.rules:r.emptyLights offset:0 atIndex:24];
+ nmProjectionBind(ring,enc,0);nmGroupsBind(ring,enc);nmFacesBind(ring,enc,0);[enc setFragmentBuffer:ring?ring.rules:r.emptyLights offset:0 atIndex:24];
  [enc setVertexBuffer:ring.groups?ring.groups.instanceGroups:r.emptyLights offset:0 atIndex:20];
- if(!ring){[enc setVertexBuffer:r.emptyLights offset:0 atIndex:21];[enc setFragmentBuffer:r.emptyLights offset:0 atIndex:21];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:22];}
+ if(!ring){[enc setVertexBuffer:r.emptyLights offset:0 atIndex:27];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:28];vector_float4 projectionView={0,0,0,0};[enc setVertexBytes:&projectionView length:16 atIndex:29];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:21];[enc setFragmentBuffer:r.emptyLights offset:0 atIndex:21];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:22];}
  [enc setVertexBuffer:ring?ring.subjectLights:r.emptyLights offset:0 atIndex:17];[enc setVertexBuffer:ring?ring.retainedLights:r.emptyLights offset:0 atIndex:16];[enc setFragmentBuffer:ring?ring.retainedLights:r.emptyLights offset:0 atIndex:16];
  [enc setVertexBuffer:ring?ring.compositionSlots:r.emptyLights offset:0 atIndex:13];[enc setVertexBuffer:ring?ring.compositionSelectors:r.emptyLights offset:0 atIndex:14];
  [enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:8];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:poses offset:0 atIndex:2];[enc setFragmentTexture:r.atlas atIndex:0];[enc setFragmentBuffer:ring?ring.lights:r.emptyLights offset:0 atIndex:4];[enc setVertexBuffer:r.materials offset:0 atIndex:6];[enc setVertexBuffer:r.textureFrames offset:0 atIndex:7];[enc setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[enc setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];
@@ -401,6 +404,7 @@ static void modelBindings(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBu
 static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes);
 static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,NMCloakDraw d,BOOL outline);
 #include "groups.inc"
+#include "projection.inc"
 #include "faces.inc"
 #include "face_reflections.inc"
 #include "shadows.inc"
@@ -413,7 +417,7 @@ static void drawPhase(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.outline];[enc setDepthStencilState:r.spriteDepth];drawMeshes(r,enc,ring,6+(int)phase);}
 }
 static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,NMCloakDraw d,BOOL outline) {
- nmFacesBind(ring,enc,d.instance);if(ring.groups)[enc setVertexBuffer:ring.groups.instanceGroups offset:d.instance*16 atIndex:20];
+ nmProjectionBind(ring,enc,d.instance);nmFacesBind(ring,enc,d.instance);if(ring.groups)[enc setVertexBuffer:ring.groups.instanceGroups offset:d.instance*16 atIndex:20];
  [enc setVertexBuffer:ring.compositionSelectors offset:d.instance*4 atIndex:14];
  NMMesh* mesh=r.meshes[d.mesh];NSUInteger count=outline?mesh.edgeCount:mesh.indexCount;if(!count)return;
  [enc setVertexBuffer:mesh.primitiveCenters offset:0 atIndex:15];[enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.materialOffsets offset:d.instance*4 atIndex:12];
@@ -571,6 +575,7 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  if(upload->light_count)memcpy(ring.lights.contents,upload->lights,upload->light_count*32);
  if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*NM_SPAN_PASSES*8];if(r.meshes.count)memcpy(ring.spans.mutableBytes,upload->spans,r.meshes.count*NM_SPAN_PASSES*8);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*NM_SPAN_PASSES;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)memcpy(ring.selectors.contents,upload->selectors,selectorCount*4);
  ring.terrainFlags=upload->terrain_flags;
+ if(!nmProjectionPrepare(r,ring,upload->projections,upload->instance_count,upload->pose_count)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmGroupsPrepare(r,ring,upload->groups)||!nmFacesPrepare(r,ring,upload->instance_count)||!nmFaceReflectionsPrepare(r,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmWaterObjectsPrepare(r,ring,upload->water_objects)||!nmWaterObjectsPrepareSources(r,ring,upload->water_sources)){dispatch_semaphore_signal(r->available);return 0;}
  NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.lightControl=(vector_float4){upload->retained_light_count,(upload->light_controls&1)?1:0,(upload->light_controls&2)?1:0,(upload->light_controls&4)?1:0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,(upload->light_controls&8)?2:1,upload->composition_slot_count};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;

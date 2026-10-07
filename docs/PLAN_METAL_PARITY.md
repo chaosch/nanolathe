@@ -71,3 +71,13 @@ cached/direct and cached/live chronology, row-extreme outline coverage, and
 edge-only shadow admission. Do not label full pixel parity achieved. Measure
 real end-to-end cadence separately from GPU command time and report 120/144Hz
 as targets, never inferred achievements.
+
+
+Projection metadata is now integrated: keyed units and 3DO features use the
+production blended/arrival origin, native/doubled anchors and record-space
+rounding, including Supersample off. Keyless cached/direct mode is explicitly
+unknown and falls back rather than guessing a cache decision. Reflection
+far-side source expansion follows the production original-face centroid.
+The frozen comparison runner pins the reflection diagnostic override to off,
+and its full-simulation frame wall metric is not total CPU consumption:
+production Modern overlaps background recording with pacing.

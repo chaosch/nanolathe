@@ -67,6 +67,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 		"LiveSource pins committed presentation frame pairs; native copies synchronously; Run does not close the source",
 		"Production-composed live frames use the client orderer, isolated subject atlases and ordered painter commits; native depth is confined to each subject rather than shared across the composed battle",
 		"Rigid pose interpolation uses shortest-path quaternion rotation once per piece; composed origins interpolate linearly and pieces hidden at either endpoint are suppressed",
+		"Keyed unit/feature projection uses production blended origins, native/doubled anchors and Supersample-off rounding; keyless cache/direct decisions, fixed-point hierarchy and cached-pose retention remain explicit gaps",
 		"Model shading consumes production SHD normals, row arithmetic, material identity and receiver controls; authored-face mapping is independent of stress subdivision; native triangle coverage, floating transforms and projection/cache staging remain potential differences",
 		"Production source gathering retains the exact 64-source family budget, stable selection and nano clusters; subjects select at most eight nearby sources; smoke uses clipped-corner scattering and ground light uses its separate receiver gate",
 		"Stock effects replay original ordered sprites, rows, lines, points, lenses and projectile identity markers; each lens reads its earlier completed composite; unsupported or suppressed records remain visible in native counters",

@@ -88,7 +88,7 @@ static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBu
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++){
   NMCloakDraw d=draws[i];if(!r.modelMetadata||d.instance>=f.objectCount||selectors[d.instance]==0||objects[d.instance].params[0]<.5)continue;NMMesh* mesh=r.meshes[d.mesh];
   NMFaceMesh* faceMesh=mesh.faceMesh;if(!faceMesh.indexCount)continue;
-  nmFacesBind(ring,enc,d.instance);[enc setVertexBuffer:ring.groups.instanceGroups offset:d.instance*16 atIndex:20];vertices+=faceMesh.indexCount;
+  nmProjectionBind(ring,enc,d.instance);nmFacesBind(ring,enc,d.instance);[enc setVertexBuffer:ring.groups.instanceGroups offset:d.instance*16 atIndex:20];vertices+=faceMesh.indexCount;
   [enc setVertexBuffer:faceMesh.corners offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.compositionSelectors offset:d.instance*4 atIndex:14];[enc setVertexBuffer:f.objects offset:d.instance*16 atIndex:18];
   [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:faceMesh.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:faceMesh.indices indexBufferOffset:0];s.reflectedModels++;
  }

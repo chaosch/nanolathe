@@ -128,7 +128,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
+	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -472,6 +472,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if err := writeLiveRows(opts.OutputDir, liveRows, opts.Warmup, firstFrame); err != nil {
 			return nil, err
 		}
+	}
+	if t := scene.TerrainTiles; t != nil {
+		tileBytes := len(t.Atlas.RGBA) + len(t.Detail.RGBA) + len(t.Lookup)*4
+		report["texture_uploaded_bytes"] = report["texture_uploaded_bytes"].(int) + tileBytes
 	}
 	report["terrain_triangles_drawn"] = 2
 	if err := writeArtifacts(opts.OutputDir, report, rows, opts.Warmup, firstFrame); err != nil {

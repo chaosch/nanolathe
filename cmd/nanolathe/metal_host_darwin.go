@@ -255,6 +255,9 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.frame.OverlayDirty[i] = uint32(dirty[i])
 	}
 	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2)
+	if err := prepareMetalProjection(h.cl, h.world, &h.frame, 2); err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	if h.composer == nil {
 		h.composer = newMetalModelComposer(h.scene)
 	}

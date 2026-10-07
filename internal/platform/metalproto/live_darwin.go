@@ -68,8 +68,11 @@ type liveUpload struct {
 	WaterSources                                                                                                     uintptr
 	Groups                                                                                                           uintptr
 	TerrainFlags                                                                                                     uint32
+	Projections                                                                                                      uintptr
 }
 type livePacking struct {
+	projectionPacking                                ProjectionPacking
+	projectionUpload                                 NativeProjectionUpload
 	groupPacking                                     GroupPacking
 	groupUpload                                      nativeGroupUpload
 	waterPacking                                     waterObjectsPacking
@@ -112,7 +115,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 648 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 656 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -295,6 +298,13 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 			return u, r, err
 		}
 		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+		if len(f.ModelProjections.Records) > 0 {
+			p.projectionUpload, err = p.projectionPacking.Prepare(f.ModelProjections, p.sourcePacked)
+			if err != nil {
+				return u, r, err
+			}
+			u.Projections = uintptr(unsafe.Pointer(&p.projectionUpload))
+		}
 		u.TerrainFlags = f.TerrainFlags
 		p.waterSourcesUpload, err = p.waterPacking.PrepareSources(f.WaterSources, f.WaterObjectScales[2])
 		if err != nil {
