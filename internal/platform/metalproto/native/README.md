@@ -307,3 +307,20 @@ point. Focus loss and renderer destruction also release native capture. As with
 the existing Ebitengine adapter, native capture starts after the host poll, so
 its saved native point can differ from an older queued button record's point
 (T25). The bridge does not reconstruct movement from an unfocused interval.
+
+## Cocoa service while the prototype runs
+
+The manual pump drains queued NSEvents without waiting, then dispatches or
+captures them in order. It also explicitly services the main thread's default
+CFRunLoop at startup and before/after each event drain. Each pass has a zero
+wait interval and consumes at most eight ready port sources; a source flood
+cannot take over the presentation loop. This lets AppleEvents, accessibility
+requests, ready timers and observers run while Go owns frame scheduling.
+`finishLaunching` alone does not replace ongoing run-loop service. Native info
+records service calls and handled-source counts. These are implementation
+counters; whether a particular external app activation succeeds still requires
+a visible runtime check.
+
+Apple's contracts: [CFRunLoopRunInMode](https://developer.apple.com/documentation/corefoundation/cfrunloopruninmode(_:_:_:))
+defines a zero interval as one nonblocking pass, and the [run-loop guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
+explains source, timer and observer dispatch.
