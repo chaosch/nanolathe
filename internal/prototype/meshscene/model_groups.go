@@ -6,6 +6,7 @@ package meshscene
 type ModelGroup struct {
 	ParentInstance, ParentSlot, FinalSlot uint32
 	Members                               []ModelGroupMember
+	Keyed                                 bool // explicit unit carrier/factory staging; implicit pairs are painter ordered
 	PreserveHoles                         bool // ordinary group; construction children admit visible coverage only
 }
 
@@ -22,6 +23,7 @@ type modelCompositionMemberWork struct {
 }
 type modelCompositionGroupWork struct {
 	parent  int
+	keyed   bool
 	members []modelCompositionMemberWork
 }
 
@@ -40,13 +42,13 @@ func (c *ModelComposer) prepareGroups(live *LiveFrame) {
 		if len(work.members) == 0 {
 			continue
 		}
-		group := ModelGroup{ParentInstance: uint32(work.parent), FinalSlot: uint32(final + 1), PreserveHoles: true}
+		group := ModelGroup{ParentInstance: uint32(work.parent), FinalSlot: uint32(final + 1), Keyed: work.keyed, PreserveHoles: work.keyed}
 		index := uint32(len(out.Groups) + 1)
 		if cap(out.Groups) > len(out.Groups) {
 			group.Members = out.Groups[:len(out.Groups)+1][len(out.Groups)].Members[:0]
 		}
 		opacity := live.Instances[work.parent].Visual.State[1]
-		if live.Instances[work.parent].Visual.State == [4]float32{} {
+		if !work.keyed || live.Instances[work.parent].Visual.State == [4]float32{} {
 			opacity = 1
 		}
 		c.work[final].opacity = opacity

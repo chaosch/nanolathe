@@ -243,7 +243,7 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		if entry.GroupKind != 0 && entry.GroupID != 0 {
 			key = modelGroupKey{kind: entry.GroupKind, id: entry.GroupID}
 		} else if instance.Subject != 0 {
-			key = modelGroupKey{kind: 1, id: instance.Subject}
+			key = modelGroupKey{kind: entry.Kind, id: instance.Subject}
 		}
 		group, found := c.groups[key]
 		if !found {
@@ -260,6 +260,7 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 				c.groupWork = append(c.groupWork, modelCompositionGroupWork{})
 			}
 			c.groupWork[group].parent = i
+			c.groupWork[group].keyed = entry.GroupKind == 1 && entry.GroupID != 0
 			if entry.GroupID != 0 {
 				if parent, ok := retained.previous.byID[battleEntityKey{entry.GroupKind, entry.GroupID}]; ok {
 					if at, ok := c.instances[modelInstanceKey{parent.mesh, parent.offset}]; ok {

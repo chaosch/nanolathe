@@ -8,17 +8,17 @@ bool nm_group_source(ModelSlot slot,float2 screen,thread uint2& pixel) {
  if(any(local<0)||any(local>=slot.atlas.zw))return false;
  pixel=uint2(slot.atlas.xy+floor(local));return true;
 }
-// Source-raster hook: child forces key-plane admission. All members defer
-// their own final water/Digger erase; the group parent owns that final clip.
+// Keyed-unit source hook: a child forces key-plane admission and every member
+// defers water/Digger erase to its carrier. Policy 2 is a keyless painter pair.
 ModelRules nm_group_source_rule(ModelRules own,int4 member) {
- if(member.x==0)return own;
- if(member.y!=0)own.reveal.w=1;
+ if(member.x==0||member.y==2)return own;
+ if(member.y==1)own.reveal.w=1;
  own.clip.x=0;own.clip.z=0;return own;
 }
 // Palette BLUE is selected before lighting/finish, as clipIndex does in the
 // production direct shader. It cannot be approximated by tinting finished RGB.
 bool nm_group_blue(float ownKey,int4 member,device const ModelRules* rules) {
- if(member.x==0)return false;
+ if(member.x==0||member.y==2)return false;
  float key=member.z==0?ownKey:clamp(ownKey+float(member.z),0.0,255.0);
  float4 clip=rules[member.w].clip;
  return clip.x>1.5&&key<=clip.y;
@@ -32,15 +32,18 @@ kernel void nm_group_merge(device const NMGroupGPU* groups [[buffer(0)]],device 
   NMGroupMemberGPU member=members[group.info.w+i];uint2 source;
   if(!nm_group_source(slots[member.slot-1],screen,source))continue;
   float4 nextColor=colors.read(source),nextEmission=emissions.read(source),nextKey=metadata.read(source);
-  if(member.delta!=0)nextKey.y=clamp(round(nextKey.y)+float(member.delta),0.0,255.0);
+  if(group.counts.z!=0&&member.delta!=0)nextKey.y=clamp(round(nextKey.y)+float(member.delta),0.0,255.0);
   // Copy the parent's erased keys too. The production initial union retains
   // its key plane even where its completed colour stage has no coverage.
   bool parent=member.instance==group.info.x;
-  bool hole=group.counts.y!=0&&nextKey.w>0&&key.y<nextKey.y;
-  bool visible=nextColor.a>0&&key.y<=nextKey.y;
+  bool hole=group.counts.z!=0&&group.counts.y!=0&&nextKey.w>0&&key.y<nextKey.y;
+  // Standalone projectile calls are keyless: the producer draws the root
+  // then its admitted header child, so transparent pixels preserve prior art.
+  // They never acquire unit key tests or the carrier's final clip.
+  bool visible=nextColor.a>0&&(group.counts.z==0||key.y<=nextKey.y);
   if(parent||hole||visible){color=nextColor;emission=nextEmission;key=nextKey;}
  }
- if(u.visual.w>.5){
+ if(group.counts.z!=0&&u.visual.w>.5){
   float4 clip=rules[group.info.x].clip;
   bool blue=clip.x>1.5&&key.y<=clip.y;
   key.z=blue?1:0;
