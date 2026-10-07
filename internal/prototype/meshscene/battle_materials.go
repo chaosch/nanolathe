@@ -116,7 +116,13 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	// Cached walks are shared read-only: native packing copies them.
 	var cacheKey modelMaterialCacheKey
 	cacheable := false
-	if keyer, ok := prepared.(ModelMaterialKeyer); ok {
+	// The key names the resolver's subject-wide inputs only. A debris walk or a
+	// live (DontCache) piece changes q.Current per slot, so it is never cached.
+	anyCurrent := q.Debris != nil
+	for _, current := range currentPieces {
+		anyCurrent = anyCurrent || current
+	}
+	if keyer, ok := prepared.(ModelMaterialKeyer); ok && !anyCurrent {
 		if key, ok := keyer.CacheKey(); ok {
 			cacheKey, cacheable = modelMaterialCacheKey{key, instance.Mesh}, true
 			if cached, ok := s.materialCache[cacheKey]; ok {
