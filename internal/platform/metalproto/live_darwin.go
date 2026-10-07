@@ -69,6 +69,8 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		lights = lights[:32]
 	}
 	u = liveUpload{Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(f.Sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
+	r.Seconds = seconds
+	r.Alpha = f.Alpha
 	r.Tick = f.Tick
 	r.Instances = len(f.Instances)
 	r.Poses = len(f.Current)
