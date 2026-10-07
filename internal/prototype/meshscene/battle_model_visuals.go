@@ -146,7 +146,7 @@ func (s *battleSource) applyUnitSubject(pub *battlePublication, u frame.UnitView
 		if _, resolved := s.modelIndices[battleModelKey(presenter.Model)]; resolved {
 			// Keyless/direct cargo writes ordinary opaque polygons [03 R-REN-03A §4].
 			instance.Visual.State[1] = 1
-			if presenter.ZBuffer || presenter.BuildRemaining > 0 {
+			if presenter.ZBuffer || presenter.BuildRemaining > 0 || presenter.Digger {
 				subject = presenter
 				if presenter.Cloaked {
 					instance.Visual.State[1] = 0.5
