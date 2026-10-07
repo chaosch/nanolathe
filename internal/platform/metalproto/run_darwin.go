@@ -310,10 +310,29 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		return at.Sub(started).Seconds()
 	}
-	var ahead chan preparedLive
+	// One persistent worker prepares ahead; the render thread hands it one
+	// request at a time and joins before the next.
+	type prepareRequest struct {
+		seconds float64
+		in      meshscene.Input
+	}
+	var requests chan prepareRequest
+	prepared := make(chan preparedLive, 1)
+	ahead := false
+	if scene.Live != nil && opts.PrepareAhead != nil {
+		requests = make(chan prepareRequest)
+		go func() {
+			for r := range requests {
+				prepared <- prepareLive(r.seconds, r.in)
+			}
+		}()
+	}
 	defer func() {
-		if ahead != nil {
-			<-ahead
+		if ahead {
+			<-prepared
+		}
+		if requests != nil {
+			close(requests)
 		}
 	}()
 	for i := 0; interactive || i < len(rows); i++ {
@@ -373,10 +392,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			var p preparedLive
 			var nextInput meshscene.Input
 			polled := false
-			if ahead != nil {
+			if ahead {
 				joinStart := time.Now()
-				p = <-ahead
-				ahead = nil
+				p = <-prepared
+				ahead = false
 				hostRow.Ahead = true
 				hostRow.Join = float64(time.Since(joinStart)) / 1e6
 				// Poll now when the next frame is prepared ahead: the newest
@@ -430,9 +449,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 						}
 					}
 					nextInput.At = at
-					seconds, in := sourceSeconds(next, at), nextInput
-					ahead = make(chan preparedLive, 1)
-					go func(done chan<- preparedLive) { done <- prepareLive(seconds, in) }(ahead)
+					requests <- prepareRequest{sourceSeconds(next, at), nextInput}
+					ahead = true
 				}
 				status = b.livePresent(handle)
 			}
