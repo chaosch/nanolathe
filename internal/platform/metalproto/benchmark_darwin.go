@@ -9,7 +9,15 @@ type benchmarkHostTiming struct {
 }
 
 func (t *benchmarkHostTiming) begin(frame int, entry, start time.Time) BenchmarkFrame {
-	row := BenchmarkFrame{Frame: frame, CadenceValid: !t.lastStart.IsZero(), PaceWait: float64(start.Sub(entry)) / 1e6}
+	return t.beginPaced(frame, entry, entry, start)
+}
+
+// beginPaced matches Ebitengine's benchmark bracket: waitStart immediately
+// precedes deadline computation/sleep and start immediately follows it.
+// entry is the callback/loop entry after any one-time measurement setup; using
+// entry as waitStart would include host bookkeeping in PaceWait.
+func (t *benchmarkHostTiming) beginPaced(frame int, entry, waitStart, start time.Time) BenchmarkFrame {
+	row := BenchmarkFrame{Frame: frame, CadenceValid: !t.lastStart.IsZero(), PaceWait: float64(start.Sub(waitStart)) / 1e6}
 	if row.CadenceValid {
 		row.Cadence = float64(start.Sub(t.lastStart)) / 1e6
 	}
