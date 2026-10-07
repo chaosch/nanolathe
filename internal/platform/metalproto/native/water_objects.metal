@@ -53,10 +53,12 @@ vertex nm_wo_Screen nm_wo_screen_vertex(uint v [[vertex_id]]){const float2 c[3]=
 float4 nm_wo_texel(texture2d<float> source,float2 p){int2 at=int2(floor(p));if(any(at<0)||at.x>=int(source.get_width())||at.y>=int(source.get_height()))return float4(0);return source.read(uint2(at));}
 float4 nm_wo_weighted(texture2d<float> source,texture2d<float> soft,float2 p,float low,float high){float4 c=nm_wo_texel(source,p),h=nm_wo_texel(soft,p);float strength=h.a>0?clamp(h.r/h.a,0.0,1.0):0;return c*mix(low,high,strength);}
 float4 nm_wo_sample(texture2d<float> source,texture2d<float> soft,float2 p,float low,float high){float2 a=floor(p-.5)+.5,f=fract(p-.5);return mix(mix(nm_wo_weighted(source,soft,a,low,high),nm_wo_weighted(source,soft,a+float2(1,0),low,high),f.x),mix(nm_wo_weighted(source,soft,a+float2(0,1),low,high),nm_wo_weighted(source,soft,a+1,low,high),f.x),f.y);}
-fragment float4 nm_wo_reflection_resolve(nm_wo_Screen in [[stage_in]],texture2d<float> source [[texture(0)]],texture2d<float> soft [[texture(1)]],texture2d<float> mask [[texture(3)]],constant Uniforms& u [[buffer(3)]],constant WaterUniform& water [[buffer(9)]],constant float4& control [[buffer(19)]]){
+fragment float4 nm_wo_reflection_resolve(nm_wo_Screen in [[stage_in]],texture2d<float> source [[texture(0)]],texture2d<float> soft [[texture(1)]],texture2d<float> mask [[texture(3)]],constant Uniforms& u [[buffer(3)]],constant WaterUniform& water [[buffer(9)]],constant float4& control [[buffer(19)]],device const uint* tileFlags [[buffer(23)]]){
  float2 world=nm_wo_world(in.position.xy,u);float coverage=smoothstep(.8,1.0,nmWaterMask(mask,world/water.mask.x).r);if(coverage<=0)return float4(0);
  float t=water.phase.x*water.controls.x;float ripple=sin(world.y*.19+t*1.9+sin(world.x*.07-t*.6))*.65+sin(world.y*.37-t*1.3)*.35;
  float2 q=in.position.xy+float2(ripple*(.65+water.phase.w*.65)*control.y,0);
+ uint bits=nm_water_tiles_resolve_flags(tileFlags,source,q,control);if(!(bits&1))return float4(0);
+ if(!(bits&2)){float4 c=nm_water_tiles_color_sample(source,q,.5)+nm_water_tiles_color_sample(source,q+float2(control.y,0),.25)+nm_water_tiles_color_sample(source,q-float2(control.y,0),.25);c.rgb*=float3(.76,.88,.94);return c*(.25*coverage);}
  float4 c=nm_wo_sample(source,soft,q,.5,0)+nm_wo_sample(source,soft,q+float2(control.y,0),.25,0)+nm_wo_sample(source,soft,q-float2(control.y,0),.25,0);
  c+=nm_wo_weighted(source,soft,floor(q)+.5,0,.25);
  const float horizontal[4]={.12,.09,.06,.03};for(uint i=0;i<4;i++){float2 d=float2((i+1)*control.z,0);c+=nm_wo_weighted(source,soft,floor(q+d)+.5,0,horizontal[i])+nm_wo_weighted(source,soft,floor(q-d)+.5,0,horizontal[i]);}

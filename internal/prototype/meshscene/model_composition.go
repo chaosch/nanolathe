@@ -33,6 +33,8 @@ type ModelOrder struct {
 	Sprite                     bool
 	FeatureBody, FeatureShadow bool
 	Submerged                  bool
+	GroupKeyDelta              int32
+	GroupReveal                bool
 }
 
 const (
@@ -54,8 +56,10 @@ type ModelPaint struct {
 }
 
 type ModelComposition struct {
-	InstanceSlots           []uint32 // aligned to live instances; zero means no body draw
-	InstanceRanks           []uint32 // production member order, including factory children
+	InstanceSlots           []uint32     // aligned to live instances; zero means no body draw
+	Groups                  []ModelGroup // isolated sources, one ordered final commit
+	MemberGroup             []uint32     // aligned to instances; zero or Groups index+1
+	InstanceRanks           []uint32     // production member order, including factory children
 	Slots                   []ModelSlot
 	AtlasWidth, AtlasHeight int
 	ProjectileSlots         []uint32 // production body markers, including zero for culled retained slots
@@ -100,6 +104,7 @@ type ModelComposer struct {
 	instanceGroups []int
 	composition    ModelComposition
 	featureSources map[uint32]featureSpriteSources
+	groupWork      []modelCompositionGroupWork
 }
 
 func NewModelComposer(scene *Scene) *ModelComposer {
@@ -151,11 +156,18 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 	clear(c.groups)
 	clear(c.instances)
 	c.work = c.work[:0]
+	for i := range c.groupWork {
+		c.groupWork[i].members = c.groupWork[i].members[:0]
+	}
+	c.groupWork = c.groupWork[:0]
 	out := &c.composition
 	out.InstanceSlots = resizeComposition(out.InstanceSlots, len(live.Instances))
 	clear(out.InstanceSlots)
 	out.InstanceRanks = resizeComposition(out.InstanceRanks, len(live.Instances))
 	clear(out.InstanceRanks)
+	out.MemberGroup = resizeComposition(out.MemberGroup, len(live.Instances))
+	clear(out.MemberGroup)
+	out.Groups = out.Groups[:0]
 	out.Slots, out.Paint, out.SubjectPixels = out.Slots[:0], out.Paint[:0], out.SubjectPixels[:0]
 	out.FeatureSprites, out.SpriteSources = out.FeatureSprites[:0], out.SpriteSources[:0]
 	out.AtlasWidth, out.AtlasHeight, out.TotalPixels, out.UnorderedInstances = 0, 0, 0, 0
@@ -218,11 +230,20 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		if !visible {
 			continue
 		}
+		if entry.GroupKind != 0 && entry.GroupID != 0 {
+			parent, exists := retained.previous.byID[battleEntityKey{entry.GroupKind, entry.GroupID}]
+			if !exists {
+				return fail("retained parent for every explicit model group")
+			}
+			if _, exists := c.instances[modelInstanceKey{parent.mesh, parent.offset}]; !exists {
+				return fail("live parent for every explicit model group")
+			}
+		}
 		key := modelGroupKey{instance: i + 1}
 		if entry.GroupKind != 0 && entry.GroupID != 0 {
 			key = modelGroupKey{kind: entry.GroupKind, id: entry.GroupID}
 		} else if instance.Subject != 0 {
-			key = modelGroupKey{kind: 1, id: instance.Subject}
+			key = modelGroupKey{kind: entry.Kind, id: instance.Subject}
 		}
 		group, found := c.groups[key]
 		if !found {
@@ -233,23 +254,50 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 				opacity = 1
 			}
 			c.work = append(c.work, modelSlotWork{rect[0], rect[1], rect[2], rect[3], opacity, ModelPaint{Rank: entry.Rank, Phase: entry.Phase, Row: entry.Row, Kind: entry.Kind, ID: entry.ID, FeatureIndex: entry.FeatureIndex}})
+			if cap(c.groupWork) > len(c.groupWork) {
+				c.groupWork = c.groupWork[:len(c.groupWork)+1]
+			} else {
+				c.groupWork = append(c.groupWork, modelCompositionGroupWork{})
+			}
+			c.groupWork[group].parent = i
+			c.groupWork[group].keyed = entry.GroupKind == 1 && entry.GroupID != 0
+			if entry.GroupID != 0 {
+				if parent, ok := retained.previous.byID[battleEntityKey{entry.GroupKind, entry.GroupID}]; ok {
+					if at, ok := c.instances[modelInstanceKey{parent.mesh, parent.offset}]; ok {
+						c.groupWork[group].parent = at
+						for _, parentEntry := range c.order {
+							if entry.ID == entry.GroupID {
+								break
+							}
+							if parentEntry.Kind == entry.GroupKind && parentEntry.ID == entry.GroupID {
+								c.work[group].paint = ModelPaint{Rank: parentEntry.Rank, Phase: parentEntry.Phase, Row: parentEntry.Row, Kind: parentEntry.Kind, ID: parentEntry.ID}
+								break
+							}
+						}
+					}
+				}
+			}
 		} else {
 			w := &c.work[group]
 			w.x0, w.y0, w.x1, w.y1 = min(w.x0, rect[0]), min(w.y0, rect[1]), max(w.x1, rect[2]), max(w.y1, rect[3])
 		}
 		c.instanceGroups[i] = group
+		c.groupWork[group].members = append(c.groupWork[group].members, modelCompositionMemberWork{i, rect, entry.GroupKeyDelta, entry.GroupReveal})
 	}
 	for i := range c.seen {
 		if !c.seen[i] {
 			out.UnorderedInstances++
 		}
 	}
+	c.prepareGroups(live)
 	for i, w := range c.work {
 		slot := uint32(i + 1)
 		pixels := uint64(w.x1-w.x0) * uint64(w.y1-w.y0)
 		out.Slots = append(out.Slots, ModelSlot{Screen: [4]float32{float32(w.x0), float32(w.y0), float32(w.x1 - w.x0), float32(w.y1 - w.y0)}, Params: [4]float32{w.opacity, float32(w.paint.Phase)}})
 		w.paint.Slot = slot
-		out.Paint = append(out.Paint, w.paint)
+		if i < len(c.groupWork) {
+			out.Paint = append(out.Paint, w.paint)
+		}
 		out.SubjectPixels = append(out.SubjectPixels, pixels)
 		out.TotalPixels += pixels
 	}
@@ -258,7 +306,9 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 	}
 	for i, group := range c.instanceGroups {
 		if group >= 0 {
-			out.InstanceSlots[i] = uint32(group + 1)
+			if out.InstanceSlots[i] == 0 {
+				out.InstanceSlots[i] = uint32(group + 1)
+			}
 		}
 	}
 	return *out, nil

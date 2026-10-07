@@ -35,7 +35,9 @@ type RetainedModelOrder struct {
 	FeatureIndex               uint32 // zero-based committed Features index; not a temporal identity
 	Sprite                     bool   // feature uses native sprite references rather than a model slot
 	FeatureBody, FeatureShadow bool
-	Submerged                  bool // production Enhanced seabed promotion, before ordinary feature passes
+	GroupKeyDelta              int32 // child integer origin minus parent integer origin
+	GroupReveal                bool  // group has a mergeable child carrying a production reveal
+	Submerged                  bool  // production Enhanced seabed promotion, before ordinary feature passes
 }
 
 // RetainedModelOrderer owns presentation scratch, and may only be used by one
@@ -45,6 +47,7 @@ type RetainedModelOrderer struct {
 	buckets worldBuckets
 	order   []RetainedModelOrder
 	rank    uint32
+	tick    uint32
 }
 
 func NewRetainedModelOrderer() *RetainedModelOrderer { return &RetainedModelOrderer{} }
@@ -59,6 +62,7 @@ func (o *RetainedModelOrderer) Prepare(c *Client, cur *frame.Frame) []RetainedMo
 	if c == nil || cur == nil || c.cam == nil {
 		return o.order
 	}
+	o.tick = cur.Tick
 	win := c.worldWindow()
 	for i := range cur.Features {
 		f := &cur.Features[i]
@@ -144,13 +148,26 @@ func (o *RetainedModelOrderer) unit(c *Client, d worldDrawable, phase uint32) {
 		return
 	}
 	m := c.modelForUnit(u)
-	keyed := m != nil && m.compiled != nil && (u.ZBuffer || u.BuildRemaining > 0)
+	keyed := m != nil && m.compiled != nil && (u.ZBuffer || u.BuildRemaining > 0 || u.Digger)
 	group := uint64(0)
 	if keyed {
 		group = u.InstanceID
 	}
+	groupReveal := false
+	if group != 0 {
+		for i := o.buckets.firstChild(u.Slot); i >= 0; i = o.buckets.nextChild(i) {
+			if i >= len(o.buckets.units) {
+				break
+			}
+			child := o.buckets.units[i]
+			if model := c.modelForUnit(child); model != nil && model.compiled != nil && c.RetainedUnitRules(child, o.tick).Reveal != nil {
+				groupReveal = true
+				break
+			}
+		}
+	}
 	if m != nil && m.compiled != nil {
-		o.appendUnit(u.InstanceID, group, phase, d.row)
+		o.appendUnit(u.InstanceID, group, phase, d.row, 0, groupReveal)
 	}
 	// Use the production's head-first cargo list followed by its admitted yard
 	// occupants. Children ride parent admission; their own row/visibility does
@@ -165,12 +182,13 @@ func (o *RetainedModelOrderer) unit(c *Client, d worldDrawable, phase uint32) {
 			continue
 		}
 		o.rank++
-		o.appendUnit(child.InstanceID, group, phase, d.row)
+		delta := int32((int64(child.Y) >> 16) - (int64(u.Y) >> 16))
+		o.appendUnit(child.InstanceID, group, phase, d.row, delta, groupReveal)
 	}
 }
 
-func (o *RetainedModelOrderer) appendUnit(id, group uint64, phase uint32, row int32) {
-	entry := RetainedModelOrder{Kind: RetainedModelUnit, ID: id, GroupID: group, Rank: o.rank, Phase: phase, Row: row}
+func (o *RetainedModelOrderer) appendUnit(id, group uint64, phase uint32, row int32, delta int32, reveal bool) {
+	entry := RetainedModelOrder{Kind: RetainedModelUnit, ID: id, GroupID: group, Rank: o.rank, Phase: phase, Row: row, GroupKeyDelta: delta, GroupReveal: reveal}
 	if group != 0 {
 		entry.GroupKind = RetainedModelUnit
 	}

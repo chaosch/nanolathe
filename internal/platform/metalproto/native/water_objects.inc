@@ -6,6 +6,7 @@ _Static_assert(sizeof(NMWaterSourcesUpload)==16,"water source upload layout");
 _Static_assert(sizeof(NMWaterSourceVertex)==64,"water source vertex layout");
 @interface NMWaterObjectsState : NSObject
 @property id<MTLRenderPipelineState> source,stock,resolve,commit,surface;
+@property NMWaterTilesState* tiles;
 @property id<MTLTexture> reflectionColor,reflectionSoft;
 @property uint64_t frames,reflectedModels,reflectionVertices,groupSuppressed,capSuppressed,seabedDraws,underwaterSlots,reflectedSprites,reflectedLines,stockCapSuppressed;
 @end
@@ -13,6 +14,7 @@ _Static_assert(sizeof(NMWaterSourceVertex)==64,"water source vertex layout");
 @end
 @interface NMWaterObjectsRing : NSObject
 @property id<MTLBuffer> objects,slotFlags,seabed,sources;
+@property NMWaterTilesFrame* tiles;
 @property id<MTLTexture> painted;
 @property NSUInteger objectCount,seabedCount,slotCount,sourceVertices;
 @property vector_float4 controls;
@@ -29,6 +31,7 @@ static id<MTLRenderPipelineState> nmWaterObjectsPipeline(NMRenderer* r,id<MTLLib
 }
 static BOOL nmWaterObjectsInitialize(NMRenderer* r,id<MTLLibrary> lib,NSError** error){
  NMWaterObjectsState* s=[NMWaterObjectsState new];
+ s.tiles=nmWaterTilesInitialize(r.device,lib,error);if(!s.tiles)return NO;const char* full=getenv("NANOLATHE_METAL_FULL_REFLECTIONS");if(full&&strcmp(full,"1")==0)s.tiles.enabled=NO;
  s.source=nmWaterObjectsPipeline(r,lib,@"nm_wo_reflection_vertex",@"nm_wo_reflection_source",2,YES,YES,error);
  s.stock=nmWaterObjectsPipeline(r,lib,@"nm_wo_stock_vertex",@"nm_wo_stock_source",2,YES,YES,error);
  s.resolve=nmWaterObjectsPipeline(r,lib,@"nm_wo_screen_vertex",@"nm_wo_reflection_resolve",1,NO,YES,error);
@@ -105,7 +108,8 @@ static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBu
   for(NSUInteger i=0;i<stock;i+=4){if(sources[i].position_height[3]<1.5)s.reflectedSprites++;else s.reflectedLines++;}
  }
  s.stockCapSuppressed+=(f.sourceVertices-stock)/4;s.reflectionVertices+=vertices+stock;[enc endEncoding];
- enc=[cb renderCommandEncoderWithDescriptor:nmWaterObjectsPass(r.color,NO)];nmWaterObjectsUniforms(r,f,enc,u);[enc setRenderPipelineState:s.resolve];[enc setFragmentTexture:s.reflectionColor atIndex:0];[enc setFragmentTexture:s.reflectionSoft atIndex:1];[enc setFragmentTexture:r.waterMask atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
+ if(!f.tiles)f.tiles=[NMWaterTilesFrame new];NSError* tileError=nil;if(!nmWaterTilesEncode(s.tiles,f.tiles,cb,s.reflectionColor,s.reflectionSoft,&tileError))return nmWaterObjectsFail(r,tileError.localizedDescription);
+ enc=[cb renderCommandEncoderWithDescriptor:nmWaterObjectsPass(r.color,NO)];nmWaterObjectsUniforms(r,f,enc,u);[enc setRenderPipelineState:s.resolve];if(!nmWaterTilesBind(f.tiles,enc)){[enc endEncoding];return nmWaterObjectsFail(r,@"Reflection tile bind failed");}[enc setFragmentTexture:s.reflectionColor atIndex:0];[enc setFragmentTexture:s.reflectionSoft atIndex:1];[enc setFragmentTexture:r.waterMask atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
 }
 // Use instead of the ordinary atlas-commit pipeline, leaving slots/paint buffer
 // bindings and production painter order in nmCompositionCommit unchanged.
@@ -120,6 +124,6 @@ static BOOL nmWaterObjectsSurface(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer
  float water[20];memcpy(water,r->water,sizeof(water));water[12]=u.camera.x-u.viewport.x*.5/u.camera.z;water[13]=u.camera.y-u.viewport.y*.5/u.camera.z;water[14]=u.camera.x+u.viewport.x*.5/u.camera.z;water[15]=u.camera.y+u.viewport.y*.5/u.camera.z;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:nmWaterObjectsPass(r.color,NO)];nmWaterObjectsUniforms(r,f,enc,u);[enc setFragmentBytes:water length:sizeof(water) atIndex:9];[enc setRenderPipelineState:r.waterObjectsState.surface];[enc setFragmentTexture:f.painted atIndex:0];[enc setFragmentTexture:r.waterMask atIndex:3];[enc setFragmentTexture:r.shadowMask?:r.emptyFog atIndex:2];[enc setFragmentTexture:r.groundField?:r.emptyFog atIndex:5];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
 }
-// TODO(water-reflection-tiles): add production 64-record-pixel softening tiles.
-// The full-plane weighted filter currently preserves arithmetic at higher cost.
+// Device-classified physical tiles reject only mathematically empty filter
+// footprints and select the unchanged cheap filter when softness is zero.
 static NSDictionary* nmWaterObjectsInfo(NMRenderer* r){NMWaterObjectsState* s=r.waterObjectsState;if(!s)return @{@"water_objects_enabled":@NO};return @{@"water_objects_enabled":@YES,@"water_object_frames":@(s.frames),@"water_reflected_models":@(s.reflectedModels),@"water_reflection_vertices":@(s.reflectionVertices),@"water_group_suppressed":@(s.groupSuppressed),@"water_cap_suppressed":@(s.capSuppressed),@"water_seabed_draws":@(s.seabedDraws),@"water_underwater_slots":@(s.underwaterSlots),@"water_stock_reflection_sources_supported":@YES,@"water_reflected_sprites":@(s.reflectedSprites),@"water_reflected_lines":@(s.reflectedLines),@"water_stock_cap_suppressed":@(s.stockCapSuppressed)};}
