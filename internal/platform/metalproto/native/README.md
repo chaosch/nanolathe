@@ -288,3 +288,22 @@ Each record carries a separate generation so a delayed presentation callback
 cannot write into a reused row. The ring never drains periodically; only the
 existing final GPU/presentation drain runs on exit or capture. Positive finite
 frame counts retain their complete warmup-inclusive history as before.
+
+## Production pointer capture
+
+`nm_pointer_capture(renderer, captured)` follows the production client's
+`PointerCaptured` request after host service. It returns zero if CoreGraphics
+cannot establish relative capture. Capture saves the native content-view point,
+centers the OS cursor and disassociates it from mouse motion. Received motion
+accumulates Cocoa relative deltas into unbounded physical drawable coordinates,
+subtracting the center warp from the first motion event. The existing production
+drag-scroll controller spends successive coordinate differences, and the input
+adapter divides by device scale as for ordinary pointer positions.
+
+Release restores the saved content-view point and reassociates the cursor. Its
+ordered motion record becomes the following host service's absolute fallback;
+the production client already paints the release frame at its semantic restore
+point. Focus loss and renderer destruction also release native capture. As with
+the existing Ebitengine adapter, native capture starts after the host poll, so
+its saved native point can differ from an older queued button record's point
+(T25). The bridge does not reconstruct movement from an unfocused interval.
