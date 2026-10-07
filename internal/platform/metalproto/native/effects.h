@@ -8,12 +8,14 @@ typedef struct { uint32_t first,count,reserved[2]; } NMEffectsLayer;
 typedef struct { float rect[4],source[4],key[4]; } NMEffectsSample;
 typedef struct { uint32_t first,count;float read[4];uint32_t reserved[2]; } NMEffectsLens;
 typedef struct { float position_uv[4],color[4],bounds[4]; } NMEffectsVertex;
+typedef struct { float rect[4],uv[4],color[4],params[4],selection[4],bounds[4]; } NMEffectsSmoke;
 typedef struct {
  const void *quads,*vertices,*samples,*lenses,*ops,*layers,*atlas;
  uint64_t version;
  uint32_t quad_count,vertex_count,sample_count,lens_count,op_count,layer_count,width,height;
  uint32_t dirty[4];
  uint32_t model_submitted,model_suppressed,projectile_models,source_count,quad_span_faces,supersample_models;
+ const void* smoke;uint32_t smoke_count,reserved;
 } NMEffectsUpload;
 
 #ifdef __OBJC__
@@ -30,5 +32,9 @@ typedef BOOL (*NMEffectsGroundDraw)(NMRenderer*,NMRing*,id<MTLCommandBuffer>,con
 static BOOL nmEffectsInitialize(NMRenderer*,id<MTLLibrary>,NSError**);
 static void nmEffectsSetRetainedDrawer(NMRenderer*,NMEffectsRetainedDraw);
 static void nmEffectsSetGroundDrawer(NMRenderer*,NMEffectsGroundDraw);
+// Call AFTER nmEffectsPrepare, BEFORE nmEffectsBegin, on the acquired ring.
+// Sources already use physical pixels and carry the production model-receiver
+// gate in flags.x. Prepare resets this binding; omission leaves smoke unlit.
+static void nmEffectsSetLighting(NMRing*,id<MTLBuffer>,uint32_t light_count);
 #endif
 #endif
