@@ -15,6 +15,7 @@ const (
 	EffectOpLens
 	EffectOpGeometry
 	EffectOpRetainedModel
+	EffectOpGround
 )
 
 // EffectLensSample carries the production executor's cropped destination and
@@ -88,4 +89,16 @@ type EffectLayer struct {
 	RetainedModels []drawlist.Model
 	Sources        []EffectSources
 	Counts         EffectCounts
+	Ground         []EffectGround
+}
+
+// EffectGround is an 80-byte replay operand. CentreAxis is centre/along vector,
+// CrossKind is cross vector/kind/reserved (0 trail, 1 scorch, 2 surface wake).
+// Values retains age, opacity/strength, variant and shape. Mapping is painted
+// map origin XY, inverse presentation scale and reserved; the native mask step
+// comes from the already-uploaded production water mask. Clip is framebuffer
+// xywh. All geometry is logical framebuffer pixels until native packing (§15,
+// §26, §29); local quad coordinates and tuning are evaluated by the shader.
+type EffectGround struct {
+	CentreAxis, CrossKind, Values, Mapping, Clip [4]float32
 }

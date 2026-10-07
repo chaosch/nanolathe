@@ -24,9 +24,11 @@ typedef struct {
 // Return YES only when the marker actually submitted a body/shadow, so an
 // intentional ShadowOnly skip remains an explicit suppressed-marker count.
 typedef BOOL (*NMEffectsRetainedDraw)(NMRenderer*,NMRing*,id<MTLCommandBuffer>,const void* uniforms,uint32_t slot,uint32_t flags);
+typedef BOOL (*NMEffectsGroundDraw)(NMRenderer*,NMRing*,id<MTLCommandBuffer>,const void* uniforms,uint32_t first,uint32_t count);
 // The bridge needs this declaration before nm_create; include the implementation
 // after NMRenderer/NMRing, target/grow/modelBindings and before encode.
 static BOOL nmEffectsInitialize(NMRenderer*,id<MTLLibrary>,NSError**);
 static void nmEffectsSetRetainedDrawer(NMRenderer*,NMEffectsRetainedDraw);
+static void nmEffectsSetGroundDrawer(NMRenderer*,NMEffectsGroundDraw);
 #endif
 #endif

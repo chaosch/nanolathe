@@ -19,6 +19,7 @@ type RetainedEffects struct {
 	AfterLabels                                         []RetainedEffectBatch
 	Effects                                             EffectDrawStats
 	Strips                                              StripDrawStats
+	LightSources                                        RetainedLightSources
 }
 
 // RecordRetainedEffects records the existing stock-effect producers once for
@@ -26,7 +27,9 @@ type RetainedEffects struct {
 // before RecordRetainedForeground. This replaces the effect portion of a world
 // recording; do not also RecordModernFrame for that same presentation, because
 // segmented shots and debris emission consume the private presentation CRT.
-// It never advances the session or walks unit/feature models [I4, I6].
+// It never advances the session or records unit/feature model bodies. Existing
+// building-foam admission and active wreck extent measurement retain their
+// canonical pose walks, without building the world's model packets [I4, I6].
 func (c *Client) RecordRetainedEffects() RetainedEffects {
 	var out RetainedEffects
 	if c == nil || c.cam == nil || len(c.indexed) != c.width*c.height {
@@ -68,6 +71,25 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 		return RetainedEffectBatch{List: c.list.Clone(), ProjectileModels: projectiles}
 	}
 	out.BeforeFeatures = []RetainedEffectBatch{record(false, func() {
+		c.drawTerrainPrep()
+		if c.effects.Scorch {
+			c.drawScorchMarks(committed)
+		}
+		if c.effects.HovercraftLandWash && !c.strategicView() {
+			if !c.observesInOrder() {
+				c.placeSurfaceWakes(committed)
+			}
+			c.drawSurfaceWakes()
+		}
+		if c.effects.WaterFoam && !c.strategicView() {
+			c.drawBuildingFoam(committed)
+		}
+		if c.trailStrength > 0 && !c.strategicView() {
+			if !c.observesInOrder() {
+				c.placeTrails(committed)
+			}
+			c.drawTrails()
+		}
 		c.drawStripSlot(cur, 0)
 		c.drawStripSlot(cur, 1)
 		c.drawStripSlot(cur, 2)
@@ -89,5 +111,6 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 		c.drawDebrisTrails(cur)
 	})}
 	out.Effects, out.Strips = c.effectStats, c.stripStats
+	out.LightSources = c.RecordRetainedLightSources()
 	return out
 }

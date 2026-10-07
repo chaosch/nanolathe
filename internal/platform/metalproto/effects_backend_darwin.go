@@ -73,6 +73,7 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 	p.sources = p.sources[:0]
 	p.retainedModels = p.retainedModels[:0]
 	var bodySlot uint32
+	var groundBase uint32
 	for _, layer := range layers {
 		qbase, lbase := len(p.quads), len(p.lenses)
 		for _, q := range layer.Quads {
@@ -125,6 +126,11 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 				return out, fmt.Errorf("metalproto: invalid effects op span")
 			}
 			switch op.Kind {
+			case meshscene.EffectOpGround:
+				if op.First > len(layer.Ground) || op.Count > len(layer.Ground)-op.First {
+					return out, fmt.Errorf("metalproto: ground marker outside layer")
+				}
+				p.ops = append(p.ops, nativeEffectsOp{Kind: 4, First: groundBase + uint32(op.First), Count: uint32(op.Count)})
 			case meshscene.EffectOpQuads:
 				if op.First > len(layer.Quads) || op.Count > len(layer.Quads)-op.First {
 					return out, fmt.Errorf("metalproto: effect quad span outside layer")
@@ -164,6 +170,10 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 		}
 		phase.Count = uint32(len(p.ops)) - phase.First
 		p.layers = append(p.layers, phase)
+		if uint64(groundBase)+uint64(len(layer.Ground)) > math.MaxInt32 {
+			return out, fmt.Errorf("metalproto: ground marker count exceeds native range")
+		}
+		groundBase += uint32(len(layer.Ground))
 		for _, src := range layer.Sources {
 			p.sources = append(p.sources, src)
 			out.SourceCount += uint32(len(src.Art) + len(src.Lines) + len(src.Nano) + len(src.Flashes) + len(src.Halos))
