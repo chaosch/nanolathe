@@ -222,7 +222,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
 			}
 			prepStart := time.Now()
-			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses)
+			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses, opts.Effects)
 			if err != nil {
 				return nil, err
 			}
