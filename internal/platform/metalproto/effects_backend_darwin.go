@@ -151,14 +151,24 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 					}
 				}
 			case meshscene.EffectOpRetainedModel:
+				if len(layer.ProjectileOrder) != len(layer.RetainedModels) {
+					return out, fmt.Errorf("metalproto: projectile identities differ from retained model markers")
+				}
 				if op.First > len(layer.RetainedModels) || op.Count > len(layer.RetainedModels)-op.First {
 					return out, fmt.Errorf("metalproto: retained projectile marker outside layer")
 				}
-				for _, model := range layer.RetainedModels[op.First : op.First+op.Count] {
+				for i, model := range layer.RetainedModels[op.First : op.First+op.Count] {
+					identity := layer.ProjectileOrder[op.First+i]
+					if identity.ID == 0 || identity.Member > 1 {
+						return out, fmt.Errorf("metalproto: invalid retained projectile identity/member")
+					}
 					marker := nativeEffectsOp{Kind: 3, First: bodySlot, Count: 1}
 					if model.ShadowOnly {
 						marker.Reserved = 1
 					} else {
+						if identity.Member == 1 {
+							marker.Reserved = 2 // already included in the parent's combined retained slot
+						}
 						bodySlot++
 					}
 					p.ops = append(p.ops, marker)

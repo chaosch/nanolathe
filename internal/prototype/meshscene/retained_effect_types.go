@@ -82,14 +82,24 @@ type EffectCounts struct {
 // factor min(2,1+row/30) and coverage in alpha. Normal sprites retain their
 // ordinary palette colors and half-alpha. No glow is baked into body pixels.
 type EffectLayer struct {
-	Quads          []OverlayQuad
-	Ops            []EffectOp
-	Lenses         []EffectLens
-	Models         []EffectGeometry
-	RetainedModels []drawlist.Model
-	Sources        []EffectSources
-	Counts         EffectCounts
-	Ground         []EffectGround
+	Quads           []OverlayQuad
+	Ops             []EffectOp
+	Lenses          []EffectLens
+	Models          []EffectGeometry
+	RetainedModels  []drawlist.Model
+	ProjectileOrder []EffectProjectileModel // aligned to RetainedModels, preserved through culling
+	Sources         []EffectSources
+	Counts          EffectCounts
+	Ground          []EffectGround
+}
+
+// EffectProjectileModel names an actual recorded standalone call. Member is
+// parent=0 or first header child=1. The retained projectile slot contains both
+// pieces: resolve it at the parent marker once, then acknowledge the child
+// marker without resolving the combined slot a second time [03 §5.4].
+type EffectProjectileModel struct {
+	ID     uint64
+	Member uint32
 }
 
 // EffectGround is an 80-byte replay operand. CentreAxis is centre/along vector,
