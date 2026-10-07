@@ -34,6 +34,12 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	Composition ModelComposition
+	Composed    bool
+
+	Water      WaterUniform
+	ModelRules []ModelRules
+
 	PointerCaptured bool // production host requests relative pointer motion
 
 	Exit bool // host requested an orderly window close after this input service

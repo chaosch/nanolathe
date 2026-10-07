@@ -77,6 +77,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		opts.Height = 1080
 	}
 	interactive := opts.Frames == 0
+	if opts.Benchmark != nil && (interactive || opts.FPS != 30 && opts.FPS != 60 && opts.FPS != 120 || opts.Warmup != 2*opts.FPS) {
+		return nil, fmt.Errorf("metalproto: benchmark requires bounded frames, 30/60/120 draws per second and two seconds of warmup")
+	}
 	if opts.Width < 1 || opts.Height < 1 || opts.Frames < 0 || opts.Warmup < 0 || opts.FPS < 0 || opts.Frames > math.MaxInt32-opts.Warmup || interactive && opts.Offscreen {
 		return nil, fmt.Errorf("metalproto: invalid dimensions or frame counts")
 	}
@@ -121,7 +124,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(shaderSource)
+	shader := cstring(waterShaderSource + "\n" + shaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -184,6 +187,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		runtime.KeepAlive(t)
 	}
+	for _, extra := range []struct {
+		slot    int32
+		texture meshscene.Texture
+	}{{5, scene.WaterMask}, {6, scene.ModelPalette}} {
+		t := extra.texture
+		if len(t.RGBA) > 0 && b.texture(handle, extra.slot, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+			return nil, fmt.Errorf("metalproto: upload texture %d", extra.slot)
+		}
+		runtime.KeepAlive(t)
+	}
 	if t := scene.FogAtlas; len(t.RGBA) > 0 {
 		if b.texture(handle, 4, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload retained fog masks")
@@ -208,6 +221,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		packing.cursor = make([]uint32, len(scene.Meshes))
 	}
 	var before, after runtime.MemStats
+	measurement := benchmarkMeasurement{directory: opts.OutputDir, options: opts.Benchmark}
+	defer measurement.stop()
+	var hostTiming benchmarkHostTiming
 	started := time.Now()
 	measuredStart := started
 	actual := 0
@@ -217,10 +233,24 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		interval = time.Duration(float64(time.Second) / float64(opts.FPS))
 	}
 	for i := 0; interactive || i < len(rows); i++ {
+		var entry time.Time
+		if opts.Benchmark != nil {
+			entry = time.Now()
+		}
+		if i == opts.Warmup && opts.Benchmark != nil {
+			if err := measurement.begin(); err != nil {
+				return nil, err
+			}
+			hostTiming = benchmarkHostTiming{}
+			deadline = time.Now()
+			entry = deadline
+		}
 		if opts.FPS > 0 && i > 0 {
 			// Keep animation on started, but skip missed presentation slots.
 			// A stall must not be repaid by submitting a catch-up burst.
-			deadline = deadline.Add(interval)
+			if i != opts.Warmup || opts.Benchmark == nil {
+				deadline = deadline.Add(interval)
+			}
 			now := time.Now()
 			if now.After(deadline) {
 				deadline = now
@@ -230,10 +260,23 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 		}
 		if i == opts.Warmup {
-			runtime.ReadMemStats(&before)
+			if opts.Benchmark != nil {
+				before = measurement.before
+			} else {
+				runtime.ReadMemStats(&before)
+			}
 			measuredStart = time.Now()
 		}
 		seconds := time.Since(started).Seconds()
+		if opts.Benchmark != nil {
+			seconds = float64(i) / float64(opts.FPS)
+		}
+		var drawStart time.Time
+		var hostRow BenchmarkFrame
+		if opts.Benchmark != nil {
+			drawStart = time.Now()
+			hostRow = hostTiming.begin(i, entry, drawStart)
+		}
 		var status int32
 		var frameMetrics liveRow
 		if scene.Live != nil {
@@ -247,6 +290,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			nextStart := time.Now()
 			live, err := scene.Live.Next(seconds, meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0})
 			nextMS := float64(time.Since(nextStart)) / float64(time.Millisecond)
+			hostRow.Source = nextMS
 			if err != nil {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
 			}
@@ -263,8 +307,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			metrics.NextMS = nextMS
 			metrics.PrepMS = float64(time.Since(prepStart)) / float64(time.Millisecond)
+			hostRow.Packing = metrics.PrepMS
 			frameMetrics = metrics
+			var submitStart time.Time
+			if opts.Benchmark != nil {
+				submitStart = time.Now()
+			}
 			status = b.liveFrame(handle, uintptr(unsafe.Pointer(&upload)))
+			if opts.Benchmark != nil {
+				hostRow.Submit = float64(time.Since(submitStart)) / 1e6
+			}
 			runtime.KeepAlive(live)
 			runtime.KeepAlive(packing)
 			runtime.KeepAlive(upload)
@@ -288,10 +340,28 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			liveRows[i%capacity] = frameMetrics
 		}
 		actual++
+		if opts.Benchmark != nil {
+			hostTiming.end(&hostRow, drawStart)
+			if i >= opts.Warmup && opts.Benchmark.AfterFrame != nil {
+				opts.Benchmark.AfterFrame(hostRow)
+			}
+		}
 	}
 	submittedAt := time.Now()
+	if opts.Benchmark != nil {
+		if actual != opts.Warmup+opts.Frames {
+			return nil, fmt.Errorf("metalproto: benchmark closed before measurement completed")
+		}
+		if err := measurement.end(); err != nil {
+			return nil, err
+		}
+	}
 	b.drain(handle)
-	runtime.ReadMemStats(&after)
+	if opts.Benchmark != nil {
+		after = measurement.after
+	} else {
+		runtime.ReadMemStats(&after)
+	}
 	n := int(b.rows(handle, pointer(rows), int32(len(rows))))
 	runtime.KeepAlive(rows)
 	if n < 0 || n > len(rows) || n > actual {
@@ -331,6 +401,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	skipWarmup := max(opts.Warmup-firstFrame, 0)
 	measured := rows[skipWarmup:]
 	report := makeReport(measured, opts, scene, device)
+	if opts.Benchmark != nil {
+		report["benchmark_memory"] = measurement.report()
+		report["benchmark_version"] = 2
+		report["simulation_tps"] = 30
+		report["draws_per_tick"] = opts.FPS / 30
+		report["warmup_draws"] = opts.Warmup
+		report["source_clock"] = "deterministic draw index divided by target draw rate"
+	}
 	report["interactive"] = interactive
 	report["total_frames_submitted"] = actual
 	report["retained_frames"] = n
@@ -348,6 +426,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["go_allocation_scope"] = "process-wide Go allocations during measured submission plus final drain"
 	if scene.Live != nil {
 		report["go_allocation_scope"] = "process-wide Go allocations including concurrent live-source worker during measured submission plus final drain"
+	}
+	if opts.Benchmark != nil {
+		report["go_allocation_scope"] = "process-wide Go allocations in measured host work; excludes final drain, snapshots, profile encoding and capture"
 	}
 	report["visual_passes"] = opts.VisualPasses && scene.Live != nil
 	report["retained_material_bytes"] = len(scene.Materials)*16 + len(scene.TextureFrames)*16

@@ -89,7 +89,9 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 		for i := range previous.Features {
 			f := &previous.Features[i]
-			previousFeatures[f.InstanceID] = f
+			if f.InstanceID != 0 {
+				previousFeatures[f.InstanceID] = f
+			}
 		}
 		for i := range previous.Projectiles {
 			p := &previous.Projectiles[i]
@@ -154,7 +156,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.Deaths++
 		}
 	}
-	for _, f := range current.Features {
+	for fi, f := range current.Features {
 		if f.IsBurning {
 			census.BurningFeatures++
 		}
@@ -184,7 +186,15 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		if prior != nil {
 			prevUnit = &frame.UnitView{X: prior.X, Y: prior.Y, Z: prior.Z, Heading: prior.Heading, Pitch: prior.Pitch, Bank: prior.Bank}
 		}
-		s.appendUnit(pub, battleEntityKey{kind: 2, id: f.InstanceID}, mesh, u, prevUnit, old)
+		// The ordinal identifies only this publication's composition span.
+		// Production currently publishes zero feature InstanceID, so that field
+		// cannot distinguish models here or match them across ticks. Only real
+		// nonzero identities above authorize prior-pose interpolation [I6].
+		// Never reuse old byID ordinal spans: insertions/removals can put an
+		// unrelated feature at the same index, even with the same model.
+		// TODO(question): publish stable feature identities if temporal wreck
+		// interpolation is wanted; zero-ID features snap to committed poses.
+		s.appendUnit(pub, battleEntityKey{kind: 2, id: uint64(fi) + 1}, mesh, u, prevUnit, nil)
 		s.applyFeatureVisual(pub, f, current)
 		census.SubmittedFeatures++
 	}

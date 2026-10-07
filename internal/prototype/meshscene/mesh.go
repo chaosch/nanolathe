@@ -64,6 +64,10 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				census.LinesSkipped++
 				continue
 			}
+			if primitive.IsColored&1 == 0 && (n != 4 || primitive.TextureName == "") {
+				// The production quad mapper rejects clear/non-quad textures [03 R-REN-03A §5].
+				continue
+			}
 			census.SourceFaces++
 			census.SourceTriangles += n - 2
 			if n == 4 {
@@ -81,11 +85,23 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 					region = r
 				} else {
 					census.MissingTextureFaces++
-					color = [3]float32{1, 0, 1}
+					c := pal.Base[0xd1]
+					color = [3]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255}
 				}
 			} else {
 				c := pal.Base[byte(primitive.ColorIndex)]
 				color = [3]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255}
+			}
+			materialID := uint32(0)
+			if atlas.useMaterials {
+				material := Material{FirstFrame: atlas.whiteFrame, FrameCount: 1}
+				if id := atlas.materialByName[canonicalTexture(primitive.TextureName)]; textured && id != 0 {
+					material = atlas.materials[id]
+				}
+				material.Reserved = uint32(len(mesh.MaterialSlots))
+				materialID = uint32(len(atlas.materials))
+				atlas.materials = append(atlas.materials, material)
+				mesh.MaterialSlots = append(mesh.MaterialSlots, ModelMaterialSlot{Piece: pi, Primitive: pri, Material: materialID})
 			}
 			vertices := make([]Vertex, n)
 			uvCorners := [4][2]float32{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
@@ -96,8 +112,8 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				if textured && n == 4 {
 					uv = uvCorners[vi]
 				}
-				if atlas.useMaterials && textured && atlas.materialByName[canonicalTexture(primitive.TextureName)] != 0 {
-					vertices[vi].Material = atlas.materialByName[canonicalTexture(primitive.TextureName)]
+				if atlas.useMaterials {
+					vertices[vi].Material = materialID
 					vertices[vi].UV = uv
 				} else {
 					vertices[vi].UV = region.uv(uv, atlas.uvWidth, atlas.uvHeight)
