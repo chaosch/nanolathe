@@ -22,6 +22,9 @@ type Mesh struct {
 	SourceFaces      int
 	PrimitiveCenters [][4]float32 // retained authored face centroids, indexed by MaterialSlots
 	MaterialSlots    []ModelMaterialSlot
+	Faces            []MeshFace // original body primitives, independent of stress tessellation
+	FaceCorners      []Vertex   // immutable authored rings; Vertex's 64-byte ABI is unchanged
+	FaceIndices      []uint32   // unsplit fans indexing FaceCorners, for source-face reflections
 }
 type Texture struct {
 	Width, Height int

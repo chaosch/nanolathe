@@ -132,6 +132,10 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 			for i := range vertices {
 				vertices[i].Normal = normal
 			}
+			// Retain the source ring before any benchmark subdivision. GPU face
+			// preparation uses these corners for admission and two-chain mapping;
+			// reflections use the unsplit fan [03 R-RAST-01 §1].
+			mesh.appendAuthoredFace(vertices, pi, pri, materialID)
 			if n == 4 {
 				// A strip creates actual smaller spatial quads. It changes tessellation,
 				// not the authored outline or the first/last texture corners.
