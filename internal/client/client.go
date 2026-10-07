@@ -92,16 +92,17 @@ type Client struct {
 	hostStepDue time.Time
 	// frameTiming is presentation-only instrumentation for the +fps overlay.
 	// The window adapter changes it only after joining any pre-record worker.
-	frameTiming         bool
-	blendNanos          int64
-	arrival             arrivalPresentation
-	presentationPaused  bool
-	pausedWorldRevision uint64
-	pausedLayer         pausedRecordLayer
-	retainedForeground  bool
-	communityHUD        CommunityHUDOptions
-	communityColors     communityColorState
-	infectionNanoRamp   [7]uint8
+	frameTiming             bool
+	blendNanos              int64
+	arrival                 arrivalPresentation
+	presentationPaused      bool
+	pausedWorldRevision     uint64
+	pausedLayer             pausedRecordLayer
+	retainedForeground      bool
+	retainedProjectileOrder *[]RetainedProjectileModel // active only during the source-only projectile batch
+	communityHUD            CommunityHUDOptions
+	communityColors         communityColorState
+	infectionNanoRamp       [7]uint8
 
 	// debugDeviceCapture is a host-owned, on-demand diagnostics bridge. It is
 	// invoked only after the frame recorder has joined, outside simulation.

@@ -45,6 +45,7 @@ func (a GlowAtlas) Flash(flash drawlist.Flash) ([4]float32, error) {
 type EffectBatch struct {
 	List             *drawlist.List
 	ProjectileModels bool
+	ProjectileOrder  []meshscene.EffectProjectileModel
 	SourceOnly       bool
 }
 
@@ -70,6 +71,7 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 				continue
 			}
 			s.projectileModels = batch.ProjectileModels
+			s.projectileOrder, s.projectileAt = batch.ProjectileOrder, 0
 			s.source = meshscene.EffectSources{}
 			batch.List.VisitLightSources(func(c drawlist.Sprite) { s.source.Art = append(s.source.Art, c) })
 			if batch.SourceOnly {
@@ -85,6 +87,9 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 				})
 			} else {
 				batch.List.Replay(&s)
+				if batch.ProjectileModels && s.projectileAt != len(batch.ProjectileOrder) {
+					s.fail("projectile identity count differs from recorded model commands")
+				}
 			}
 			s.layer.Sources = append(s.layer.Sources, s.source)
 		}
@@ -98,6 +103,8 @@ type effectSink struct {
 	layer            *meshscene.EffectLayer
 	base             int
 	projectileModels bool
+	projectileOrder  []meshscene.EffectProjectileModel
+	projectileAt     int
 	terrain          drawlist.Terrain
 	source           meshscene.EffectSources
 }
@@ -166,9 +173,20 @@ func (s *effectSink) Points(c drawlist.Points) {
 
 func (s *effectSink) Model(c drawlist.Model) {
 	if s.projectileModels {
+		if s.projectileAt >= len(s.projectileOrder) {
+			s.fail("projectile model command has no recorded identity")
+			return
+		}
+		identity := s.projectileOrder[s.projectileAt]
+		s.projectileAt++
+		if identity.ID == 0 || identity.Member > 1 {
+			s.fail("invalid recorded projectile identity/member")
+			return
+		}
 		s.layer.Counts.ProjectileModels++
 		i := len(s.layer.RetainedModels)
 		s.layer.RetainedModels = append(s.layer.RetainedModels, c)
+		s.layer.ProjectileOrder = append(s.layer.ProjectileOrder, identity)
 		s.layer.Ops = append(s.layer.Ops, meshscene.EffectOp{Kind: meshscene.EffectOpRetainedModel, First: i, Count: 1})
 		return
 	}
