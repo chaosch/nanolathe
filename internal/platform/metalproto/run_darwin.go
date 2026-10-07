@@ -21,24 +21,25 @@ import (
 var shaderSource string
 
 type bridge struct {
-	terrainTiles   func(uintptr, uintptr) int32
-	meshFaces      func(uintptr, uint32, uintptr) int32
-	pointerCapture func(uintptr, int32) int32
-	create         func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
-	mesh           func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, uintptr, int32) int32
-	assets         func(uintptr, uintptr) int32
-	texture        func(uintptr, int32, int32, int32, uintptr) int32
-	configure      func(uintptr, uintptr, uintptr, int32) int32
-	frame          func(uintptr, uintptr, uintptr, float32, float64) int32
-	liveFrame      func(uintptr, uintptr) int32
-	input          func(uintptr, uintptr)
-	events         func(uintptr, uintptr, int32) int32
-	playable       func(uintptr, int32)
-	drain          func(uintptr)
-	rows           func(uintptr, uintptr, int32) int32
-	capture        func(uintptr, uintptr) int32
-	info           func(uintptr, uintptr, int32)
-	destroy        func(uintptr)
+	meshOutlineRows func(uintptr, uint32, uintptr) int32
+	terrainTiles    func(uintptr, uintptr) int32
+	meshFaces       func(uintptr, uint32, uintptr) int32
+	pointerCapture  func(uintptr, int32) int32
+	create          func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
+	mesh            func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, uintptr, int32) int32
+	assets          func(uintptr, uintptr) int32
+	texture         func(uintptr, int32, int32, int32, uintptr) int32
+	configure       func(uintptr, uintptr, uintptr, int32) int32
+	frame           func(uintptr, uintptr, uintptr, float32, float64) int32
+	liveFrame       func(uintptr, uintptr) int32
+	input           func(uintptr, uintptr)
+	events          func(uintptr, uintptr, int32) int32
+	playable        func(uintptr, int32)
+	drain           func(uintptr)
+	rows            func(uintptr, uintptr, int32) int32
+	capture         func(uintptr, uintptr) int32
+	info            func(uintptr, uintptr, int32)
+	destroy         func(uintptr)
 }
 
 func pointer[T any](s []T) uintptr {
@@ -115,6 +116,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.pointerCapture, lib, "nm_pointer_capture")
 	purego.RegisterLibFunc(&b.mesh, lib, "nm_mesh")
 	purego.RegisterLibFunc(&b.meshFaces, lib, "nm_mesh_faces")
+	purego.RegisterLibFunc(&b.meshOutlineRows, lib, "nm_mesh_outline_rows")
 	purego.RegisterLibFunc(&b.assets, lib, "nm_assets")
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
 	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
@@ -128,7 +130,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
+	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + OutlineRowsShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -169,6 +171,15 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if b.meshFaces(handle, uint32(drawCalls), uintptr(unsafe.Pointer(&faces))) == 0 {
 			return nil, fmt.Errorf("metalproto: upload authored faces %s", m.Name)
 		}
+		outline, err := PrepareOutlineRows(&m)
+		if err != nil {
+			return nil, err
+		}
+		if b.meshOutlineRows(handle, uint32(drawCalls), uintptr(unsafe.Pointer(&outline.Native))) == 0 {
+			return nil, fmt.Errorf("metalproto: upload authored outline rings %s", m.Name)
+		}
+		vertexBytes += uint64(len(outline.Rings)) * 16
+		runtime.KeepAlive(outline)
 		runtime.KeepAlive(faces)
 		runtime.KeepAlive(m)
 		runtime.KeepAlive(offsets)

@@ -49,7 +49,7 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				continue
 			}
 			// Retain the authored rings once, including two-corner primitives.
-			// The native line pass approximates retail row extrema [03 R-COMP-01 §3].
+			// The composed native pass scans these rings for row extrema [03 R-COMP-01 §3].
 			if n >= 2 {
 				base := uint32(len(mesh.Vertices))
 				for _, index := range primitive.VertexIndices {

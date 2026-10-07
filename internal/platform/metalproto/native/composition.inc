@@ -35,9 +35,9 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  p.depthAttachment.texture=r.modelAtlasDepth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionDontCare;p.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];u.mode.z=0;u.mode.w=2;
  modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
- const NMCloakDraw* draws=ring.compositionDraws.bytes;const float* visuals=ring.visuals.contents;
+ const NMCloakDraw* draws=ring.compositionDraws.bytes;
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++)drawSubjectMember(r,enc,ring,draws[i],NO);
- if(u.visual.x>0.5){[enc setRenderPipelineState:r.atlasOutline];[enc setDepthStencilState:r.spriteDepth];for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)drawSubjectMember(r,enc,ring,draws[i],YES);}
+ // Construction row endpoints resolve complete native pixel blocks after this pass.
  [enc endEncoding];
 }
 static void nmCompositionCommit(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEncoder> enc,NMUniforms u,uint32_t phase) {

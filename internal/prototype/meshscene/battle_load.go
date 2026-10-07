@@ -261,7 +261,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	scene.Metadata["render_limitations"] = []string{
 		"Production-composed battles use isolated subject and group source pages, ordered final commits and source-face quad UV/key/SHD mapping; cached/direct projection and cached/live seed chronology remain distinct from production",
 		"GPU quaternion pose interpolation preserves rigid pieces but not the exact fixed-point hierarchy or production cache rebuild history",
-		"Construction uses production reveal verdicts; authored edge outlines still differ from raster row extremes and whole-block key ownership",
+		"Construction uses production reveal verdicts and GPU two-chain row endpoints with per-texel maximum keys and block-level colour admission; exact optimized outline key admission remains a documented fidelity gap",
 		"Production shadow policy and silhouette composition run; native coverage and offscreen-body shadow admission still differ at boundaries",
 		"Production effects, lights, glow, water, reflections, BLUE and fog are integrated; capability coverage does not establish exact pixel parity",
 		"Deep attachment chains and projectile secondary-model replacement remain outside the retained instance topology",

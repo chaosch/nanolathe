@@ -115,3 +115,23 @@ for Classic/Modern/Metal. These are host cadence rates with full simulation, not
 GPU throughput or observed scanout. The current full-feature workloads do not
 hold steady 120 Hz. Prior prototype measurements with fewer completed passes
 are historical experiments, not interchangeable with this comparison.
+
+## GPU outline integration
+
+The composed battle path now prepares immutable authored rings on the GPU and
+resolves each native pixel block's two-chain endpoints after body raster and
+before group merge. It preserves each texel's maximum key independently of the
+single block-level colour test, clears erased live winners, and keeps transformed
+blocks disjoint at fractional output scale. Prepared corner storage is compact
+and does not grow with face subdivision. Root and a read-only peer reviewed the
+module; Go/native builds and runtime Metal compilation succeeded. The short
+coastal capture rendered eight active outline subjects with zero unsupported
+rings across all 66 completed frames. No tests were run.
+
+Remaining implementation gap: production admits some three/four-corner rings to
+an exact rational key path after checking float32 equivalence. The prototype
+currently takes the float32 walk/floor path for all rings; negative fractional
+keys may differ by one byte. This is recorded as
+TODO(retained-outline-admission), alongside the existing transform/cache gaps.
+Do not claim exact pixel parity. The final frozen comparison repeats all ten
+1080p cases and adds four 3456x2160 field cases before the report is finalized.
