@@ -56,14 +56,15 @@ static BOOL nmWaterObjectsPrepare(NMRenderer* r,NMRing* ring,const NMWaterObject
  vector_float4* flags=f.slotFlags.contents;if(fb)memset(flags,0,fb);
  const uint32_t* selectors=ring.compositionSelectors.contents;
  NMWaterObject* objects=f.objects.contents;
- for(NSUInteger i=0;i<u->object_count;i++){uint32_t slot=selectors[i];if(!slot)continue;if(slot>ring.compositionSlotCount)return nmWaterObjectsFail(r,@"Water-object selector exceeds subject atlas");flags[slot-1].x=fmaxf(flags[slot-1].x,objects[i].params[2]);flags[slot-1].y+=1;}
- // TODO(water-groups): expose isolated child pages/member eligibility to enable
- // grouped subjects without sampling surviving parent colour at child height.
- // A grouped slot has only its final merged colour/key page. Production
- // reflections read isolated child pages and test the merged key separately
- // (§22.4). Refraction also needs the winning member's heat exclusion gate.
- // Do not animate such groups using a guessed member policy.
- for(NSUInteger i=0;i<u->object_count;i++){uint32_t slot=selectors[i];if(slot&&flags[slot-1].y>1){if(objects[i].params[0]>.5||objects[i].params[2]>.5)r.waterObjectsState.groupSuppressed++;objects[i].params[0]=objects[i].params[2]=0;flags[slot-1].x=0;}}
+ // Isolated source pages remain available to reflections. Only the parent's
+ // water policy admits the final group to the underwater composition pass.
+ for(NSUInteger i=0;i<u->object_count;i++){
+  uint32_t slot=selectors[i];if(!slot)continue;if(slot>ring.compositionSlotCount)return nmWaterObjectsFail(r,@"Water-object selector exceeds subject atlas");
+  uint32_t final=nmGroupFinalSlot(ring,i,slot);objects[i].params[3]=(float)final;
+  if(final==slot)flags[slot-1].x=objects[i].params[2];
+ }
+ NMGroupFrame* groups=ring.groups;const NMGroup* descriptors=groups.descriptors.contents;
+ for(NSUInteger i=0;i<groups.groupCount;i++){NMGroup group=descriptors[i];if(group.info[0]>=u->object_count||!group.info[2]||group.info[2]>ring.compositionSlotCount)return nmWaterObjectsFail(r,@"Water group exceeds parent/slot span");flags[group.info[2]-1].x=objects[group.info[0]].params[2];}
  for(NSUInteger i=0;i<ring.compositionSlotCount;i++)if(flags[i].x>.5)r.waterObjectsState.underwaterSlots++;
  f.objectCount=u->object_count;f.seabedCount=u->seabed_count;f.slotCount=ring.compositionSlotCount;f.controls=(vector_float4){u->controls[0],u->controls[1],u->controls[2],u->controls[3]};r.waterObjectsState.frames++;return YES;
 }
@@ -82,23 +83,19 @@ static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBu
  if(!s.reflectionColor||s.reflectionColor.width!=r.color.width||s.reflectionColor.height!=r.color.height){s.reflectionColor=target(r,r.color.width,r.color.height,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.reflectionSoft=target(r,r.color.width,r.color.height,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);}
  if(!s.reflectionColor||!s.reflectionSoft)return nmWaterObjectsFail(r,@"Reflection source allocation failed");
  MTLRenderPassDescriptor* pass=nmWaterObjectsPass(s.reflectionColor,YES);pass.colorAttachments[1].texture=s.reflectionSoft;pass.colorAttachments[1].loadAction=MTLLoadActionClear;pass.colorAttachments[1].storeAction=MTLStoreActionStore;pass.colorAttachments[1].clearColor=MTLClearColorMake(0,0,0,0);
- id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];modelBindings(r,enc,poses,ring,u);nmWaterObjectsUniforms(r,f,enc,u);[enc setRenderPipelineState:s.source];[enc setDepthStencilState:nil];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelMetadata atIndex:1];
+ id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];modelBindings(r,enc,poses,ring,u);nmWaterObjectsUniforms(r,f,enc,u);[enc setRenderPipelineState:s.source];[enc setDepthStencilState:nil];[enc setCullMode:MTLCullModeNone];nmFaceReflectionsBind(ring,enc);[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelMetadata atIndex:1];
  NSUInteger vertices=0;
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++){
   NMCloakDraw d=draws[i];if(!r.modelMetadata||d.instance>=f.objectCount||selectors[d.instance]==0||objects[d.instance].params[0]<.5)continue;NMMesh* mesh=r.meshes[d.mesh];
-  // TODO(water-reflection-cap): preserve production face runs for per-face
-  // admission at the source vertex cap.
-  // The retained mesh exposes triangles, not production face runs. Enforce
-  // its source-model reserve conservatively and report whole-model suppression
-  // rather than claiming the production per-face overflow policy (§26.6).
-  if(mesh.indexCount>28672-vertices){s.capSuppressed++;continue;}vertices+=mesh.indexCount;
-  [enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.compositionSelectors offset:d.instance*4 atIndex:14];[enc setVertexBuffer:f.objects offset:d.instance*16 atIndex:18];
-  [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:mesh.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:mesh.indices indexBufferOffset:0];s.reflectedModels++;
+  NMFaceMesh* faceMesh=mesh.faceMesh;if(!faceMesh.indexCount)continue;
+  nmProjectionBind(ring,enc,d.instance);nmFacesBind(ring,enc,d.instance);[enc setVertexBuffer:ring.groups.instanceGroups offset:d.instance*16 atIndex:20];vertices+=faceMesh.indexCount;
+  [enc setVertexBuffer:faceMesh.corners offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.compositionSelectors offset:d.instance*4 atIndex:14];[enc setVertexBuffer:f.objects offset:d.instance*16 atIndex:18];
+  [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:faceMesh.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:faceMesh.indices indexBufferOffset:0];s.reflectedModels++;
  }
  // Production appends stock billboards, then strokes, after model faces.
  // Both consume four source corners; the six raster vertices are only the
  // quad fan. They may use all remaining capacity beyond the model reserve.
- NSUInteger stock=MIN(f.sourceVertices,((32768-vertices)/4)*4);
+ NSUInteger stock=f.sourceVertices; // GPU budget rejects excess stock quads.
  const NMWaterSourceVertex* sources=f.sources.contents;
  if(stock){
   BOOL sprite=NO;for(NSUInteger i=0;i<stock;i+=4)if(sources[i].position_height[3]<1.5){sprite=YES;break;}
@@ -107,7 +104,7 @@ static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBu
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:stock/4];
   for(NSUInteger i=0;i<stock;i+=4){if(sources[i].position_height[3]<1.5)s.reflectedSprites++;else s.reflectedLines++;}
  }
- s.stockCapSuppressed+=(f.sourceVertices-stock)/4;s.reflectionVertices+=vertices+stock;[enc endEncoding];
+ s.reflectionVertices+=vertices+stock;[enc endEncoding];
  if(!f.tiles)f.tiles=[NMWaterTilesFrame new];NSError* tileError=nil;if(!nmWaterTilesEncode(s.tiles,f.tiles,cb,s.reflectionColor,s.reflectionSoft,&tileError))return nmWaterObjectsFail(r,tileError.localizedDescription);
  enc=[cb renderCommandEncoderWithDescriptor:nmWaterObjectsPass(r.color,NO)];nmWaterObjectsUniforms(r,f,enc,u);[enc setRenderPipelineState:s.resolve];if(!nmWaterTilesBind(f.tiles,enc)){[enc endEncoding];return nmWaterObjectsFail(r,@"Reflection tile bind failed");}[enc setFragmentTexture:s.reflectionColor atIndex:0];[enc setFragmentTexture:s.reflectionSoft atIndex:1];[enc setFragmentTexture:r.waterMask atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
 }
@@ -126,4 +123,4 @@ static BOOL nmWaterObjectsSurface(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer
 }
 // Device-classified physical tiles reject only mathematically empty filter
 // footprints and select the unchanged cheap filter when softness is zero.
-static NSDictionary* nmWaterObjectsInfo(NMRenderer* r){NMWaterObjectsState* s=r.waterObjectsState;if(!s)return @{@"water_objects_enabled":@NO};return @{@"water_objects_enabled":@YES,@"water_object_frames":@(s.frames),@"water_reflected_models":@(s.reflectedModels),@"water_reflection_vertices":@(s.reflectionVertices),@"water_group_suppressed":@(s.groupSuppressed),@"water_cap_suppressed":@(s.capSuppressed),@"water_seabed_draws":@(s.seabedDraws),@"water_underwater_slots":@(s.underwaterSlots),@"water_stock_reflection_sources_supported":@YES,@"water_reflected_sprites":@(s.reflectedSprites),@"water_reflected_lines":@(s.reflectedLines),@"water_stock_cap_suppressed":@(s.stockCapSuppressed)};}
+static NSDictionary* nmWaterObjectsInfo(NMRenderer* r){NMWaterObjectsState* s=r.waterObjectsState;if(!s)return @{@"water_objects_enabled":@NO};return @{@"water_objects_enabled":@YES,@"water_object_frames":@(s.frames),@"water_reflected_models":@(s.reflectedModels),@"water_reflection_submitted_raster_vertices":@(s.reflectionVertices),@"water_group_suppressed":@(s.groupSuppressed),@"water_cap_suppressed":@(s.capSuppressed),@"water_seabed_draws":@(s.seabedDraws),@"water_underwater_slots":@(s.underwaterSlots),@"water_stock_reflection_sources_supported":@YES,@"water_reflected_sprites":@(s.reflectedSprites),@"water_reflected_lines":@(s.reflectedLines),@"water_stock_cap_suppressed":@(s.stockCapSuppressed)};}

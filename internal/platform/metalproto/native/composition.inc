@@ -20,9 +20,9 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  float rasterScale=2;float* slots=ring.compositionSlots.contents;for(NSUInteger i=0;i<u->composition_slot_count;i++)for(int j=4;j<8;j++)slots[i*12+j]*=rasterScale;
  NSUInteger w=MAX(r.modelAtlasColor.width,u->composition_width*rasterScale),h=MAX(r.modelAtlasColor.height,u->composition_height*rasterScale);
  if(w&&h&&(w!=r.modelAtlasColor.width||h!=r.modelAtlasColor.height)){
-  r.modelMetadata=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
-  r.modelAtlasColor=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
-  r.modelAtlasEmission=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
+  r.modelMetadata=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite);
+  r.modelAtlasColor=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite);
+  r.modelAtlasEmission=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite);
   r.modelAtlasDepth=target(r,w,h,MTLPixelFormatDepth32Float,MTLTextureUsageRenderTarget);
   if(!r.modelMetadata||!r.modelAtlasColor||!r.modelAtlasEmission||!r.modelAtlasDepth)return NO;
  }
@@ -34,7 +34,7 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  for(int i=0;i<3;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=r.modelAtlasDepth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionDontCare;p.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];u.mode.z=0;u.mode.w=2;
- modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
+ modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
  const NMCloakDraw* draws=ring.compositionDraws.bytes;const float* visuals=ring.visuals.contents;
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++)drawSubjectMember(r,enc,ring,draws[i],NO);
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.atlasOutline];[enc setDepthStencilState:r.spriteDepth];for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)drawSubjectMember(r,enc,ring,draws[i],YES);}

@@ -1,47 +1,46 @@
 // Concatenate after the shared water field and retained base shader types.
-// TODO(water-face-mapping): retained triangles lack the production quad mapper
-// and cached/live isolated pages; ownership follows the retained triangle keys.
 // Enhanced presentation arithmetic from water_reflections.go/underwater.go,
 // DESIGN_GPU_RENDERER §26.5–26.6/§32. No simulation histories live here.
 struct nm_wo_Object {float4 params;};
-struct nm_wo_Reflection {float4 position [[position]];float2 source;float height,key;float2 lo [[flat]],hi [[flat]];float keyed [[flat]];};
+struct nm_wo_Reflection {float4 position [[position]];float2 source;float height,key;float2 lo [[flat]],hi [[flat]];float keyed [[flat]];uint faceIndex [[flat]];float4 finalTransform [[flat]],finalBounds [[flat]];int2 group [[flat]];};
 struct nm_wo_Source {float4 color [[color(0)]],soft [[color(1)]];};
 float2 nm_wo_world(float2 pixel,constant Uniforms& u){return (pixel-u.viewport.xy*.5)/u.camera.z+u.camera.xy;}
-vertex nm_wo_Reflection nm_wo_reflection_vertex(uint vid [[vertex_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const ModelRules* rules [[buffer(10)]],device const ModelSlot* slots [[buffer(13)]],device const uint* slotSelectors [[buffer(14)]],device const nm_wo_Object* objects [[buffer(18)]],constant WaterUniform& water [[buffer(9)]],constant float4& control [[buffer(19)]]){
+vertex nm_wo_Reflection nm_wo_reflection_vertex(uint vid [[vertex_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const ModelRules* rules [[buffer(10)]],device const ModelSlot* slots [[buffer(13)]],device const uint* slotSelectors [[buffer(14)]],device const nm_wo_Object* objects [[buffer(18)]],constant WaterUniform& water [[buffer(9)]],constant float4& control [[buffer(19)]],device const Material* materials [[buffer(6)]],device const int4* groups [[buffer(20)]],device const nm_face_Prepared* faces [[buffer(21)]],device const uint* faceBases [[buffer(22)]],device const uint* admission [[buffer(25)]],device const nm_projection_Record* projection [[buffer(27)]],device const uint* projectionFlags [[buffer(28)]],constant float4& projectionView [[buffer(29)]]){
  nm_wo_Reflection o={};o.position=float4(2,2,2,1);
  Vertex v=vertices[vid];float4x4 m=poses[offsets[0]+v.piece];uint selector=slotSelectors[0];if(m[3].w<.5||selector==0)return o;
- // Production records a reflection only after positive original-view face
- // admission. The cross-column (cofactor) transform maps its authored face
- // normal without assuming the fixed-point endpoint basis is orthonormal.
- // Dot with cross(screen-X,screen-Y), where screen-Y=world-Z-height/2.
- // This is the planar retained-face sign before production integer rounding;
- // folded rings remain part of the retained face-mapping limit above.
- float3 n=cross(m[1].xyz,m[2].xyz)*v.n.x+cross(m[2].xyz,m[0].xyz)*v.n.y+cross(m[0].xyz,m[1].xyz)*v.n.z;
- float heightScale=u.mode.x>.5?.5:1.0;if(dot(n,float3(0,-1,-heightScale))<=0)return o;
+ if(v.material==0||faceBases[0]==0)return o;o.faceIndex=faceBases[0]-1+materials[v.material].reserved;
+ if(admission[o.faceIndex]==0)return o;nm_face_Prepared face=faces[o.faceIndex];
  ModelSlot slot=slots[selector-1];float3 w=(m*float4(float3(v.p),1)).xyz;float sea=objects[0].params.y;
  float4 original=project(w,u);float2 source=float2((original.x+1)*.5,(1-original.y)*.5)*u.viewport.xy;
- o.source=slot.atlas.xy+(source-slot.screen.xy)*slot.atlas.zw/slot.screen.zw;o.lo=slot.atlas.xy;o.hi=o.lo+slot.atlas.zw;
+ source=nm_projection_screen(w,projection[0],projectionFlags[offsets[0]+v.piece],projectionView,source);float2 corner=floor(source*face.pixel.xy+face.pixel.zw);o.source=slot.atlas.xy+corner+select(float2(0),float2(1),corner>face.centroid.xy);o.lo=slot.atlas.xy;o.hi=o.lo+slot.atlas.zw;
+ uint finalSelector=uint(objects[0].params.w);int4 group=groups[0];o.group=int2(finalSelector!=selector&&group.x>0&&group.y!=2,group.z);
+ ModelSlot finalSlot=slots[(finalSelector?finalSelector:selector)-1];float2 scale=finalSlot.atlas.zw/finalSlot.screen.zw*slot.screen.zw/slot.atlas.zw;
+ o.finalTransform=float4(scale,finalSlot.atlas.xy+(slot.screen.xy-finalSlot.screen.xy)*finalSlot.atlas.zw/finalSlot.screen.zw-slot.atlas.xy*scale);o.finalBounds=float4(finalSlot.atlas.xy,finalSlot.atlas.xy+finalSlot.atlas.zw);
  float origin=m[2].w>.5?m[1].w:visuals[0].bounds.w;
  o.height=w.y-sea;o.key=floor(w.y-origin)+rules[0].clip.w;o.keyed=1;
- w.y=2*sea-w.y;float4 reflected=project(w,u);float2 screen=float2((reflected.x+1)*.5,(1-reflected.y)*.5)*u.viewport.xy;
+ float heightScale=u.mode.x>.5?.5:1.0;float2 screen=slot.screen.xy+(o.source-slot.atlas.xy)*slot.screen.zw/slot.atlas.zw;screen.y+=2*o.height*heightScale*u.camera.z;
  float amount=clamp((o.height-64.0)/96.0,0.0,1.0);amount=max(.35,amount*amount*(3-2*amount));
  float2 world=nm_wo_world(screen,u);float time=water.phase.x*water.controls.x;
  float wave=sin(world.y*.65+time*1.7)+.35*sin(world.x*.11-world.y*.31-time*1.1);
  screen.x+=wave*3*amount*control.y;
  o.position=float4(screen.x/u.viewport.x*2-1,1-screen.y/u.viewport.y*2,0,1);return o;
 }
-fragment nm_wo_Source nm_wo_reflection_source(nm_wo_Reflection in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> metadata [[texture(1)]],constant Uniforms& u [[buffer(3)]],constant WaterUniform& water [[buffer(9)]]){
+fragment nm_wo_Source nm_wo_reflection_source(nm_wo_Reflection in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> metadata [[texture(1)]],constant Uniforms& u [[buffer(3)]],constant WaterUniform& water [[buffer(9)]],device const nm_face_Prepared* faces [[buffer(21)]]){
  nm_wo_Source out={};if(in.height<=0||any(in.source<in.lo)||any(in.source>=in.hi))discard_fragment();
  float2 p=floor(in.source);float4 stored=metadata.read(uint2(p));if(stored.w<.5)discard_fragment();
  if(in.keyed>.5){
-  // Compare at the source texel centre, retaining the source-space triangle
-  // key gradient. Comparing at the reflected pixel rejects its own slope.
-  float2 a=dfdx(in.source),b=dfdy(in.source);float det=a.x*b.y-a.y*b.x;
-  if(abs(det)<1e-8)discard_fragment();float ka=dfdx(in.key),kb=dfdy(in.key);
-  float2 gradient=float2(ka*b.y-kb*a.y,a.x*kb-b.x*ka)/det;
-  float key=floor(in.key+dot(gradient,p+.5-in.source));key-=floor(key/256)*256;
+  nm_face_Prepared face=faces[in.faceIndex];float key;
+  if(nm_face_mapped(face))key=nm_face_key(nm_face_lanes(face,p+.5-in.lo));
+  else {
+   float2 a=dfdx(in.source),b=dfdy(in.source);float det=a.x*b.y-a.y*b.x;
+   if(abs(det)<1e-8)discard_fragment();float ka=dfdx(in.key),kb=dfdy(in.key);
+   float2 gradient=float2(ka*b.y-kb*a.y,a.x*kb-b.x*ka)/det;
+   key=floor(in.key+dot(gradient,p+.5-in.source));key-=floor(key/256)*256;
+  }
   if(key<stored.y)discard_fragment();
+  if(in.group.x){float2 finalPixel=(p+.5)*in.finalTransform.xy+in.finalTransform.zw;if(any(finalPixel<in.finalBounds.xy)||any(finalPixel>=in.finalBounds.zw))discard_fragment();float groupKey=metadata.read(uint2(floor(finalPixel))).y;if(clamp(key+in.group.y,0.0,255.0)<groupKey)discard_fragment();}
  }
+
  float4 c=color.read(uint2(p));float distance=smoothstep(64.0,160.0,in.height);float time=water.phase.x*water.controls.x;
  float2 world=nm_wo_world(in.position.xy,u);
  float band=.5+.5*sin(world.y*.9+sin(world.x*.075-time*.7)+time*1.7);
@@ -114,8 +113,8 @@ fragment float4 nm_wo_surface_fragment(nm_wo_Screen in [[stage_in]],texture2d<fl
 
 struct nm_wo_StockVertex {float4 positionHeight,uv,color,bounds;};
 struct nm_wo_StockOut {float4 position [[position]];float2 uv;float4 color [[flat]],bounds [[flat]];float height;float kind [[flat]];};
-vertex nm_wo_StockOut nm_wo_stock_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const nm_wo_StockVertex* vertices [[buffer(0)]],constant Uniforms& u [[buffer(3)]]){
- const uint fan[6]={0,1,2,0,2,3};nm_wo_StockVertex v=vertices[iid*4+fan[vid]];nm_wo_StockOut o;o.position=float4(v.positionHeight.x/u.viewport.x*2-1,1-v.positionHeight.y/u.viewport.y*2,0,1);o.uv=v.uv.xy;o.height=v.positionHeight.z;o.kind=v.positionHeight.w;o.color=v.color;o.bounds=v.bounds;return o;
+vertex nm_wo_StockOut nm_wo_stock_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const nm_wo_StockVertex* vertices [[buffer(0)]],constant Uniforms& u [[buffer(3)]],device const uint4* budget [[buffer(26)]]){
+ const uint fan[6]={0,1,2,0,2,3};nm_wo_StockVertex v=vertices[iid*4+fan[vid]];nm_wo_StockOut o;if(!nm_fr_stock_admitted(iid,budget)){o={};o.position=float4(2,2,2,1);return o;}o.position=float4(v.positionHeight.x/u.viewport.x*2-1,1-v.positionHeight.y/u.viewport.y*2,0,1);o.uv=v.uv.xy;o.height=v.positionHeight.z;o.kind=v.positionHeight.w;o.color=v.color;o.bounds=v.bounds;return o;
 }
 fragment nm_wo_Source nm_wo_stock_source(nm_wo_StockOut in [[stage_in]],texture2d<float> atlas [[texture(0)]]){
  // Surface impacts/billboards admit height zero; interpolated beam strokes
