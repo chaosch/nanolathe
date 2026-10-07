@@ -20,6 +20,7 @@ type BattleSprites struct {
 	texture                                              Texture
 	regions                                              []atlasRegion
 	sequences                                            map[string]*spriteSequence
+	sequenceLookups                                      map[spriteSequenceName]*spriteSequence
 	missing                                              map[string]string
 	counts                                               map[string]int
 	totals                                               map[string]int
@@ -90,7 +91,7 @@ func (b *BattleSprites) art(bank, name string, index int32, clamp bool) (spriteA
 	if bank == "" {
 		bank = content.DefaultEffectBank
 	}
-	seq := b.sequences[spriteSequenceKey(bank, name)]
+	seq := b.sequence(bank, name)
 	if seq == nil || len(seq.frames) == 0 {
 		if name != "" {
 			b.missing[content.EffectBankPath(content.CanonicalKey(bank))+"#"+content.CanonicalKey(name)] = "sequence unavailable in prepared atlas"
@@ -109,7 +110,7 @@ func (b *BattleSprites) art(bank, name string, index int32, clamp bool) (spriteA
 }
 
 func (b *BattleSprites) eventArt(bank, name string, visit int32) (spriteArt, bool) {
-	seq := b.sequences[spriteSequenceKey(bank, name)]
+	seq := b.sequence(bank, name)
 	if seq == nil || len(seq.frames) == 0 {
 		return b.art(bank, name, 0, false)
 	}

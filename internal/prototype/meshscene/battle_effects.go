@@ -99,9 +99,13 @@ func (b *BattleSprites) restArt(bank, name string, tick uint32, animating bool) 
 	if bank == "" {
 		bank = content.DefaultEffectBank
 	}
-	seq := b.sequences[spriteSequenceKey(bank, name)]
-	if !animating || seq == nil || seq.cycle == 0 || len(seq.frames) < 2 {
+	seq := b.sequence(bank, name)
+	if seq == nil || len(seq.frames) == 0 {
 		return b.art(bank, name, 0, false)
+	}
+	if !animating || seq.cycle == 0 || len(seq.frames) < 2 {
+		a := seq.frames[0]
+		return a, a.width > 0 && a.height > 0
 	}
 	at := uint64(tick) % seq.cycle
 	for _, a := range seq.frames {
@@ -118,7 +122,7 @@ func (b *BattleSprites) sequenceExtent(bank, name string) float32 {
 	if bank == "" {
 		bank = content.DefaultEffectBank
 	}
-	if seq := b.sequences[spriteSequenceKey(bank, name)]; seq != nil {
+	if seq := b.sequence(bank, name); seq != nil {
 		return seq.extent
 	}
 	return 0

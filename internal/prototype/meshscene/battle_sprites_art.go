@@ -25,6 +25,7 @@ type spriteSequence struct {
 	extent float32
 	cycle  uint64
 }
+type spriteSequenceName struct{ bank, entry string }
 type spriteCell struct {
 	region atlasRegion
 	rgba   []byte
@@ -52,7 +53,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 	if fs == nil || pal == nil || cat == nil {
 		return nil, fmt.Errorf("nanolathe: prototype sprite preparation failed: logical path battle sprites, providers searched [arguments], expected VFS, palette and catalog")
 	}
-	b := &BattleSprites{sequences: make(map[string]*spriteSequence), missing: make(map[string]string), counts: make(map[string]int), previousEffects: make(map[uint64][4]float32), previousProjectiles: make(map[uint64][4]float32), previousBeams: make(map[uint64][4]float32)}
+	b := &BattleSprites{sequences: make(map[string]*spriteSequence), sequenceLookups: make(map[spriteSequenceName]*spriteSequence), missing: make(map[string]string), counts: make(map[string]int), previousEffects: make(map[uint64][4]float32), previousProjectiles: make(map[uint64][4]float32), previousBeams: make(map[uint64][4]float32)}
 	for i, c := range pal.Base {
 		b.colors[i] = [4]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255, 1}
 	}
@@ -311,6 +312,22 @@ func spriteAlternateChildren(f *formats.GAFFrame) int {
 
 func spriteSequenceKey(bank, entry string) string {
 	return content.CanonicalKey(bank) + "|" + content.CanonicalKey(entry)
+}
+
+// Art is complete before worker lookups begin, so missing resolutions can also
+// be retained. Raw names avoid repeating normalization and string concatenation
+// for every visible feature; callers still own missing-art diagnostics.
+func (b *BattleSprites) sequence(bank, entry string) *spriteSequence {
+	name := spriteSequenceName{bank, entry}
+	if seq, ok := b.sequenceLookups[name]; ok {
+		return seq
+	}
+	seq := b.sequences[spriteSequenceKey(bank, entry)]
+	if b.sequenceLookups == nil {
+		b.sequenceLookups = make(map[spriteSequenceName]*spriteSequence)
+	}
+	b.sequenceLookups[name] = seq
+	return seq
 }
 
 func (b *BattleSprites) packSprites(cells []spriteCell) error {
