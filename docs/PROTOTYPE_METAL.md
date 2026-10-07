@@ -1373,3 +1373,69 @@ limit is the benchmark's synchronous step plus per-draw Go preparation. Next:
 background pre-recording, live palette reload, and geometric slab edge
 coverage if the approximation is judged insufficient. Results, captures and
 tools: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round2/`.
+
+### Third round: preparing frames ahead (2026-10-07)
+
+**Pipeline.** The render thread used to pace, run the source's `Next` and
+packing, then submit, so Go preparation (2.1–4.2 ms per draw, plus world-frame
+building and, in the benchmark, the synchronous step on stepping draws) was on
+the critical path every frame. The native submit is now two calls:
+`nm_live_upload` performs every read of caller memory into the free ring slot,
+and `nm_live_present` waits for a drawable, encodes and commits. Between them
+the render thread hands the next frame's `Next` and packing to one persistent
+worker, so preparation overlaps the drawable wait, encoding and pacing. One set
+of Go buffers suffices because the worker starts after the copy. Each frame
+carries the instant it is prepared for (`Input.At`); the match host steps and
+samples its camera at the predicted draw start, not when the worker runs.
+
+**Input.** A prepared-ahead frame sees input one draw earlier, as the
+production window's pre-record does. To keep the pointer fresh, the render
+thread polls input after the join. The HUD marks unpinned, unclipped cursor
+quads, and the render thread moves them to the newest pointer exactly as the
+host's late positioning would, before the upload; the same input then feeds
+the next frame's preparation.
+
+**Policies** (`NANOLATHE_METAL_PIPELINE`): the match host prepares every frame
+ahead (`0` restores preparation after pacing). The benchmark defaults to `all`,
+stepping draws and their synchronous step included; `nonstep` is the production
+benchmark's pre-record policy. Every policy makes the same source calls in the
+same order, and each scene's capture is byte-identical across them. `nonstep`
+does not help Metal: the stepping draw is the one that overruns its slot, and
+it stays on the critical path. Raising the worker's thread to the render
+thread's scheduling class measured no difference and was dropped.
+
+**Results** (M3 Pro, GOMAXPROCS=2, 120 draws/s requested, Metal 1× geometry and
+textures; full = 3,600 draws with the simulation stepped synchronously every
+fourth draw, frozen = 480; two interleaved repeats per full case agree within
+0.5%, the mean is shown; one-minute load 2.3–4.3):
+
+| Scene | Modern | Metal, prepared after pacing | Metal, prepared ahead |
+|---|---:|---:|---:|
+| Coastal 1080p full | 102.4 | 111.8 | **119.7** |
+| Field 1080p full | 97.0 | 102.3 | **119.1** |
+| Field 3456×2160 full | 71.1 | 83.7 | **102.9** |
+| Coastal 1080p frozen | 110.3 | — | 119.6 |
+| Field 1080p frozen | 120.0 | — | 119.4 |
+| Field 3456×2160 frozen | 82.3 | — | 119.2 |
+
+Policy matters for comparison: Modern's benchmark prepares only non-stepping
+draws ahead, so its synchronous step stays on the critical path; Metal's
+default also overlaps the step. In a match both run the simulation on its own
+goroutine. In the large view with the simulation running, Metal is now GPU
+bound (GPU span p50 9.7 ms, against 8.0 ms frozen) and the stepping draw's
+preparation (step 7.3 ms + record 8.6 ms) still overruns one slot. The 5×
+geometry and 2× texture multipliers that `tools/metal-play` uses by default are
+stress settings with no visual change (subdivided flat faces, nearest-neighbour
+atlas enlargement); with them that view drops to 87 draws/s (GPU p50 13.6 ms).
+A matrix taken earlier the same afternoon at a five-minute load near 9 is kept
+only as a record (`summary-contended-matrix3.txt`); it understated every case.
+
+**Defaults changed on this branch.** Depth slabs are now the default
+(`NANOLATHE_METAL_DEPTH_SLABS=0` restores the atlas for every subject), and
+`tools/metal-play` uses Go's default processor count, as the production game
+does. The playable host at The Pass, 1× multipliers, 2880×1800 presented 1,800
+measured frames with no interval above 9 ms (opening only, no completed match).
+
+Still open: GPU time in large full-simulation views, live palette reload when
+gamma changes mid-battle, and geometric slab edge coverage. Results, captures
+and tools: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round3/`.
