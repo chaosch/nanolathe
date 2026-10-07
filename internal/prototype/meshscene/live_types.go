@@ -35,6 +35,7 @@ type LiveFrame struct {
 	Exit bool // host requested an orderly window close after this input service
 	// Optional replacement of the retained UI atlas. The native host uploads it
 	// only when this nonzero version changes; slices live until Next returns.
+	OverlayDirty      [4]uint32 // changed atlas rectangle x/y/width/height; empty means full texture
 	OverlayTexture    Texture
 	OverlayVersion    uint64
 	Overlay           []OverlayQuad
