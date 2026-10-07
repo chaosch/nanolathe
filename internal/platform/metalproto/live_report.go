@@ -50,7 +50,7 @@ func addLiveReport(report map[string]any, rows []liveRow) {
 	report["live_source_next"] = percentiles(next)
 	report["live_cpu_prep"] = percentiles(prep)
 	report["live_frame_counts"] = stats
-	report["live_distortion"] = report["visual_passes"]
+	report["live_distortion"] = report["visual_passes"] == true && report["effects"] == true
 	for _, key := range []string{"pose_upload_bytes_per_frame", "triple_pose_buffer_bytes", "model_draw_calls_per_frame", "model_vertices_instanced", "model_indices_drawn", "model_triangles_drawn"} {
 		delete(report, key)
 	}

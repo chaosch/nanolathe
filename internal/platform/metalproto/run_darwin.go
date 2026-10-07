@@ -291,7 +291,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if scene.Live != nil {
 		report["go_allocation_scope"] = "process-wide Go allocations including concurrent live-source worker during measured submission plus final drain"
 	}
-	report["visual_passes"] = opts.VisualPasses
+	report["visual_passes"] = opts.VisualPasses && scene.Live != nil
 	report["retained_material_bytes"] = len(scene.Materials)*16 + len(scene.TextureFrames)*16
 	report["retained_height_bytes"] = len(scene.HeightField.Values) * 4
 	report["retained_vertex_bytes"] = vertexBytes
@@ -301,6 +301,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["triple_pose_buffer_bytes"] = uint64(poseCount) * 128 * 3
 	report["model_draw_calls_per_frame"] = drawCalls
 	report["model_vertices_instanced"] = drawnVertices
+	report["vertex_counting"] = "retained vertex records for submitted instances, including edge-only records; not hardware vertex shader invocations"
 	report["model_indices_drawn"] = drawnIndices
 	report["model_triangles_drawn"] = drawnIndices / 3
 	report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA)
