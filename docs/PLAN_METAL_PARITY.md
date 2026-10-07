@@ -81,3 +81,37 @@ far-side source expansion follows the production original-face centroid.
 The frozen comparison runner pins the reflection diagnostic override to off,
 and its full-simulation frame wall metric is not total CPU consumption:
 production Modern overlaps background recording with pacing.
+
+
+## Full comparison and final correction checkpoint
+
+The frozen 8ffe9a70 build completed all ten sequential runs: Classic, Modern and
+retained Metal on coastal and 1,500-record field battles, plus native 2x/5x
+geometry with 2x atlas dimensions. Each run includes 900 measured simulation
+ticks across 3,600 draws at a requested 120 Hz and 1920x1080 physical pixels.
+Four boundary fingerprints/RNG counts, three available full publication pairs,
+endpoint state snapshots and all authoritative census rows match. Classic's
+uninterpolated view counters intentionally differ. No per-draw frame hash was
+recorded. The field fixture sets its own 1,500-record capacity.
+
+Root inspected matching final captures. Construction outlines still used every
+authored edge and produced visible extra cages; the active correction replaces
+that atlas pass with production two-chain row endpoints on the GPU. For active
+construction, the current All-vertex extent contains every outline endpoint with
+a two-pixel margin; cached/live union only widens it, so original packet clipping
+is redundant when the edge arithmetic is overflow-safe. This is an implementation
+consequence of the established source contracts, not a new retail rule.
+
+Profiled native allocation was 3.93 MiB/draw coastal and 4.31 MiB/draw field.
+Reviewed follow-up commits reuse adapter-owned effect receiver arrays and replace
+per-frame feature value maps with checked publication-index lookup. The latter
+uses the same one-based identity as the retained feature poses. No borrowed
+recorded list or GPU ring lifetime is shortened. A short post-change coastal
+capture and its simulation state are byte-identical to the previous capture.
+Allocation savings and final outline cost still require the repeated matrix.
+
+Initial host throughput was about 55/101/102 FPS coastal and 64/96/95 FPS field
+for Classic/Modern/Metal. These are host cadence rates with full simulation, not
+GPU throughput or observed scanout. The current full-feature workloads do not
+hold steady 120 Hz. Prior prototype measurements with fewer completed passes
+are historical experiments, not interchangeable with this comparison.
