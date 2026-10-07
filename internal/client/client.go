@@ -98,6 +98,7 @@ type Client struct {
 	presentationPaused  bool
 	pausedWorldRevision uint64
 	pausedLayer         pausedRecordLayer
+	retainedForeground  bool
 	communityHUD        CommunityHUDOptions
 	communityColors     communityColorState
 	infectionNanoRamp   [7]uint8
