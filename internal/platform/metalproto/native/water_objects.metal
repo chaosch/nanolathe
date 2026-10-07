@@ -70,22 +70,32 @@ vertex nm_wo_Commit nm_wo_commit_vertex(uint v [[vertex_id]],uint iid [[instance
 }
 float4 nm_wo_body(texture2d<float> color,texture2d<float> metadata,float2 p,float4 rect,bool submerged){if(any(p<rect.xy)||any(p>=rect.xy+rect.zw))return float4(0);float4 m=metadata.read(uint2(floor(p)));if(m.w<.5||(m.z>.5)!=submerged)return float4(0);return color.read(uint2(floor(p)));}
 fragment MRT nm_wo_commit_fragment(nm_wo_Commit in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]],texture2d<float> metadata [[texture(2)]],texture2d<float> mask [[texture(3)]],constant Uniforms& u [[buffer(3)]],constant WaterUniform& water [[buffer(9)]]){
- constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);MRT out={};
+ constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);
+ constexpr sampler nearest(coord::pixel,address::clamp_to_edge,filter::nearest);MRT out={};
+ // The body page always has two texels per screen pixel. Supersample selects
+ // its resolve only: off uses the block's top-left texel at four times weight,
+ // while submerged samples keep the two-texel box (underwater.go, §26.5).
+ bool point=u.composition.z<1.5;float2 start=floor(in.source-.5),resolve=point?start+.5:in.source;
  bool inside=all(in.source>=in.atlas.xy)&&all(in.source<in.atlas.xy+in.atlas.zw);
- if(inside)out.glow=emission.sample(linear,in.source)*in.opacity;
- if(in.underwater<.5||water.controls.x<.5||water.mask.w<.5){if(inside)out.color=color.sample(linear,in.source)*in.opacity;return out;}
- float ratio=in.atlas.z/in.screen.z;uint side=ratio>1.5?2u:1u;float area=float(side*side);float2 start=floor(in.source-.5);float4 above=0;
- for(uint j=0;j<side;j++)for(uint i=0;i<side;i++)above+=nm_wo_body(color,metadata,start+float2(i,j)+.5,in.atlas,false);
- above/=area;
+ if(inside)out.glow=(point?emission.sample(nearest,resolve):emission.sample(linear,resolve))*in.opacity;
+ if(in.underwater<.5||water.controls.x<.5||water.mask.w<.5){if(inside)out.color=(point?color.sample(nearest,resolve):color.sample(linear,resolve))*in.opacity;return out;}
+ float ratio=in.atlas.z/in.screen.z;float4 above=0;
+ for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+  if(point&&i+j>0)continue;
+  above+=nm_wo_body(color,metadata,start+float2(i,j)+.5,in.atlas,false);
+ }
+ if(point)above*=4.0;
+ above/=4.0;
  float2 world=nm_wo_world(in.position.xy,u);float4 wet=nmWaterMask(mask,world/water.mask.x);float coverage=smoothstep(.8,1.0,wet.r)*smoothstep(0.0,nmEdgeFadePixels/32.0,wet.g),deep=smoothstep(.05,.55,wet.g);
  float3 field=nmWaterField(world/nmPatternSize,water.phase.yz*nmCurrentScale,water.phase.x);
- float2 off=nmWaterOffset(field)*deep*coverage*u.camera.z*ratio*.5;
- float2 corner=in.source+off-float(side)*.5,base=floor(corner);float4 sub=0;
- for(uint j=0;j<=side;j++)for(uint i=0;i<=side;i++){
-  float2 at=base+float2(i,j);float2 overlap=max(float2(0),min(at+1,corner+float(side))-max(at,corner));
-  sub+=nm_wo_body(color,metadata,at+.5,in.atlas,true)*overlap.x*overlap.y;
+ float texelsPerWorld=u.camera.z*ratio;float2 off=nmWaterOffset(field)*deep*coverage*texelsPerWorld*.5;
+ float2 corner=in.source+off-1.0,base=floor(corner),f=corner-base;float4 sub=0;
+ float wx[3]={1.0-f.x,1.0,f.x},wy[3]={1.0-f.y,1.0,f.y};
+ for(uint j=0;j<3;j++)for(uint i=0;i<3;i++){
+  float2 at=base+float2(i,j);
+  float weight=wx[i]*wy[j];sub+=nm_wo_body(color,metadata,at+.5,in.atlas,true)*weight;
  }
- float cover=sub.a/area;float3 submerged=sub.rgb/max(sub.a,1e-4);float3 surface=submerged;
+ float cover=sub.a/4.0;float3 submerged=sub.rgb/max(sub.a,1e-4);float3 surface=submerged;
  if(water.controls.z>.5)surface=mix(submerged,mix(submerged,nmWaterShade(submerged,field,deep,1.0),coverage),nmSurfaceOpacity);
  float fs=(1-above.a)*cover;out.color=float4(above.rgb+surface*fs,above.a+fs)*in.opacity;return out;
 }
