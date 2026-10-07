@@ -29,7 +29,8 @@ type RetainedSelection struct {
 }
 
 // SetExternalSelection makes RecordRetainedForeground collect selected-unit
-// quads for RetainedSelections instead of drawing them over the world.
+// quads for RetainedSelections, and leave unit labels to RecordRetainedLabels,
+// instead of drawing either over the world.
 func (c *Client) SetExternalSelection(on bool) {
 	if c != nil {
 		c.externalSelection = on
@@ -44,6 +45,36 @@ func (c *Client) RetainedSelections() (drawlist.WorldSpace, []RetainedSelection)
 		return drawlist.WorldSpace{}, nil
 	}
 	return c.retainedSelectionWS, c.retainedSelections
+}
+
+// RecordRetainedLabels records the pinned frame's unit labels (health bars,
+// Community unit HUD, group digits) into dst in their own world region, for a
+// host that composes them where drawCommittedWorld does: after the airborne
+// pass and its strip, before strip 9 and the fog [03 §1][03 R-FX-01 §6]. It
+// records nothing unless SetExternalSelection is on. Call it after
+// BeginPresentationFrame and replay dst before the next client recording,
+// which reuses the point arena its batches borrow.
+func (c *Client) RecordRetainedLabels(dst *drawlist.List) {
+	if dst == nil {
+		return
+	}
+	dst.Reset()
+	if c == nil || !c.externalSelection || c.cam == nil {
+		return
+	}
+	cur := c.committedFrame()
+	if cur == nil {
+		return
+	}
+	saved := c.list
+	c.list = *dst
+	c.refreshRecordExtent()
+	c.frameTick = cur.Tick
+	c.emitWorldBegin()
+	c.drawUnitLabels(cur, true)
+	c.emitWorldEnd()
+	*dst = c.list
+	c.list = saved
 }
 
 func (c *Client) drawRetainedAnnotations(cur *frame.Frame) {
@@ -74,7 +105,9 @@ func (c *Client) drawRetainedAnnotations(cur *frame.Frame) {
 			c.drawSelectionQuad(*u)
 		}
 	}
-	c.drawUnitLabels(cur, true)
+	if !c.externalSelection {
+		c.drawUnitLabels(cur, true)
+	}
 	c.emitWorldEnd()
 }
 

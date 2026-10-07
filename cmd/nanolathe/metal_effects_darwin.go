@@ -4,9 +4,11 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/client"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/metalhud"
 )
@@ -31,6 +33,7 @@ type metalEffectFrame struct {
 // native submission has already copied [I6].
 type metalEffectRecorder struct {
 	storage client.RetainedEffectStorage
+	labels  drawlist.List
 	groups  [5][]metalhud.EffectBatch
 	orders  [][]meshscene.EffectProjectileModel
 	// recordMS and adaptMS split one record call (diagnostic).
@@ -67,6 +70,11 @@ func (r *metalEffectRecorder) record(cl *client.Client, adapter *metalhud.Foregr
 			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels, ProjectileOrder: converted})
 		}
 	}
+	// Unit labels open the last layer: production draws them after the
+	// airborne pass and before strip 9 [03 §1]. Empty unless the client
+	// leaves them to the host (SetExternalSelection).
+	cl.RecordRetainedLabels(&r.labels)
+	groups[4] = slices.Insert(groups[4], 0, metalhud.EffectBatch{List: &r.labels, Labels: true})
 	groups[0] = append(groups[0], metalhud.EffectBatch{List: &recorded.LightSources.Short, SourceOnly: true})
 	groups[1] = append(groups[1], metalhud.EffectBatch{List: &recorded.LightSources.Ground, SourceOnly: true})
 	layers, atlas, version, err := adapter.PrepareEffectLayers(groups)

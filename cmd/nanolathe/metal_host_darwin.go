@@ -92,6 +92,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	}
 	prepareMetalScene(scene, sess.World)
 	host := &metalBattleHost{worldGamma: worldGamma, fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
+	host.visuals.worldPalette = &display
 	scene.Live = host
 	if path := os.Getenv("NANOLATHE_METAL_INPUT_TRACE"); path != "" {
 		if host.trace.out, err = os.Create(path); err != nil {

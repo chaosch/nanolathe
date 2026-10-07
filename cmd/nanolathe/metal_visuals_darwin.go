@@ -22,10 +22,15 @@ type metalVisuals struct {
 	effects metalEffectRecorder
 	water   []meshscene.WaterSource
 	// parts: record+adapter, lighting/glow sources, glow frame, water (ms, diagnostic).
-	parts          [4]float64
-	lighting       *gpurender.RetainedLighting
-	glow           *gpurender.RetainedGlow
-	palette        [256][4]byte
+	parts    [4]float64
+	lighting *gpurender.RetainedLighting
+	glow     *gpurender.RetainedGlow
+	palette  [256][4]byte
+	// worldPalette, when set, is the display palette the retained world was
+	// built with. Effects, lights and water sources keep it after a gamma
+	// change, because the final pass scales the whole world by the new
+	// factor (LiveFrame.WorldGain); the current palette would scale twice.
+	worldPalette   *[256][4]byte
 	epoch, version uint64
 	frame          meshscene.StockFrame
 	layers         [5]meshscene.EffectLayer
@@ -35,6 +40,9 @@ type metalVisuals struct {
 
 func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, width, height int, scale float32) error {
 	display := cl.DisplayPalette()
+	if v.worldPalette != nil {
+		display = *v.worldPalette
+	}
 	if v.adapter == nil || display != v.palette {
 		var pal palette.Tables
 		if source := cl.PaletteTables(); source != nil {
@@ -139,7 +147,7 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	v.frame.Glow.Parameters.Blur[0] *= scale
 	v.frame.Glow.Parameters.Blur[1] = min(v.frame.Glow.Parameters.Blur[1]*scale, float32(24.0/2.5))
 	split(2)
-	waterSources, _, err := metalWaterSources(v.water, cl, v.adapter, v.layers[:])
+	waterSources, _, err := metalWaterSources(v.water, cl, v.adapter, v.layers[:], display)
 	if err != nil {
 		return err
 	}

@@ -48,6 +48,10 @@ type EffectBatch struct {
 	ProjectileModels bool
 	ProjectileOrder  []meshscene.EffectProjectileModel
 	SourceOnly       bool
+	// Labels marks the host's unit-label recording (health bars, group
+	// digits) placed in its production slot between two effect layers: plain
+	// interface art, so glyphs are admitted and nothing feeds light sources.
+	Labels bool
 }
 
 type effectArtKey struct {
@@ -77,6 +81,7 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 				continue
 			}
 			s.projectileModels = batch.ProjectileModels
+			s.labels = batch.Labels
 			s.projectileOrder, s.projectileAt = batch.ProjectileOrder, 0
 			s.source = meshscene.EffectSources{}
 			if at := len(s.layer.Sources); at < cap(s.layer.Sources) {
@@ -149,6 +154,7 @@ type effectSink struct {
 	projectileModels bool
 	projectileOrder  []meshscene.EffectProjectileModel
 	projectileAt     int
+	labels           bool
 	terrain          drawlist.Terrain
 	source           meshscene.EffectSources
 }
@@ -183,6 +189,11 @@ func (s *effectSink) quadsFrom(start int) {
 
 func (s *effectSink) Sprite(c drawlist.Sprite) {
 	start := len(s.quads)
+	if s.labels {
+		s.Foreground.Sprite(c)
+		s.quadsFrom(start)
+		return
+	}
 	if c.Kind == drawlist.BlitTinted && c.LightingKind == drawlist.SpriteLightingSmoke && c.Frame != nil && c.PCX == nil {
 		s.smoke(c)
 	} else {
@@ -573,9 +584,17 @@ func (s *effectSink) reject(family string) {
 	s.layer.Counts.Unsupported++
 	s.fail("unexpected %s command in stock-effects list", family)
 }
-func (s *effectSink) Clear()                   { s.reject("clear") }
-func (s *effectSink) Fog(drawlist.Fog)         { s.reject("fog") }
-func (s *effectSink) Glyphs(drawlist.Glyphs)   { s.reject("glyph") }
+func (s *effectSink) Clear()           { s.reject("clear") }
+func (s *effectSink) Fog(drawlist.Fog) { s.reject("fog") }
+func (s *effectSink) Glyphs(c drawlist.Glyphs) {
+	if !s.labels {
+		s.reject("glyph")
+		return
+	}
+	start := len(s.quads)
+	s.Foreground.Glyphs(c)
+	s.quadsFrom(start)
+}
 func (s *effectSink) Surface(drawlist.Surface) { s.reject("surface") }
 func (s *effectSink) Cursor(drawlist.Cursor)   { s.reject("cursor") }
 func (s *effectSink) Markers(drawlist.Markers) { s.reject("marker") }

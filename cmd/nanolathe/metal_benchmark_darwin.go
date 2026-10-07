@@ -68,6 +68,10 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 		hud:  metalhud.New(c.PaletteTables(), options.Width, options.Height),
 		step: step, census: census, options: options,
 		rows: make([]metalBenchmarkRow, 0, options.Frames), measured: make(chan metalBenchmarkRow, 2)}
+	// Compose as the match host does: selected-unit quads in their units'
+	// paint bands, labels before strip 9, world art on its load palette.
+	c.SetExternalSelection(true)
+	host.visuals.worldPalette = &display
 	scene.Live = host
 	// Every draw, the synchronous step included, is prepared on a worker while
 	// the previous draw presents and paces, as the match host prepares every
@@ -92,6 +96,8 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 	report, err := metalproto.Run(scene, metalproto.Options{
 		Width: options.Width, Height: options.Height, Frames: options.Frames, Warmup: options.TPS * 2, FPS: options.TPS,
 		VSync: true, Effects: true, VisualPasses: true, OutputDir: options.Directory, LibraryPath: opts.MetalLibrary,
+		// A windowless run serves capture checks only; its timings are not comparable.
+		Offscreen: os.Getenv("NANOLATHE_METAL_OFFSCREEN") == "1",
 		Benchmark: &metalproto.BenchmarkOptions{BeforeMeasure: options.BeforeMeasure, AfterMeasure: options.AfterMeasure,
 			AfterFrame: host.afterFrame},
 		PrepareAhead: prepareAhead,
@@ -131,6 +137,7 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 
 type metalBenchmarkSource struct {
 	visuals                  metalVisuals
+	selection                metalSelection
 	b                        *battleSession
 	c                        *client.Client
 	world                    *meshscene.RetainedBattle
@@ -241,6 +248,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		return meshscene.LiveFrame{}, err
 	}
 	h.frame.Composition, h.frame.Composed = composition, true
+	h.frame.Annotations = h.selection.Prepare(h.c, h.hud, h.composer.order, composition, 1)
 	split()
 	if h.shadows == nil {
 		h.shadows = newMetalShadowComposer(h.world)
