@@ -199,6 +199,10 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 		scene.Terrain, scene.TerrainRect = bakePlayTerrain(terrain, pal)
 		scene.Name = "Playable Metal skirmish"
 	}
+	scene.TerrainTiles, err = BuildTerrainTiles(terrain, pal.Base)
+	if err != nil {
+		return nil, nil, err
+	}
 	scene.HeightField = battleHeightField(sess.World)
 	source := newBattleSource(scene, sess, fs, models, modelIndices, originY, [2]int{opts.Width, opts.Height})
 	source.spectator, source.palette = opts.ViewPlayer < 0, pal
@@ -248,6 +252,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	scene.Metadata["texture_multiplier"] = opts.TextureScale
 	scene.Metadata["atlas"] = atlas.metadata
 	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT background without depth writes; immutable height field supplies shadow receivers"}
+	scene.Metadata["terrain_tiles"] = map[string]any{"map_dimensions": [2]int{scene.TerrainTiles.Width, scene.TerrainTiles.Height}, "unique_referenced_tiles": scene.TerrainTiles.TileCount, "atlas_dimensions": [2]int{scene.TerrainTiles.Atlas.Width, scene.TerrainTiles.Atlas.Height}, "atlas_rgba_bytes": len(scene.TerrainTiles.Atlas.RGBA), "lookup_bytes": len(scene.TerrainTiles.Lookup) * 4, "tile_side": 32, "policy": "full-resolution original TNT pixels in unique tile atlas; nearest at identity, per-tile edge-clamped bilinear under fractional world transform; optional production detail source may replace at host load"}
 	scene.Metadata["pose_source"] = "worker reads pinned completed frame pairs; InstanceID matching snaps births, suppresses deaths and prevents slot-reuse blending"
 	scene.Metadata["presentation_buffer_ticks"] = 1
 	scene.Metadata["presentation_buffer_seconds"] = battlePeriod.Seconds()
