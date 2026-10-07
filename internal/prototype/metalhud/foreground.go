@@ -15,8 +15,10 @@ import (
 const atlasSize = 4096
 
 // Foreground is worker-owned. Prepare borrows the list synchronously; returned
-// quads and atlas bytes remain valid until the next Prepare. Palette tables and
-// loaded art must remain immutable for this object's lifetime.
+// quads, effect layers and atlas bytes remain valid until the next Prepare or
+// PrepareEffectLayers. Consumers must finish packing/copying before that call;
+// native command buffers read their own ring storage. Palette tables and loaded
+// art must remain immutable for this object's lifetime.
 type Foreground struct {
 	pal           *palette.Tables
 	w, h          int
@@ -26,6 +28,7 @@ type Foreground struct {
 	first         bool
 	x, y, shelf   int
 	quads         []meshscene.OverlayQuad
+	effectLayers  []meshscene.EffectLayer
 	err           error
 	world         bool
 	scale, ox, oy float32
@@ -68,6 +71,9 @@ func (f *Foreground) Prepare(list *drawlist.List) ([]meshscene.OverlayQuad, mesh
 }
 
 func (f *Foreground) beginPrepare() {
+	for i := range f.effectLayers {
+		resetEffectLayer(&f.effectLayers[i])
+	}
 	f.quads = f.quads[:0]
 	f.dirty = [4]int{}
 	if f.first {
