@@ -21,8 +21,9 @@ import (
 var shaderSource string
 
 type bridge struct {
-	create    func(int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
-	mesh      func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32) int32
+	create    func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
+	mesh      func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr) int32
+	assets    func(uintptr, uintptr) int32
 	texture   func(uintptr, int32, int32, int32, uintptr) int32
 	configure func(uintptr, uintptr, uintptr, int32) int32
 	frame     func(uintptr, uintptr, uintptr, float32, float64) int32
@@ -105,6 +106,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var b bridge
 	purego.RegisterLibFunc(&b.create, lib, "nm_create")
 	purego.RegisterLibFunc(&b.mesh, lib, "nm_mesh")
+	purego.RegisterLibFunc(&b.assets, lib, "nm_assets")
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
 	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
 	purego.RegisterLibFunc(&b.frame, lib, "nm_frame")
@@ -117,7 +119,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
 	shader := cstring(shaderSource)
 	errorText := make([]byte, 8192)
-	handle := b.create(int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), int32(opts.Frames+opts.Warmup), pointer(shader), pointer(errorText), int32(len(errorText)))
+	handle := b.create(int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), boolInt(opts.VisualPasses && scene.Live != nil), int32(opts.Frames+opts.Warmup), pointer(shader), pointer(errorText), int32(len(errorText)))
 	runtime.KeepAlive(shader)
 	runtime.KeepAlive(errorText)
 	if handle == 0 {
@@ -127,26 +129,35 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var vertexBytes, indexBytes, instanceBytes, drawnVertices, drawnIndices, drawCalls uint64
 	for i, m := range scene.Meshes {
 		var offsets []uint32
+		var visuals []meshscene.ModelVisual
 		for _, instance := range scene.Instances {
 			if instance.Mesh == i {
 				offsets = append(offsets, uint32(instance.PoseOffset))
+				visuals = append(visuals, instance.Visual)
 			}
 		}
 		if len(offsets) == 0 && scene.Live == nil {
 			continue
 		}
-		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets))) == 0 {
+		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload mesh %s", m.Name)
 		}
 		runtime.KeepAlive(m)
 		runtime.KeepAlive(offsets)
-		vertexBytes += uint64(len(m.Vertices)) * 48
-		indexBytes += uint64(len(m.Indices)) * 4
-		instanceBytes += uint64(len(offsets)) * 4
+		runtime.KeepAlive(visuals)
+		vertexBytes += uint64(len(m.Vertices)) * 64
+		indexBytes += uint64(len(m.Indices)+len(m.EdgeIndices)) * 4
+		instanceBytes += uint64(len(offsets)) * 68
 		drawnVertices += uint64(len(m.Vertices)) * uint64(len(offsets))
 		drawnIndices += uint64(len(m.Indices)) * uint64(len(offsets))
 		drawCalls++
 	}
+	assets := nativeAssets{Materials: pointer(scene.Materials), Frames: pointer(scene.TextureFrames), Heights: pointer(scene.HeightField.Values), MaterialCount: uint32(len(scene.Materials)), FrameCount: uint32(len(scene.TextureFrames)), Width: uint32(scene.HeightField.Width), Height: uint32(scene.HeightField.Height), Rect: scene.HeightField.Rect}
+	if b.assets(handle, uintptr(unsafe.Pointer(&assets))) == 0 {
+		return nil, fmt.Errorf("metalproto: upload retained visual assets")
+	}
+	runtime.KeepAlive(scene)
+	runtime.KeepAlive(assets)
 	textures := []meshscene.Texture{scene.Atlas, scene.Terrain}
 	if scene.Live != nil {
 		textures = append(textures, scene.SpriteAtlas)
@@ -170,7 +181,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var packing livePacking
 	if scene.Live != nil {
 		liveRows = make([]liveRow, len(rows))
-		packing.spans = make([]meshSpan, len(scene.Meshes))
+		packing.spans = make([]meshSpan, len(scene.Meshes)*3)
 		packing.cursor = make([]uint32, len(scene.Meshes))
 	}
 	var before, after runtime.MemStats
@@ -211,7 +222,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
 			}
 			prepStart := time.Now()
-			upload, metrics, err := packing.prepare(scene, live, seconds)
+			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses)
 			if err != nil {
 				return nil, err
 			}
@@ -280,6 +291,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if scene.Live != nil {
 		report["go_allocation_scope"] = "process-wide Go allocations including concurrent live-source worker during measured submission plus final drain"
 	}
+	report["visual_passes"] = opts.VisualPasses
+	report["retained_material_bytes"] = len(scene.Materials)*16 + len(scene.TextureFrames)*16
+	report["retained_height_bytes"] = len(scene.HeightField.Values) * 4
 	report["retained_vertex_bytes"] = vertexBytes
 	report["retained_index_bytes"] = indexBytes
 	report["retained_instance_bytes"] = instanceBytes
@@ -323,19 +337,22 @@ func validate(s *meshscene.Scene) error {
 			}
 		}
 	}
-	if unsafe.Sizeof(meshscene.Vertex{}) != 48 {
-		return fmt.Errorf("metalproto: vertex ABI is not 48 bytes")
+	if unsafe.Sizeof(meshscene.Vertex{}) != 64 {
+		return fmt.Errorf("metalproto: vertex ABI is not 64 bytes")
 	}
 	for i, m := range s.Meshes {
-		if len(m.Vertices) > math.MaxInt32 || len(m.Indices) > math.MaxInt32 || len(m.Indices)%3 != 0 {
+		if len(m.Vertices) > math.MaxInt32 || len(m.Indices) > math.MaxInt32 || len(m.Indices)%3 != 0 || len(m.EdgeIndices) > math.MaxInt32 || len(m.EdgeIndices)%2 != 0 {
 			return fmt.Errorf("metalproto: mesh %d has invalid counts", i)
 		}
-		for _, index := range m.Indices {
+		for _, index := range append(append([]uint32(nil), m.Indices...), m.EdgeIndices...) {
 			if uint64(index) >= uint64(len(m.Vertices)) {
 				return fmt.Errorf("metalproto: mesh %d has invalid index", i)
 			}
 		}
 		for _, v := range m.Vertices {
+			if v.Material != 0 && int(v.Material) >= len(s.Materials) {
+				return fmt.Errorf("metalproto: invalid material")
+			}
 			if uint64(v.Piece) >= uint64(m.Pieces) {
 				return fmt.Errorf("metalproto: mesh %d has invalid piece", i)
 			}
@@ -347,6 +364,21 @@ func validate(s *meshscene.Scene) error {
 				return fmt.Errorf("metalproto: instance has invalid mesh or pose span")
 			}
 		}
+	}
+	if unsafe.Sizeof(meshscene.Material{}) != 16 || unsafe.Sizeof(meshscene.ModelVisual{}) != 64 || unsafe.Sizeof(nativeAssets{}) != 56 {
+		return fmt.Errorf("metalproto: retained assets ABI mismatch")
+	}
+	for index, m := range s.Materials {
+		if index != 0 && m.FrameCount == 0 {
+			return fmt.Errorf("metalproto: empty material frame span")
+		}
+		if uint64(m.FirstFrame)+uint64(m.FrameCount) > uint64(len(s.TextureFrames)) {
+			return fmt.Errorf("metalproto: material frame span")
+		}
+	}
+	h := s.HeightField
+	if h.Width < 0 || h.Height < 0 || uint64(h.Width)*uint64(h.Height) != uint64(len(h.Values)) {
+		return fmt.Errorf("metalproto: invalid height field")
 	}
 	textures := []meshscene.Texture{s.Atlas, s.Terrain}
 	if s.Live != nil {

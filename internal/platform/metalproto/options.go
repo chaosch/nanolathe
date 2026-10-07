@@ -5,7 +5,7 @@ package metalproto
 
 // Options selects host presentation and measurement, not gameplay behavior.
 type Options struct {
-	Width, Height, Frames, Warmup, FPS int
-	Offscreen, VSync, Effects          bool
-	OutputDir, LibraryPath             string
+	Width, Height, Frames, Warmup, FPS      int
+	Offscreen, VSync, Effects, VisualPasses bool
+	OutputDir, LibraryPath                  string
 }
