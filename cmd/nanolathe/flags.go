@@ -29,6 +29,9 @@ import (
 // Options is the command-line surface for the retail runtime and its host
 // configuration. Developer probes and capture modes are separate tools.
 type Options struct {
+	MetalPrototype, MetalLibrary, MetalSize string
+	MetalFrames, MetalQuads, MetalTextures  int
+
 	// excludedMapRoot belongs only to a prepared map-removal mount; never saved.
 	excludedMapRoot   string
 	Gameplay          gameplay.Mode
@@ -224,6 +227,12 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 	})
 	set.BoolVar(&opts.ListInstalls, "list-installs", false, "print selected or discovered content roots, one per line, without mounting")
 	set.BoolVar(&opts.CheckInstall, "check-install", false, "validate selected content roots without opening a game window")
+	set.StringVar(&opts.MetalPrototype, "metal-prototype", "", "prototype: play the ordinary battle with a retained Metal world; write timing/capture artifacts to this new directory")
+	set.StringVar(&opts.MetalLibrary, "metal-library", "", "prototype native bridge library (default beside executable)")
+	set.StringVar(&opts.MetalSize, "metal-size", "2880x1800", "prototype drawable pixels, with a 2x logical HUD")
+	set.IntVar(&opts.MetalFrames, "metal-frames", 0, "prototype frame limit; zero plays until close")
+	set.IntVar(&opts.MetalQuads, "metal-quads", 5, "prototype mesh subdivisions: 1, 2 or 5")
+	set.IntVar(&opts.MetalTextures, "metal-textures", 2, "prototype texture scale: 1 or 2")
 	set.StringVar(&opts.SaveDir, "save-dir", "", "exact save/load directory (omitted uses savegame beneath the installation)")
 	set.StringVar(&opts.Map, "map", "", "map name without extension, e.g. \"ashap plateau\"")
 	set.BoolVar(&opts.Survival, "survival", false, "start a Survival battle on --map (docs/DESIGN_SURVIVAL.md)")

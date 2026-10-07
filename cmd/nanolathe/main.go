@@ -216,6 +216,10 @@ func run(opts Options, out, errOut *os.File) error {
 		return runHeadless(opts, content, out)
 	}
 
+	if opts.MetalPrototype != "" {
+		return runMetalPrototype(opts, content)
+	}
+
 	// All runtime entry points compose the retail game shell. The shell opens
 	// the authored menus, or enters the battle directly when --map is supplied.
 	return runGameShell(launch, opts, content)

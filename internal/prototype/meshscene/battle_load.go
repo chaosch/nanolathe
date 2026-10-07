@@ -127,6 +127,19 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	} else {
 		cx, cz = float32(fixture.CentreX), float32(fixture.CentreZ)
 	}
+	scene, _, err := retainBattle(opts, fs, cat, pal, sess, cx, cz, false)
+	if err != nil {
+		return nil, err
+	}
+	scene.Metadata["fixture"] = fixture
+	scene.Metadata["pretick_elapsed_seconds"] = warmDuration.Seconds()
+	return scene, nil
+}
+
+// retainBattle shares the immutable asset preparation between the independent
+// benchmark host and the production battle host. Only the caller owns ticks.
+func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *palette.Tables, sess *session.Session, cx, cz float32, wholeMap bool) (*Scene, *battleSource, error) {
+	mapName := battleModelMapName(opts.Map)
 	originY := float32(0) // Live geometry retains published world height; screen Y uses z-y/2.
 
 	// Preload the complete mounted objects3d namespace, including otherwise
@@ -154,11 +167,11 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		models = append(models, loaded)
 	}
 	if len(models) == 0 {
-		return nil, fmt.Errorf("nanolathe: live prototype models missing: logical path objects3d, providers searched [mounted content], expected retained 3DO meshes")
+		return nil, nil, fmt.Errorf("nanolathe: live prototype models missing: logical path objects3d, providers searched [mounted content], expected retained 3DO meshes")
 	}
 	atlas, err := buildAtlas(fs, models, pal, opts.TextureScale)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	atlas.useMaterials = true
 	scene := &Scene{Playable: opts.Playable, Name: "live ordinary three-army battle", Atlas: atlas.texture, Materials: atlas.materials, TextureFrames: atlas.frames, Camera: [3]float32{cx, cz, opts.Zoom}, Metadata: map[string]any{}}
@@ -174,9 +187,12 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	tntPath := "maps/" + mapName + ".tnt"
 	terrain, err := formats.LoadTNTFile(fs, tntPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	scene.Terrain, scene.TerrainRect = bakeTerrain(terrain, pal, cx, cz, 4096, 4096)
+	if wholeMap {
+		scene.Terrain, scene.TerrainRect = bakePlayTerrain(terrain, pal)
+	}
 	if opts.Playable {
 		scene.Terrain, scene.TerrainRect = bakePlayTerrain(terrain, pal)
 		scene.Name = "Playable Metal skirmish"
@@ -185,20 +201,20 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	source := newBattleSource(scene, sess, fs, models, modelIndices, originY, [2]int{opts.Width, opts.Height})
 	source.spectator, source.palette = opts.ViewPlayer < 0, pal
 	if err := source.prepareFog(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := source.prepareSprites(pal, cat); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if opts.Playable {
 		source.play, err = NewPlayController(fs, sess.Catalog, sess, models, source.viewport)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		scene.OverlayAtlas = source.play.OverlayAtlas()
 	}
 	if err := source.publishInitial(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	scene.Live = source
 	initial := source.latest.Load()
@@ -206,7 +222,6 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Frames = []PoseFrame{{Transforms: initial.frame.Previous}, {Transforms: initial.frame.Current}}
 	info, _ := fs.Stat(tntPath)
 	scene.Metadata["scene_kind"] = "live ordinary authoritative simbench session; no replicated or replayed units"
-	scene.Metadata["fixture"] = fixture
 	scene.Metadata["gameplay"] = "modern"
 	scene.Metadata["view_player"] = opts.ViewPlayer
 	scene.Metadata["spectator"] = source.spectator
@@ -216,7 +231,6 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Metadata["crt_seed"] = opts.Seed
 	scene.Metadata["requested_preticks"] = opts.Preticks
 	scene.Metadata["actual_preticks"] = sess.Clock.GlobalTick
-	scene.Metadata["pretick_elapsed_seconds"] = warmDuration.Seconds()
 	scene.Metadata["initial_census"] = initial.census
 	scene.Metadata["configured_unit_limit"] = max(headless.SimBenchDefaultUnitLimit, opts.ArmySize+1)
 	scene.Metadata["resolved_unit_limit"] = sess.Units.UnitLimit()
@@ -247,7 +261,7 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		scene.Metadata["playable"] = true
 		scene.Metadata["hud_atlas_bytes"] = len(scene.OverlayAtlas.RGBA)
 	}
-	return scene, nil
+	return scene, source, nil
 }
 
 func battleModelKey(name string) string {

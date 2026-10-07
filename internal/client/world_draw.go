@@ -596,6 +596,9 @@ func (c *Client) drawCommittedWorld(cur *frame.Frame, ok bool) {
 }
 
 func (c *Client) drawCommittedForeground(cur *frame.Frame) {
+	if c.retainedForeground {
+		c.drawRetainedAnnotations(cur)
+	}
 	c.drawSelectionStage()
 	// The strategic marker layer is world CONTENT at a fixed SCREEN size, so it
 	// too is positioned through the live factor and recorded outside the

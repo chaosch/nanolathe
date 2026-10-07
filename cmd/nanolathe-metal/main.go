@@ -66,39 +66,12 @@ func run() error {
 	flag.UintVar(&seed, "seed", 7, "live battle simulation and CRT seed")
 	flag.Float64Var(&zoom, "zoom", 0.75, "live battle pixels per world unit")
 	flag.BoolVar(&profile, "profile", false, "write a CPU profile of rendering and live simulation")
-	flag.BoolVar(&play, "play", false, "play an ordinary commander skirmish with native HUD and commands")
+	flag.BoolVar(&play, "play", false, "retired: use tools/metal-play for the production HUD and controls")
 	flag.IntVar(&difficulty, "difficulty", 1, "computer difficulty: 0 easy, 1 medium, 2 hard")
 	flag.StringVar(&computerAI, "ai", "modern", "computer controller: classic or modern")
 	flag.Parse()
-	explicit := map[string]bool{}
-	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	if play {
-		battle = true
-		viewPlayer = 0
-		if !explicit["map"] {
-			load.Map = "The Pass"
-		}
-		if !explicit["preticks"] {
-			preticks = 0
-		}
-		if !explicit["frames"] {
-			render.Frames = 0
-		}
-		if !explicit["warmup"] {
-			render.Warmup = 0
-		}
-		if !explicit["zoom"] {
-			zoom = 3
-		}
-		if !explicit["width"] {
-			render.Width = 2880
-		}
-		if !explicit["height"] {
-			render.Height = 1800
-		}
-		if difficulty < 0 || difficulty > 2 || (computerAI != "classic" && computerAI != "modern") {
-			return fmt.Errorf("nanolathe: Metal match: invalid AI or difficulty")
-		}
+		return fmt.Errorf("nanolathe: --play moved to tools/metal-play, which uses the production HUD and controls")
 	}
 	if battle {
 		mapExplicit := false
