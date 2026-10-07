@@ -59,11 +59,16 @@ type effectArtKey struct {
 
 // PrepareEffectLayers uses one effects-only Foreground for every layer in a
 // presentation. One call aggregates atlas changes; DirtyRect is valid until the
-// next Prepare/PrepareEffectLayers. Returned quads borrow this adapter, while
-// model packets borrow the independently owned recorded batches.
+// next Prepare/PrepareEffectLayers. Layers and their nested slices borrow this
+// adapter; model packets still borrow the independently owned recorded batches.
+// The presentation owner must finish all source gathers and native packing/copy
+// before preparing another frame [DESIGN_GPU_RENDERER §2.1, C-G5].
 func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.EffectLayer, meshscene.Texture, uint64, error) {
 	f.beginPrepare()
-	layers := make([]meshscene.EffectLayer, len(groups))
+	for len(f.effectLayers) < len(groups) {
+		f.effectLayers = append(f.effectLayers, meshscene.EffectLayer{})
+	}
+	layers := f.effectLayers[:len(groups)]
 	for i, batches := range groups {
 		start := len(f.quads)
 		s := effectSink{Foreground: f, layer: &layers[i], base: start}
@@ -74,6 +79,9 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 			s.projectileModels = batch.ProjectileModels
 			s.projectileOrder, s.projectileAt = batch.ProjectileOrder, 0
 			s.source = meshscene.EffectSources{}
+			if at := len(s.layer.Sources); at < cap(s.layer.Sources) {
+				s.source = s.layer.Sources[:cap(s.layer.Sources)][at]
+			}
 			batch.List.VisitLightSources(func(c drawlist.Sprite) { s.source.Art = append(s.source.Art, c) })
 			if batch.SourceOnly {
 				spaces := batch.List.WorldSpaces()
@@ -97,6 +105,41 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 		layers[i].Quads = f.quads[start:len(f.quads)]
 	}
 	return layers, f.atlas, f.version, f.err
+}
+
+// Reset only adapter-owned receivers after the previous consumer has copied
+// them. Keep nested receiver capacities, but release every recorded model/art
+// reference so a smaller next frame cannot retain an old client's batches.
+// Inactive slots were already reset when they last appeared in a layer.
+func resetEffectLayer(l *meshscene.EffectLayer) {
+	l.Quads = nil
+	l.Ops = l.Ops[:0]
+	for i := range l.Lenses {
+		lens := &l.Lenses[i]
+		*lens = meshscene.EffectLens{Samples: lens.Samples[:0]}
+	}
+	l.Lenses = l.Lenses[:0]
+	for i := range l.Models {
+		model := &l.Models[i]
+		*model = meshscene.EffectGeometry{Vertices: model.Vertices[:0]}
+	}
+	l.Models = l.Models[:0]
+	clear(l.RetainedModels)
+	l.RetainedModels = l.RetainedModels[:0]
+	l.ProjectileOrder = l.ProjectileOrder[:0]
+	for i := range l.Sources {
+		source := &l.Sources[i]
+		clear(source.Art)
+		clear(source.Sprites)
+		clear(source.Nano)
+		clear(source.Flashes)
+		*source = meshscene.EffectSources{Art: source.Art[:0], Sprites: source.Sprites[:0],
+			Lines: source.Lines[:0], Nano: source.Nano[:0], Flashes: source.Flashes[:0], Halos: source.Halos[:0]}
+	}
+	l.Sources = l.Sources[:0]
+	l.Counts = meshscene.EffectCounts{}
+	l.Ground = l.Ground[:0]
+	l.Smoke = l.Smoke[:0]
 }
 
 type effectSink struct {
@@ -260,6 +303,9 @@ func (s *effectSink) Model(c drawlist.Model) {
 		scale, ox, oy = s.scale, s.ox, s.oy
 	}
 	packet := meshscene.EffectGeometry{Model: c, Scale: scale, OffsetX: ox, OffsetY: oy}
+	if i < cap(s.layer.Models) {
+		packet.Vertices = s.layer.Models[:cap(s.layer.Models)][i].Vertices
+	}
 	s.projectModel(&packet)
 	s.layer.Models = append(s.layer.Models, packet)
 	s.layer.Ops = append(s.layer.Ops, meshscene.EffectOp{Kind: meshscene.EffectOpGeometry, First: i, Count: 1})
@@ -466,6 +512,9 @@ func (s *effectSink) Halo(c drawlist.Halo) {
 func (s *effectSink) Lens(c drawlist.Lens) {
 	s.layer.Counts.Lenses++
 	var out meshscene.EffectLens
+	if i := len(s.layer.Lenses); i < cap(s.layer.Lenses) {
+		out.Samples = s.layer.Lenses[:cap(s.layer.Lenses)][i].Samples
+	}
 	r, g, b, _ := s.pal.RGBA(c.Key)
 	out.KeyRGB = [3]uint8{r, g, b}
 	bound := c.Bounds()
