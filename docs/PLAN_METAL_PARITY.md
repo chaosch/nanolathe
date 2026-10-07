@@ -135,3 +135,23 @@ keys may differ by one byte. This is recorded as
 TODO(retained-outline-admission), alongside the existing transform/cache gaps.
 Do not claim exact pixel parity. The final frozen comparison repeats all ten
 1080p cases and adds four 3456x2160 field cases before the report is finalized.
+
+
+## Final measured checkpoint
+
+All fourteen frozen 193e663f cases completed and passed their saved-artifact
+validation: ten 1920x1080 cases and four 3456x2160 field cases, full simulation
+throughout. Root inspected matching captures at both resolutions and the final
+ordinary-match opening; the extra construction cage is gone. Native errors and
+all-frame unsupported-outline counts are zero. No tests were run, no production
+landing attempted, and no complete victory/defeat match played.
+
+The report and launcher are packaged under the renderer-comparison artifact
+directory and the findings are copied into docs/PROTOTYPE_METAL.md, whose opening
+now points to the latest comparison. Baseline host FPS is 55/101/103 coastal,
+65/94/96 field at 1080p and 30/69/66 field at 3456x2160 (Classic/Modern/Metal).
+The larger view contains 729–821 unit anchors, with the same 1,433–1,502 units
+in simulation. Fivefold geometry with doubled atlas dimensions measures about
+90/93/57 native FPS across those scenes. Remaining fidelity contracts above
+and 120/144 Hz remain unmet; the recommendation is opt-in experimentation,
+per-pass GPU/bandwidth work and focused visual parity work before adoption.

@@ -1,5 +1,10 @@
 # Retained Metal renderer experiment
 
+**Latest result (2026-10-07):** the matched full-simulation comparison is in
+[Final full-simulation comparison](#final-full-simulation-comparison).
+It supersedes the earlier near-120 Hz recommendation: baseline Metal is close
+to Modern, and exact renderer parity and steady 120 Hz remain unmet.
+
 This is the user-requested throwaway macOS prototype of 2026-10-06, isolated on
 `metal-prototype`. It does not select a new production renderer or change any
 simulation behavior. The user explicitly requested no tests; verification is
@@ -27,7 +32,7 @@ the Go executable does not require cgo for this bridge.
 
 The current renderer's relevant costs and visual contracts are described in
 [DESIGN_GPU_RENDERER](DESIGN_GPU_RENDERER.md), especially §13.5, §22 and §35.
-This experiment deliberately uses modern depth geometry and sampled floating
+The initial replay experiment deliberately used modern depth geometry and sampled floating
 point transforms; it is not a reproduction of retail's byte height-key raster,
 per-subject images, or its palette composition arithmetic.
 
@@ -1109,3 +1114,128 @@ prototype remains unmerged.
 Binaries, launcher, native source, hashes, commands, captures and reports are in
 `/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-composition/`.
 Earlier `metal-match` and `metal-motion` packages are preserved.
+
+
+## Final full-simulation comparison
+
+The prototype is playable with the existing HUD, controls, audio and simulation.
+It retains meshes/shared UV textures on the GPU and uses vertex, fragment and
+compute shaders for animation and visual passes, through a purego Metal bridge.
+
+Exact renderer parity and steady 120 FPS remain unmet. Keep Modern as the
+default and Metal opt-in: retained geometry scales usefully, but baseline
+throughput is close to Modern and does not yet justify replacing it.
+
+### Performance
+Host draws/second, followed by p95 frame interval in milliseconds:
+
+| Scene / physical viewport | Classic CPU | Modern GPU | Metal |
+|---|---:|---:|---:|
+| Coastal, 1920x1080 | 54.6 / 26.6 | 101.3 / 15.6 | 103.0 / 15.1 |
+| Field, 1920x1080 | 65.0 / 27.7 | 93.7 / 17.7 | 95.5 / 17.0 |
+| Field, 3456x2160 | 29.7 / 51.5 | 69.2 / 24.9 | 66.5 / 25.8 |
+
+Metal density stress; both columns use doubled atlas dimensions:
+
+| Scene / physical viewport | 2x geometry | 5x geometry |
+|---|---:|---:|
+| Coastal, 1920x1080 | 101.4 draws/s | 89.8 draws/s |
+| Field, 1920x1080 | 96.5 draws/s | 92.6 draws/s |
+| Field, 3456x2160 | not run | 57.4 draws/s |
+
+The large final frame submits 103,954 body triangles, or 519,770 at 5x.
+Subdivision adds vertex/index work, not new silhouettes or bones. Doubled
+textures use nearest scaling and 4x texel storage, not authored HD art.
+Small timing differences are not evidence that more geometry is faster.
+
+Metal GPU spans p50/p95: 8.0/10.6 ms coastal, 7.3/14.9 ms field, and 16.0/21.3
+ms in the larger view. These command spans can overlap and cannot be compared
+to Ebitengine CPU submission time. The 120/144 Hz budgets are 8.33/6.94 ms;
+visible 144 Hz was not tested on this 120 Hz panel. Native presentation p95
+was 16.67 ms at 1080p and 25.0 ms in the larger view.
+
+### What was fixed / what remains
+Corrections cover clipped sprites, model face ordering including the Solar
+base, terrain/fog filtering, wreck identity/pose instability, production effect
+ordering and missing visual passes. The final GPU row-extrema outline pass
+removes the stray grey construction cage. Matching Modern/Metal captures were
+inspected at both resolutions; outline-comparison.png shows the correction.
+
+Remaining differences include fixed-point transform rounding, cache/direct
+selection, cached/live pose and key-plane history, fractional rasterization,
+some shadow boundaries, destination-palette ALP blending, and optimized small
+outline-ring key admission. Deep cargo chains, secondary projectile models
+and live terrain gamma/skin reload also need coverage. Not every reported
+wreck flicker is proven resolved. Reports keep render_parity_verified=false.
+
+Suppressed effect-marker counters include offscreen body markers without an
+admitted slot; they are not a count of missing projectile shadows. Actual
+projectile shadows use the stock sprite pass. The aggregate needs finer
+classification before using it to claim complete effect coverage.
+
+### Costs and benefits
+Reviewed allocation fixes reduced native bytes/draw from 3.93 to 1.74 MiB
+coastal and 4.31 to 2.52 MiB field: 56% and 41% reductions, with identical
+captures/state in the isolated follow-up. The large view uses 3.35 MiB/draw.
+Allocation stays effectively flat as geometry grows, but still exceeds
+Modern's corresponding 0.92/0.80/1.32 MiB/draw. Profiles still show significant
+clearing and native-call time; native driver waits need better attribution.
+
+The shared model atlas is only 8 MiB, or 32 MiB at doubled dimensions. Total
+Metal allocation is about 1,020 MiB at baseline 1080p, 1,818 MiB in the larger
+view and 1,959 MiB there at 5x geometry. Composition/shadow atlases, effects
+and staging dominate beyond the art atlas. Large-view baseline Go heap after
+GC is separately 1,227 MiB; these numbers are not combined process RSS.
+Direct shader/resource control is useful, but native resource ownership and
+macOS bridge maintenance add substantial complexity.
+
+### Measurement scope
+Apple M3 Pro, 18 GB, Go 1.27.1, Ebitengine 2.10.4, GOMAXPROCS=2. Fourteen
+sequential runs used one frozen build/settings, seed 7, zoom 1, Modern gameplay,
+no mods/restrictions/mutators and active factory construction. Each warms 240
+draws, then measures 3,600 draws and 900 full simulation ticks. Coastal has 300
+lead-in ticks; field has 1,200 and three 500-unit fixture armies.
+
+Field census: 1,433–1,502 units, 439–1,123 moving, 29–45 nanoframes. In-view
+unit anchors rise from 123–172 at 1080p to 729–821 at 3456x2160. This includes
+the whole simulation, not merely pose replay. Four draws per tick keep saved
+states comparable; slow renderers take longer wall time. The playable host
+instead runs simulation in the background. Classic retains its own visual
+style; these are backend comparisons, not identical pixel workloads.
+
+All audits passed: settings, surfaces, schedules, authoritative census, four
+boundary fingerprints/RNG counts, three full publication pairs and complete
+start/end snapshots. This proves the saved scope, not every-draw state or
+pixel parity. All native GPU commands completed with no native errors and zero
+unsupported outline rings. Four of 28,800 expected measured-frame presentation callbacks
+were missing. No tests were added or run; the prototype remains unmerged.
+
+### Recommendation
+1. Close the specific visual contracts above using matched pose, cargo,
+   construction, waterline and fractional-zoom captures. Keep production HUD,
+   input and presentation policy; do not build another frontend.
+2. Measure individual Metal passes and native encode/drawable waits, then
+   reduce composition/effect bandwidth and allocation/clearing. Large-view
+   GPU time already exceeds the 120 Hz budget before other work.
+3. Keep retained meshes/atlases and a narrow backend interface. Remove
+   duplicate preparation only with proven publication/buffer lifetimes.
+   Evaluate genuinely denser authored UV-mapped art next.
+4. Repeat full-sim comparisons and finish a complete playable match before
+   adoption, portability work or polishing a general graphics library.
+
+### Try it / artifacts
+Open Play Metal Match.command: The Pass versus Modern AI, production HUD and
+controls, 2560x1600, retail assets from ~/TotalAnnihilation. It reads normal
+saved preferences without saving changes. Optional Terminal arguments include
+--metal-quads=5 --metal-textures=2. The final opening ran 1,800 measured frames
+without native errors, input overflow or missing presentation callbacks; no
+victory/defeat match was completed.
+
+Frozen build: 193e663f82aac5d6bfad9d9912cf38cb63ce98a2.
+build-final/manifest.json records hashes/build commands. final-batches.json
+locates both final matrices, with exact commands/settings, profiles, captures,
+state snapshots, validation-audit.json and summary-metrics.json. Repeat a saved
+case command with a fresh output path. Earlier near-120 Hz experiments used a
+less complete presentation path and are not the final comparison above.
+
+Artifact directory: `/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/renderer-comparison`.
