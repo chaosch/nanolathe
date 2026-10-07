@@ -19,7 +19,9 @@ typedef struct { vector_float4 camera,rect,viewport,timing; } NMUniforms;
  NMRow* rows;
  NSUInteger rowCount, rowCapacity, poseCount, frameNumber;
  dispatch_semaphore_t available;
- dispatch_group_t pending;
+ dispatch_group_t pending, presentations;
+ BOOL presentationDrainTimedOut;
+ NSUInteger presentationDrainRowCount;
  BOOL offscreen,effects;
 }
 @property id<MTLDevice> device;
@@ -51,7 +53,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int c
  @autoreleasepool {
  if(![NSThread isMainThread]){copyError(error,errorSize,@"Metal window must be initialized on the process main thread");return NULL;}
  NMRenderer* r=[NMRenderer new];r.device=MTLCreateSystemDefaultDevice();if(!r.device){copyError(error,errorSize,@"No Metal device");return NULL;}
- r.queue=[r.device newCommandQueue];r.meshes=[NSMutableArray new];r.poses=[NSMutableArray new];r->offscreen=isOffscreen;r->effects=effects;r->available=dispatch_semaphore_create(3);r->pending=dispatch_group_create();r->rowCapacity=capacity;r->rows=calloc(capacity,sizeof(NMRow));
+ r.queue=[r.device newCommandQueue];r.meshes=[NSMutableArray new];r.poses=[NSMutableArray new];r->offscreen=isOffscreen;r->effects=effects;r->available=dispatch_semaphore_create(3);r->pending=dispatch_group_create();r->presentations=dispatch_group_create();r->rowCapacity=capacity;r->rows=calloc(capacity,sizeof(NMRow));
  r->uniforms.viewport=(vector_float4){width,height,0,0};
  NSError* e=nil;id<MTLLibrary> lib=[r.device newLibraryWithSource:[NSString stringWithUTF8String:shader] options:nil error:&e];
  if(!lib){copyError(error,errorSize,e.localizedDescription);return NULL;}
@@ -111,11 +113,11 @@ int nm_frame(void* handle,const void* previous,const void* next,float alpha,doub
  double ready=CACurrentMediaTime();NSUInteger rowIndex=r->rowCount++;NMRow* row=&r->rows[rowIndex];row->wait=(acquired-start)*1000;row->drawable_wait=(ready-acquired)*1000;
  id<MTLBuffer> poses=r.poses[r->frameNumber%3];memcpy(poses.contents,previous,r->poseCount*64);memcpy((char*)poses.contents+r->poseCount*64,next,r->poseCount*64);
  NMUniforms u=r->uniforms;u.timing=(vector_float4){alpha,(float)seconds,(float)r->poseCount,r->effects?1:0};r->lastUniforms=u;id<MTLCommandBuffer> cb=[r.queue commandBuffer];encode(r,cb,poses,u,drawable?drawable.texture:r.output);
- if(drawable){[cb presentDrawable:drawable];[drawable addPresentedHandler:^(id<MTLDrawable> d){@synchronized(r){r->rows[rowIndex].presented=d.presentedTime;}}];}
+ if(drawable){dispatch_group_enter(r->presentations);[drawable addPresentedHandler:^(id<MTLDrawable> d){@synchronized(r){r->rows[rowIndex].presented=d.presentedTime;}dispatch_group_leave(r->presentations);}];[cb presentDrawable:drawable];}
  row->encode=(CACurrentMediaTime()-ready)*1000;row->submit=CACurrentMediaTime();row->memory=r.device.currentAllocatedSize;dispatch_group_enter(r->pending);
  [cb addCompletedHandler:^(id<MTLCommandBuffer> b){NMRow* result=&r->rows[rowIndex];result->gpu_start=b.GPUStartTime;result->gpu_end=b.GPUEndTime;result->completed=CACurrentMediaTime();result->status=(int)b.status;if(b.error)r.lastError=b.error.localizedDescription;dispatch_semaphore_signal(r->available);dispatch_group_leave(r->pending);}];[cb commit];r->frameNumber++;return 1;}
 }
-void nm_drain(void* handle) {NMRenderer* r=(__bridge NMRenderer*)handle;dispatch_group_wait(r->pending,DISPATCH_TIME_FOREVER);}
+void nm_drain(void* handle) {NMRenderer* r=(__bridge NMRenderer*)handle;dispatch_group_wait(r->pending,DISPATCH_TIME_FOREVER);if(!r->offscreen&&r->presentationDrainRowCount!=r->rowCount){r->presentationDrainRowCount=r->rowCount;r->presentationDrainTimedOut=dispatch_group_wait(r->presentations,dispatch_time(DISPATCH_TIME_NOW,250*NSEC_PER_MSEC))!=0;}}
 int nm_rows(void* handle,void* output,int capacity) {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger n=MIN((NSUInteger)capacity,r->rowCount);@synchronized(r){memcpy(output,r->rows,n*sizeof(NMRow));}return (int)n;}
 int nm_capture(void* handle,const char* path) {
  @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;nm_drain(handle);NSUInteger last=(r->frameNumber-1)%3;NMUniforms u=r->lastUniforms;
@@ -126,6 +128,6 @@ int nm_capture(void* handle,const char* path) {
  NSData* png=[image representationUsingType:NSBitmapImageFileTypePNG properties:@{}];return [png writeToFile:[NSString stringWithUTF8String:path] atomically:YES]?1:0;}
 }
 void nm_info(void* handle,char* output,int capacity) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSDictionary* info=@{@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSData* d=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
+ @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSDictionary* info=@{@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSData* d=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
 }
 void nm_destroy(void* handle) { @autoreleasepool {NMRenderer* r=(__bridge_transfer NMRenderer*)handle;nm_drain((__bridge void*)r);[r.window orderOut:nil];[r.window close];} }
