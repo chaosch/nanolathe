@@ -37,3 +37,10 @@ func (m metalPreparedMaterial) Resolve(piece, primitive int, current bool) (mesh
 	s, ok := m.source.Resolve(piece, primitive, current)
 	return meshscene.ModelMaterialSelection{Frame: s.Frame, Color: s.Color, Skip: s.Skip, Material: s.Material, Glint: s.Glint}, ok
 }
+
+// CacheKey lets the retained source reuse a walk whose selections cannot
+// differ: same model, texture generation, skin and owner selector, and no
+// animated texture.
+func (m metalPreparedMaterial) CacheKey() (any, bool) {
+	return m.source.CacheKey()
+}

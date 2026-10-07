@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
@@ -25,29 +26,51 @@ type metalEffectFrame struct {
 	LightSources                                                     client.RetainedLightSources
 }
 
-// recordMetalEffects must run once per presented pinned frame, after the
-// client's BeginPresentationFrame and before recording its foreground. Give it
-// a dedicated adapter, so HUD Prepare cannot replace borrowed effect quads or
+// metalEffectRecorder keeps one presenter's effect copies and adapter inputs
+// between draws. Each record overwrites the previous draw's batches, which the
+// native submission has already copied [I6].
+type metalEffectRecorder struct {
+	storage client.RetainedEffectStorage
+	groups  [5][]metalhud.EffectBatch
+	orders  [][]meshscene.EffectProjectileModel
+	// recordMS and adaptMS split one record call (diagnostic).
+	recordMS, adaptMS float64
+}
+
+// record must run once per presented pinned frame, after the client's
+// BeginPresentationFrame and before recording its foreground. Give it a
+// dedicated adapter, so HUD Prepare cannot replace borrowed effect quads or
 // lose the aggregated effects-atlas upload rectangle.
-func recordMetalEffects(cl *client.Client, adapter *metalhud.Foreground) (metalEffectFrame, error) {
+func (r *metalEffectRecorder) record(cl *client.Client, adapter *metalhud.Foreground) (metalEffectFrame, error) {
 	var out metalEffectFrame
 	if cl == nil || adapter == nil {
 		return out, fmt.Errorf("nanolathe: native stock-effects recording requires client and atlas adapter")
 	}
-	recorded := cl.RecordRetainedEffects()
-	groups := make([][]metalhud.EffectBatch, 5)
+	start := time.Now()
+	recorded := cl.RecordRetainedEffectsInto(&r.storage)
+	r.recordMS = float64(time.Since(start)) / 1e6
+	start = time.Now()
+	groups := r.groups[:]
+	order := 0
 	for i, batches := range [][]client.RetainedEffectBatch{recorded.BeforeFeatures, recorded.BeforeGround, recorded.AfterGround, recorded.AfterAir, recorded.AfterLabels} {
+		groups[i] = groups[i][:0]
 		for j := range batches {
-			order := make([]meshscene.EffectProjectileModel, len(batches[j].ProjectileOrder))
-			for k, e := range batches[j].ProjectileOrder {
-				order[k] = meshscene.EffectProjectileModel{ID: e.ID, Member: e.Member}
+			if order == len(r.orders) {
+				r.orders = append(r.orders, nil)
 			}
-			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels, ProjectileOrder: order})
+			converted := r.orders[order][:0]
+			for _, e := range batches[j].ProjectileOrder {
+				converted = append(converted, meshscene.EffectProjectileModel{ID: e.ID, Member: e.Member})
+			}
+			r.orders[order] = converted
+			order++
+			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels, ProjectileOrder: converted})
 		}
 	}
 	groups[0] = append(groups[0], metalhud.EffectBatch{List: &recorded.LightSources.Short, SourceOnly: true})
 	groups[1] = append(groups[1], metalhud.EffectBatch{List: &recorded.LightSources.Ground, SourceOnly: true})
 	layers, atlas, version, err := adapter.PrepareEffectLayers(groups)
+	r.adaptMS = float64(time.Since(start)) / 1e6
 	out.Atlas, out.Version, out.Dirty = atlas, version, adapter.DirtyRect()
 	out.ProductionEffects, out.ProductionStrips = recorded.Effects, recorded.Strips
 	out.LightSources = recorded.LightSources

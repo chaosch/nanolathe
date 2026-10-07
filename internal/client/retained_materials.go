@@ -215,3 +215,32 @@ func (c *Client) RetainedMaterialFrames() []*formats.GAFFrame {
 	}
 	return out
 }
+
+// RetainedMaterialKey names every subject-wide input Resolve reads. Two
+// resolvers with equal keys select identical primitives for every piece,
+// primitive and cursor lane, unless the model has an animated texture.
+type RetainedMaterialKey struct {
+	model      *unitModel
+	refs       *modelTexRefs
+	skin       *ModelSkin
+	selector   teamColor
+	projectile bool
+}
+
+// CacheKey reports the resolver's key, and false when a selection can change
+// without the key changing: an animated texture's cursor advances between
+// presentations, and an unprepared resolver has no table to key. The texture
+// table is per index generation, so a reload yields a new key.
+func (r RetainedMaterialResolver) CacheKey() (RetainedMaterialKey, bool) {
+	if r.client == nil || r.model == nil || r.model.compiled == nil || r.refs == nil {
+		return RetainedMaterialKey{}, false
+	}
+	for _, piece := range r.refs.refs {
+		for _, ref := range piece {
+			if ref.kind == texAnimated {
+				return RetainedMaterialKey{}, false
+			}
+		}
+	}
+	return RetainedMaterialKey{model: r.model, refs: r.refs, skin: r.skin, selector: r.selector, projectile: r.projectile}, true
+}

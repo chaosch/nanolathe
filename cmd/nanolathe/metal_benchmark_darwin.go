@@ -26,7 +26,11 @@ type metalBenchmarkRow struct {
 	TickPhase                                                      int
 	Step, Record, Submit, Cadence, PaceWait, OutsideDraw, DrawWork float64
 	Source, Packing, CensusMS                                      float64
-	Census                                                         any
+	// Parts splits Record: begin+camera, world frame, visuals, foreground+HUD,
+	// frame sources, projection, composer, shadows (milliseconds, diagnostic).
+	Parts  [20]float64
+	World  [17]float64
+	Census any
 }
 
 // The benchmark shares fixture, viewer step and census with both production
@@ -142,6 +146,12 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	}
 	h.c.SetTickFraction(float32(phase) / float32(drawsPerTick))
 	start := time.Now()
+	part, mark := 0, start
+	split := func() {
+		now := time.Now()
+		h.row.Parts[part] = float64(now.Sub(mark)) / 1e6
+		part, mark = part+1, now
+	}
 	h.c.BeginPresentationFrame()
 	fraction := h.c.ResolveTickFraction()
 	view := h.c.CameraViewFor(h.c.PresentationDigest())
@@ -151,6 +161,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	// this does not create an independent simulation or presentation clock.
 	h.world.SetSourceEffects(h.c.Effects())
 	h.world.SetDitheredFog(h.c.DitheredFog())
+	split()
 	if h.current != current || h.previous != previous || h.camera != camera || current != nil && h.frame.Tick != current.Tick {
 		sourcePrevious := previous
 		_, _, blend := h.c.PresentedTicks()
@@ -158,9 +169,13 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 			sourcePrevious = current
 		}
 		h.frame = h.world.Frame(sourcePrevious, current, camera)
+		copy(h.row.World[:], h.world.Timings[:])
+		h.row.World[9], h.row.World[10] = h.world.UnitPose, h.world.UnitVisual
+		copy(h.row.World[11:], h.world.SpriteSplits[:])
 		h.current, h.previous, h.camera = current, previous, camera
 	}
 	h.frame.Alpha = float32(fraction) / 65536
+	split()
 	display := h.c.DisplayPalette()
 	if display != h.palette {
 		var pal palette.Tables
@@ -176,6 +191,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	if err := h.visuals.Prepare(h.c, &h.frame, h.options.Width, h.options.Height, 1); err != nil {
 		return meshscene.LiveFrame{}, err
 	}
+	split()
 	quads, texture, version, err := h.hud.Prepare(h.c.RecordRetainedForeground())
 	if err != nil {
 		return meshscene.LiveFrame{}, err
@@ -185,10 +201,13 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	for i, value := range h.hud.DirtyRect() {
 		h.frame.OverlayDirty[i] = uint32(value)
 	}
+	split()
 	prepareMetalFrame(h.c, h.world, h.scene, &h.frame, current, h.options.Width, h.options.Height)
+	split()
 	if err := prepareMetalProjection(h.c, h.world, &h.frame, 1); err != nil {
 		return meshscene.LiveFrame{}, err
 	}
+	split()
 	if h.composer == nil {
 		h.composer = newMetalModelComposer(h.scene)
 	}
@@ -197,6 +216,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		return meshscene.LiveFrame{}, err
 	}
 	h.frame.Composition, h.frame.Composed = composition, true
+	split()
 	if h.shadows == nil {
 		h.shadows = newMetalShadowComposer(h.world)
 	}
@@ -204,6 +224,9 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	if err != nil {
 		return meshscene.LiveFrame{}, err
 	}
+	split()
+	copy(h.row.Parts[8:], h.visuals.parts[:])
+	copy(h.row.Parts[12:], h.visuals.effects.storage.Timings[:])
 	h.row.Record = benchmarkElapsed(start)
 	if h.draw >= h.options.TPS*2 {
 		start := time.Now()

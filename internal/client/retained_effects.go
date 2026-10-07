@@ -1,6 +1,11 @@
 package client
 
-import "github.com/nanolathe-gg/nanolathe/internal/drawlist"
+import (
+	"time"
+
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/platform/gpurender"
+)
 
 // RetainedEffectBatch owns its commands and mutable geometry. ProjectileModels
 // identifies the projectile pool's batch: a retained world producer may already
@@ -32,6 +37,38 @@ type RetainedEffects struct {
 // building-foam admission and active wreck extent measurement retain their
 // canonical pose walks, without building the world's model packets [I4, I6].
 func (c *Client) RecordRetainedEffects() RetainedEffects {
+	return c.RecordRetainedEffectsInto(nil)
+}
+
+// RetainedEffectStorage holds one presenter's batch copies between calls. A
+// recording made into it is the same deep copy RecordRetainedEffects returns,
+// but it reuses the previous recording's storage, so it stays valid only until
+// the next RecordRetainedEffectsInto with the same storage [I6].
+type RetainedEffectStorage struct {
+	lists         [7]drawlist.List
+	orders        [7][]RetainedProjectileModel
+	batches       [7]RetainedEffectBatch
+	short, ground drawlist.List
+	art, leaves   []drawlist.Sprite
+	wrecks        []gpurender.RetainedWreckSource
+	// Milliseconds per batch, then light sources, of the last recording (diagnostic).
+	Timings [8]float64
+}
+
+// cloneRetained deep-copies the recording list, into storage when supplied.
+func (c *Client) cloneRetained(storage *RetainedEffectStorage, slot func(*RetainedEffectStorage) *drawlist.List) drawlist.List {
+	if storage == nil {
+		return c.list.Clone()
+	}
+	dst := slot(storage)
+	c.list.CloneInto(dst)
+	return *dst
+}
+
+// RecordRetainedEffectsInto is RecordRetainedEffects with reusable storage; a
+// nil storage allocates fresh copies. Recording order and every producer call
+// are identical either way.
+func (c *Client) RecordRetainedEffectsInto(storage *RetainedEffectStorage) RetainedEffects {
 	var out RetainedEffects
 	if c == nil || c.cam == nil || len(c.indexed) != c.width*c.height {
 		return out
@@ -64,8 +101,19 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 	// The existing store sweeps before this frame's debris can emit containers.
 	// Neither stepping nor creation is repeated by native replay [04 R-COB-04 §2].
 	c.stepDebrisTrails(cur)
+	recorded := 0
 	record := func(projectiles bool, draw func()) RetainedEffectBatch {
+		k := recorded
+		recorded++
+		if storage != nil {
+			start := time.Now()
+			defer func() { storage.Timings[k] = float64(time.Since(start)) / 1e6 }()
+		}
 		batch := RetainedEffectBatch{ProjectileModels: projectiles}
+		if storage != nil {
+			batch.ProjectileOrder = storage.orders[k][:0]
+			defer func() { storage.orders[k] = batch.ProjectileOrder[:0] }()
+		}
 		previousOrder := c.retainedProjectileOrder
 		c.retainedProjectileOrder = nil
 		if projectiles {
@@ -76,10 +124,18 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 		c.emitWorldBegin()
 		draw()
 		c.emitWorldEnd()
-		batch.List = c.list.Clone()
+		batch.List = c.cloneRetained(storage, func(s *RetainedEffectStorage) *drawlist.List { return &s.lists[k] })
 		return batch
 	}
-	out.BeforeFeatures = []RetainedEffectBatch{record(false, func() {
+	// Batches keep record order; with storage their slices are reused too.
+	batches := func(n int) []RetainedEffectBatch {
+		if storage == nil {
+			return make([]RetainedEffectBatch, n)
+		}
+		return storage.batches[recorded : recorded+n : recorded+n]
+	}
+	out.BeforeFeatures = batches(1)
+	out.BeforeFeatures[0] = record(false, func() {
 		c.drawTerrainPrep()
 		if c.effects.Scorch {
 			c.drawScorchMarks(committed)
@@ -102,24 +158,30 @@ func (c *Client) RecordRetainedEffects() RetainedEffects {
 		c.drawStripSlot(cur, 0)
 		c.drawStripSlot(cur, 1)
 		c.drawStripSlot(cur, 2)
-	})}
-	out.BeforeGround = []RetainedEffectBatch{record(false, func() {
+	})
+	out.BeforeGround = batches(1)
+	out.BeforeGround[0] = record(false, func() {
 		c.drawStripSlot(cur, 3)
 		c.drawStripSlot(cur, 4)
-	})}
-	out.AfterGround = []RetainedEffectBatch{
-		record(false, func() { c.drawStripSlot(cur, 5); c.drawEffects(cur) }),
-		record(true, func() { c.drawProjectiles(cur) }),
-		record(false, func() { c.drawFixedEffects(cur); c.drawStripSlot(cur, 7) }),
-	}
-	out.AfterAir = []RetainedEffectBatch{record(false, func() {
+	})
+	out.AfterGround = batches(3)
+	out.AfterGround[0] = record(false, func() { c.drawStripSlot(cur, 5); c.drawEffects(cur) })
+	out.AfterGround[1] = record(true, func() { c.drawProjectiles(cur) })
+	out.AfterGround[2] = record(false, func() { c.drawFixedEffects(cur); c.drawStripSlot(cur, 7) })
+	out.AfterAir = batches(1)
+	out.AfterAir[0] = record(false, func() {
 		c.drawStripSlot(cur, 8)
-	})}
-	out.AfterLabels = []RetainedEffectBatch{record(false, func() {
+	})
+	out.AfterLabels = batches(1)
+	out.AfterLabels[0] = record(false, func() {
 		c.drawStripSlot(cur, 9)
 		c.drawDebrisTrails(cur)
-	})}
+	})
 	out.Effects, out.Strips = c.effectStats, c.stripStats
-	out.LightSources = c.RecordRetainedLightSources()
+	lights := time.Now()
+	out.LightSources = c.recordRetainedLightSources(storage)
+	if storage != nil {
+		storage.Timings[7] = float64(time.Since(lights)) / 1e6
+	}
 	return out
 }
