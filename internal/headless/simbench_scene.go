@@ -605,6 +605,12 @@ func simBenchFlatAt(terrain *world.Terrain, x, z int32) bool {
 // simBenchFactoryHandles returns the placed factories' pool handles in
 // placement order, for the census.
 func (s *SimBenchScene) simBenchFactoryHandles() []pool.Handle {
+	return s.FactoryHandles()
+}
+
+// FactoryHandles identifies the ordinary production queues placed by this
+// fixture, in placement order, for windowed and displayless census consumers.
+func (s *SimBenchScene) FactoryHandles() []pool.Handle {
 	out := make([]pool.Handle, 0, len(s.factories))
 	for _, factory := range s.factories {
 		if factory != nil {

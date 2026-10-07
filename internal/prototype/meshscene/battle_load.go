@@ -185,6 +185,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 		edges += len(mesh.EdgeIndices)
 	}
 	scene.Materials, scene.TextureFrames = atlas.materials, atlas.frames
+	scene.ModelPalette = atlas.palette
 	tntPath := "maps/" + mapName + ".tnt"
 	terrain, err := formats.LoadTNTFile(fs, tntPath)
 	if err != nil {

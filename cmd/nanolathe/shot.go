@@ -16,6 +16,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/framediff"
+	"github.com/nanolathe-gg/nanolathe/internal/headless"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
 	"github.com/nanolathe-gg/nanolathe/internal/settings"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
@@ -110,11 +111,35 @@ func runShot(opts Options, cs *contentSet) error {
 	if opts.Shot == "" {
 		return fmt.Errorf("nanolathe: shot: no output path: logical path <command line>, providers searched [none], expected --shot <file.png>")
 	}
-	request, _, err := headlessFreshBattleRequest(opts, cs, newBattleSeedSource(opts))
-	if err != nil {
-		return err
+	var authoritative headless.FreshBattle
+	var field *headless.SimBenchScene
+	var err error
+	if opts.BattleBenchmark != "" && opts.BenchmarkScene == "field" {
+		// Reuse the displayless benchmark's complete session and fixture rather
+		// than placing three armies into a two-player direct battle.
+		if !strings.EqualFold(opts.Map, headless.SimBenchDefaultMap) || !opts.Mutators.IsZero() || !opts.Restrictions.IsZero() {
+			return fmt.Errorf("nanolathe: field benchmark requires Town & Country without mutators or restrictions")
+		}
+		catalog, compileErr := cs.compileCatalog(nil)
+		if compileErr != nil {
+			return compileErr
+		}
+		limit := max(headless.SimBenchDefaultUnitLimit, opts.BenchmarkArmySize+1)
+		if opts.UnitLimit != 0 {
+			limit = opts.UnitLimit
+		}
+		authoritative, field, err = headless.ComposeSimBenchBattle(headless.SimBenchOptions{
+			Map: opts.Map, ArmySize: opts.BenchmarkArmySize, UnitLimit: limit,
+			Gameplay: opts.Gameplay, Seed: uint32(opts.Seed), Difficulty: 1,
+			ProfileFeatures: cs.gameplayFeatures, GameplayOverrides: opts.GameplayOverrides,
+		}, cs.fs, catalog)
+	} else {
+		var request freshBattleRequest
+		request, _, err = headlessFreshBattleRequest(opts, cs, newBattleSeedSource(opts))
+		if err == nil {
+			authoritative, err = composeAuthoritativeBattle(request)
+		}
 	}
-	authoritative, err := composeAuthoritativeBattle(request)
 	if err != nil {
 		return err
 	}
@@ -188,7 +213,7 @@ func runShot(opts Options, cs *contentSet) error {
 		b.setMegamapShown(true, cl)
 	}
 	if opts.BattleBenchmark != "" {
-		return runBattleBenchmark(opts, cs, b, cl)
+		return runBattleBenchmark(opts, cs, b, cl, field)
 	}
 
 	// Sampling starts after content load and battle composition so a profile

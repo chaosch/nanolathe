@@ -21,6 +21,7 @@ func (r atlasRegion) uv(corner [2]float32, width, height int) [2]float32 {
 
 type atlasResult struct {
 	texture           Texture
+	palette           Texture
 	byName            map[string]atlasRegion
 	white             atlasRegion
 	uvWidth, uvHeight int
@@ -102,7 +103,7 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	cells := []atlasCell{{key: "white", rgba: []byte{255, 255, 255, 255}, region: atlasRegion{w: 1, h: 1}}}
+	cells := []atlasCell{{key: "white", rgba: []byte{0, 255, 0, 255}, region: atlasRegion{w: 1, h: 1}}}
 	byDigest := map[[32]byte]int{}
 	textureRows := []textureCensus{}
 	frameCells := map[string][]int{}
@@ -132,17 +133,7 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 			if w == 0 || h == 0 {
 				return nil, fmt.Errorf("nanolathe: prototype texture frame empty: logical path %s/%s, providers searched [%s], expected nonempty frame %d", ref.path, ref.entry, ref.provider, fi)
 			}
-			rgba := make([]byte, w*h*4)
-			for i, index := range frame.Pixels {
-				if i >= w*h {
-					break
-				}
-				c := pal.Base[index]
-				copy(rgba[4*i:4*i+3], c[:3])
-				if i >= len(frame.Transparent) || !frame.Transparent[i] {
-					rgba[4*i+3] = 255
-				}
-			}
+			rgba := modelFrameRGBA(frame, pal)
 			digestBytes := make([]byte, 8+len(rgba))
 			binary.LittleEndian.PutUint32(digestBytes, uint32(w))
 			binary.LittleEndian.PutUint32(digestBytes[4:], uint32(h))
@@ -289,6 +280,14 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 
 	}
 	result.texture = texture
+	result.palette = Texture{Width: 256, Height: 2, RGBA: make([]byte, 256*2*4)}
+	for i := 0; i < 256; i++ {
+		a, b := pal.Base[i], pal.Base[pal.Blue[i]]
+		copy(result.palette.RGBA[i*4:], a[:])
+		copy(result.palette.RGBA[(256+i)*4:], b[:])
+		result.palette.RGBA[i*4+3] = 255
+		result.palette.RGBA[(256+i)*4+3] = 255
+	}
 	result.metadata = map[string]any{"width": texture.Width, "height": texture.Height, "rgba_bytes": len(texture.RGBA), "referenced_texture_names": len(names), "resolved_texture_names": len(textureRows), "unique_rgba_cells": len(cells) - 1, "missing_textures": missing, "textures": textureRows, "dimension_multiplier": scale, "policy": "deduplicated model GAF and prepared skin frames; primary textures precede fallback logos; exactly ten fallback logo frames select team; one replicated border; 2x is nearest-neighbour enlargement, no authored extra detail"}
 	return result, nil
 }

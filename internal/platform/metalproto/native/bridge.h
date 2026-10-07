@@ -25,6 +25,9 @@ typedef struct {
  uint32_t ground_sprite_count;
  const NMCloakDraw* cloaks;
  uint32_t cloak_count,air_count;
+ float water[20];
+ const void *rules,*material_offsets,*material_overrides;
+ uint32_t rules_count,material_count;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
