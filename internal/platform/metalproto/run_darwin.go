@@ -159,10 +159,21 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	started := time.Now()
 	measuredStart := started
 	actual := 0
+	deadline := started
+	var interval time.Duration
+	if opts.FPS > 0 {
+		interval = time.Duration(float64(time.Second) / float64(opts.FPS))
+	}
 	for i := 0; i < len(rows); i++ {
 		if opts.FPS > 0 && i > 0 {
-			due := started.Add(time.Duration(float64(i) * float64(time.Second) / float64(opts.FPS)))
-			if delay := time.Until(due); delay > 0 {
+			// Keep animation on started, but skip missed presentation slots.
+			// A stall must not be repaid by submitting a catch-up burst.
+			deadline = deadline.Add(interval)
+			now := time.Now()
+			if now.After(deadline) {
+				deadline = now
+			}
+			if delay := time.Until(deadline); delay > 0 {
 				time.Sleep(delay)
 			}
 		}

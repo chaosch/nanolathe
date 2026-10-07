@@ -33,8 +33,10 @@ the measurement drains, then performs one synchronized readback for PNG.
 Visible output uses a native Cocoa window and CAMetalLayer, with pixel-size
 output and backing-scale-sized view points. Offscreen output creates no window,
 layer, drawable or application. It still requires Metal hardware. The host FPS
-cap uses timer scheduling, not a display-link scheduler; 144 FPS offscreen does
-not imply 144 Hz display presentation. Window close ends a run; no watchdog
+cap uses timer scheduling with missed slots skipped after stalls, not a
+display-link scheduler; animation continues against its independent wall-time
+origin. The submission deadline rebases after a missed slot to avoid bursts.
+144 FPS offscreen does not imply 144 Hz display presentation. Window close ends a run; no watchdog
 recovers an indefinitely stuck GPU, drawable acquisition or in-flight wait.
 
 These are deliberate synthetic presentation approximations, not retail claims:
@@ -57,8 +59,11 @@ These are deliberate synthetic presentation approximations, not retail claims:
   measured.
 - GPU timings are command-buffer `GPUStartTime`/`GPUEndTime` after completion.
   They include every encoded pass, not presentation or per-stage counters.
-  Presentation intervals use drawable callbacks when available. Offscreen
-  reports none; callbacks delayed past the final row snapshot are excluded.
+  Presentation intervals use drawable callbacks when available. A separate
+  callback group drains for at most 250 ms after GPU completion, outside the
+  measured submission window. The report records exact available/missing counts
+  and the fraction of measured rows with timestamps. Offscreen reports none;
+  callbacks delayed past that bounded drain and row snapshot are excluded.
   The dylib remains loaded for process lifetime because presentation callbacks
   may finish after command-buffer completion.
 
