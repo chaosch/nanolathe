@@ -1486,6 +1486,14 @@ at 1.0 within 2 levels on 99.99% of pixels (6 everywhere); colours clamped under
 the old factor stay approximate. `NANOLATHE_METAL_OFFSCREEN=1` and
 `NANOLATHE_METAL_TEST_GAMMA=frame:value` script such checks without a window.
 
+**Labels over effects.** Health bars, Community unit HUD and group digits were
+drawn in the HUD over every effect and the fog; production draws them after the
+airborne pass and before strip 9 [03 §1]. The client now records them into a
+side list that opens the AfterLabels effect layer (its sink admits glyphs for
+that batch only); in the coastal battle the strip-9 smoke covers a bar it
+overlaps. The effects adapter, lighting, glow and water sources also keep the
+world's load palette, so a gamma change scales them once, with the world. The
+benchmark host composes the same way and honours `NANOLATHE_METAL_OFFSCREEN`.
+
 Still open: GPU time in large full-simulation views (needs an idle host to
-measure), unit labels (health bars, group digits) drawn in the HUD over effects
-and fog rather than before strip 9, and a complete match.
+measure), group digits seen in a live match, and a complete match.
