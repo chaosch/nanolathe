@@ -4,6 +4,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
+	"github.com/nanolathe-gg/nanolathe/internal/input"
 	"github.com/nanolathe-gg/nanolathe/internal/pool"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 	"github.com/nanolathe-gg/nanolathe/internal/units"
@@ -70,7 +71,7 @@ func (p *PlayController) selectHandles(f *frame.Frame, handles []pool.Handle, to
 	}
 	p.selectionEvents++
 	p.product = ""
-	p.latch = 1
+	p.latch = input.LatchNormal
 	p.notify("Selection updated")
 }
 func (p *PlayController) finishSelection(f *frame.Frame, event NativeEvent, cam [3]float32) {

@@ -218,7 +218,11 @@ func (p *PlayController) selectionPanel(out *[]OverlayQuad, f *frame.Frame) {
 		p.fill(out, r, bg)
 		p.text(out, r.x+10*s, r.y+9*s, 12*s, fmt.Sprintf("%c  %s", key, names[i]), c, r.w-16*s)
 	}
-	p.text(out, 16*s, 538*s, 11*s, "BUILD   /   SHIFT QUEUES", playMuted, 268*s)
+	buildHint := "BUILD   /   SHIFT QUEUES"
+	if u, ok := playUnit(f, f.CommandPage.Builder); ok && u.IsFactory {
+		buildHint = "BUILD   /   SHIFT ADDS 5   /   RMB -1"
+	}
+	p.text(out, 16*s, 538*s, 11*s, buildHint, playMuted, 268*s)
 	products := p.products(f)
 	count := (len(products) + 5) / 6
 	for i := 0; i < 6; i++ {
