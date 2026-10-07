@@ -46,12 +46,13 @@ static BOOL nmFacesPrepare(NMRenderer* r,NMRing* ring,uint32_t instanceCount){
  for(NSUInteger i=0;i<r.meshes.count;i++){NMFaceMesh* m=r.meshes[i].faceMesh;for(NSUInteger j=0;j<spans[i*2+1];j++){if(m.faceCount){bases[spans[i*2]+j]=base;base+=(uint32_t)m.faceCount;}}}
  f.faceCount=(NSUInteger)total;f.instanceCount=instanceCount;return YES;
 }
-static BOOL nmFacesEncode(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMUniforms u){
+static BOOL nmFacesEncode(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,id<MTLBuffer> waterObjects,NMUniforms u){
  NMFaceRing* f=ring.faceRing;if(!f||!f.faceCount)return YES;
+ if(waterObjects&&waterObjects.length<f.instanceCount*16)return nmFacesFail(r,@"Water objects do not cover prepared face instances");
  const uint32_t* spans=ring.spans.bytes;id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];if(!e)return nmFacesFail(r,@"Authored face encoder failed");[e setComputePipelineState:r.faceState.prepare];
- [e setBuffer:ring.instances offset:0 atIndex:1];[e setBuffer:poses offset:0 atIndex:2];[e setBytes:&u length:sizeof(u) atIndex:3];[e setBuffer:ring.visuals offset:0 atIndex:5];[e setBuffer:r.materials offset:0 atIndex:6];[e setBuffer:r.textureFrames offset:0 atIndex:7];[e setBuffer:ring.rules offset:0 atIndex:10];[e setBuffer:ring.materialOverrides offset:0 atIndex:11];[e setBuffer:ring.materialOffsets offset:0 atIndex:12];[e setBuffer:ring.compositionSlots offset:0 atIndex:13];[e setBuffer:ring.compositionSelectors offset:0 atIndex:14];[e setBuffer:f.prepared offset:0 atIndex:21];[e setBuffer:f.bases offset:0 atIndex:22];
+ [e setBuffer:ring.instances offset:0 atIndex:1];[e setBuffer:poses offset:0 atIndex:2];[e setBytes:&u length:sizeof(u) atIndex:3];[e setBuffer:ring.visuals offset:0 atIndex:5];[e setBuffer:r.materials offset:0 atIndex:6];[e setBuffer:r.textureFrames offset:0 atIndex:7];[e setBuffer:ring.rules offset:0 atIndex:10];[e setBuffer:ring.materialOverrides offset:0 atIndex:11];[e setBuffer:ring.materialOffsets offset:0 atIndex:12];[e setBuffer:ring.compositionSlots offset:0 atIndex:13];[e setBuffer:ring.compositionSelectors offset:0 atIndex:14];[e setBuffer:waterObjects?:r.faceState.empty offset:0 atIndex:18];[e setBuffer:f.prepared offset:0 atIndex:21];[e setBuffer:f.bases offset:0 atIndex:22];
  for(NSUInteger i=0;i<r.meshes.count;i++){NMFaceMesh* m=r.meshes[i].faceMesh;NSUInteger count=spans[i*2+1];if(!count||!m.faceCount)continue;
-  struct {uint32_t span[4];float texture[4];} control={{spans[i*2],(uint32_t)count,(uint32_t)m.faceCount,ring.composed?1u:0u},{(float)r.atlas.width,(float)r.atlas.height,0,0}};
+  struct {uint32_t span[4];float texture[4];} control={{spans[i*2],(uint32_t)count,(uint32_t)m.faceCount,ring.composed?1u:0u},{(float)r.atlas.width,(float)r.atlas.height,waterObjects?1.f:0.f,0}};
   [e setBuffer:m.corners offset:0 atIndex:0];[e setBuffer:m.faces offset:0 atIndex:4];[e setBytes:&control length:sizeof(control) atIndex:23];NSUInteger group=MIN((NSUInteger)64,r.faceState.prepare.maxTotalThreadsPerThreadgroup);[e dispatchThreads:MTLSizeMake(count*m.faceCount,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];
  }
  [e endEncoding];return YES;
