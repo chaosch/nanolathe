@@ -363,8 +363,8 @@ vertex ModelCommitOut model_commit_vertex(uint v [[vertex_id]],uint iid [[instan
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
  ModelSlot slot=slots[paint[iid].x-1];float2 pixel=slot.screen.xy+c[v]*slot.screen.zw;ModelCommitOut o;o.position=float4(pixel.x/u.viewport.x*2-1,1-pixel.y/u.viewport.y*2,0,1);o.atlasPixel=slot.atlas.xy+c[v]*slot.atlas.zw;o.opacity=slot.params.x;return o;
 }
-fragment MRT model_commit_fragment(ModelCommitOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]]) {
- constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);MRT out;out.color=color.sample(linear,in.atlasPixel)*in.opacity;out.glow=emission.sample(linear,in.atlasPixel)*in.opacity;return out;
+fragment MRT model_commit_fragment(ModelCommitOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]],constant Uniforms& u [[buffer(3)]]) {
+ constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);float2 sample=u.composition.z>1.5?in.atlasPixel:floor(in.atlasPixel-.5)+.5;MRT out;out.color=color.sample(linear,sample)*in.opacity;out.glow=emission.sample(linear,sample)*in.opacity;return out;
 }
 
 struct GroundLightOut {float4 position [[position]];float2 projected;uint source [[flat]];};

@@ -15,7 +15,9 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  if(u->composition_paint_count)memcpy(ring.compositionPaint.contents,u->composition_paint,u->composition_paint_count*16);
  if(!ring.compositionDraws)ring.compositionDraws=[NSMutableData new];ring.compositionDraws.length=u->composition_draw_count*sizeof(NMCloakDraw);
  if(u->composition_draw_count)memcpy(ring.compositionDraws.mutableBytes,u->composition_draws,ring.compositionDraws.length);
- float rasterScale=(u->light_controls&8)?2:1;float* slots=ring.compositionSlots.contents;for(NSUInteger i=0;i<u->composition_slot_count;i++)for(int j=4;j<8;j++)slots[i*12+j]*=rasterScale;
+ // Production always rasterizes the body at 2x; Supersample chooses the resolve
+ // sample pattern, and underwater refraction keeps its weighted gather.
+ float rasterScale=2;float* slots=ring.compositionSlots.contents;for(NSUInteger i=0;i<u->composition_slot_count;i++)for(int j=4;j<8;j++)slots[i*12+j]*=rasterScale;
  NSUInteger w=MAX(r.modelAtlasColor.width,u->composition_width*rasterScale),h=MAX(r.modelAtlasColor.height,u->composition_height*rasterScale);
  if(w&&h&&(w!=r.modelAtlasColor.width||h!=r.modelAtlasColor.height)){
   r.modelMetadata=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);

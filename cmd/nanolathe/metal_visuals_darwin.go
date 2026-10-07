@@ -121,6 +121,11 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	v.frame.Glow.Parameters = meshscene.RetainedGlowParameters(parameters)
 	v.frame.Glow.Parameters.Blur[0] *= scale
 	v.frame.Glow.Parameters.Blur[1] = min(v.frame.Glow.Parameters.Blur[1]*scale, float32(24.0/2.5))
+	waterSources, _, err := metalWaterSources(cl, v.adapter, v.layers[:])
+	if err != nil {
+		return err
+	}
+	live.WaterSources = waterSources
 	live.StockEffects = &v.frame
 	return nil
 }

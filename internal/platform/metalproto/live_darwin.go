@@ -65,10 +65,12 @@ type liveUpload struct {
 	GroundEffects                                                                                                    uintptr
 	Shadows                                                                                                          nativeShadowUpload
 	WaterObjects                                                                                                     uintptr
+	WaterSources                                                                                                     uintptr
 }
 type livePacking struct {
 	waterPacking                                     waterObjectsPacking
 	waterUpload                                      nativeWaterObjectsUpload
+	waterSourcesUpload                               nativeWaterSourcesUpload
 	waterObjects                                     []meshscene.WaterObject
 	seabed                                           []uint32
 	groundPacking                                    groundEffectsPacking
@@ -106,7 +108,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 624 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 632 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -283,6 +285,11 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 			return u, r, err
 		}
 		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+		p.waterSourcesUpload, err = p.waterPacking.PrepareSources(f.WaterSources, f.WaterObjectScales[2])
+		if err != nil {
+			return u, r, err
+		}
+		u.WaterSources = uintptr(unsafe.Pointer(&p.waterSourcesUpload))
 	}
 	var shadowErr error
 	u.Shadows, shadowErr = p.shadowPacking.Prepare(f.Shadows, p.sourcePacked)

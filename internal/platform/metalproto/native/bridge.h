@@ -39,6 +39,7 @@ typedef struct {
  const NMGroundUpload* ground_effects;
  NMShadowUpload shadows;
  const void* water_objects;
+ const void* water_sources;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings

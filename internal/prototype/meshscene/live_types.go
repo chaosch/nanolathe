@@ -40,6 +40,7 @@ type LiveFrame struct {
 	Composition       ModelComposition
 	Shadows           ShadowComposition
 	WaterObjects      []WaterObject
+	WaterSources      []WaterSource
 	WaterObjectScales [3]float32
 	Composed          bool
 
