@@ -22,9 +22,10 @@ the executable. Lock the process main OS thread in the executable's `init`.
 
 The resource interface uploads an immutable vertex/index buffer and an instance
 pose-offset buffer per mesh, and one model atlas plus a 2D terrain texture.
-Three pose buffers hold two adjacent sampled frames. Every frame copies those
-matrices and draws one indexed instanced call per uploaded mesh; transforms,
-projection and normal lighting run in custom shaders. The bounded queue permits
+Three pose input buffers hold two adjacent sampled frames. Every frame copies
+those matrices, computes one interpolated rigid transform per submitted piece
+into a private GPU buffer, then draws one indexed instanced call per uploaded
+mesh; projection and normal lighting run in custom shaders. The bounded queue permits
 three in-flight command buffers, waits for a slot before modifying its pose
 buffer, and drains only at finish or capture. Completion records errors and
 GPU timing asynchronously. `nm_capture` re-renders the final sampled pose after
@@ -42,7 +43,8 @@ recovers an indefinitely stuck GPU, drawable acquisition or in-flight wait.
 These are deliberate synthetic presentation approximations, not retail claims:
 
 - The sample stream wraps; last-to-first transforms can be discontinuous.
-- Matrix columns blend linearly; large rotations may lose rigidity. A zero
+- Rotations use shortest-path quaternion slerp after removing the endpoint
+  basis's final world-Z reflection, restored after interpolation. A zero
   matrix is a hidden piece, suppressed if either endpoint is hidden, producing
   a visibility snap of up to one sample instead of motion toward world origin.
 - Projection is the scene's x / z-minus-height shear. Depth uses independent
@@ -92,13 +94,57 @@ Empty vertex/index storage has a minimum allocation and is never copied or drawn
 Every live submission packs per-mesh instance spans and pose offsets in Go,
 then passes one 208-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
-owns pose, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
+owns pose input and computed output, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
 has finished the earlier work that used it. Growth replaces only that free
 slot's buffer, doubling capacity; it does not wait for or resize other slots.
 Command buffers retain their encoded resources. The final capture uses the last
 slot's poses, spans, sprites, lights and uniform snapshot after the GPU drains.
 Actual ring capacities are reported separately from exact per-frame upload bytes.
+
+## Rigid pose interpolation
+
+The endpoint ABI is unchanged: two column-major 64-byte matrices per piece,
+including the final world-Z reflection from `meshscene.battleAffine` and
+`committedMatrices`. A compute pass runs before the first model render pass,
+once per submitted piece, in replay and live mode. All body, outline and shadow
+vertices read its single output matrix. Final capture recomputes through that
+same path after draining the queue. Quaternion conversion never runs per vertex.
+
+For a changing rotation the shader removes reflection from the three basis
+columns, normalizes the first column, orthogonalizes and normalizes the second,
+and obtains the third by their cross product. This repairs small fixed-point
+composition errors into a proper rotation for quaternion conversion. The
+quaternions are normalized, and a negative dot product flips the second one to
+choose the shortest arc. Dot products above 0.9995 use normalized linear
+interpolation to avoid division by a vanishing sine; other pairs use slerp.
+The resulting rotation restores the world-Z reflection. Origins interpolate
+linearly between the already composed endpoint translations.
+
+Alpha zero and one copy their respective spatial endpoint lanes exactly.
+Equal basis columns bypass quaternion conversion at every alpha, including
+pieces translating without rotation; equal translations bypass mixing too.
+Thus static poses retain their original corner heights without normalization
+noise. The current endpoint's `Mat4[3]` base-shade flag and `Mat4[15]` visibility
+marker are preserved, with visibility still suppressed whenever either endpoint
+is hidden. These flags are not interpolated rotation or translation data.
+
+This is an Enhanced presentation approximation under DESIGN_GPU_RENDERER §5.3,
+with no simulation writes or RNG. The per-piece hierarchy was composed before
+upload: origins still take straight paths between composed endpoints rather
+than being recomputed from interpolated local hierarchy rotations. A rotating
+parent can therefore change child spacing during an interval even though each
+piece's basis remains rigid. Endpoint fixed-point scale errors are retained at
+alpha zero/one and equal bases; changing rotations normalize those errors away.
+
+Each in-flight slot owns its computed output buffer, with 64 bytes per piece
+before capacity rounding. Replay allocates the exact pose capacity (minimum
+64 bytes); live capacity doubles from 4096 bytes only in the acquired free
+slot. `nm_info` reports their summed actual buffer lengths as
+`pose_interpolation_output_buffer_capacity_bytes`, including both allocated
+replay and live storage, and names the interpolation method. No CPU readback,
+per-stage timing or independent performance claim is added; the existing
+command-buffer GPU span includes the compute pass.
 
 Sprites match `meshscene.Sprite`'s six float4 lanes (96 bytes); lights match its
 two float4 lanes (32 bytes). Sprite positions blend on the GPU. Live projection uses the production world
