@@ -1,4 +1,5 @@
 @implementation NMWaterTilesState
+- (instancetype)init {if((self=[super init]))_enabled=YES;return self;}
 @end
 @implementation NMWaterTilesFrame
 @end
@@ -19,17 +20,23 @@ static BOOL nmWaterTilesEncode(NMWaterTilesState* state,NMWaterTilesFrame* frame
  NSUInteger columns=(color.width+NMWaterTileSide-1)/NMWaterTileSide,rows=(color.height+NMWaterTileSide-1)/NMWaterTileSide;
  if(rows>state.device.maxBufferLength/(sizeof(uint32_t)*columns))return nmWaterTilesFail(error,@"Reflection tile buffer exceeds device limit");
  NSUInteger bytes=columns*rows*sizeof(uint32_t);
- if(!frame.flags||frame.flags.length<bytes)frame.flags=[state.device newBufferWithLength:bytes options:MTLResourceStorageModePrivate];
+ if(!frame.flags||frame.flags.length<bytes)frame.flags=[state.device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
  if(!frame.flags)return nmWaterTilesFail(error,@"Reflection tile allocation failed");
- id<MTLComputeCommandEncoder> encoder=[cb computeCommandEncoder];if(!encoder)return nmWaterTilesFail(error,@"Reflection tile compute encoder failed");
- [encoder setComputePipelineState:state.classify];[encoder setTexture:color atIndex:0];[encoder setTexture:soft atIndex:1];[encoder setBuffer:frame.flags offset:0 atIndex:0];
- [encoder dispatchThreadgroups:MTLSizeMake(columns,rows,1) threadsPerThreadgroup:MTLSizeMake(NMWaterTileThreads,1,1)];[encoder endEncoding];
- frame.width=color.width;frame.height=color.height;frame.columns=columns;frame.rows=rows;frame.encoded=YES;state.encodedFrames++;state.classifiedTiles+=columns*rows;return YES;
+ if(state.enabled){
+  id<MTLComputeCommandEncoder> encoder=[cb computeCommandEncoder];if(!encoder)return nmWaterTilesFail(error,@"Reflection tile compute encoder failed");
+  [encoder setComputePipelineState:state.classify];[encoder setTexture:color atIndex:0];[encoder setTexture:soft atIndex:1];[encoder setBuffer:frame.flags offset:0 atIndex:0];
+  [encoder dispatchThreadgroups:MTLSizeMake(columns,rows,1) threadsPerThreadgroup:MTLSizeMake(NMWaterTileThreads,1,1)];[encoder endEncoding];state.classifiedTiles+=columns*rows;
+ }else{
+  // The ring is acquired, so no preceding GPU reader/writer still owns it.
+  // Write WORD value 3, not byte-fill 3, to preserve the shader's bit contract.
+  uint32_t* flags=frame.flags.contents;for(NSUInteger i=0;i<columns*rows;i++)flags[i]=3;state.bypassFrames++;
+ }
+ frame.width=color.width;frame.height=color.height;frame.columns=columns;frame.rows=rows;frame.encoded=YES;state.encodedFrames++;return YES;
 }
 static BOOL nmWaterTilesBind(NMWaterTilesFrame* frame,id<MTLRenderCommandEncoder> encoder){
  if(!frame||!frame.encoded||!frame.flags||!encoder)return NO;[encoder setFragmentBuffer:frame.flags offset:0 atIndex:23];return YES;
 }
 static NSDictionary* nmWaterTilesInfo(NMWaterTilesState* state,NMWaterTilesFrame* frame){
  if(!state)return @{@"water_reflection_tiles_enabled":@NO};
- return @{@"water_reflection_tiles_enabled":@YES,@"water_reflection_tile_side_physical":@(NMWaterTileSide),@"water_reflection_tile_frames":@(state.encodedFrames),@"water_reflection_tiles_classified":@(state.classifiedTiles),@"water_reflection_tile_columns":@(frame.columns),@"water_reflection_tile_rows":@(frame.rows),@"water_reflection_tile_buffer_bytes":@(frame.flags.length),@"water_reflection_tile_content_rule":@"any RGBA channel > 0",@"water_reflection_tile_soft_rule":@"soft.r > 0"};
+ return @{@"water_reflection_tiles_enabled":@(state.enabled),@"water_reflection_full_filter_frames":@(state.bypassFrames),@"water_reflection_tile_side_physical":@(NMWaterTileSide),@"water_reflection_tile_frames":@(state.encodedFrames),@"water_reflection_tiles_classified":@(state.classifiedTiles),@"water_reflection_tile_columns":@(frame.columns),@"water_reflection_tile_rows":@(frame.rows),@"water_reflection_tile_buffer_bytes":@(frame.flags.length),@"water_reflection_tile_content_rule":@"any RGBA channel > 0",@"water_reflection_tile_soft_rule":@"soft.r > 0"};
 }
