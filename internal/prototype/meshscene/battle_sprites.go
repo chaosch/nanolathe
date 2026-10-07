@@ -32,6 +32,8 @@ type BattleSprites struct {
 	bankCensus                                          []spriteBankCensus
 	preparedFeatureNames, unresolvedFeatureNames        []string
 	featureScopeFiltered                                bool
+	rawSpritePixels, croppedSpritePixels                int64
+	fullyTransparentFrames                              int
 }
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
@@ -370,7 +372,7 @@ func (b *BattleSprites) Report() map[string]any {
 	for k, v := range b.totals {
 		totals[k] = v
 	}
-	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": len(b.texture.RGBA), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": b.alternateChildrenOmitted, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "approximations": []string{
+	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": len(b.texture.RGBA), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": b.alternateChildrenOmitted, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "crop_raw_texel_area": b.rawSpritePixels, "crop_retained_texel_area": b.croppedSpritePixels, "crop_rgba_margin_bytes_removed": (b.rawSpritePixels - b.croppedSpritePixels) * 4, "crop_fully_transparent_frames": b.fullyTransparentFrames, "crop_area_basis": "sum of decoded frame areas before deduplication and gutters; atlas_bytes is actual packed storage", "approximations": []string{
 		"rest feature animations use first authored frame; feature event cursors retain authored holds",
 		"native straight RGBA alpha approximates destination-palette ALP; alternate composite children omitted",
 		"strip particles snap at committed ticks; original nano palette retained without optional team-color ramp",
