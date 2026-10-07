@@ -48,6 +48,15 @@ for directory in sys.argv[1:]:
         metrics["tick_range"] = [int(live[0]["tick"]), int(live[-1]["tick"])]
         metrics["live_counts"] = report["live_frame_counts"]
         metrics["battle"] = {key: value for key, value in report.get("battle", {}).items() if key not in ["tick_records", "census", "tick_samples", "samples"]}
+        low, high = metrics["tick_range"]
+        ticks = [row for row in report.get("battle", {}).get("tick_records", []) if low <= row["tick"] <= high]
+        metrics["measured_tick_work"] = {key: summary([row[key] for row in ticks]) for key in ["simulation_ms", "pose_preparation_ms", "tick_work_ms", "start_lateness_ms"]}
+        metrics["measured_missed_30hz_deadlines"] = sum(row["missed_30hz_deadlines"] for row in ticks)
+        metrics["measured_unit_births"] = sum(row["census"]["unit_births"] for row in ticks)
+        metrics["measured_unit_deaths"] = sum(row["census"]["unit_deaths"] for row in ticks)
+        metrics["measured_peak_census"] = {key: max((row["census"][key] for row in ticks), default=0) for key in ["units", "units_moving_by_committed_position", "nanoframes", "projectiles", "effects", "strip_objects", "burning_features"]}
+        metrics["go_memory"] = {key: value for key, value in report.items() if key.startswith("go_")}
+        metrics["submit_to_present"] = report.get("submit_to_present", {})
     for key, intervals in [("submit", submission), ("present", presentation)]:
         for hz in [120, 144]:
             if intervals:

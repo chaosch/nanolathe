@@ -110,7 +110,8 @@ as instanced billboards. `Params.w` is added directly to normalized clip depth:
 negative values bring a sprite forward. Billboards test model depth without
 writing depth, retain supplied source order, and blend premultiplied RGB with
 ordinary alpha or additive color. Sprite glow is additive emission. Transparent
-sprite overlaps are not sorted by depth; material lighting, palette brightening
+sprite ordering is owned by the source: the battle adapter sorts by anchor depth,
+which cannot reproduce per-pixel height. Material lighting, palette brightening
 and exact retail overlap/composition behavior remain outside this prototype.
 
 Live mode uses up to the first 32 submitted lights for diffuse model lighting

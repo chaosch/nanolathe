@@ -31,7 +31,7 @@ _Static_assert(sizeof(NMInput)==16,"input layout");
  dispatch_group_t pending, presentations;
  BOOL presentationDrainTimedOut;
  NSUInteger presentationDrainRowCount;
- BOOL offscreen,effects,held[128],pauseToggle;
+ BOOL offscreen,effects,held[128],pressed[128],pauseToggle;
  float wheel;
 }
 @property id<MTLDevice> device;
@@ -87,6 +87,9 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int c
  r.output=target(r,width,height,MTLPixelFormatBGRA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  if(!isOffscreen){
  [NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+ // Our loop pumps events instead of calling NSApplication.run. Complete launch
+ // explicitly so Launch Services and accessibility can attach to the app.
+ [NSApp finishLaunching];
  CGFloat scale=NSScreen.mainScreen.backingScaleFactor;
  r.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,width/scale,height/scale) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];r.window.releasedWhenClosed=NO;r.window.title=@"Nanolathe retained Metal prototype";
  r.layer=[CAMetalLayer layer];r.layer.device=r.device;r.layer.pixelFormat=MTLPixelFormatBGRA8Unorm;r.layer.drawableSize=CGSizeMake(width,height);r.layer.contentsScale=scale;r.layer.framebufferOnly=YES;r.layer.maximumDrawableCount=3;r.layer.displaySyncEnabled=vsync;
@@ -119,13 +122,22 @@ static void pump(NMRenderer* r) {
  if(r->offscreen)return;
  NSEvent* event;while((event=[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES])){
   BOOL consumed=NO;
-  if(event.type==NSEventTypeKeyDown||event.type==NSEventTypeKeyUp){unsigned short k=event.keyCode;if(k<128){r->held[k]=event.type==NSEventTypeKeyDown;if(k==49&&event.type==NSEventTypeKeyDown&&!event.isARepeat)r->pauseToggle=!r->pauseToggle;consumed=k==0||k==1||k==2||k==13||k==49||k>=123;}}
+  if(event.type==NSEventTypeKeyDown||event.type==NSEventTypeKeyUp){unsigned short k=event.keyCode;if(k<128){r->held[k]=event.type==NSEventTypeKeyDown;if(r->held[k])r->pressed[k]=YES;if(k==49&&event.type==NSEventTypeKeyDown&&!event.isARepeat)r->pauseToggle=!r->pauseToggle;consumed=k==0||k==1||k==2||k==13||k==49||k>=123;}}
   if(event.type==NSEventTypeScrollWheel){r->wheel+=(float)event.scrollingDeltaY;consumed=YES;}
   if(!consumed)[NSApp sendEvent:event];
- }if(!r.window.keyWindow)memset(r->held,0,sizeof(r->held));[NSApp updateWindows];
+ }if(!r.window.keyWindow){memset(r->held,0,sizeof(r->held));memset(r->pressed,0,sizeof(r->pressed));}[NSApp updateWindows];
 }
 void nm_input(void* handle,NMInput* input) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;pump(r);input->pan_x=(r->held[2]||r->held[124])-(r->held[0]||r->held[123]);input->pan_z=(r->held[1]||r->held[125])-(r->held[13]||r->held[126]);input->zoom=r->wheel;input->pause_toggle=r->pauseToggle;r->wheel=0;r->pauseToggle=NO;}
+ @autoreleasepool {
+ NMRenderer* r=(__bridge NMRenderer*)handle;pump(r);
+ // Retain a short tap for one input sample even when down/up share an event pump.
+ BOOL right=r->held[2]||r->held[124]||r->pressed[2]||r->pressed[124];
+ BOOL left=r->held[0]||r->held[123]||r->pressed[0]||r->pressed[123];
+ BOOL down=r->held[1]||r->held[125]||r->pressed[1]||r->pressed[125];
+ BOOL up=r->held[13]||r->held[126]||r->pressed[13]||r->pressed[126];
+ input->pan_x=right-left;input->pan_z=down-up;input->zoom=r->wheel;input->pause_toggle=r->pauseToggle;
+ memset(r->pressed,0,sizeof(r->pressed));r->wheel=0;r->pauseToggle=NO;
+ }
 }
 static void encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
  MTLRenderPassDescriptor* pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.color;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0.08,0.09,0.1,1);
