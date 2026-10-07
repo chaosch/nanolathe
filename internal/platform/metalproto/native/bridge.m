@@ -381,17 +381,18 @@ static void drawMeshes(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* rin
  nmProjectionBind(ring,enc,start);nmFacesBind(ring,enc,start);if(ring.groups)[enc setVertexBuffer:ring.groups.instanceGroups offset:start*16 atIndex:20];
  [enc drawIndexedPrimitives:outline?MTLPrimitiveTypeLine:MTLPrimitiveTypeTriangle indexCount:indices indexType:MTLIndexTypeUInt32 indexBuffer:outline?m.edges:m.indices indexBufferOffset:0 instanceCount:count];}
 }
-static void encodeOverlay(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
+// Draws the HUD into the pass that already owns the drawable, so the finished
+// world is not stored and reloaded for the overlay alone.
+static void encodeOverlayInto(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMUniforms u,NMRing* ring) {
  if(!ring.overlayCount)return;
- MTLRenderPassDescriptor* pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
- id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,pass,"hud.overlay");[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:ring.overlayAtlas?:r.emptyFog atIndex:0];[enc setFragmentTexture:r.terrainImage atIndex:1];[enc setFragmentTexture:u.visual.z>0.5?ring.fog:r.emptyFog atIndex:2];
+ [enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:ring.overlayAtlas?:r.emptyFog atIndex:0];[enc setFragmentTexture:r.terrainImage atIndex:1];[enc setFragmentTexture:u.visual.z>0.5?ring.fog:r.emptyFog atIndex:2];
  // Split only consecutive blend runs. Reordering them would change shaded
  // gadgets, text and modal surfaces that overlap earlier HUD commands.
  const float* quads=ring.overlay.contents;NSUInteger start=0;
  while(start<ring.overlayCount){BOOL multiply=quads[start*16+13]>0.5;NSUInteger end=start+1;while(end<ring.overlayCount&&(quads[end*16+13]>0.5)==multiply)end++;
   [enc setRenderPipelineState:multiply?r.overlayMultiply:r.overlay];[enc setVertexBuffer:ring.overlay offset:start*64 atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:end-start];start=end;
  }
- [enc endEncoding];
+ 
 }
 // World passes keep colour/emission; the airborne boundary starts a new depth
 // plane so earlier terrain/effects cannot clip pass B [03 R-RAST-01 §7].
@@ -516,10 +517,10 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
  enc=nmRenderEncoder(cb,pass,"post.worldResolve");[enc setRenderPipelineState:r.world];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];
  if(distort){u.timing.w=r->effects?1:0;id<MTLBlitCommandEncoder> copy=nmBlitEncoder(cb,"post.distortionCopy");[copy copyFromTexture:r.worldSnapshot sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(r.postColor.width,r.postColor.height,1) toTexture:r.postColor destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[copy endEncoding];
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.postColor;pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=nmRenderEncoder(cb,pass,"post.distortion");[enc setRenderPipelineState:r.distortion];[enc setVertexBuffer:ring.distortions offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.worldSnapshot atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.distortionCount];[enc endEncoding];}
- pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=nmRenderEncoder(cb,pass,"post.fog");[enc setRenderPipelineState:r.fog];[enc setFragmentTexture:r.postColor atIndex:0];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:1];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:2];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);return r.lastError==nil;
+ pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=nmRenderEncoder(cb,pass,"post.fog");[enc setRenderPipelineState:r.fog];[enc setFragmentTexture:r.postColor atIndex:0];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:1];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:2];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];encodeOverlayInto(r,enc,u,ring);[enc endEncoding];return r.lastError==nil;
  }
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
- enc=nmRenderEncoder(cb,pass,"post.composite");[enc setRenderPipelineState:r.composite];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);return r.lastError==nil;
+ enc=nmRenderEncoder(cb,pass,"post.composite");[enc setRenderPipelineState:r.composite];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];encodeOverlayInto(r,enc,u,ring);[enc endEncoding];return r.lastError==nil;
 }
 int nm_frame(void* handle,const void* previous,const void* next,float alpha,double seconds) {
  @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;if(!r->interactive&&r->rowCount>=r->rowCapacity)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
