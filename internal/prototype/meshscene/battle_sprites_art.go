@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
@@ -25,12 +26,23 @@ type spriteCell struct {
 	rgba   []byte
 }
 
+type spriteBankCensus struct {
+	Path                                       string `json:"path"`
+	Entries, Frames, UniqueCells, UniquePixels int
+	MaxWidth, MaxHeight                        int
+}
+
 // NewBattleSprites resolves immutable art before the measured loop. The bank
 // set follows content's SimArt requests; feature bodies/shadows and all event
 // frames are prepared from authored names [05 R-FEAT-01 §10][06 R-WFX-01 §1].
 // Animated rest features deliberately retain their first frame in this
 // experiment; the production rest cursor is presentation-owned [03 §4.4].
-func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*BattleSprites, error) {
+// When featureNames are provided, only those placed feature roots plus every
+// battle-catalog unit corpse and their authored successor closure are loaded.
+// All catalog units cover future factory products without predicting gameplay.
+// No arguments preserves the unrestricted catalog diagnostic; an empty string
+// argument requests corpse-only preparation for a map with no placed features.
+func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, featureNames ...string) (*BattleSprites, error) {
 	if fs == nil || pal == nil || cat == nil {
 		return nil, fmt.Errorf("nanolathe: prototype sprite preparation failed: logical path battle sprites, providers searched [arguments], expected VFS, palette and catalog")
 	}
@@ -54,7 +66,8 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*B
 			}
 		}
 	}
-	for _, f := range cat.Features {
+	features := b.spriteFeatureScope(cat, featureNames)
+	for _, f := range features {
 		if f == nil || f.Filename == "" {
 			continue
 		}
@@ -87,6 +100,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*B
 	sort.Strings(banks)
 	for _, bank := range banks {
 		path := content.EffectBankPath(bank)
+		census := spriteBankCensus{Path: path}
 		source, err := formats.LoadGAFSourceFile(fs, path, content.EffectBankMaxBytes, content.EffectBankGAFLimits())
 		if err != nil {
 			b.missing[path] = err.Error()
@@ -104,6 +118,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*B
 			}
 		}
 		sort.Strings(entries)
+		census.Entries = len(entries)
 		for _, name := range entries {
 			key := spriteSequenceKey(bank, name)
 			if _, exists := b.sequences[key]; exists {
@@ -130,6 +145,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*B
 					continue
 				}
 				w, h := int(f.Width), int(f.Height)
+				census.MaxWidth, census.MaxHeight = max(census.MaxWidth, w), max(census.MaxHeight, h)
 				rgba := make([]byte, w*h*4)
 				var hue [3]float32
 				var weight float32
@@ -169,17 +185,85 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog) (*B
 					cell = len(cells)
 					digests[hash] = cell
 					cells = append(cells, spriteCell{region: atlasRegion{w: w, h: h}, rgba: rgba})
+					census.UniqueCells++
+					census.UniquePixels += w * h
 				}
 				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset), yoff: int(f.YOffset), hold: max(int32(meta.Frames[i].Value), 1), hue: hue, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
 				b.framesLoaded++
+				census.Frames++
 			}
 			b.sequences[key] = seq
 		}
+		b.bankCensus = append(b.bankCensus, census)
 	}
 	if err := b.packSprites(cells); err != nil {
 		return nil, err
 	}
 	return b, nil
+}
+
+func (b *BattleSprites) spriteFeatureScope(cat *content.Catalog, names []string) []*content.FeatureDef {
+	selected := make(map[*content.FeatureDef]bool)
+	var missing []string
+	var visit func(*content.FeatureDef)
+	var named func(string)
+	named = func(name string) {
+		if key := content.CanonicalKey(name); key != "" {
+			if f := cat.Features[key]; f != nil {
+				visit(f)
+			} else {
+				missing = append(missing, key)
+			}
+		}
+	}
+	visit = func(f *content.FeatureDef) {
+		if f == nil || selected[f] {
+			return
+		}
+		selected[f] = true
+		for _, next := range []struct {
+			f    *content.FeatureDef
+			name string
+		}{{f.FeatureDeadDef, f.FeatureDead}, {f.FeatureBurntDef, f.FeatureBurnt}, {f.FeatureReclamateDef, f.FeatureReclamate}} {
+			if next.f != nil {
+				visit(next.f)
+			} else {
+				named(next.name)
+			}
+		}
+	}
+	if len(names) == 0 {
+		for _, f := range cat.Features {
+			visit(f)
+		}
+	} else {
+		b.featureScopeFiltered = true
+		for _, name := range names {
+			named(name)
+		}
+		// Every unit in the battle catalog can be a factory product or a
+		// subsequent resurrection; no live allocator reads are needed.
+		for _, u := range cat.Units {
+			if u != nil {
+				named(u.Corpse)
+			}
+		}
+	}
+	out := make([]*content.FeatureDef, 0, len(selected))
+	for f := range selected {
+		out = append(out, f)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CanonicalKey < out[j].CanonicalKey })
+	for _, f := range out {
+		b.preparedFeatureNames = append(b.preparedFeatureNames, f.CanonicalKey)
+	}
+	sort.Strings(missing)
+	for _, name := range missing {
+		if len(b.unresolvedFeatureNames) == 0 || b.unresolvedFeatureNames[len(b.unresolvedFeatureNames)-1] != name {
+			b.unresolvedFeatureNames = append(b.unresolvedFeatureNames, name)
+		}
+	}
+	return out
 }
 
 func spriteAlternateChildren(f *formats.GAFFrame) int {
@@ -227,7 +311,13 @@ func (b *BattleSprites) packSprites(cells []spriteCell) error {
 		width *= 2
 	}
 	if width > 8192 || height > 8192 {
-		return fmt.Errorf("nanolathe: prototype sprite atlas too large: logical path sprite atlas, providers searched [prepared animation banks], expected at most 8192x8192")
+		largest := append([]spriteBankCensus(nil), b.bankCensus...)
+		sort.SliceStable(largest, func(i, j int) bool { return largest[i].UniquePixels > largest[j].UniquePixels })
+		var descriptions []string
+		for _, bank := range largest[:min(len(largest), 3)] {
+			descriptions = append(descriptions, fmt.Sprintf("%s=%d pixels", bank.Path, bank.UniquePixels))
+		}
+		return fmt.Errorf("nanolathe: prototype sprite atlas too large: logical path sprite atlas, providers searched [prepared animation banks], expected at most 8192x8192, prepared %d cells from %d feature definitions; largest banks [%s]", len(cells), len(b.preparedFeatureNames), strings.Join(descriptions, ", "))
 	}
 	b.texture = Texture{Width: width, Height: height, RGBA: make([]byte, width*height*4)}
 	b.regions = make([]atlasRegion, len(cells))
