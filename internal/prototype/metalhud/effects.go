@@ -45,6 +45,7 @@ func (a GlowAtlas) Flash(flash drawlist.Flash) ([4]float32, error) {
 type EffectBatch struct {
 	List             *drawlist.List
 	ProjectileModels bool
+	SourceOnly       bool
 }
 
 type effectArtKey struct {
@@ -71,7 +72,20 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 			s.projectileModels = batch.ProjectileModels
 			s.source = meshscene.EffectSources{}
 			batch.List.VisitLightSources(func(c drawlist.Sprite) { s.source.Art = append(s.source.Art, c) })
-			batch.List.Replay(&s)
+			if batch.SourceOnly {
+				spaces := batch.List.WorldSpaces()
+				if len(spaces) > 0 {
+					s.source.World = spaces[0]
+				}
+				batch.List.VisitSprites(func(c drawlist.Sprite) {
+					s.source.Sprites = append(s.source.Sprites, c)
+					if c.Frame != nil {
+						f.image(imageKey{gaf: c.Frame})
+					}
+				})
+			} else {
+				batch.List.Replay(&s)
+			}
 			s.layer.Sources = append(s.layer.Sources, s.source)
 		}
 		layers[i].Quads = f.quads[start:len(f.quads)]
@@ -84,6 +98,7 @@ type effectSink struct {
 	layer            *meshscene.EffectLayer
 	base             int
 	projectileModels bool
+	terrain          drawlist.Terrain
 	source           meshscene.EffectSources
 }
 
@@ -432,13 +447,9 @@ func (s *effectSink) reject(family string) {
 	s.layer.Counts.Unsupported++
 	s.fail("unexpected %s command in stock-effects list", family)
 }
-func (s *effectSink) Clear()                             { s.reject("clear") }
-func (s *effectSink) Terrain(drawlist.Terrain)           { s.reject("terrain") }
-func (s *effectSink) Fog(drawlist.Fog)                   { s.reject("fog") }
-func (s *effectSink) Glyphs(drawlist.Glyphs)             { s.reject("glyph") }
-func (s *effectSink) Surface(drawlist.Surface)           { s.reject("surface") }
-func (s *effectSink) Cursor(drawlist.Cursor)             { s.reject("cursor") }
-func (s *effectSink) Trails(drawlist.Trails)             { s.reject("trail") }
-func (s *effectSink) SurfaceWakes(drawlist.SurfaceWakes) { s.reject("wake") }
-func (s *effectSink) ScorchMarks(drawlist.ScorchMarks)   { s.reject("scorch") }
-func (s *effectSink) Markers(drawlist.Markers)           { s.reject("marker") }
+func (s *effectSink) Clear()                   { s.reject("clear") }
+func (s *effectSink) Fog(drawlist.Fog)         { s.reject("fog") }
+func (s *effectSink) Glyphs(drawlist.Glyphs)   { s.reject("glyph") }
+func (s *effectSink) Surface(drawlist.Surface) { s.reject("surface") }
+func (s *effectSink) Cursor(drawlist.Cursor)   { s.reject("cursor") }
+func (s *effectSink) Markers(drawlist.Markers) { s.reject("marker") }
