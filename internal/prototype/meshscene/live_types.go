@@ -32,6 +32,7 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	Exit bool // host requested an orderly window close after this input service
 	// Optional replacement of the retained UI atlas. The native host uploads it
 	// only when this nonzero version changes; slices live until Next returns.
 	OverlayTexture    Texture
