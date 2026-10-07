@@ -55,7 +55,9 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 			}
 			region := atlas.white
 			color := [3]float32{1, 1, 1}
-			textured := primitive.IsColored == 0 && primitive.TextureName != ""
+			// Match modelPrimitiveDispatch: only bit zero selects flat art;
+			// even nonzero authored residue still selects textures [R-REN-03A §5].
+			textured := primitive.IsColored&1 == 0 && primitive.TextureName != ""
 			if textured {
 				census.TexturedFaces++
 				if r, ok := atlas.byName[canonicalTexture(primitive.TextureName)]; ok {
@@ -123,15 +125,18 @@ func lerpVertex(a, b Vertex, t float32) Vertex {
 	return out
 }
 
+// Match render.faceNormal's authored winding and degenerate fallback; the
+// transform mirrors final model Z separately [03 §2.4.1].
 func faceNormal(a, b, c [3]float32) [3]float32 {
 	u := [3]float32{b[0] - a[0], b[1] - a[1], b[2] - a[2]}
-	v := [3]float32{c[0] - a[0], c[1] - a[1], c[2] - a[2]}
+	v := [3]float32{b[0] - c[0], b[1] - c[1], b[2] - c[2]}
 	n := [3]float32{u[1]*v[2] - u[2]*v[1], u[2]*v[0] - u[0]*v[2], u[0]*v[1] - u[1]*v[0]}
 	length := float32(math.Sqrt(float64(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])))
-	if length > 0 {
-		for i := range n {
-			n[i] /= length
-		}
+	if length == 0 {
+		return [3]float32{0, 1, 0}
+	}
+	for i := range n {
+		n[i] /= length
 	}
 	return n
 }

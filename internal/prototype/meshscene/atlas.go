@@ -60,7 +60,7 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 				if p.Selection && pri == 0 {
 					continue
 				}
-				if face.IsColored == 0 && face.TextureName != "" {
+				if face.IsColored&1 == 0 && face.TextureName != "" {
 					wanted[canonicalTexture(face.TextureName)] = true
 				}
 			}
