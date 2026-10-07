@@ -21,3 +21,28 @@ User scope: continue unattended through renderer parity fixes, then compare Clas
 ## Review constraints
 
 Do not claim parity from appearance alone; track unsupported families and exact reference comparisons. Do not compare Metal GPU milliseconds with Ebit CPU submission milliseconds. Keep saved settings/input/window geometry controlled. No simulation changes or invented retail behavior. Existing production/research inconsistencies are separate follow-ups, not a reason for native-only corrections.
+
+## 2026-10-07 checkpoint
+
+Water/material/rule exports, isolated subject atlases, production feature order,
+stock effect replay, exact projectile callback identities, shared lighting/glow,
+smoke receiving and ordered model shadows are integrated and runtime compiled.
+The feature publication's zero identity collision no longer interpolates unrelated
+wrecks. Projectile pieces now preserve the production unshaded effect entry.
+Water surface/seabed promotion, model reflections and BLUE refraction run; stock
+reflection sources are the active last module. Prepared material resolver work is
+in review. No tests were added or run.
+
+Matching short coastal captures preserve all four simulation state boundaries,
+frame hashes, RNG counts and census. Short 120 Hz profiling found CPU material
+selection and atlas allocation growth: stable atlas aspect/64-row allocation and
+RGBA8 body storage reduced Metal allocation from 1.48 GB to 0.92 GB; dropping
+unused fallback material work and repeated piece matching reduced Record p95
+from 13.54 to 10.81 ms. These are diagnostic runs, not the final comparison.
+
+Next: finish stock reflections and review new water arithmetic, freeze a single
+binary/library/settings snapshot, run sequential coastal and large-field
+Classic/Modern/Metal comparisons plus 2×/5× mesh and 2× texture stress, inspect
+captures/state/census, fix measured issues, save report and playable launcher.
+Native triangle/quad pixel coverage and historical cached/live group staging are
+explicit parity gaps; do not claim exact renderer parity from a scene census.

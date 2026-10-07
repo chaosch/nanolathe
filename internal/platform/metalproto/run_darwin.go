@@ -124,7 +124,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + shaderSource + "\n" + shadowShaderSource)
+	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + shaderSource + "\n" + shadowShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -245,6 +245,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			deadline = time.Now()
 			entry = deadline
 		}
+		waitStart := time.Now()
 		if opts.FPS > 0 && i > 0 {
 			// Keep animation on started, but skip missed presentation slots.
 			// A stall must not be repaid by submitting a catch-up burst.
@@ -259,6 +260,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				time.Sleep(delay)
 			}
 		}
+		drawStart := time.Now()
 		if i == opts.Warmup {
 			if opts.Benchmark != nil {
 				before = measurement.before
@@ -271,11 +273,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if opts.Benchmark != nil {
 			seconds = float64(i) / float64(opts.FPS)
 		}
-		var drawStart time.Time
 		var hostRow BenchmarkFrame
 		if opts.Benchmark != nil {
-			drawStart = time.Now()
-			hostRow = hostTiming.begin(i, entry, drawStart)
+			hostRow = hostTiming.beginPaced(i, entry, waitStart, drawStart)
 		}
 		var status int32
 		var frameMetrics liveRow

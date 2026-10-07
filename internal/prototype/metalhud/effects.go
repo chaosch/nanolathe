@@ -3,6 +3,7 @@ package metalhud
 import (
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
+	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
@@ -139,10 +140,68 @@ func (s *effectSink) quadsFrom(start int) {
 
 func (s *effectSink) Sprite(c drawlist.Sprite) {
 	start := len(s.quads)
-	s.Foreground.Sprite(c)
+	if c.Kind == drawlist.BlitTinted && c.LightingKind == drawlist.SpriteLightingSmoke && c.Frame != nil && c.PCX == nil {
+		s.smoke(c)
+	} else {
+		s.Foreground.Sprite(c)
+	}
 	s.quadsFrom(start)
 	s.layer.Counts.Sprites++
 	s.source.Sprites = append(s.source.Sprites, c)
+}
+
+// Keep production's RECORD clip and its four receiving corners, rather than
+// evaluating a second set of corners after framebuffer clipping (§23.2).
+func (s *effectSink) smoke(c drawlist.Sprite) {
+	if s.pal == nil {
+		return
+	}
+	f := c.Frame
+	r := s.image(imageKey{gaf: f})
+	if r.w <= 0 || r.h <= 0 {
+		return
+	}
+	x, y := int(c.X)-int(f.XOffset), int(c.Y)-int(f.YOffset)
+	cx, cy, cw, ch := 0, 0, s.cw, s.ch
+	if c.HasClip {
+		cx, cy, cw, ch = int(c.Clip.X), int(c.Clip.Y), int(c.Clip.W), int(c.Clip.H)
+	}
+	x0, y0 := max(x, cx, 0), max(y, cy, 0)
+	x1, y1 := min(x+int(f.Width), cx+cw, s.cw), min(y+int(f.Height), cy+ch, s.ch)
+	if x0 >= x1 || y0 >= y1 {
+		return
+	}
+	const a = float32(atlasSize)
+	p := meshscene.EffectSmoke{Quad: meshscene.OverlayQuad{
+		Rect:  [4]float32{float32(x0), float32(y0), float32(x1 - x0), float32(y1 - y0)},
+		UV:    [4]float32{float32(r.x+x0-x) / a, float32(r.y+y0-y) / a, float32(r.x+x1-x) / a, float32(r.y+y1-y) / a},
+		Color: [4]float32{1, 1, 1, .5}},
+		Selection: [4]float32{float32(c.X), float32(c.Y), float32(max(f.Width, f.Height)), c.WorldHeight},
+		Bounds:    [4]float32{float32(r.x) / a, float32(r.y) / a, float32(r.x+r.w) / a, float32(r.y+r.h) / a}}
+	if s.world {
+		p.Quad.Rect[0] = p.Quad.Rect[0]*s.scale + s.ox
+		p.Quad.Rect[1] = p.Quad.Rect[1]*s.scale + s.oy
+		p.Quad.Rect[2] = max(p.Quad.Rect[2]*s.scale, 1)
+		p.Quad.Rect[3] = max(p.Quad.Rect[3]*s.scale, 1)
+		p.Selection[0] = p.Selection[0]*s.scale + s.ox
+		p.Selection[1] = p.Selection[1]*s.scale + s.oy
+		p.Selection[2] *= s.scale
+		p.Selection[3] *= s.scale
+		if s.source.World.Step.Norm() == camera.ViewScaleDetail && s.scale < 1 {
+			p.Quad.Params[0] = 1
+		}
+	}
+	// World replay expands subpixel sprite spans to one pixel, after production
+	// has evaluated its original clipped receiving corners. Keep that physical
+	// span separate so raster expansion does not move the light sample.
+	p.Quad.Params[1], p.Quad.Params[2] = float32(x1-x0), float32(y1-y0)
+	if s.world {
+		p.Quad.Params[1] *= s.scale
+		p.Quad.Params[2] *= s.scale
+	}
+	i := len(s.layer.Smoke)
+	s.layer.Smoke = append(s.layer.Smoke, p)
+	s.layer.Ops = append(s.layer.Ops, meshscene.EffectOp{Kind: meshscene.EffectOpSmoke, First: i, Count: 1})
 }
 
 func (s *effectSink) Line(c drawlist.Line) {
