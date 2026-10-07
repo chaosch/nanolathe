@@ -10,6 +10,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/model"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
+	"github.com/nanolathe-gg/nanolathe/internal/pool"
 	"github.com/nanolathe-gg/nanolathe/internal/render"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 )
@@ -20,11 +21,12 @@ type battleEntityKey struct {
 }
 type battlePoseSpan struct{ mesh, offset, count int }
 type battlePublication struct {
-	frame      LiveFrame
-	byID       map[battleEntityKey]battlePoseSpan
-	census     battleCensus
-	blendStart time.Time
-	previous   *battlePublication // bounded presentation fallback; its own previous is nil
+	frame                 LiveFrame
+	byID                  map[battleEntityKey]battlePoseSpan
+	census                battleCensus
+	fogSource, fogVersion uint64
+	blendStart            time.Time
+	previous              *battlePublication // bounded presentation fallback; its own previous is nil
 }
 type battlePoseScratch struct {
 	states     []model.PieceState
@@ -49,6 +51,14 @@ type battleCensus struct {
 	SubmittedUnits       int     `json:"submitted_unit_models"`
 	SubmittedFeatures    int     `json:"submitted_feature_models"`
 	SubmittedProjectiles int     `json:"submitted_projectile_models"`
+	SubmittedDebris      int     `json:"submitted_debris_models"`
+	RejectedUnits        int     `json:"admission_rejected_unit_models"`
+	RejectedFeatures     int     `json:"visibility_rejected_feature_models"`
+	RejectedProjectiles  int     `json:"visibility_rejected_projectile_models"`
+	SubmittedShadows     int     `json:"submitted_model_shadows"`
+	SubmittedOutlines    int     `json:"submitted_nanoframe_outlines"`
+	SubmittedHotWrecks   int     `json:"submitted_hot_wreck_models"`
+	SubmittedDistortions int     `json:"submitted_distortions"`
 	SubmittedSprites     int     `json:"submitted_sprites"`
 	SubmittedModels      int     `json:"submitted_model_instances"`
 	SubmittedTriangles   int     `json:"submitted_model_triangles"`
@@ -85,6 +95,10 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			previousProjectiles[p.PresentationID] = p
 		}
 	}
+	unitSlots := make(map[pool.Handle]*frame.UnitView, len(current.Units))
+	for i := range current.Units {
+		unitSlots[current.Units[i].Slot] = &current.Units[i]
+	}
 	currentUnits := make(map[uint64]bool, len(current.Units))
 	for _, u := range current.Units {
 		currentUnits[u.InstanceID] = true
@@ -109,6 +123,10 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		if u.Cloaked {
 			census.Cloaked++
 		}
+		if !battleModelUnitVisible(current, u, unitSlots, s.spectator) {
+			census.RejectedUnits++
+			continue
+		}
 		mesh, ok := s.modelIndices[battleModelKey(u.Model)]
 		if !ok {
 			census.MissingModels++
@@ -124,6 +142,15 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 		key := battleEntityKey{kind: 1, id: u.InstanceID}
 		s.appendUnit(pub, key, mesh, u, prior, old)
+		s.applyUnitVisual(pub, u, current)
+		// A keyed parent's cloak commits the attached image once [03 R-REN-03D §4].
+		// Approximate that propagation with each child's native opacity.
+		for depth, parent := 0, unitSlots[u.Carrier]; parent != nil && depth < len(unitSlots); depth, parent = depth+1, unitSlots[parent.Carrier] {
+			if parent.Cloaked {
+				pub.frame.Instances[len(pub.frame.Instances)-1].Visual.State[1] = 0.5
+				break
+			}
+		}
 		census.SubmittedUnits++
 	}
 	for id := range previousUnits {
@@ -136,6 +163,10 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.BurningFeatures++
 		}
 		if f.Model == "" || f.Filename != "" {
+			continue
+		}
+		if !battleFeatureVisible(current, f, s.spectator) {
+			census.RejectedFeatures++
 			continue
 		}
 		mesh, ok := s.modelIndices[battleModelKey(f.Model)]
@@ -158,6 +189,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			prevUnit = &frame.UnitView{X: prior.X, Y: prior.Y, Z: prior.Z, Heading: prior.Heading, Pitch: prior.Pitch, Bank: prior.Bank}
 		}
 		s.appendUnit(pub, battleEntityKey{kind: 2, id: f.InstanceID}, mesh, u, prevUnit, old)
+		s.applyFeatureVisual(pub, f, current)
 		census.SubmittedFeatures++
 	}
 	for _, p := range current.Projectiles {
@@ -165,6 +197,10 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		// these three model families; an authored Model cannot override the
 		// projectile's render family [03 §5.4][06 R-WFX-01 §4].
 		if p.BurstRemaining != 0 || p.Model == "" || (p.RenderType != render.RenderTypeBaseSpriteModel && p.RenderType != render.RenderTypeBaseModelDistinct && p.RenderType != render.RenderTypeRecordOrientation) {
+			continue
+		}
+		if !battlePointVisible(current, p.X, p.Y, p.Z, s.spectator) {
+			census.RejectedProjectiles++
 			continue
 		}
 		mesh, ok := s.modelIndices[battleModelKey(p.Model)]
@@ -195,12 +231,26 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	}
 	if s.sprites != nil {
 		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(nil, nil, previous, current, camera, s.viewport)
+		pub.frame.Distortions = s.sprites.Distortions(nil, previous, current, camera, s.viewport)
 	}
+	census.SubmittedDebris = s.appendDetachedDebris(pub, current, camera, s.spectator)
+	pub.frame.Fog = s.appendFog(current, old)
+	pub.fogSource, pub.fogVersion = current.Fog.Source, current.Fog.Version
+	census.SubmittedDistortions = len(pub.frame.Distortions)
 	census.SubmittedModels = len(pub.frame.Instances)
 	census.SubmittedSprites = len(pub.frame.Sprites)
 	census.SubmittedMatrices = len(pub.frame.Current)
 	for _, instance := range pub.frame.Instances {
 		census.SubmittedTriangles += len(s.scene.Meshes[instance.Mesh].Indices) / 3
+		if instance.Visual.State[3] > 0 {
+			census.SubmittedShadows++
+		}
+		if instance.Visual.Outline[3] > 0 {
+			census.SubmittedOutlines++
+		}
+		if instance.Visual.Emission[3] > 0 {
+			census.SubmittedHotWrecks++
+		}
 	}
 	pub.census = census
 	return pub
@@ -210,7 +260,7 @@ func (s *battleSource) beginInstance(pub *battlePublication, key battleEntityKey
 	offset, count := len(pub.frame.Current), len(s.models[mesh].Pieces)
 	pub.frame.Current = slices.Grow(pub.frame.Current, count)[:offset+count]
 	pub.frame.Previous = slices.Grow(pub.frame.Previous, count)[:offset+count]
-	pub.frame.Instances = append(pub.frame.Instances, Instance{Mesh: mesh, PoseOffset: offset})
+	pub.frame.Instances = append(pub.frame.Instances, Instance{Mesh: mesh, PoseOffset: offset, Visual: ModelVisual{State: [4]float32{0, 1, 0, 0}}})
 	span := battlePoseSpan{mesh: mesh, offset: offset, count: count}
 	pub.byID[key] = span
 	return span
@@ -364,6 +414,7 @@ func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
 
 type battleSpriteAdapter interface {
 	Append([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
+	Distortions([]Distortion, *frame.Frame, *frame.Frame, [3]float32, [2]int) []Distortion
 	Report() map[string]any
 }
 
@@ -389,6 +440,8 @@ func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog)
 		return err
 	}
 	sprites.SetTerrain(s.sess.World)
+	sprites.SetSpectator(s.spectator)
+	sprites.SetFeatureModelBounds(s.featureModelBounds())
 	s.sprites = sprites
 	s.scene.SpriteAtlas = sprites.Texture()
 	return nil

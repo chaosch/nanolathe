@@ -8,8 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/model"
+	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/internal/session"
 	"github.com/nanolathe-gg/nanolathe/vfs"
 )
@@ -25,6 +27,9 @@ type battleSource struct {
 	originY                                           float32
 	viewport                                          [2]int
 	sprites                                           battleSpriteAdapter
+	spectator                                         bool
+	palette                                           *palette.Tables
+	fogGray, fogBlack                                 [4]*formats.GAFEntry
 	poseScratch                                       battlePoseScratch
 	latest                                            atomic.Pointer[battlePublication]
 	mu                                                sync.Mutex // short camera/lifecycle exchange; never held while stepping
