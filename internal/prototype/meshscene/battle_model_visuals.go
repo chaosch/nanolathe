@@ -52,8 +52,9 @@ func (s *battleSource) applyUnitVisual(pub *battlePublication, u frame.UnitView,
 	matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
 	lo, hi := battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
 	instance.Visual.Bounds = [4]float32{lo, hi, battleGroundHeight(s.scene.HeightField, u.X, u.Z), float32(u.Y) / 65536}
-	// The backend clamps logo entry frame ranges. Unknown colours deliberately
-	// retain frame zero in this prototype; retail omits that texture [03 R-RAST-01 §3].
+	// Unknown team colours omit the textured primitive [03 R-RAST-01 §3].
+	instance.Visual.State[0] = -1
+	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Unit: &u})
 	if u.OwnerColorKnown {
 		instance.Visual.State[0] = float32(u.OwnerColor)
 	}
@@ -76,6 +77,8 @@ func (s *battleSource) applyUnitVisual(pub *battlePublication, u frame.UnitView,
 func (s *battleSource) applyFeatureVisual(pub *battlePublication, feature frame.FeatureView, f *frame.Frame) {
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
 	// 3DO features use the pseudo-unit's player-zero logo [03 R-RAST-01 §3].
+	instance.Visual.State[0] = -1
+	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Feature: &feature})
 	if f.Players[0].Present {
 		instance.Visual.State[0] = float32(f.Players[0].Logo)
 	}

@@ -20,6 +20,9 @@ import (
 const battlePeriod = time.Second / 30
 
 type battleSource struct {
+	materialAtlas                                     *atlasResult
+	materialSource                                    *ModelMaterialSource
+	materialFramesMissing                             uint64
 	effects                                           drawlist.Effects
 	scene                                             *Scene
 	sess                                              *session.Session // accessed only during preparation or by worker

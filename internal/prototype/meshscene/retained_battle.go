@@ -61,11 +61,12 @@ func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32
 		old = &copyOld
 	}
 	pub := r.source.buildPublication(previous, current, camera, old)
+	r.source.applyStandaloneMaterials(pub, current)
 	r.previous = pub
 	return pub.frame
 }
 func (r *RetainedBattle) Report() map[string]any {
-	report := map[string]any{"sprites": r.source.spriteReport()}
+	report := map[string]any{"sprites": r.source.spriteReport(), "material_frames_missing": r.source.materialFramesMissing}
 	if r.previous != nil {
 		report["final_census"] = r.previous.census
 	}
