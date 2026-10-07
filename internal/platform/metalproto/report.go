@@ -59,7 +59,7 @@ func makeReport(rows []nativeRow, o Options, s *meshscene.Scene, device map[stri
 		"approximations": []string{"Immutable sampled pose loop, no live battle or simulation writes; last-to-first pose wrap can be discontinuous", "Column-wise matrix lerp in vertex shader; large rotations are not rigid quaternion interpolation; pieces hidden at either endpoint are suppressed, so visibility snaps by up to one sample", "Conventional orthographic depth on independent z+y axis and directional light; no retail palette composition or model shadows", "Effects are eight synthetic point lights, two half-resolution bloom blur passes, four synthetic shock rings", "FPS uses host timer pacing with missed slots skipped after stalls; CAMetalLayer vsync and drawable backpressure determine actual display cadence", "GPU execution is command-buffer GPU start/end, not per-pass hardware counters", "Native allocations are reported through Metal currentAllocatedSize; Go allocations use runtime.MemStats; Objective-C allocation counts unavailable", "Presentation callbacks receive a bounded 250 ms drain outside measurement; missing/zero timestamps are counted and excluded from intervals; offscreen has no presentation timestamps"},
 	}
 }
-func writeArtifacts(dir string, report map[string]any, rows []nativeRow, warmup int) error {
+func writeArtifacts(dir string, report map[string]any, rows []nativeRow, warmup, firstFrame int) error {
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ func writeArtifacts(dir string, report map[string]any, rows []nativeRow, warmup 
 	}
 	number := func(v float64) string { return strconv.FormatFloat(v, 'f', 9, 64) }
 	for i, r := range rows {
-		if err = w.Write([]string{strconv.Itoa(i), strconv.FormatBool(i < warmup), number(r.Submit), number(r.Encode), number(r.Wait), number(r.DrawableWait), number(r.GPUStart), number(r.GPUEnd), number((r.GPUEnd - r.GPUStart) * 1000), number(r.Completed), number(r.Presented), fmt.Sprint(r.Memory), fmt.Sprint(r.Status)}); err != nil {
+		if err = w.Write([]string{strconv.Itoa(i + firstFrame), strconv.FormatBool(i+firstFrame < warmup), number(r.Submit), number(r.Encode), number(r.Wait), number(r.DrawableWait), number(r.GPUStart), number(r.GPUEnd), number((r.GPUEnd - r.GPUStart) * 1000), number(r.Completed), number(r.Presented), fmt.Sprint(r.Memory), fmt.Sprint(r.Status)}); err != nil {
 			return err
 		}
 	}

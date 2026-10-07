@@ -90,9 +90,9 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 152-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 168-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
-owns pose, instance-offset, 64-byte visual, sprite, light, selector and distortion buffers, fog texture, plus CPU draw spans. A slot
+owns pose, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
 has finished the earlier work that used it. Growth replaces only that free
 slot's buffer, doubling capacity; it does not wait for or resize other slots.
@@ -120,11 +120,11 @@ emission feeds bloom; replay's synthetic lights, model threshold emission and
 shock rings are suppressed. The Effects option controls lights/emission/bloom,
 while ordinary sprites remain visible. `VisualPasses` enables the additional live presentation described below.
 
-Native input polls held arrows/WASD, accumulated vertical wheel delta and a
+Native input polls held arrows (also WASD for spectators), accumulated vertical wheel delta and a
 non-repeating space pause toggle. The source owns camera movement, zoom and
 pause behavior; the renderer only delivers input and uses the returned camera.
-Keys reset on focus loss. Offscreen input is empty. No command/order UI or other
-input is implemented here.
+Keys reset on focus loss. Offscreen input is empty. Playable scenes also receive
+ordered pointer/key edges and compose their supplied HUD, as described below.
 
 `live-frames.csv` includes warmup rows, source `Next` time, Go validation/packing
 preparation time, committed tick, the wall seconds passed to `Next`, its returned
@@ -217,3 +217,43 @@ Standalone `xcrun metal` is unavailable on the host without the optional Metal
 Toolchain; startup compilation through `newLibraryWithSource` is the required
 runtime shader check. No tests or benchmarks were run by the backend agent;
 real-device runs and visual inspection are performed by the coordinating agent.
+
+
+## Playable input and HUD
+
+`Scene.Playable` selects the native playable input mode through `nm_playable`.
+`nm_input` pumps Cocoa events and samples camera arrows, accumulated wheel zoom
+and space pause. Spectators also retain WASD pan; playable WASD keys are command
+keys. Held keys clear when the window loses focus, and unfinished pointer drags
+receive synthetic button releases on that transition. Ordinary received drag
+releases outside the content bounds are retained.
+
+`nm_events` drains ordered 32-byte `NMEvent` records without another event pump.
+Left/right/middle buttons are 0/1/2; kind move/down/up/key-down is 1/2/3/4.
+ASCII keys are uppercase with Escape 27, Enter 13 and Backspace 8; modifiers are
+Shift 1, Control 2, Alt 4 and Command 8. Pointer coordinates convert from Cocoa
+window coordinates through the content view, flip Y for an unflipped view and
+scale its bounds into the physical drawable dimensions. The native queue holds
+8,192 events. Only consecutive wheel-free moves coalesce. If exhausted, newest
+events are dropped and `input_queue_overflow` reports every drop explicitly.
+Wheel events retain their ordered position and also feed `Input.Zoom`; a caller
+must choose which wheel representation to act upon. Right clicks are captured
+as gameplay events before Cocoa can interpret them as contextual-menu input.
+
+The synchronous live upload is now 168 bytes. It includes a 64-byte-per-quad
+HUD stream copied into the reusable three-slot native resource ring. The
+immutable overlay atlas uploads once at texture slot 3; model/terrain/sprite
+remain slots 0/1/2. HUD params select overlay atlas 0, terrain 1 or current fog
+2. This batch runs after the final world/fog composition, including when visual
+passes are disabled, with premultiplied alpha into BGRA8 and no depth attachment.
+Final capture executes the same HUD pass. Reports include quad counts, exact
+upload bytes, retained atlas bytes and actual native ring capacities.
+
+`Options.Frames == 0` is interactive until window close (visible output only).
+Go and native timing histories retain the same chronological last 8,192 submitted
+frames; global frame IDs and total submission count remain explicit. Native
+creation uses negative capacity to select this bounded circular history.
+Each record carries a separate generation so a delayed presentation callback
+cannot write into a reused row. The ring never drains periodically; only the
+existing final GPU/presentation drain runs on exit or capture. Positive finite
+frame counts retain their complete warmup-inclusive history as before.
