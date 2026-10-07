@@ -242,7 +242,7 @@ Conventional depth and triangle mapping change retail composition and coplanar
 face behavior. Most game-specific composition and front-end work is still ahead.
 The native bridge is intentionally prototype-quality, with no GPU-hang watchdog.
 
-**Recommended next iteration:** connect this resource/pose boundary to a live
+**Recommendation after the initial replay (completed below):** connect this resource/pose boundary to a live
 committed battle frame before the current CPU model projection, using an opt-in
 experimental host. Keep simulation, content loading and existing frame ownership.
 Add the required terrain/fog, feature/effect, shadow, construction/cargo and HUD
@@ -286,3 +286,242 @@ The measured directories are `mesh-360-q1`, `mesh-1000-q1`, `mesh-1000-q2`,
 baselines are `baseline-classic` and `baseline-modern`. Captures were inspected
 for both the existing renderers and the native prototype. Only authored code
 and this report are committed; retail images and raw run artifacts remain local.
+
+
+## Live battle continuation
+
+The next experiment connects the retained backend to the existing
+`headless.ComposeSimBenchBattle` fixture on Town & Country: three computer
+armies, ordinary production/orders/weapons/deaths, Modern gameplay and seed 7.
+It uses the same fixture contract as `--live-scene=field:250`, with difficulty
+1 and a requested unit limit of at least 400; the Modern rule set resolves the
+actual per-owner limit to 1500 in the recorded metadata. It begins at committed
+tick 1200, after the
+armies have moved into contact. It is an omniscient spectator prototype, with
+arrow/WASD pan, wheel zoom and space pause. It has no order-entry UI or audio.
+
+The simulation owns a worker at 30 Hz. After each tick it reads pinned published
+frames and builds detached immutable presentation data. The renderer never
+reads the mutable session. Allocation identities match previous/current unit,
+feature and projectile transforms; births snap and deaths disappear. A fixed
+one-tick presentation buffer gives the worker time to finish before interpolation
+begins. Only the current and immediately previous publication are retained;
+there is no unbounded history or replay loop. Matrix interpolation and conventional
+floating point depth are still deliberate display approximations.
+
+All 3DO meshes in the mounted asset namespace upload once, including future
+products and wrecks. Draw counts and pose-buffer spans change with the live
+battle. Pose/instance/sprite/light buffers reuse three native ring slots. Sprite
+art is prepared from the map's committed feature definitions, all catalog unit
+corpses and their authored dead/burnt/reclaim successors. The first attempt to
+prepare every map's feature animations exceeded the prototype's atlas limit;
+this scope reduction preserves reachable battle art without loading unrelated
+maps. The model and sprite atlases remain shared across instances.
+
+Actual GAF feature bodies, shadows and event animations, effect sprites, strip
+particles, weapon sprites and beam endpoints now feed the native renderer.
+Projectile selection reuses the production dispatch. Terrain/feature anchors use
+`z - y/2`; feature height shear preserves the four-cell integer sum divided by
+8 [03 §5.1.4]. Lighting comes from published flash geometry. The live path has
+no synthetic point lights or shock rings. Bloom uses actual submitted sprites;
+real displacement effects are still omitted.
+
+The first short visible run reached approximately 120 Hz, but its motion trace
+showed an interpolation stall each time the worker had not finished the next
+pose pair. The fixed presentation buffer was added in response. Frame rate alone
+would have missed this defect. `live-frames.csv` records the committed tick and
+alpha alongside native frame timing, and `battle.json` records every simulation
+and pose-preparation cost and census, including missed 30 Hz deadlines.
+
+Live limitations remain: no fog/LOS/cloak admission, HUD, audio, unit shadows,
+terrain height occlusion, cargo composition, nanoframe reveal, animated model
+textures or per-team logos. Rest feature animations use their first frame;
+destination-palette ALP and its composite children are approximated/omitted.
+Strip particles and beam spans snap per tick, while their supported moving
+anchors interpolate. Tall billboards use anchor depth rather than pixel height.
+Detached/model effect fragments, secondary projectile models, segmented beams
+and displacement lenses are counted but omitted. Native lights have a 32-source
+cap. These omissions matter when comparing with the production renderer.
+
+The matching production live trace averaged 77.7 host draws/s at 0.75× zoom
+and 97.6 at 1× during the final 32 seconds of separate 72-second runs at
+1920×1080, GOMAXPROCS=2 and a requested 120 cap. Their p99 draw intervals were
+29.95 and 23.18 ms. This is host draw timing, not Metal presentation callbacks.
+A 0.5× exploratory run is excluded because production switches to strategic
+icons there. The attempted Classic live trace produced no rows: the trace's
+start hook exists only in the Modern draw path. The bounded attempt was stopped;
+no Classic timing is inferred from it. The earlier coastal Classic measurement
+above remains a different workload.
+
+### Live measurements
+
+Established by local runs at code commit `be4ba9da` (the later report wording
+correction changes no rendering). Native bridge sources last changed at
+`bcaf24e6`. Both use the versions and Mac recorded above, `GOMAXPROCS=2`, and
+an explicitly cgo-disabled Go build. Each row excludes 240 warmup frames and
+includes 3,600 measured frames: about 30 seconds visible or 25 seconds at 144
+submissions/s. Visible runs use uncapped submission with vsync. All four have
+3,600 presentation timestamps and no missing callbacks or native run errors.
+
+| Initial computer armies | Pixels | Geometry / model texture dimensions | Presented Hz | p99 presentation interval | GPU mean / p99 | Peak Metal allocation |
+|---|---|---|---:|---:|---:|---:|
+| 3 × 250 | 1920×1080 | 1× / 1× | 119.6 | 8.338 ms | 4.08 / 5.19 ms | 399 MiB |
+| 3 × 250 | 1920×1080 | 5× / 2× | 119.8 | 8.338 ms | 4.88 / 6.64 ms | 468 MiB |
+| 3 × 500 | 1920×1080 | 5× / 2× | 119.6 | 8.339 ms | 4.22 / 6.65 ms | 472 MiB |
+| 3 × 500 | 3456×2234 | 5× / 2× | 119.9 | 8.340 ms | 5.54 / 6.99 ms | 690 MiB |
+
+The Retina run uses zoom 1.35 versus 0.75 at 1080p to preserve horizontal world
+coverage; its taller aspect ratio shows somewhat more world vertically. It
+submitted 761–917 model instances, 536k–616k model triangles and 2,437–3,025
+sprites per frame. The conservative culling margin means these are submitted,
+not exact visible, counts. There are additional off-camera combatants. During
+the measured window the session reached 1,485 units, 1,086 moving units, 44
+nanoframes, 213 projectiles, 830 effect records, 6,353 strip objects and 24
+burning features. Those maxima are not all from the same tick. It recorded 23
+unit births and 128 deaths. No model or sprite art failed to resolve; explicitly
+omitted effect families still apply.
+
+The 750-unit run recorded 10 births and 44 deaths during measurement. Its
+simulation plus presentation preparation averaged 8.68 ms/tick, p99 12.15 ms.
+The 1,500-unit Retina run averaged 12.27 ms/tick, p99 16.05 ms: simulation
+7.40 ms mean, pose/sprite preparation 4.87 ms mean. This work is at 30 Hz on the
+worker, not every display frame. Native encoding p99 was 0.23–0.30 ms across
+the four runs; it excludes Go preparation and worker time.
+
+World motion is a separate result from display pacing. The fixed 33.33 ms
+presentation buffer reduced the small run's p99 motion-step error from 8.33 ms
+in the initial smoke run to 1.12 ms in the sustained run. Here error is the
+absolute difference between the change in `(tick + alpha)/30` and consecutive
+presentation timestamps; it is a timing proxy, not optical motion analysis.
+The 1,500-unit 1080p run still missed four 30 Hz worker deadlines and had
+6.25 ms p99 motion-step error, despite its 119.6 Hz presentation. Its slowest
+combined tick took 46.06 ms. The Retina run had no missed worker deadlines in
+the measured window and 1.15 ms p99 motion-step error. Host scheduling variation
+and occasional worker stalls remain; the prototype does not guarantee perfect
+world pacing. Warmup/PNG-drain ticks are recorded separately in `battle.json`.
+
+The full Retina battle also ran offscreen at a requested 144 Hz: **144.0 mean
+submissions/s**, GPU mean 4.32 ms and p99 6.16 ms. Submission p99 was 8.63 ms,
+so the timer-driven host did not deliver every interval within 6.94 ms. It had
+no drawable/presentation cost and a shorter committed-tick window, and cannot
+establish 144 Hz visible delivery on this 120 Hz panel. The result supports
+continuing toward 144 Hz, not declaring it finished.
+
+A longer 18,000-frame visible run at 1600×900 completed after approximately
+150 seconds, at 119.5 presented Hz, with ordinary ongoing battle activity. It
+was launched to inspect controls; the first automation attempt timed out without
+sending input. A subsequent authorized retry exposed an incomplete Cocoa launch
+and short key taps disappearing within one event-pump batch. Commit `8f205587`
+explicitly completes launch and retains taps for one input sample. Native UI
+inspection then verified pause/resume, wheel zoom, arrow/WASD camera movement,
+and clean window-close termination; the recorded pause lasted 33.55 seconds in
+one check. A separate 24-instance, 12-frame offscreen replay smoke run completed
+after the streaming changes. No tests were added or run.
+
+The final host was re-measured after the interactive fixes at `8f205587`, with
+3,600 visible Retina frames and the same large fixture: **119.9 presented Hz**,
+p99 presentation interval 8.340 ms, GPU mean/p99 5.61/6.94 ms and native encode
+p99 0.288 ms. It recorded all presentation timestamps, no missed worker deadlines
+in the measured window, 0.93 ms p99 motion-step error and the same 690 MiB peak
+Metal allocation. This confirmation is `battle-1500-retina-final`.
+
+The production comparisons above share the fixture family, map, seed and
+settings, but differ in presentation coverage, effects, camera/HUD composition
+and host scheduling. Their end ticks differ. They establish that the new path
+is promising on a real workload; **77.7 versus 119.8 is not a controlled,
+feature-equivalent backend speedup ratio**.
+
+### Memory and latency costs
+
+The full mounted model namespace has 608 retained meshes and 496 resolved
+texture names. Its shared model atlas is 8 MiB at original dimensions or
+32 MiB at double dimensions, independent of army size. Increasing geometry
+from 1× to 5× leaves the same battle's dynamic upload essentially unchanged
+at 0.632 MiB/display frame. The larger Retina battle averages 1.304 MiB/frame
+for poses, instance offsets, sprites and lights, about 156.5 MiB/s at 120 Hz.
+This is copied input, not hardware bandwidth measurement.
+
+The larger cost is **225.1 MiB for the shared feature/effect sprite atlas**,
+8192×7204 RGBA, plus 64 MiB for the 4096×4096 terrain crop. The atlas preloads
+3,457 authored animation frames from 22 banks, including future building
+collapse states and reachable corpses. Three urban-building banks dominate.
+Scoping preload to this battle fixed the initial over-capacity failure;
+transparent-margin cropping saved zero bytes for these already tight assets.
+Sprite textures are not doubled by `--textures=2`. This prototype therefore
+answers the shared *unit texture* question well but still needs bounded sprite
+resource management. Metal's peak includes inputs, meshes, triple buffers,
+HDR/depth/bloom targets and drawables. It is not total process memory.
+
+Go heap at the end of the four visible runs was 577–740 MiB; the large Retina
+run had about 1.27 GiB reserved heap and allocated 3.27 GiB cumulatively across
+measured rendering and final drain (warmup excluded). These are process-wide measurements including
+simulation and detached presentation construction. Seven GC cycles accumulated
+0.61 ms of stop-the-world pause; concurrent GC work is not isolated. Asset
+preload, retained CPU texture/mesh copies and per-tick allocation are deliberately
+rough. Pooling publications and releasing upload-only CPU data are worthwhile
+next steps, with explicit frame ownership.
+
+Latency also needs attention: visible submission-to-presentation median is
+about 32 ms, on top of the 33.33 ms interpolation buffer and the ordinary
+30 Hz state sampling. This is not a measured input-to-photon figure. Smooth
+120 Hz cadence alone is insufficient; reduce queue depth and schedule near
+presentation while maintaining enough worker headroom. Rigid translation/
+rotation interpolation should replace matrix-column blending.
+
+### Recommendation after the live battle
+
+Continue the opt-in native backend. The experiment now demonstrates that actual
+battle updates, persistent geometry, shared atlases, instanced custom shaders,
+interpolated poses and sprite/effect submission fit 120 Hz on this Mac even with
+5× surface subdivision. There is no reason from these measurements to rebuild
+or upload unit geometry on every frame. Keep the existing content/session/frame
+contracts and `purego` boundary; do not generalize a cross-platform abstraction
+before another backend needs it.
+
+The next useful work is visual and lifecycle integration: per-team atlas
+selection, fog/cloak, construction/cargo composition, terrain occlusion and
+shadows, then the missing effect families, real distortion and the existing HUD
+and commands. Give the sprite atlas a bounded lifetime/streaming policy; evaluate
+indexed palette textures for legacy art instead of expanding all frames to RGBA.
+Choose a lower-latency presentation policy and reduce per-tick temporary data.
+Re-run a matched scene with comparable coverage as each missing pass is added.
+
+Ebitengine's host/input code remains a useful candidate for a narrow attributed
+extraction or maintained fork. Reusing its public draw pipeline would give back
+the limitations this experiment removes. The prototype's small Objective-C ABI
+has been adequate through `purego`; rewriting it into `purego/objc` solely to
+remove a build step is less urgent than fidelity, resource lifetime and pacing.
+Keep the shipping renderer available until those gaps are closed and Windows/
+Linux have an explicit backend plan.
+
+### Reproduce the live run
+
+From the `metal-prototype` worktree (output directories must be new):
+
+```sh
+# Visible Retina battle: about 30 seconds measured, plus preparation and warmup.
+tools/metal-proto --battle --army-size 500 --preticks 1200 --seed 7 \
+  --quads 5 --textures 2 --width 3456 --height 2234 --zoom 1.35 \
+  --fps 0 --warmup 240 --frames 3600 --out /tmp/metal-battle-new
+
+# Longer interactive spectator session. Arrows/WASD, wheel, space; close to exit.
+tools/metal-proto --battle --quads 5 --textures 2 --fps 0 \
+  --frames 100000 --out /tmp/metal-spectator-new
+
+# 144 Hz throughput only; this creates no window.
+tools/metal-proto --battle --army-size 500 --quads 5 --textures 2 \
+  --width 3456 --height 2234 --zoom 1.35 --fps 144 --offscreen \
+  --frames 3600 --out /tmp/metal-battle-offscreen-new
+
+tools/metal-proto-report /tmp/metal-battle-new /tmp/metal-battle-offscreen-new
+```
+
+Live artifacts are in `/tmp/nanolathe-metal-live/` with a durable copy under
+`/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-live/`.
+The four visible cases are `battle-750-q1`, `battle-750-q5`, `battle-1500-q5`,
+`battle-1500-retina`; the offscreen case is `battle-1500-retina-144`.
+`manifest.json` identifies the measured binaries and settings. Each case includes
+CSV records, JSON census/timing reports and a captured `final.png`. Retail-derived
+artifacts remain outside version control. The durable directory also includes a prebuilt `run-live.sh` launcher and both
+required binaries for this Mac. The branch is committed and retained
+for iteration; no production landing or tests are claimed.
