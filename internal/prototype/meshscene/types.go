@@ -31,10 +31,12 @@ type Instance struct {
 }
 type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
-	Name    string
-	Meshes  []Mesh
-	Atlas   Texture
-	Terrain Texture
+	Name        string
+	Meshes      []Mesh
+	Atlas       Texture
+	Terrain     Texture
+	SpriteAtlas Texture
+	Live        LiveSource // nil retains the original recorded-pose workload
 	// Terrain rectangle in world x,z; it is a flat 2D backdrop.
 	TerrainRect [4]float32
 	Instances   []Instance
