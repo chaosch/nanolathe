@@ -1,11 +1,14 @@
 #ifndef NANOMETAL_BRIDGE_H
 #define NANOMETAL_BRIDGE_H
 #include <stdint.h>
+#include "effects.h"
+#include "ground_effects.h"
+#include "shadows.h"
 typedef struct { double submit, encode, wait, drawable_wait, gpu_start, gpu_end, completed, presented; uint64_t memory; int32_t status, reserved; } NMRow;
 // Positive capacity retains every finite sample; negative capacity is a
 // circular interactive history of its absolute value.
 void* nm_create(int width,int height,int offscreen,int vsync,int effects,int visual_passes,int capacity,const char* shader,char* error,int error_size);
-int nm_mesh(void* renderer,const void* vertices,int vertex_count,const uint32_t* indices,int index_count,const uint32_t* offsets,int instances,const uint32_t* edges,int edge_count,const void* visuals);
+int nm_mesh(void* renderer,const void* vertices,int vertex_count,const uint32_t* indices,int index_count,const uint32_t* offsets,int instances,const uint32_t* edges,int edge_count,const void* visuals,const void* primitive_centers,int primitive_count);
 typedef struct { const void *materials,*frames,*heights; uint32_t material_count,frame_count,width,height;float rect[4]; } NMAssets;
 int nm_assets(void* renderer,const NMAssets* assets);
 int nm_texture(void* renderer,int slot,int width,int height,const void* rgba);
@@ -30,6 +33,13 @@ typedef struct {
  uint32_t rules_count,material_count;
  const void *composition_slots,*composition_selectors,*composition_draws,*composition_paint;
  uint32_t composition_slot_count,composition_draw_count,composition_paint_count,composition_width,composition_height,composed;
+ const void* retained_lights;uint32_t retained_light_count,light_controls;
+ const NMEffectsUpload* effects;
+ const void* glow_vertices;uint32_t glow_count,glow_enabled;float glow_parameters[12];
+ const NMGroundUpload* ground_effects;
+ NMShadowUpload shadows;
+ const void* water_objects;
+ const void* water_sources;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings

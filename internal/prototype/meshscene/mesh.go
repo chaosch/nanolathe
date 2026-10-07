@@ -119,6 +119,15 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 					vertices[vi].UV = region.uv(uv, atlas.uvWidth, atlas.uvHeight)
 				}
 			}
+			if atlas.useMaterials {
+				var center [4]float32
+				for _, v := range vertices {
+					for j := 0; j < 3; j++ {
+						center[j] += v.Position[j] / float32(n)
+					}
+				}
+				mesh.PrimitiveCenters = append(mesh.PrimitiveCenters, center)
+			}
 			normal := faceNormal(vertices[0].Position, vertices[1].Position, vertices[2].Position)
 			for i := range vertices {
 				vertices[i].Normal = normal

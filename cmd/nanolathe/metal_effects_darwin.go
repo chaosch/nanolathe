@@ -38,7 +38,11 @@ func recordMetalEffects(cl *client.Client, adapter *metalhud.Foreground) (metalE
 	groups := make([][]metalhud.EffectBatch, 5)
 	for i, batches := range [][]client.RetainedEffectBatch{recorded.BeforeFeatures, recorded.BeforeGround, recorded.AfterGround, recorded.AfterAir, recorded.AfterLabels} {
 		for j := range batches {
-			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels})
+			order := make([]meshscene.EffectProjectileModel, len(batches[j].ProjectileOrder))
+			for k, e := range batches[j].ProjectileOrder {
+				order[k] = meshscene.EffectProjectileModel{ID: e.ID, Member: e.Member}
+			}
+			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels, ProjectileOrder: order})
 		}
 	}
 	groups[0] = append(groups[0], metalhud.EffectBatch{List: &recorded.LightSources.Short, SourceOnly: true})

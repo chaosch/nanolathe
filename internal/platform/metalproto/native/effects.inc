@@ -21,7 +21,7 @@ _Static_assert(sizeof(NMEffectsVertex)==48,"effects vertex layout");
 @property BOOL atlasNeedsFullUpload;
 @property (nonatomic) NMEffectsRetainedDraw retainedDrawer;
 @property (nonatomic) NMEffectsGroundDraw groundDrawer;
-@property uint64_t retainedSubmitted,retainedSuppressed;
+@property uint64_t retainedSubmitted,retainedSuppressed,retainedChildren;
 @property uint64_t groundMarkerSuppressed;
 @property uint32_t retainedBodyMarkers,retainedShadowMarkers;
 @property uint64_t smokeReceiversDrawn;
@@ -146,7 +146,7 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
   if(op.kind==4){if(enc){[enc endEncoding];enc=nil;}if(!s.groundDrawer||!s.groundDrawer(r,ring,cb,&u,op.first,op.count))s.groundMarkerSuppressed+=op.count;continue;}
   if(op.kind==3){
    if(enc){[enc endEncoding];enc=nil;}
-   if(s.retainedDrawer&&s.retainedDrawer(r,ring,cb,&u,op.first,op.reserved)){s.retainedSubmitted++;}else{s.retainedSuppressed++;}
+   if(s.retainedDrawer&&s.retainedDrawer(r,ring,cb,&u,op.first,op.reserved)){if(op.reserved&2)s.retainedChildren++;else s.retainedSubmitted++;}else{s.retainedSuppressed++;}
    continue;
   }
   if(op.kind==1){
@@ -179,5 +179,5 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
 // The bridge may merge this dictionary into nm_info's ordinary renderer report.
 static NSDictionary* nmEffectsInfo(NMRenderer* r) {
  NMEffectsState* s=r.effectState;if(!s)return @{@"stock_effects_enabled":@NO};
- return @{@"stock_effects_enabled":@(s.preparedFrames!=0),@"stock_effects_prepared_frames":@(s.preparedFrames),@"stock_effects_drawn_layers":@(s.drawnLayers),@"stock_effects_empty_layers":@(s.emptyLayers),@"stock_effects_drawn_lenses":@(s.drawnLenses),@"stock_effects_empty_lenses":@(s.emptyLenses),@"stock_effects_drawn_models":@(s.drawnModels),@"stock_effects_prepared_models":@(s.modelSubmitted),@"stock_effects_suppressed_models":@(s.modelSuppressed),@"stock_effects_delegated_projectile_models":@(s.projectileModels),@"stock_effects_retained_body_markers":@(s.retainedBodyMarkers),@"stock_effects_retained_shadow_markers":@(s.retainedShadowMarkers),@"stock_effects_retained_markers_submitted":@(s.retainedSubmitted),@"stock_effects_retained_markers_suppressed":@(s.retainedSuppressed),@"stock_effects_source_count":@(s.sourceCount),@"stock_effects_fan_quad_faces":@(s.quadSpanFaces),@"stock_effects_unused_supersample_models":@(s.supersampleModels),@"stock_effects_atlas_version":@(s.version),@"stock_effects_atlas_uploads":@(s.atlasUploads),@"stock_effects_atlas_uploaded_bytes":@(s.atlasBytes),@"stock_effects_ground_markers_suppressed":@(s.groundMarkerSuppressed),@"stock_effects_smoke_receivers_drawn":@(s.smokeReceiversDrawn),@"stock_effects_bloom_submitted":@NO};
+ return @{@"stock_effects_enabled":@(s.preparedFrames!=0),@"stock_effects_prepared_frames":@(s.preparedFrames),@"stock_effects_drawn_layers":@(s.drawnLayers),@"stock_effects_empty_layers":@(s.emptyLayers),@"stock_effects_drawn_lenses":@(s.drawnLenses),@"stock_effects_empty_lenses":@(s.emptyLenses),@"stock_effects_drawn_models":@(s.drawnModels),@"stock_effects_prepared_models":@(s.modelSubmitted),@"stock_effects_suppressed_models":@(s.modelSuppressed),@"stock_effects_delegated_projectile_models":@(s.projectileModels),@"stock_effects_retained_body_markers":@(s.retainedBodyMarkers),@"stock_effects_retained_shadow_markers":@(s.retainedShadowMarkers),@"stock_effects_retained_markers_submitted":@(s.retainedSubmitted),@"stock_effects_retained_children_handled":@(s.retainedChildren),@"stock_effects_retained_markers_suppressed":@(s.retainedSuppressed),@"stock_effects_source_count":@(s.sourceCount),@"stock_effects_fan_quad_faces":@(s.quadSpanFaces),@"stock_effects_unused_supersample_models":@(s.supersampleModels),@"stock_effects_atlas_version":@(s.version),@"stock_effects_atlas_uploads":@(s.atlasUploads),@"stock_effects_atlas_uploaded_bytes":@(s.atlasBytes),@"stock_effects_ground_markers_suppressed":@(s.groundMarkerSuppressed),@"stock_effects_smoke_receivers_drawn":@(s.smokeReceiversDrawn),@"stock_effects_bloom_submitted":@NO};
 }

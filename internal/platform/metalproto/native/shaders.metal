@@ -4,7 +4,7 @@ using namespace metal;
 // submitted sources; neither path claims retail composition or light arithmetic.
 // Packed vector lanes keep the Go/Metal ABI exactly 64 bytes.
 struct Vertex { packed_float3 p; packed_float3 n; float2 uv; packed_float3 color; uint piece; uint material; packed_float3 shadeNormal; };
-struct Uniforms { float4 camera; float4 rect; float4 viewport; float4 timing; float4 mode; float4 heightRect; float4 fogRect; float4 visual; float4 composition; };
+struct Uniforms { float4 camera; float4 rect; float4 viewport; float4 timing; float4 mode; float4 heightRect; float4 fogRect; float4 visual; float4 composition; float4 lightControl; };
 struct Light { float4 positionRadius; float4 colorStrength; };
 struct Material { uint firstFrame,frameCount,kind,reserved; };
 struct ModelRules { float4 reveal,below,band,above,clip,shadow,outline; };
@@ -70,7 +70,7 @@ kernel void interpolate_poses(device const float4x4* endpoints [[buffer(0)]],dev
  m[2].w=a[2].w>0.5&&b[2].w>0.5?1:0;poses[at]=m;
 }
 struct ModelSlot { float4 screen,atlas,params; };
-struct Out { float4 atlasRect [[flat]]; float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float heightKey; float keyOrigin [[flat]]; float shadeRow; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; float4 reveal [[flat]],below [[flat]],band [[flat]],above [[flat]],clip [[flat]],shadow [[flat]],material [[flat]]; };
+struct Out { float3 battleLight [[flat]];float3 faceNormal [[flat]];float4 atlasRect [[flat]]; float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float heightKey; float keyOrigin [[flat]]; float shadeRow; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; float4 reveal [[flat]],below [[flat]],band [[flat]],above [[flat]],clip [[flat]],shadow [[flat]],material [[flat]]; };
 float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
  if(u.visual.y<0.5)return 0;
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
@@ -78,6 +78,8 @@ float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
  return heights.sample(s,uv,level(0)).r;
 }
 struct MRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; };
+struct ModelResult {float4 color,glow,metadata;float depth;};
+struct AtlasModelMRT {float4 color [[color(0)]];float4 glow [[color(1)]];float4 metadata [[color(2)]];float depth [[depth(any)]];};
 struct ModelMRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; float depth [[depth(any)]]; };
 float4 project(float3 p, constant Uniforms& u) {
  // Live world art uses half-height shear; replay retains its measured basis.
@@ -85,7 +87,7 @@ float4 project(float3 p, constant Uniforms& u) {
  float2 screen=float2(p.x-u.camera.x,p.z-u.camera.y-p.y*heightScale)*u.camera.z+u.viewport.xy*0.5;
  return float4(screen.x/u.viewport.x*2-1,1-screen.y/u.viewport.y*2,clamp(0.5-((p.z-u.camera.y)+p.y*depthHeight)*0.00001,0.001,0.999),1);
 }
-vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const Material* materials [[buffer(6)]],device const float4* frames [[buffer(7)]],device const uint* selectors [[buffer(8)]],device const ModelRules* rules [[buffer(10)]],device const NativeModelMaterial* selected [[buffer(11)]],device const uint* materialOffsets [[buffer(12)]],device const ModelSlot* slots [[buffer(13)]],device const uint* slotSelectors [[buffer(14)]]) {
+vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const Material* materials [[buffer(6)]],device const float4* frames [[buffer(7)]],device const uint* selectors [[buffer(8)]],device const ModelRules* rules [[buffer(10)]],device const NativeModelMaterial* selected [[buffer(11)]],device const uint* materialOffsets [[buffer(12)]],device const ModelSlot* slots [[buffer(13)]],device const uint* slotSelectors [[buffer(14)]],device const float4* centers [[buffer(15)]],device const nm_light_source* retainedLights [[buffer(16)]],device const nm_light_subject* subjectLights [[buffer(17)]]) {
  if(u.mode.z>0.5)iid=selectors[iid];
  Vertex v=vertices[vid]; uint at=offsets[iid]+v.piece;
  float4x4 m=poses[at];
@@ -106,7 +108,14 @@ vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device c
  uint shadeRow=uint(int(dot(shadeNormal,float3(-0.8,1,0.25))*5.0))&31;
  if(m[0].w>1.5)shadeRow=15;
  o.shadeRow=m[0].w>0.5&&m[0].w<1.5?-1.0:float(shadeRow);o.color=vertexColor;o.normal=normalize((m*float4(float3(v.n),0)).xyz);o.world=w;
- if(u.mode.w>1.5){uint slot=slotSelectors[iid];if(slot==0){o.position=float4(2,2,2,1);return o;}ModelSlot placement=slots[slot-1];o.atlasRect=placement.atlas;float2 screen=float2((o.position.x+1)*0.5,(1-o.position.y)*0.5)*u.viewport.xy;float2 pixel=screen-placement.screen.xy+placement.atlas.xy;o.position=float4(pixel.x/u.composition.x*2-1,1-pixel.y/u.composition.y*2,0.5,1);}
+ o.faceNormal=o.normal.xzy;
+ if(u.lightControl.y>0.5&&v.material!=0&&u.mode.w>1.5&&slotSelectors[iid]>0){
+  nm_light_subject local=subjectLights[slotSelectors[iid]-1];
+  float3 face=(m*float4(centers[materials[v.material].reserved].xyz,1)).xyz;
+  float3 physical=float3((face.x-u.camera.x)*u.camera.z+u.viewport.x*.5,(face.z-u.camera.y)*u.camera.z+u.viewport.y*.5,face.y*u.camera.z);
+  o.battleLight=nm_light_irradiance(retainedLights,local,physical,o.faceNormal,false);
+ }
+ if(u.mode.w>1.5){uint slot=slotSelectors[iid];if(slot==0){o.position=float4(2,2,2,1);return o;}ModelSlot placement=slots[slot-1];o.atlasRect=placement.atlas;float2 screen=float2((o.position.x+1)*0.5,(1-o.position.y)*0.5)*u.viewport.xy;float2 pixel=(screen-placement.screen.xy)*(placement.atlas.zw/placement.screen.zw)+placement.atlas.xy;o.position=float4(pixel.x/u.composition.x*2-1,1-pixel.y/u.composition.y*2,0.5,1);}
  return o;
 }
 float4 modelTexel(texture2d<float> atlas,texture2d<float> palette,float2 uv,bool blue) {
@@ -116,7 +125,7 @@ float4 modelTexel(texture2d<float> atlas,texture2d<float> palette,float2 uv,bool
 }
 float modelKey(Out in) { float k=floor(in.heightKey)+in.clip.w;return k-floor(k/256)*256; }
 float4 modelVerdict(Out in,float key) { return key<in.reveal.y?in.below:key>=in.reveal.x?in.above:in.band; }
-fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]]) {
+ModelResult shadeModel(Out in,texture2d<float> atlas,constant Uniforms& u,device const Light* lights,texture2d<float> palette) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
  float key=modelKey(in);bool ruled=u.visual.w>0.5;
  bool blue=ruled&&in.clip.x>1.5&&key<=in.clip.y;
@@ -137,13 +146,14 @@ fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[te
   float3 d=p-in.world;float r=length(d);float fall=pow(max(1-r/230,0.0),2.0);
   light+=float3(0.6+0.4*sin(a),0.3+0.3*cos(a),0.5+0.5*cos(a+2))*fall*max(dot(in.normal,normalize(d)),0.0)*1.8;
  }
- if(u.timing.w>0.5&&u.mode.x>0.5)for(uint i=0;i<uint(u.mode.y);i++){
+ if(u.timing.w>0.5&&u.mode.x>0.5&&u.lightControl.y<0.5)for(uint i=0;i<uint(u.mode.y);i++){
   Light l=lights[i];float3 d=l.positionRadius.xyz-in.world;float r=length(d);float fall=pow(max(1-r/max(l.positionRadius.w,0.001),0.0),2.0);
   light+=l.colorStrength.rgb*l.colorStrength.w*fall*max(dot(in.normal,normalize(d+0.0001)),0.0);
  }
  float3 source=tex.rgb*in.color;
  if(blue&&in.material.x>1.5)source=palette.read(uint2(uint(in.material.w),1)).rgb;
- float3 color=source*light;
+ float3 color=u.lightControl.y>0.5?nm_light_model(source,light.x,in.battleLight):source*light;
+ if(verdict.w<0){color=nm_light_finish(source,color,uint(in.material.y),nm_light_finish_response(in.faceNormal),u.lightControl.z>0.5);color=nm_light_glint(source,color,nm_light_glint_weight(in.faceNormal,in.material.z,u.lightControl.w>0.5));}
  if(verdict.w>=0){color=blue?palette.read(uint2(uint(verdict.w),1)).rgb:verdict.rgb;}
  // Modern display approximation: screen-blended cooling tint plus HDR bloom.
  float3 emission=in.emission.rgb*max(in.emission.w,0.0);
@@ -151,20 +161,24 @@ fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[te
  // Retain integer corner-height ties, then the production reverse piece
  // order decides ownership (opened Solar rim, DESIGN_GPU_RENDERER §22.1).
  // Inter-subject ordering and triangle lane interpolation remain approximate.
- ModelMRT out;float modelY=in.keyOrigin+floor(in.heightKey);
+ ModelResult out={};float modelY=in.keyOrigin+floor(in.heightKey);
  float projectedY=(in.position.y-u.viewport.y*0.5)/u.camera.z;
  float depthHeight=u.mode.x>0.5?2.5:2.0;
  out.depth=clamp(0.5-(projectedY+modelY*depthHeight)*0.00001,0.001,0.999);
  if(staged)out.depth=in.reveal.w>0.5?(256-key)/257.0:0.5;
  if(erased){out.color=0;out.glow=0;return out;}
+ out.metadata=float4(in.world.y,key,blue?1:0,1);
  float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,u.mode.w>0.5?alpha:0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
 }
+fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]]) {ModelResult a=shadeModel(in,atlas,u,lights,palette);ModelMRT o;o.color=a.color;o.glow=a.glow;o.depth=a.depth;return o;}
+fragment AtlasModelMRT model_atlas_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]]) {ModelResult a=shadeModel(in,atlas,u,lights,palette);AtlasModelMRT o;o.color=a.color;o.glow=a.glow;o.metadata=a.metadata;o.depth=a.depth;return o;}
+fragment AtlasModelMRT outline_atlas_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]]) {if(in.state.z<=0||in.outline.a<=0)discard_fragment();AtlasModelMRT o;o.color=float4(in.outline.rgb*in.outline.a,in.outline.a);o.glow=0;float key=modelKey(in);o.depth=in.reveal.w>0.5?(256-key)/257.0:0.5;o.metadata=float4(in.world.y,key,(u.visual.w>0.5&&in.clip.x>1.5&&key<=in.clip.y)?1:0,1);return o;}
 vertex Out terrain_vertex(uint v [[vertex_id]],constant Uniforms& u [[buffer(3)]]) {
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
  Out o={};o.uv=c[v];o.world=float3(mix(u.rect.x,u.rect.z,o.uv.x),0,mix(u.rect.y,u.rect.w,o.uv.y));o.position=project(o.world,u);o.position.z=0.9999;o.color=1;o.normal=float3(0,1,0);return o;
 }
 struct TerrainMRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; float depth [[depth(any)]]; };
-fragment TerrainMRT terrain_fragment(Out in [[stage_in]],texture2d<float> terrain [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> heights [[texture(1)]],texture2d<float> shadows [[texture(2)]],texture2d<float> waterMask [[texture(3)]],constant WaterUniform& water [[buffer(9)]]) {
+fragment TerrainMRT terrain_fragment(Out in [[stage_in]],texture2d<float> terrain [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> heights [[texture(1)]],texture2d<float> shadows [[texture(2)]],texture2d<float> waterMask [[texture(3)]],constant WaterUniform& water [[buffer(9)]],texture2d<float> groundField [[texture(5)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
  // TNT is painted background, not a reconstructed depth surface. A depth
  // plane would cut flat GAF art at its anchor [DESIGN_GPU_RENDERER C-G5].
@@ -175,9 +189,10 @@ fragment TerrainMRT terrain_fragment(Out in [[stage_in]],texture2d<float> terrai
   float fall=pow(max(1-length(p-in.world.xz)/120,0.0),2.0);
   float3 tint=float3(0.6+0.4*sin(a),0.3+0.3*cos(a),0.5+0.5*cos(a+2));out.color.rgb+=tint*fall*0.4;out.glow.rgb+=tint*fall*0.6;
  }
- if(u.timing.w>0.5&&u.mode.x>0.5)for(uint i=0;i<uint(u.mode.y);i++){
+ if(u.timing.w>0.5&&u.mode.x>0.5&&u.lightControl.y<0.5)for(uint i=0;i<uint(u.mode.y);i++){
   Light l=lights[i];float r=length(l.positionRadius.xyz-in.world);float fall=pow(max(1-r/max(l.positionRadius.w,0.001),0.0),2.0);out.color.rgb+=l.colorStrength.rgb*l.colorStrength.w*fall*0.4;
  }
+ if(u.lightControl.y>0.5)out.color=nm_light_ground_resolve(out.color,groundField.sample(s,in.position.xy/u.viewport.xy).rgb);
  if(u.visual.x>0.5){float mask=shadows.sample(s,in.position.xy/u.viewport.xy).r;out.color.rgb*=1-mask;}
  return out;
 }
@@ -348,6 +363,17 @@ vertex ModelCommitOut model_commit_vertex(uint v [[vertex_id]],uint iid [[instan
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
  ModelSlot slot=slots[paint[iid].x-1];float2 pixel=slot.screen.xy+c[v]*slot.screen.zw;ModelCommitOut o;o.position=float4(pixel.x/u.viewport.x*2-1,1-pixel.y/u.viewport.y*2,0,1);o.atlasPixel=slot.atlas.xy+c[v]*slot.atlas.zw;o.opacity=slot.params.x;return o;
 }
-fragment MRT model_commit_fragment(ModelCommitOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]]) {
- MRT out;uint2 at=uint2(in.atlasPixel);out.color=color.read(at)*in.opacity;out.glow=emission.read(at)*in.opacity;return out;
+fragment MRT model_commit_fragment(ModelCommitOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> emission [[texture(1)]],constant Uniforms& u [[buffer(3)]]) {
+ constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);float2 sample=u.composition.z>1.5?in.atlasPixel:floor(in.atlasPixel-.5)+.5;MRT out;out.color=color.sample(linear,sample)*in.opacity;out.glow=emission.sample(linear,sample)*in.opacity;return out;
+}
+
+struct GroundLightOut {float4 position [[position]];float2 projected;uint source [[flat]];};
+vertex GroundLightOut ground_light_vertex(uint v [[vertex_id]],uint iid [[instance_id]],constant Uniforms& u [[buffer(3)]],device const nm_light_source* lights [[buffer(16)]]) {
+ const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};nm_light_source light=lights[iid];float2 center=light.position_radius.xy-float2(0,light.position_radius.z*.5);float radius=light.position_radius.w;float2 pixel=center+(c[v]*2-1)*radius;
+ GroundLightOut o;o.position=float4(pixel.x/u.viewport.x*2-1,1-pixel.y/u.viewport.y*2,0,1);o.projected=pixel;o.source=iid;return o;
+}
+fragment float4 ground_light_fragment(GroundLightOut in [[stage_in]],device const nm_light_source* lights [[buffer(16)]]) {return float4(1-exp(-nm_light_ground_energy(lights[in.source],in.projected)),1);}
+
+kernel void select_subject_lights(device const ModelSlot* slots [[buffer(13)]],device const nm_light_source* lights [[buffer(16)]],device nm_light_subject* subjects [[buffer(17)]],constant Uniforms& u [[buffer(3)]],uint at [[thread_position_in_grid]]) {
+ if(at>=uint(u.composition.w))return;ModelSlot s=slots[at];subjects[at]=nm_light_select(lights,uint(u.lightControl.x),s.screen.xy+s.screen.zw*.5,(s.screen.z+s.screen.w)*.5);
 }

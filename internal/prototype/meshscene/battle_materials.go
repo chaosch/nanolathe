@@ -4,6 +4,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
+	"strings"
 )
 
 // ModelMaterialSource borrows the production presentation owner's immutable
@@ -13,6 +14,15 @@ import (
 type ModelMaterialSource struct {
 	Frames  []*formats.GAFFrame
 	Resolve func(ModelMaterialRequest) (ModelMaterialSelection, bool)
+	// Prepare borrows subject-wide inputs for this material walk only.
+	// Resolve is the compatibility fallback when Prepare is absent.
+	Prepare func(ModelMaterialRequest) ModelMaterialResolver
+}
+
+// ModelMaterialResolver selects primitive frames without retaining mutable
+// animation phase. The descriptor is discarded after the subject's face walk.
+type ModelMaterialResolver interface {
+	Resolve(piece, primitive int, current bool) (ModelMaterialSelection, bool)
 }
 
 type ModelMaterialRequest struct {
@@ -72,25 +82,34 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	m := s.models[instance.Mesh]
 	q.Model = m.Name
 	instance.Materials = make([]NativeModelMaterial, len(mesh.MaterialSlots))
-	for i, slot := range mesh.MaterialSlots {
-		q.Piece, q.Primitive = slot.Piece, slot.Primitive
-		q.Current = q.Projectile != nil || q.Debris != nil
-		if q.Unit != nil {
-			// The retained path combines cached and live pieces. Completed live
-			// pieces read their existing cursor; construction keeps frame zero
-			// [03 R-REN-03A §5]. Historical cached/direct lane staging remains
-			// an explicit prototype limitation, not a second cursor lifecycle.
-			for _, p := range q.Unit.Pieces {
-				if p.Index == slot.Piece || p.Name != "" && canonicalTexture(p.Name) == canonicalTexture(m.Pieces[slot.Piece].Name) {
-					q.Current = p.DontCache && q.Unit.BuildRemaining <= 0
+	// Resolve the script alias once per piece, not once per face. The last
+	// matching lane remains authoritative, as in the original retained walk.
+	currentPieces := make([]bool, len(m.Pieces))
+	if q.Unit != nil && q.Unit.BuildRemaining <= 0 {
+		for pi, piece := range m.Pieces {
+			for _, lane := range q.Unit.Pieces {
+				if lane.Index == pi || lane.Name != "" && strings.EqualFold(lane.Name, piece.Name) {
+					currentPieces[pi] = lane.DontCache
 				}
 			}
 		}
-		selection := s.baseModelMaterial(q)
-		if s.materialSource != nil && s.materialSource.Resolve != nil {
-			if selected, ok := s.materialSource.Resolve(q); ok {
-				selection = selected
-			}
+	}
+	var prepared ModelMaterialResolver
+	if s.materialSource != nil && s.materialSource.Prepare != nil {
+		prepared = s.materialSource.Prepare(q)
+	}
+	for i, slot := range mesh.MaterialSlots {
+		q.Piece, q.Primitive = slot.Piece, slot.Primitive
+		q.Current = q.Projectile != nil || q.Debris != nil || currentPieces[slot.Piece]
+		var selection ModelMaterialSelection
+		resolved := false
+		if prepared != nil {
+			selection, resolved = prepared.Resolve(slot.Piece, slot.Primitive, q.Current)
+		} else if s.materialSource != nil && s.materialSource.Resolve != nil {
+			selection, resolved = s.materialSource.Resolve(q)
+		}
+		if !resolved {
+			selection = s.baseModelMaterial(q)
 		}
 		out := &instance.Materials[i]
 		if selection.Skip {

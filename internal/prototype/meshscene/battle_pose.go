@@ -398,6 +398,8 @@ func (s *battlePoseScratch) projectileInto(dst []Mat4, m *model.Model, p frame.P
 		}
 		s.transforms[0] = model.ComposeInto(&one, s.states, 0, s.transforms[0], &s.compose)
 		dst[piece] = battleAffine(s.transforms[0], p.X, p.Y, p.Z)
+		// Standalone effect pieces bypass SHD [03 R-COMP-02 §6].
+		dst[piece][3] = 1
 	}
 	fill(m.Root, p.Roll, false)
 	if p.RenderType == render.RenderTypeBaseSpriteModel && tick < p.ExpiryTick && len(m.Pieces[m.Root].Children) > 0 {

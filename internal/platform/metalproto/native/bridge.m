@@ -4,18 +4,29 @@
 #import <QuartzCore/CAMetalLayer.h>
 #import <simd/simd.h>
 #include "bridge.h"
+#include "glow.h"
+#include "glow.inc"
 #include <stdatomic.h>
 
 @interface NMMesh : NSObject
-@property id<MTLBuffer> vertices, indices, instances, edges, visuals;
+@property id<MTLBuffer> vertices, indices, instances, edges, visuals, primitiveCenters;
 @property NSUInteger indexCount, instanceCount, edgeCount;
 @end
 @implementation NMMesh
 @end
 
-typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRect,visual,composition; } NMUniforms;
+typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRect,visual,composition,lightControl; } NMUniforms;
+#include "water_objects.h"
 @interface NMRing : NSObject
-@property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload,rules,materialOffsets,materialOverrides;
+@property NMEffectsRing* effectRing;
+@property NMGroundRing* groundRing;
+@property NMShadowFrame* shadows;
+@property NMWaterObjectsRing* waterObjectsRing;
+@property id<MTLBuffer> glowVertices;
+@property NSUInteger glowCount;
+@property BOOL glowEnabled;
+@property NMGlowParameters glowParams;
+@property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload,rules,materialOffsets,materialOverrides,retainedLights,subjectLights;
 @property NSMutableData *spans,*cloaks,*compositionDraws;
 @property id<MTLBuffer> compositionSlots,compositionSelectors,compositionPaint;
 @property NSUInteger compositionSlotCount,compositionDrawCount,compositionPaintCount;
@@ -25,7 +36,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==400,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==632,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -55,10 +66,15 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
  BOOL offscreen,effects,visualPasses,held[128],pressed[128],pauseToggle;
  float wheel;
 }
+@property NMEffectsState* effectState;
+@property NMGroundState* groundState;
+@property NMShadowState* shadows;
+@property NMWaterObjectsState* waterObjectsState;
+@property NMGlow* productionGlow;
 @property id<MTLDevice> device;
 @property id<MTLCommandQueue> queue;
-@property id<MTLRenderPipelineState> model,subjectModel,subjectResolve,atlasModel,atlasCommit,clearDepth,terrain,composite,sprite,shadow,outline,world,distortion,fog,overlay,overlayMultiply;
-@property id<MTLComputePipelineState> blur,interpolatePoses;
+@property id<MTLRenderPipelineState> model,subjectModel,subjectResolve,atlasModel,atlasModelMetadata,atlasOutline,shadowOutline,atlasCommit,groundLight,clearDepth,terrain,composite,sprite,shadow,outline,world,distortion,fog,overlay,overlayMultiply;
+@property id<MTLComputePipelineState> blur,interpolatePoses,selectLights;
 @property id<MTLDepthStencilState> depth,spriteDepth,alwaysDepth;
 @property NSMutableArray<NMMesh*>* meshes;
 @property NSMutableArray<id<MTLBuffer>> *poses,*interpolatedPoses;
@@ -67,7 +83,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property id<MTLBuffer> emptyLights,materials,textureFrames;
 @property id<MTLTexture> spriteAtlas,overlayAtlas,fogAtlas,waterMask,modelPalette;
 @property id<MTLTexture> atlas,terrainImage,color,emission,blurA,blurB,depthImage,output,heights,shadowMask,worldSnapshot,postColor,emptyFog,subjectColor,subjectEmission,subjectDepth;
-@property id<MTLTexture> modelAtlasColor,modelAtlasEmission,modelAtlasDepth;
+@property id<MTLTexture> modelMetadata,modelAtlasColor,modelAtlasEmission,modelAtlasDepth,groundField;
 @property CAMetalLayer* layer;
 @property NSWindow* window;
 @property NSString* lastError;
@@ -80,14 +96,17 @@ static id<MTLTexture> target(NMRenderer* r,NSUInteger w,NSUInteger h,MTLPixelFor
  MTLTextureDescriptor* d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:w height:h mipmapped:NO];d.storageMode=MTLStorageModePrivate;d.usage=usage;return [r.device newTextureWithDescriptor:d];
 }
 static id<MTLRenderPipelineState> pipeline(NMRenderer* r,id<MTLLibrary> l,NSString* vertex,NSString* fragment,BOOL mrt,NSError** error) {
- MTLRenderPipelineDescriptor* d=[MTLRenderPipelineDescriptor new];d.vertexFunction=[l newFunctionWithName:vertex];d.fragmentFunction=[l newFunctionWithName:([fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"atlas_model"])?@"model_fragment":fragment];d.colorAttachments[0].pixelFormat=(mrt||[fragment isEqualToString:@"world_fragment"]||[fragment isEqualToString:@"distortion_fragment"]||[fragment isEqualToString:@"shadow_fragment"])?MTLPixelFormatRGBA16Float:MTLPixelFormatBGRA8Unorm;
+ MTLRenderPipelineDescriptor* d=[MTLRenderPipelineDescriptor new];d.vertexFunction=[l newFunctionWithName:vertex];d.fragmentFunction=[l newFunctionWithName:[fragment isEqualToString:@"shadow_outline"]?@"outline_fragment":([fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"atlas_model"])?@"model_fragment":fragment];d.colorAttachments[0].pixelFormat=(mrt||[fragment isEqualToString:@"world_fragment"]||[fragment isEqualToString:@"distortion_fragment"]||[fragment isEqualToString:@"shadow_fragment"])?MTLPixelFormatRGBA16Float:MTLPixelFormatBGRA8Unorm;
  if([vertex isEqualToString:@"overlay_vertex"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceAlpha;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  if([fragment isEqualToString:@"overlay_multiply_fragment"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.sourceRGBBlendFactor=MTLBlendFactorZero;a.destinationRGBBlendFactor=MTLBlendFactorSourceColor;a.sourceAlphaBlendFactor=MTLBlendFactorZero;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
  if([vertex isEqualToString:@"sprite_vertex"]||[fragment isEqualToString:@"model_fragment"]||[fragment isEqualToString:@"outline_fragment"]||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"subject_resolve_fragment"]||[fragment isEqualToString:@"model_commit_fragment"]){
  for(int i=0;i<2;i++){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[i];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=(i==0||[fragment isEqualToString:@"subject_model"])?MTLBlendFactorOneMinusSourceAlpha:MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  }
  if([fragment isEqualToString:@"shadow_fragment"]){d.colorAttachments[0].pixelFormat=MTLPixelFormatR8Unorm;MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.rgbBlendOperation=MTLBlendOperationMax;a.alphaBlendOperation=MTLBlendOperationMax;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
+ if([fragment isEqualToString:@"ground_light_fragment"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.pixelFormat=MTLPixelFormatRGBA8Unorm;a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceColor;}
+ if([fragment isEqualToString:@"model_atlas_fragment"]||[fragment isEqualToString:@"outline_atlas_fragment"])d.colorAttachments[2].pixelFormat=MTLPixelFormatRGBA16Float;
  if(mrt){d.colorAttachments[1].pixelFormat=MTLPixelFormatRGBA16Float;d.depthAttachmentPixelFormat=MTLPixelFormatDepth32Float;}
+ if([fragment isEqualToString:@"model_atlas_fragment"]||[fragment isEqualToString:@"outline_atlas_fragment"]||[fragment isEqualToString:@"atlas_model"]||[fragment isEqualToString:@"shadow_outline"]){d.colorAttachments[0].pixelFormat=MTLPixelFormatRGBA8Unorm;d.colorAttachments[1].pixelFormat=MTLPixelFormatRGBA8Unorm;}
  if([fragment isEqualToString:@"clear_depth_fragment"]){d.colorAttachments[0].writeMask=MTLColorWriteMaskNone;d.colorAttachments[1].writeMask=MTLColorWriteMaskNone;}
  return [r.device newRenderPipelineStateWithDescriptor:d error:error];
 }
@@ -100,14 +119,21 @@ static void serviceRunLoop(NMRenderer* r) {
  r->runLoopPumps++;
  for(int i=0;i<8;i++){CFRunLoopRunResult result=CFRunLoopRunInMode(kCFRunLoopDefaultMode,0,true);if(result!=kCFRunLoopRunHandledSource)break;r->runLoopSources++;}
 }
+static BOOL nmRetainedProjectile(NMRenderer*,NMRing*,id<MTLCommandBuffer>,const void*,uint32_t,uint32_t);
 void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int visualPasses,int capacity,const char* shader,char* error,int errorSize) {
  @autoreleasepool {
  if(![NSThread isMainThread]){copyError(error,errorSize,@"Metal window must be initialized on the process main thread");return NULL;}
  NMRenderer* r=[NMRenderer new];r.device=MTLCreateSystemDefaultDevice();if(!r.device){copyError(error,errorSize,@"No Metal device");return NULL;}
- r.queue=[r.device newCommandQueue];r.rings=[NSMutableArray new];for(int i=0;i<3;i++)[r.rings addObject:[NMRing new]];r.emptyLights=[r.device newBufferWithLength:32 options:MTLResourceStorageModeShared];r.meshes=[NSMutableArray new];r.poses=[NSMutableArray new];r.interpolatedPoses=[NSMutableArray new];r->offscreen=isOffscreen;r->effects=effects;r->visualPasses=visualPasses;r->available=dispatch_semaphore_create(3);r->pending=dispatch_group_create();r->presentations=dispatch_group_create();r->interactive=capacity<0;r->rowCapacity=capacity<0?-(int64_t)capacity:capacity;if(!r->rowCapacity){copyError(error,errorSize,@"Timing capacity must be positive");return NULL;}r->rows=calloc(r->rowCapacity,sizeof(NMRow));r->rowGenerations=calloc(r->rowCapacity,sizeof(uint64_t));if(!r->rows||!r->rowGenerations){copyError(error,errorSize,@"Timing storage allocation failed");return NULL;}
+ r.queue=[r.device newCommandQueue];r.rings=[NSMutableArray new];for(int i=0;i<3;i++)[r.rings addObject:[NMRing new]];r.emptyLights=[r.device newBufferWithLength:64 options:MTLResourceStorageModeShared];r.meshes=[NSMutableArray new];r.poses=[NSMutableArray new];r.interpolatedPoses=[NSMutableArray new];r->offscreen=isOffscreen;r->effects=effects;r->visualPasses=visualPasses;r->available=dispatch_semaphore_create(3);r->pending=dispatch_group_create();r->presentations=dispatch_group_create();r->interactive=capacity<0;r->rowCapacity=capacity<0?-(int64_t)capacity:capacity;if(!r->rowCapacity){copyError(error,errorSize,@"Timing capacity must be positive");return NULL;}r->rows=calloc(r->rowCapacity,sizeof(NMRow));r->rowGenerations=calloc(r->rowCapacity,sizeof(uint64_t));if(!r->rows||!r->rowGenerations){copyError(error,errorSize,@"Timing storage allocation failed");return NULL;}
  r->uniforms.viewport=(vector_float4){width,height,0,0};
  NSError* e=nil;id<MTLLibrary> lib=[r.device newLibraryWithSource:[NSString stringWithUTF8String:shader] options:nil error:&e];
  if(!lib){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ if(!nmEffectsInitialize(r,lib,&e)){copyError(error,errorSize,e.localizedDescription);return NULL;}if(!nmGroundInitialize(r,lib,&e)){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ if(!nmWaterObjectsInitialize(r,lib,&e)){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ r.shadows=nmShadowsCreate(r,lib,&e);if(!r.shadows){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ nmEffectsSetRetainedDrawer(r,nmRetainedProjectile);r.productionGlow=nmGlowInitialize(r.device,lib,MTLPixelFormatRGBA16Float,&e);if(!r.productionGlow){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ r.groundLight=pipeline(r,lib,@"ground_light_vertex",@"ground_light_fragment",NO,&e);
+ r.shadowOutline=pipeline(r,lib,@"model_vertex",@"shadow_outline",YES,&e);r.atlasModelMetadata=pipeline(r,lib,@"model_vertex",@"model_atlas_fragment",YES,&e);r.atlasOutline=pipeline(r,lib,@"model_vertex",@"outline_atlas_fragment",YES,&e);
  r.atlasModel=pipeline(r,lib,@"model_vertex",@"atlas_model",YES,&e);r.atlasCommit=pipeline(r,lib,@"model_commit_vertex",@"model_commit_fragment",YES,&e);
  r.model=pipeline(r,lib,@"model_vertex",@"model_fragment",YES,&e);r.subjectModel=pipeline(r,lib,@"model_vertex",@"subject_model",YES,&e);r.subjectResolve=pipeline(r,lib,@"screen_vertex",@"subject_resolve_fragment",YES,&e);r.clearDepth=pipeline(r,lib,@"screen_vertex",@"clear_depth_fragment",YES,&e);r.terrain=pipeline(r,lib,@"terrain_vertex",@"terrain_fragment",YES,&e);r.composite=pipeline(r,lib,@"screen_vertex",@"composite_fragment",NO,&e);
  r.shadow=pipeline(r,lib,@"shadow_vertex",@"shadow_fragment",NO,&e);r.outline=pipeline(r,lib,@"model_vertex",@"outline_fragment",YES,&e);r.world=pipeline(r,lib,@"screen_vertex",@"world_fragment",NO,&e);r.distortion=pipeline(r,lib,@"distortion_vertex",@"distortion_fragment",NO,&e);r.fog=pipeline(r,lib,@"screen_vertex",@"fog_fragment",NO,&e);r.overlay=pipeline(r,lib,@"overlay_vertex",@"overlay_fragment",NO,&e);r.overlayMultiply=pipeline(r,lib,@"overlay_vertex",@"overlay_multiply_fragment",NO,&e);
@@ -116,9 +142,11 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  hd.pixelFormat=MTLPixelFormatRGBA8Unorm;r.emptyFog=[r.device newTextureWithDescriptor:hd];uint32_t white=0xffffffff;[r.emptyFog replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];
  r.sprite=pipeline(r,lib,@"sprite_vertex",@"sprite_fragment",YES,&e);
  r.blur=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"blur"] error:&e];
+ r.selectLights=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"select_subject_lights"] error:&e];
  r.interpolatePoses=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"interpolate_poses"] error:&e];
- if(!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ if(!r.shadowOutline||!r.atlasModelMetadata||!r.atlasOutline||!r.selectLights||!r.groundLight||!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
  MTLDepthStencilDescriptor* depth=[MTLDepthStencilDescriptor new];depth.depthCompareFunction=MTLCompareFunctionLessEqual;depth.depthWriteEnabled=YES;r.depth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=NO;r.spriteDepth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=YES;depth.depthCompareFunction=MTLCompareFunctionAlways;r.alwaysDepth=[r.device newDepthStencilStateWithDescriptor:depth];
+ r.groundField=target(r,(width+1)/2,(height+1)/2,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  r.color=target(r,width,height,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  r.emission=target(r,width,height,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  r.blurA=target(r,MAX(width/2,1),MAX(height/2,1),MTLPixelFormatRGBA16Float,MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite);
@@ -142,14 +170,15 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  return (__bridge_retained void*)r;
  }
 }
-int nm_mesh(void* handle,const void* vertices,int vertexCount,const uint32_t* indices,int indexCount,const uint32_t* offsets,int instances,const uint32_t* edges,int edgeCount,const void* visuals) {
+int nm_mesh(void* handle,const void* vertices,int vertexCount,const uint32_t* indices,int indexCount,const uint32_t* offsets,int instances,const uint32_t* edges,int edgeCount,const void* visuals,const void* primitiveCenters,int primitiveCount) {
  @autoreleasepool {
  NMRenderer* r=(__bridge NMRenderer*)handle;NMMesh* m=[NMMesh new];
  m.vertices=[r.device newBufferWithLength:MAX((NSUInteger)vertexCount*64,64) options:MTLResourceStorageModeShared];
  m.indices=[r.device newBufferWithLength:MAX((NSUInteger)indexCount*4,4) options:MTLResourceStorageModeShared];
  m.instances=[r.device newBufferWithLength:MAX((NSUInteger)instances*4,4) options:MTLResourceStorageModeShared];
  m.edges=[r.device newBufferWithLength:MAX((NSUInteger)edgeCount*4,4) options:MTLResourceStorageModeShared];m.visuals=[r.device newBufferWithLength:MAX((NSUInteger)instances*64,64) options:MTLResourceStorageModeShared];
- if(!m.vertices||!m.indices||!m.instances||!m.edges||!m.visuals)return 0;
+ m.primitiveCenters=[r.device newBufferWithLength:MAX((NSUInteger)primitiveCount*16,16) options:MTLResourceStorageModeShared];if(primitiveCount)memcpy(m.primitiveCenters.contents,primitiveCenters,primitiveCount*16);
+ if(!m.primitiveCenters||!m.vertices||!m.indices||!m.instances||!m.edges||!m.visuals)return 0;
  if(edgeCount)memcpy(m.edges.contents,edges,(NSUInteger)edgeCount*4);if(instances)memcpy(m.visuals.contents,visuals,(NSUInteger)instances*64);m.edgeCount=edgeCount;
  if(vertexCount>0)memcpy(m.vertices.contents,vertices,(NSUInteger)vertexCount*64);
  if(indexCount>0)memcpy(m.indices.contents,indices,(NSUInteger)indexCount*4);
@@ -316,7 +345,7 @@ void nm_input(void* handle,NMInput* input) {
 static void drawMeshes(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,int visualPass) {
  NSUInteger meshIndex=0;const uint32_t* spans=ring.spans.bytes;
  for(NMMesh* m in r.meshes){NSUInteger index=meshIndex++;NSUInteger at=(visualPass*r.meshes.count+index)*2;NSUInteger count=ring?spans[at+1]:m.instanceCount;NSUInteger start=ring?spans[index*2]:0;BOOL outline=visualPass==2||visualPass>=6;NSUInteger indices=outline?m.edgeCount:m.indexCount;if(count==0||indices==0)continue;
- [enc setVertexBuffer:m.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring?ring.instances:m.instances offset:start*4 atIndex:1];[enc setVertexBuffer:ring?ring.visuals:m.visuals offset:start*64 atIndex:5];[enc setVertexBuffer:ring?ring.rules:r.emptyLights offset:ring?start*112:0 atIndex:10];[enc setVertexBuffer:ring?ring.materialOffsets:r.emptyLights offset:ring?start*4:0 atIndex:12];[enc setVertexBuffer:visualPass?ring.selectors:r.emptyLights offset:visualPass?spans[at]*4:0 atIndex:8];
+ [enc setVertexBuffer:m.primitiveCenters offset:0 atIndex:15];[enc setVertexBuffer:m.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring?ring.instances:m.instances offset:start*4 atIndex:1];[enc setVertexBuffer:ring?ring.visuals:m.visuals offset:start*64 atIndex:5];[enc setVertexBuffer:ring?ring.rules:r.emptyLights offset:ring?start*112:0 atIndex:10];[enc setVertexBuffer:ring?ring.materialOffsets:r.emptyLights offset:ring?start*4:0 atIndex:12];[enc setVertexBuffer:visualPass?ring.selectors:r.emptyLights offset:visualPass?spans[at]*4:0 atIndex:8];
  [enc drawIndexedPrimitives:outline?MTLPrimitiveTypeLine:MTLPrimitiveTypeTriangle indexCount:indices indexType:MTLIndexTypeUInt32 indexBuffer:outline?m.edges:m.indices indexBufferOffset:0 instanceCount:count];}
 }
 static void encodeOverlay(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
@@ -340,12 +369,17 @@ static MTLRenderPassDescriptor* worldPass(NMRenderer* r,BOOL clearDepth) {
  p.depthAttachment.texture=r.depthImage;p.depthAttachment.loadAction=clearDepth?MTLLoadActionClear:MTLLoadActionLoad;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;return p;
 }
 static void modelBindings(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer> poses,NMRing* ring,NMUniforms u) {
+ [enc setVertexBuffer:ring?ring.subjectLights:r.emptyLights offset:0 atIndex:17];[enc setVertexBuffer:ring?ring.retainedLights:r.emptyLights offset:0 atIndex:16];[enc setFragmentBuffer:ring?ring.retainedLights:r.emptyLights offset:0 atIndex:16];
  [enc setVertexBuffer:ring?ring.compositionSlots:r.emptyLights offset:0 atIndex:13];[enc setVertexBuffer:ring?ring.compositionSelectors:r.emptyLights offset:0 atIndex:14];
  [enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:r.emptyLights offset:0 atIndex:8];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:poses offset:0 atIndex:2];[enc setFragmentTexture:r.atlas atIndex:0];[enc setFragmentBuffer:ring?ring.lights:r.emptyLights offset:0 atIndex:4];[enc setVertexBuffer:r.materials offset:0 atIndex:6];[enc setVertexBuffer:r.textureFrames offset:0 atIndex:7];[enc setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[enc setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];
 }
 static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes);
 static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,NMCloakDraw d,BOOL outline);
+#include "shadows.inc"
 #include "composition.inc"
+#include "effects.inc"
+#include "ground_effects.inc"
+#include "water_objects.inc"
 static void drawPhase(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer> poses,NMRing* ring,NMUniforms u,NSUInteger phase) {
  u.mode.z=1;modelBindings(r,enc,poses,ring,u);[enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];drawMeshes(r,enc,ring,3+(int)phase);
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.outline];[enc setDepthStencilState:r.spriteDepth];drawMeshes(r,enc,ring,6+(int)phase);}
@@ -353,7 +387,7 @@ static void drawPhase(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer
 static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,NMCloakDraw d,BOOL outline) {
  [enc setVertexBuffer:ring.compositionSelectors offset:d.instance*4 atIndex:14];
  NMMesh* mesh=r.meshes[d.mesh];NSUInteger count=outline?mesh.edgeCount:mesh.indexCount;if(!count)return;
- [enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.materialOffsets offset:d.instance*4 atIndex:12];
+ [enc setVertexBuffer:mesh.primitiveCenters offset:0 atIndex:15];[enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:ring.rules offset:d.instance*112 atIndex:10];[enc setVertexBuffer:ring.materialOffsets offset:d.instance*4 atIndex:12];
  [enc drawIndexedPrimitives:outline?MTLPrimitiveTypeLine:MTLPrimitiveTypeTriangle indexCount:count indexType:MTLIndexTypeUInt32 indexBuffer:outline?mesh.edges:mesh.indices indexBufferOffset:0 instanceCount:1];
 }
 static void encodeCloaks(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMRing* ring,NMUniforms u,NSUInteger phase) {
@@ -376,29 +410,43 @@ static void encodeCloaks(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> pos
   [enc setFragmentTexture:r.subjectColor atIndex:0];[enc setFragmentTexture:r.subjectEmission atIndex:1];[enc setFragmentTexture:r.subjectDepth atIndex:2];float opacity=visuals[draws[begin].instance*16+1];[enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];begin=end;
  }
 }
-static void encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
+static BOOL nmRetainedProjectile(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,const void* uniforms,uint32_t slot,uint32_t flags) {
+ if(flags&1)return NO;const uint32_t* paint=ring.compositionPaint.contents;NSUInteger at=0,body=0;
+ for(;at<ring.compositionPaintCount;at++)if(paint[at*4+3]==2){if(body++==slot)break;}
+ if(at==ring.compositionPaintCount||!paint[at*4])return NO;if(flags&2)return YES;NMUniforms u=*(const NMUniforms*)uniforms;
+ id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:worldPass(r,NO)];[enc setDepthStencilState:nil];[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:at*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];[enc endEncoding];return YES;
+}
+static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
  // Compute once per submitted piece in this acquired slot. Body, outline and
  // shadow passes share the result; capture reruns the same path after drain.
  NSUInteger count=(NSUInteger)u.timing.z;
  if(count){id<MTLComputeCommandEncoder> compute=[cb computeCommandEncoder];[compute setComputePipelineState:r.interpolatePoses];[compute setBuffer:endpoints offset:0 atIndex:0];[compute setBuffer:poses offset:0 atIndex:1];[compute setBytes:&u length:sizeof(u) atIndex:3];NSUInteger group=MIN((NSUInteger)256,r.interpolatePoses.maxTotalThreadsPerThreadgroup);[compute dispatchThreads:MTLSizeMake(count,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];[compute endEncoding];}
- if(ring.composed)nmCompositionRaster(r,ring,cb,poses,u);
+ if(u.lightControl.y>0.5){MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=r.groundField;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);id<MTLRenderCommandEncoder> e=[cb renderCommandEncoderWithDescriptor:p];[e setRenderPipelineState:r.groundLight];[e setVertexBytes:&u length:sizeof(u) atIndex:3];[e setVertexBuffer:ring.retainedLights offset:0 atIndex:16];[e setFragmentBuffer:ring.retainedLights offset:0 atIndex:16];if(u.lightControl.x>0)[e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:(NSUInteger)u.lightControl.x];[e endEncoding];}
+ if(ring.composed&&ring.compositionSlotCount&&u.lightControl.y>0.5){id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];[e setComputePipelineState:r.selectLights];[e setBytes:&u length:sizeof(u) atIndex:3];[e setBuffer:ring.compositionSlots offset:0 atIndex:13];[e setBuffer:ring.retainedLights offset:0 atIndex:16];[e setBuffer:ring.subjectLights offset:0 atIndex:17];[e dispatchThreads:MTLSizeMake(ring.compositionSlotCount,1,1) threadsPerThreadgroup:MTLSizeMake(MIN((NSUInteger)64,r.selectLights.maxTotalThreadsPerThreadgroup),1,1)];[e endEncoding];}
+ if(ring.composed){nmCompositionRaster(r,ring,cb,poses,u);nmShadowsRaster(r,r.shadows,ring.shadows,ring,cb,poses,u);}
  MTLRenderPassDescriptor* pass;
  if(u.visual.x>0.5){
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.shadowMask;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
- id<MTLRenderCommandEncoder> shadow=[cb renderCommandEncoderWithDescriptor:pass];[shadow setRenderPipelineState:r.shadow];[shadow setVertexBytes:&u length:sizeof(u) atIndex:3];[shadow setVertexBuffer:poses offset:0 atIndex:2];[shadow setVertexTexture:r.heights atIndex:1];[shadow setVertexBuffer:r.materials offset:0 atIndex:6];[shadow setVertexBuffer:r.textureFrames offset:0 atIndex:7];[shadow setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[shadow setFragmentTexture:r.atlas atIndex:0];[shadow setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];[shadow setFragmentBytes:&u length:sizeof(u) atIndex:3];drawMeshes(r,shadow,ring,1);[shadow endEncoding];}
+ id<MTLRenderCommandEncoder> shadow=[cb renderCommandEncoderWithDescriptor:pass];[shadow setRenderPipelineState:r.shadow];[shadow setVertexBytes:&u length:sizeof(u) atIndex:3];[shadow setVertexBuffer:poses offset:0 atIndex:2];[shadow setVertexTexture:r.heights atIndex:1];[shadow setVertexBuffer:r.materials offset:0 atIndex:6];[shadow setVertexBuffer:r.textureFrames offset:0 atIndex:7];[shadow setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[shadow setFragmentTexture:r.atlas atIndex:0];[shadow setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];[shadow setFragmentBytes:&u length:sizeof(u) atIndex:3];if(!ring.composed)drawMeshes(r,shadow,ring,1);[shadow endEncoding];}
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.color;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0.08,0.09,0.1,1);
  pass.colorAttachments[1].texture=r.emission;pass.colorAttachments[1].loadAction=MTLLoadActionClear;pass.colorAttachments[1].storeAction=MTLStoreActionStore;
  pass.depthAttachment.texture=r.depthImage;pass.depthAttachment.loadAction=MTLLoadActionClear;pass.depthAttachment.storeAction=MTLStoreActionStore;pass.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setDepthStencilState:r.depth];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setCullMode:MTLCullModeNone];[enc setFragmentBuffer:ring?ring.lights:r.emptyLights offset:0 atIndex:4];
- [enc setRenderPipelineState:r.terrain];[enc setDepthStencilState:r.spriteDepth];[enc setFragmentTexture:r.terrainImage atIndex:0];[enc setFragmentTexture:r.heights atIndex:1];[enc setFragmentTexture:r.shadowMask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+ BOOL deferredWater=ring.composed&&ring.waterObjectsRing&&r->water[7]>.5;
+ if(deferredWater){NMUniforms base=u;base.lightControl.y=0;base.visual.x=0;float water[20];memcpy(water,r->water,sizeof(water));water[7]=0;[enc setFragmentBytes:&base length:sizeof(base) atIndex:3];[enc setFragmentBytes:water length:sizeof(water) atIndex:9];}
+ [enc setRenderPipelineState:r.terrain];[enc setDepthStencilState:r.spriteDepth];[enc setFragmentTexture:r.groundField atIndex:5];[enc setFragmentTexture:r.terrainImage atIndex:0];[enc setFragmentTexture:r.heights atIndex:1];[enc setFragmentTexture:r.shadowMask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];if(!deferredWater)[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+ [enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  // Short features are painted after TNT and before any model [03 R-RAST-01 §6].
- if(ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.groundSpriteCount];}
+ if(ring.groundSpriteCount&&!ring.composed){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.groundSpriteCount];}
  if(!ring){
   modelBindings(r,enc,poses,nil,u);[enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];drawMeshes(r,enc,nil,0);[enc endEncoding];
  }else if(ring.composed){
-  nmCompositionCommit(r,ring,enc,u,0);nmCompositionCommit(r,ring,enc,u,1);
-  if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
-  nmCompositionCommit(r,ring,enc,u,2);nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];
+  nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;nmEffectsDraw(r,ring,cb,0,u);
+  enc=[cb renderCommandEncoderWithDescriptor:worldPass(r,NO)];nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];nmEffectsDraw(r,ring,cb,1,u);
+  enc=[cb renderCommandEncoderWithDescriptor:worldPass(r,NO)];nmCompositionCommit(r,ring,enc,u,1);
+  if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:nil];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
+  if(!ring.effectRing.layerCount)nmCompositionCommit(r,ring,enc,u,2);[enc endEncoding];nmEffectsDraw(r,ring,cb,2,u);
+  enc=[cb renderCommandEncoderWithDescriptor:worldPass(r,NO)];nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];nmEffectsDraw(r,ring,cb,3,u);nmEffectsDraw(r,ring,cb,4,u);
  }else if(!ring.cloakCount){
   // Keep opaque phases in one tile render pass. A depth-only fullscreen draw
   // resets pass B's ownership without storing/reloading both HDR attachments.
@@ -413,20 +461,22 @@ static void encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   [enc endEncoding];encodeCloaks(r,cb,poses,ring,u,1);
   if(ring.airCount){enc=[cb renderCommandEncoderWithDescriptor:worldPass(r,YES)];drawPhase(r,enc,poses,ring,u,2);[enc endEncoding];encodeCloaks(r,cb,poses,ring,u,2);}
  }
- if(r->effects){
+ if(ring.glowEnabled){if(!nmGlowEncode(r.productionGlow,cb,r.emission,r.color,ring.effectRing.atlas,r.color,ring.glowVertices,ring.glowCount,ring.glowParams))r.lastError=@"Production glow submission failed";}
+ if(r->effects&&!ring.glowEnabled){
  id<MTLComputeCommandEncoder> compute=[cb computeCommandEncoder];[compute setComputePipelineState:r.blur];vector_float2 d={1,0};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.emission atIndex:0];[compute setTexture:r.blurA atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurA.width,r.blurA.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
  compute=[cb computeCommandEncoder];[compute setComputePipelineState:r.blur];d=(vector_float2){0,1};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.blurA atIndex:0];[compute setTexture:r.blurB atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurB.width,r.blurB.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
  }
  if(u.visual.x>0.5){
+ if(ring.glowEnabled)u.timing.w=0;
  BOOL distort=r->effects&&ring.distortionCount>0;id<MTLTexture> world=distort?r.worldSnapshot:r.postColor;
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=world;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
  enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.world];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];
- if(distort){id<MTLBlitCommandEncoder> copy=[cb blitCommandEncoder];[copy copyFromTexture:r.worldSnapshot sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(r.postColor.width,r.postColor.height,1) toTexture:r.postColor destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[copy endEncoding];
+ if(distort){u.timing.w=r->effects?1:0;id<MTLBlitCommandEncoder> copy=[cb blitCommandEncoder];[copy copyFromTexture:r.worldSnapshot sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(r.postColor.width,r.postColor.height,1) toTexture:r.postColor destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[copy endEncoding];
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.postColor;pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.distortion];[enc setVertexBuffer:ring.distortions offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.worldSnapshot atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.distortionCount];[enc endEncoding];}
- pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.fog];[enc setFragmentTexture:r.postColor atIndex:0];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:1];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:2];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);return;
+ pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.fog];[enc setFragmentTexture:r.postColor atIndex:0];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:1];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:2];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);return r.lastError==nil;
  }
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=destination;pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
- enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.composite];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);
+ enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setRenderPipelineState:r.composite];[enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];encodeOverlay(r,cb,u,destination,ring);return r.lastError==nil;
 }
 int nm_frame(void* handle,const void* previous,const void* next,float alpha,double seconds) {
  @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;if(!r->interactive&&r->rowCount>=r->rowCapacity)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
@@ -434,7 +484,7 @@ int nm_frame(void* handle,const void* previous,const void* next,float alpha,doub
  id<CAMetalDrawable> drawable=nil;if(!r->offscreen){drawable=[r.layer nextDrawable];if(!drawable){dispatch_semaphore_signal(r->available);return 0;}}
  double ready=CACurrentMediaTime();NSUInteger generation=++r->rowCount;NSUInteger rowIndex=(generation-1)%r->rowCapacity;NMRow* row=&r->rows[rowIndex];@synchronized(r){memset(row,0,sizeof(*row));r->rowGenerations[rowIndex]=generation;}row->wait=(acquired-start)*1000;row->drawable_wait=(ready-acquired)*1000;
  id<MTLBuffer> poses=r.poses[r->frameNumber%3];memcpy(poses.contents,previous,r->poseCount*64);memcpy((char*)poses.contents+r->poseCount*64,next,r->poseCount*64);
- NMUniforms u=r->uniforms;u.timing=(vector_float4){alpha,(float)seconds,(float)r->poseCount,r->effects?1:0};r->lastUniforms=u;id<MTLCommandBuffer> cb=[r.queue commandBuffer];encode(r,cb,poses,r.interpolatedPoses[r->frameNumber%3],u,drawable?drawable.texture:r.output,nil);
+ NMUniforms u=r->uniforms;u.timing=(vector_float4){alpha,(float)seconds,(float)r->poseCount,r->effects?1:0};r->lastUniforms=u;id<MTLCommandBuffer> cb=[r.queue commandBuffer];if(!encode(r,cb,poses,r.interpolatedPoses[r->frameNumber%3],u,drawable?drawable.texture:r.output,nil)){dispatch_semaphore_signal(r->available);return 0;}
  if(drawable){dispatch_group_enter(r->presentations);[drawable addPresentedHandler:^(id<MTLDrawable> d){@synchronized(r){if(r->rowGenerations[rowIndex]==generation)r->rows[rowIndex].presented=d.presentedTime;}dispatch_group_leave(r->presentations);}];[cb presentDrawable:drawable];}
  row->encode=(CACurrentMediaTime()-ready)*1000;row->submit=CACurrentMediaTime();row->memory=r.device.currentAllocatedSize;dispatch_group_enter(r->pending);
  [cb addCompletedHandler:^(id<MTLCommandBuffer> b){@synchronized(r){if(r->rowGenerations[rowIndex]==generation){NMRow* result=&r->rows[rowIndex];result->gpu_start=b.GPUStartTime;result->gpu_end=b.GPUEndTime;result->completed=CACurrentMediaTime();result->status=(int)b.status;}}if(b.error)r.lastError=b.error.localizedDescription;dispatch_semaphore_signal(r->available);dispatch_group_leave(r->pending);}];[cb commit];r->frameNumber++;return 1;}
@@ -451,6 +501,9 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();id<CAMetalDrawable> drawable=nil;
  if(!r->offscreen){drawable=[r.layer nextDrawable];if(!drawable){dispatch_semaphore_signal(r->available);return 0;}}
  double ready=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];
+ if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects)){dispatch_semaphore_signal(r->available);return 0;}
+ if(!ring.shadows)ring.shadows=[NMShadowFrame new];if(!nmShadowsPrepare(r,r.shadows,ring.shadows,&upload->shadows)){r.lastError=@"Shadow preparation failed";dispatch_semaphore_signal(r->available);return 0;}
+ ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)memcpy(ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;memcpy(&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;
  if(!nmCompositionPrepare(r,ring,upload)){dispatch_semaphore_signal(r->available);return 0;}
  BOOL uploadOverlay=upload->overlay_version&&upload->overlay_version!=r->overlayVersion;
  NSUInteger overlayX=0,overlayY=0,overlayW=0,overlayH=0,overlayRowBytes=0;
@@ -475,6 +528,7 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  // resources; no other in-flight slot is modified or resized here.
  memcpy(r->water,upload->water,sizeof(r->water));
  ring.poses=grow(r,ring.poses,(NSUInteger)upload->pose_count*128);ring.instances=grow(r,ring.instances,(NSUInteger)upload->instance_count*4);ring.sprites=grow(r,ring.sprites,(NSUInteger)upload->sprite_count*96);ring.lights=grow(r,ring.lights,(NSUInteger)upload->light_count*32);ring.visuals=grow(r,ring.visuals,(NSUInteger)upload->instance_count*64);ring.distortions=grow(r,ring.distortions,(NSUInteger)upload->distortion_count*64);ring.selectors=grow(r,ring.selectors,(NSUInteger)upload->instance_count*12);ring.overlay=grow(r,ring.overlay,(NSUInteger)upload->overlay_count*64);
+ ring.retainedLights=grow(r,ring.retainedLights,MAX((NSUInteger)upload->retained_light_count*64,64));if(!ring.retainedLights){dispatch_semaphore_signal(r->available);return 0;}if(upload->retained_light_count)memcpy(ring.retainedLights.contents,upload->retained_lights,upload->retained_light_count*64);
  ring.rules=grow(r,ring.rules,MAX((NSUInteger)upload->instance_count*112,112));ring.materialOffsets=grow(r,ring.materialOffsets,MAX((NSUInteger)upload->instance_count*4,4));ring.materialOverrides=grow(r,ring.materialOverrides,MAX((NSUInteger)upload->material_count*48,48));
  ring.interpolatedPoses=growPoseOutput(r,ring.interpolatedPoses,(NSUInteger)upload->pose_count*64);
  if(!ring.rules||!ring.materialOffsets||!ring.materialOverrides||!ring.poses||!ring.interpolatedPoses||!ring.instances||!ring.sprites||!ring.lights||!ring.visuals||!ring.distortions||!ring.selectors||!ring.overlay){dispatch_semaphore_signal(r->available);return 0;}
@@ -487,14 +541,17 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  if(upload->sprite_count)memcpy(ring.sprites.contents,upload->sprites,upload->sprite_count*96);
  if(upload->light_count)memcpy(ring.lights.contents,upload->lights,upload->light_count*32);
  if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*NM_SPAN_PASSES*8];if(r.meshes.count)memcpy(ring.spans.mutableBytes,upload->spans,r.meshes.count*NM_SPAN_PASSES*8);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*NM_SPAN_PASSES;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)memcpy(ring.selectors.contents,upload->selectors,selectorCount*4);
- NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,upload->composed,0};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;
+ if(!nmWaterObjectsPrepare(r,ring,upload->water_objects)||!nmWaterObjectsPrepareSources(r,ring,upload->water_sources)){dispatch_semaphore_signal(r->available);return 0;}
+ NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.lightControl=(vector_float4){upload->retained_light_count,(upload->light_controls&1)?1:0,(upload->light_controls&2)?1:0,(upload->light_controls&4)?1:0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,(upload->light_controls&8)?2:1,upload->composition_slot_count};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;
  NSUInteger generation=++r->rowCount;NSUInteger rowIndex=(generation-1)%r->rowCapacity;NMRow* row=&r->rows[rowIndex];@synchronized(r){memset(row,0,sizeof(*row));r->rowGenerations[rowIndex]=generation;}row->wait=(acquired-start)*1000;row->drawable_wait=(ready-acquired)*1000;
  id<MTLCommandBuffer> cb=[r.queue commandBuffer];
  // GPU writes are ordered after previous readers on this serial queue. Only
  // the acquired ring's CPU staging bytes are modified; the atlas is never
  // replaceRegion-written while an earlier command buffer can sample it.
  if(uploadOverlay){id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];[blit copyFromBuffer:ring.overlayUpload sourceOffset:0 sourceBytesPerRow:overlayRowBytes sourceBytesPerImage:overlayRowBytes*overlayH sourceSize:MTLSizeMake(overlayW,overlayH,1) toTexture:ring.overlayAtlas destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(overlayX,overlayY,0)];[blit endEncoding];}
- encode(r,cb,ring.poses,ring.interpolatedPoses,u,drawable?drawable.texture:r.output,ring);
+ nmEffectsSetLighting(ring,ring.retainedLights,upload->retained_light_count);
+ nmEffectsBegin(r,ring,cb);
+ if(!encode(r,cb,ring.poses,ring.interpolatedPoses,u,drawable?drawable.texture:r.output,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(drawable){dispatch_group_enter(r->presentations);[drawable addPresentedHandler:^(id<MTLDrawable> d){@synchronized(r){if(r->rowGenerations[rowIndex]==generation)r->rows[rowIndex].presented=d.presentedTime;}dispatch_group_leave(r->presentations);}];[cb presentDrawable:drawable];}
  row->encode=(CACurrentMediaTime()-ready)*1000;row->submit=CACurrentMediaTime();row->memory=r.device.currentAllocatedSize;dispatch_group_enter(r->pending);
  [cb addCompletedHandler:^(id<MTLCommandBuffer> b){@synchronized(r){if(r->rowGenerations[rowIndex]==generation){NMRow* result=&r->rows[rowIndex];result->gpu_start=b.GPUStartTime;result->gpu_end=b.GPUEndTime;result->completed=CACurrentMediaTime();result->status=(int)b.status;}}if(b.error)r.lastError=b.error.localizedDescription;dispatch_semaphore_signal(r->available);dispatch_group_leave(r->pending);}];[cb commit];r->frameNumber++;return 1;
@@ -504,13 +561,13 @@ void nm_drain(void* handle) {NMRenderer* r=(__bridge NMRenderer*)handle;dispatch
 int nm_rows(void* handle,void* output,int capacity) {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger n=MIN((NSUInteger)MAX(capacity,0),MIN(r->rowCount,r->rowCapacity));@synchronized(r){NMRow* out=output;NSUInteger first=r->rowCount-n;for(NSUInteger i=0;i<n;i++)out[i]=r->rows[(first+i)%r->rowCapacity];}return (int)n;}
 int nm_capture(void* handle,const char* path) {
  @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;nm_drain(handle);NSUInteger last=(r->frameNumber-1)%3;NMUniforms u=r->lastUniforms;
- id<MTLCommandBuffer> cb=[r.queue commandBuffer];encode(r,cb,r.lastRing?r.lastRing.poses:r.poses[last],r.lastRing?r.lastRing.interpolatedPoses:r.interpolatedPoses[last],u,r.output,r.lastRing);NSUInteger width=r.output.width,height=r.output.height,bytesPerRow=(width*4+255)&~255;
+ id<MTLCommandBuffer> cb=[r.queue commandBuffer];if(!encode(r,cb,r.lastRing?r.lastRing.poses:r.poses[last],r.lastRing?r.lastRing.interpolatedPoses:r.interpolatedPoses[last],u,r.output,r.lastRing))return 0;NSUInteger width=r.output.width,height=r.output.height,bytesPerRow=(width*4+255)&~255;
  id<MTLBuffer> read=[r.device newBufferWithLength:bytesPerRow*height options:MTLResourceStorageModeShared];id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];[blit copyFromTexture:r.output sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(width,height,1) toBuffer:read destinationOffset:0 destinationBytesPerRow:bytesPerRow destinationBytesPerImage:bytesPerRow*height];[blit endEncoding];[cb commit];[cb waitUntilCompleted];if(cb.status==MTLCommandBufferStatusError)return 0;
  NSBitmapImageRep* image=[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:width pixelsHigh:height bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:width*4 bitsPerPixel:32];uint8_t* src=read.contents;uint8_t* dst=image.bitmapData;
  for(NSUInteger y=0;y<height;y++)for(NSUInteger x=0;x<width;x++){NSUInteger a=y*bytesPerRow+x*4,b=(y*width+x)*4;dst[b]=src[a+2];dst[b+1]=src[a+1];dst[b+2]=src[a];dst[b+3]=255;}
  NSData* png=[image representationUsingType:NSBitmapImageFileTypePNG properties:@{}];return [png writeToFile:[NSString stringWithUTF8String:path] atomically:YES]?1:0;}
 }
 void nm_info(void* handle,char* output,int capacity) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger poseOutputBytes=0;for(id<MTLBuffer> poses in r.interpolatedPoses)poseOutputBytes+=poses.length;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){poseOutputBytes+=ring.interpolatedPoses.length;overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"cloak_scratch_bytes":@(r.subjectColor.width*r.subjectColor.height*20),@"model_atlas_bytes":@(r.modelAtlasColor.width*r.modelAtlasColor.height*20),@"model_composition":@"ordered subjects with isolated atlas byte-key depth",@"pose_interpolation_method":@"per-piece shortest-path quaternion slerp",@"pose_interpolation_output_buffer_capacity_bytes":@(poseOutputBytes),@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"run_loop_service_calls":@(r->runLoopPumps),@"run_loop_handled_sources":@(r->runLoopSources),@"pointer_captured":@(r->pointerCaptured),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSData* d=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
+ @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger poseOutputBytes=0;for(id<MTLBuffer> poses in r.interpolatedPoses)poseOutputBytes+=poses.length;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){poseOutputBytes+=ring.interpolatedPoses.length;overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"cloak_scratch_bytes":@(r.subjectColor.width*r.subjectColor.height*20),@"model_atlas_bytes":@(r.modelAtlasColor.width*r.modelAtlasColor.height*20),@"model_atlas_dimensions":@[@(r.modelAtlasColor.width),@(r.modelAtlasColor.height)],@"shadow_atlas_bytes":@(r.shadows.body.width*r.shadows.body.height*13),@"shadow_atlas_dimensions":@[@(r.shadows.body.width),@(r.shadows.body.height)],@"model_composition":@"ordered subjects with isolated atlas byte-key depth",@"pose_interpolation_method":@"per-piece shortest-path quaternion slerp",@"pose_interpolation_output_buffer_capacity_bytes":@(poseOutputBytes),@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"run_loop_service_calls":@(r->runLoopPumps),@"run_loop_handled_sources":@(r->runLoopSources),@"pointer_captured":@(r->pointerCaptured),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSMutableDictionary* combined=[info mutableCopy];[combined addEntriesFromDictionary:nmEffectsInfo(r)];[combined addEntriesFromDictionary:nmGroundInfo(r)];[combined addEntriesFromDictionary:nmWaterObjectsInfo(r)];combined[@"stock_effects_bloom_submitted"]=@(r.lastRing.glowEnabled);NSData* d=[NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
 }
 void nm_destroy(void* handle) { @autoreleasepool {NMRenderer* r=(__bridge_transfer NMRenderer*)handle;nm_drain((__bridge void*)r);restorePointer(r);if(r->cursorHidden){[NSCursor unhide];r->cursorHidden=NO;}[r.window orderOut:nil];[r.window close];} }
