@@ -65,11 +65,16 @@ func (f *Foreground) write(r region, pixel func(x, y int) [4]byte) {
 		for x := -1; x <= r.w; x++ {
 			p := pixel(max(0, min(x, r.w-1)), max(0, min(y, r.h-1)))
 			off := ((r.y+y)*atlasSize + r.x + x) * 4
+			pixelChanged := false
 			for c := 0; c < 4; c++ {
 				if f.atlas.RGBA[off+c] != p[c] {
 					changed = true
+					pixelChanged = true
 					f.atlas.RGBA[off+c] = p[c]
 				}
+			}
+			if pixelChanged {
+				f.dirtyPixel(r.x+x, r.y+y)
 			}
 		}
 	}

@@ -22,6 +22,8 @@ type Foreground struct {
 	w, h          int
 	atlas         meshscene.Texture
 	version       uint64
+	dirty         [4]int
+	first         bool
 	x, y, shelf   int
 	quads         []meshscene.OverlayQuad
 	err           error
@@ -44,7 +46,7 @@ var _ drawlist.MarkerSink = (*Foreground)(nil)
 func New(pal *palette.Tables, width, height int) *Foreground {
 	f := &Foreground{pal: pal, w: width, h: height, cw: width, ch: height,
 		atlas:   meshscene.Texture{Width: atlasSize, Height: atlasSize, RGBA: make([]byte, atlasSize*atlasSize*4)},
-		version: 1, x: 1, shelf: 1, images: make(map[imageKey]region), fonts: make(map[fontKey]region), markers: make(map[markerKey]region),
+		version: 1, first: true, dirty: [4]int{0, 0, atlasSize, atlasSize}, x: 1, shelf: 1, images: make(map[imageKey]region), fonts: make(map[fontKey]region), markers: make(map[markerKey]region),
 		surfaces: make(map[surfaceKey]*surfaceEntry), surfaceUses: make(map[uint64]int)}
 	copy(f.atlas.RGBA[:4], []byte{255, 255, 255, 255})
 	return f
@@ -55,6 +57,11 @@ func New(pal *palette.Tables, width, height int) *Foreground {
 // entire foreground rather than quietly omitting unsupported art.
 func (f *Foreground) Prepare(list *drawlist.List) ([]meshscene.OverlayQuad, meshscene.Texture, uint64, error) {
 	f.quads = f.quads[:0]
+	f.dirty = [4]int{}
+	if f.first {
+		f.dirty = [4]int{0, 0, atlasSize, atlasSize}
+		f.first = false
+	}
 	f.err = nil
 	f.world = false
 	f.scale = 1
@@ -73,6 +80,23 @@ func (f *Foreground) Prepare(list *drawlist.List) ([]meshscene.OverlayQuad, mesh
 		return nil, f.atlas, f.version, f.err
 	}
 	return f.quads, f.atlas, f.version, nil
+}
+
+// DirtyRect returns the bounding rectangle of atlas texels changed by the most
+// recent Prepare, in x/y/width/height pixels. The first Prepare returns the whole
+// atlas; unchanged content returns zero extent. A native consumer can stage just
+// these rows from the retained full atlas and update its existing texture before
+// drawing this frame. DirtyRect and bytes are borrowed until the next Prepare.
+func (f *Foreground) DirtyRect() [4]int { return f.dirty }
+
+func (f *Foreground) dirtyPixel(x, y int) {
+	if f.dirty[2] == 0 || f.dirty[3] == 0 {
+		f.dirty = [4]int{x, y, 1, 1}
+		return
+	}
+	x0, y0 := min(f.dirty[0], x), min(f.dirty[1], y)
+	x1, y1 := max(f.dirty[0]+f.dirty[2], x+1), max(f.dirty[1]+f.dirty[3], y+1)
+	f.dirty = [4]int{x0, y0, x1 - x0, y1 - y0}
 }
 
 func (f *Foreground) fail(format string, args ...any) {
