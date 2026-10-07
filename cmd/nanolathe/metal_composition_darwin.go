@@ -23,7 +23,7 @@ func newMetalModelComposer(scene *meshscene.Scene) *metalModelComposer {
 func (m *metalModelComposer) Prepare(cl *client.Client, retained *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame, width, height int) (meshscene.ModelComposition, error) {
 	m.order = m.order[:0]
 	for _, e := range m.orderer.Prepare(cl, current) {
-		m.order = append(m.order, meshscene.ModelOrder{Kind: e.Kind, ID: e.ID, GroupKind: e.GroupKind, GroupID: e.GroupID, Rank: e.Rank, Phase: e.Phase, Row: e.Row})
+		m.order = append(m.order, meshscene.ModelOrder{Kind: e.Kind, ID: e.ID, GroupKind: e.GroupKind, GroupID: e.GroupID, Rank: e.Rank, Phase: e.Phase, Row: e.Row, FeatureIndex: e.FeatureIndex, Sprite: e.Sprite, FeatureBody: e.FeatureBody, FeatureShadow: e.FeatureShadow, Submerged: e.Submerged})
 	}
 	return m.composer.Prepare(retained, live, current, width, height, m.order)
 }
