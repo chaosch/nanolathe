@@ -82,6 +82,10 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	if err != nil {
 		return err
 	}
+	scene.TerrainTiles, err = meshscene.BuildBattleTerrainTiles(cl.BattleTerrainSources(), cl.DisplayPalette())
+	if err != nil {
+		return err
+	}
 	prepareMetalScene(scene, sess.World)
 	host := &metalBattleHost{scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	scene.Live = host
@@ -251,6 +255,9 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.frame.OverlayDirty[i] = uint32(dirty[i])
 	}
 	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2)
+	if err := prepareMetalProjection(h.cl, h.world, &h.frame, 2); err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	if h.composer == nil {
 		h.composer = newMetalModelComposer(h.scene)
 	}

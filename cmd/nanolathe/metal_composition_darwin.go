@@ -27,7 +27,7 @@ func (m *metalModelComposer) Prepare(cl *client.Client, retained *meshscene.Reta
 		if live.StockEffects != nil && e.Kind == client.RetainedModelDebris {
 			continue
 		}
-		m.order = append(m.order, meshscene.ModelOrder{Kind: e.Kind, ID: e.ID, GroupKind: e.GroupKind, GroupID: e.GroupID, Rank: e.Rank, Phase: e.Phase, Row: e.Row, FeatureIndex: e.FeatureIndex, Sprite: e.Sprite, FeatureBody: e.FeatureBody, FeatureShadow: e.FeatureShadow, Submerged: e.Submerged})
+		m.order = append(m.order, meshscene.ModelOrder{Kind: e.Kind, ID: e.ID, GroupKind: e.GroupKind, GroupID: e.GroupID, Rank: e.Rank, Phase: e.Phase, Row: e.Row, FeatureIndex: e.FeatureIndex, Sprite: e.Sprite, FeatureBody: e.FeatureBody, FeatureShadow: e.FeatureShadow, Submerged: e.Submerged, GroupKeyDelta: e.GroupKeyDelta, GroupReveal: e.GroupReveal})
 	}
 	out, err := m.composer.Prepare(retained, live, current, width, height, m.order)
 	m.projectiles = m.projectiles[:0]

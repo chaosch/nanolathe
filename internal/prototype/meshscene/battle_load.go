@@ -199,6 +199,10 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 		scene.Terrain, scene.TerrainRect = bakePlayTerrain(terrain, pal)
 		scene.Name = "Playable Metal skirmish"
 	}
+	scene.TerrainTiles, err = BuildTerrainTiles(terrain, pal.Base)
+	if err != nil {
+		return nil, nil, err
+	}
 	scene.HeightField = battleHeightField(sess.World)
 	source := newBattleSource(scene, sess, fs, models, modelIndices, originY, [2]int{opts.Width, opts.Height})
 	source.spectator, source.palette = opts.ViewPlayer < 0, pal
@@ -248,12 +252,21 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	scene.Metadata["texture_multiplier"] = opts.TextureScale
 	scene.Metadata["atlas"] = atlas.metadata
 	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT background without depth writes; immutable height field supplies shadow receivers"}
+	scene.Metadata["terrain_tiles"] = map[string]any{"map_dimensions": [2]int{scene.TerrainTiles.Width, scene.TerrainTiles.Height}, "unique_referenced_tiles": scene.TerrainTiles.TileCount, "atlas_dimensions": [2]int{scene.TerrainTiles.Atlas.Width, scene.TerrainTiles.Atlas.Height}, "atlas_rgba_bytes": len(scene.TerrainTiles.Atlas.RGBA), "lookup_bytes": len(scene.TerrainTiles.Lookup) * 4, "tile_side": 32, "policy": "full-resolution original TNT pixels in unique tile atlas; nearest at identity, per-tile edge-clamped bilinear under fractional world transform; optional production detail source may replace at host load"}
 	scene.Metadata["pose_source"] = "worker reads pinned completed frame pairs; InstanceID matching snaps births, suppresses deaths and prevents slot-reuse blending"
 	scene.Metadata["presentation_buffer_ticks"] = 1
 	scene.Metadata["presentation_buffer_seconds"] = battlePeriod.Seconds()
 	scene.Metadata["viewport"] = [2]int{opts.Width, opts.Height}
 	scene.Metadata["camera_policy"] = "native pixels per world unit; pan clamped to crop, zoom 0.1..4; views wider than crop expose limited terrain; renderer input only"
-	scene.Metadata["render_limitations"] = []string{"shared depth with integer model-height ties; retained SHD normals use float triangle interpolation and quantize subdivided corners; rigid rotation with linear composed origins can change hierarchical joint spacing", "ordinary perspective applies published LOS and cloak admission; fog uses authored masks and production true-colour gray operations; composite/out-of-tile fog art unsupported", "resolved per-primitive material selections require the native selector hook; unknown/out-of-range team colour omits its texture", "construction height cutoff and authored ring lines approximate the five-stage height-key reveal and raster row extremes", "cargo uses committed world poses and carrier admission; keyed direct cargo shares one opacity resolve; staged byte-height ownership remains approximate; deeper attachment chains are not traversed", "cloak resolves native subject colour once at opacity 0.5 rather than source-major destination-palette ALP; keyless parent cached/live lane separation remains approximate", "unit shadows use authored gates and immutable ground receiver; native projection/depth differs from retail silhouette clipping and structure cache", "flat terrain background without depth writes; ordinary animation selection reads the production material source when supplied; standalone fallback is frame zero", "projectile secondary-model replacement and paired triangle fragments omitted", "wreck shimmer uses neutral-pose model bounds rather than changing heading/pose bounds", "short and tall feature admission retain their separate map-owner visibility gate"}
+	scene.Metadata["render_limitations"] = []string{
+		"Production-composed battles use isolated subject and group source pages, ordered final commits and source-face quad UV/key/SHD mapping; cached/direct projection and cached/live seed chronology remain distinct from production",
+		"GPU quaternion pose interpolation preserves rigid pieces but not the exact fixed-point hierarchy or production cache rebuild history",
+		"Construction uses production reveal verdicts; authored edge outlines still differ from raster row extremes and whole-block key ownership",
+		"Production shadow policy and silhouette composition run; native coverage and offscreen-body shadow admission still differ at boundaries",
+		"Production effects, lights, glow, water, reflections, BLUE and fog are integrated; capability coverage does not establish exact pixel parity",
+		"Deep attachment chains and projectile secondary-model replacement remain outside the retained instance topology",
+		"Standalone uncomposed fixtures retain the earlier shared-depth approximation and do not certify the production battle path",
+	}
 	scene.Metadata["sprites"] = source.spriteReport()
 	if opts.Playable {
 		scene.Metadata["scene_kind"] = "ordinary direct 1v1 skirmish; human ARM versus computer CORE; no fixture armies"
