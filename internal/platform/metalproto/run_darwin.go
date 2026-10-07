@@ -26,6 +26,8 @@ type bridge struct {
 	texture   func(uintptr, int32, int32, int32, uintptr) int32
 	configure func(uintptr, uintptr, uintptr, int32) int32
 	frame     func(uintptr, uintptr, uintptr, float32, float64) int32
+	liveFrame func(uintptr, uintptr) int32
+	input     func(uintptr, uintptr)
 	drain     func(uintptr)
 	rows      func(uintptr, uintptr, int32) int32
 	capture   func(uintptr, uintptr) int32
@@ -106,6 +108,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
 	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
 	purego.RegisterLibFunc(&b.frame, lib, "nm_frame")
+	purego.RegisterLibFunc(&b.liveFrame, lib, "nm_live_frame")
+	purego.RegisterLibFunc(&b.input, lib, "nm_input")
 	purego.RegisterLibFunc(&b.drain, lib, "nm_drain")
 	purego.RegisterLibFunc(&b.rows, lib, "nm_rows")
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
@@ -128,7 +132,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				offsets = append(offsets, uint32(instance.PoseOffset))
 			}
 		}
-		if len(offsets) == 0 {
+		if len(offsets) == 0 && scene.Live == nil {
 			continue
 		}
 		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets))) == 0 {
@@ -143,18 +147,32 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		drawnIndices += uint64(len(m.Indices)) * uint64(len(offsets))
 		drawCalls++
 	}
-	for i, t := range []meshscene.Texture{scene.Atlas, scene.Terrain} {
+	textures := []meshscene.Texture{scene.Atlas, scene.Terrain}
+	if scene.Live != nil {
+		textures = append(textures, scene.SpriteAtlas)
+	}
+	for i, t := range textures {
 		if b.texture(handle, int32(i), int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload texture %d", i)
 		}
 		runtime.KeepAlive(t)
 	}
-	poseCount := len(scene.Frames[0].Transforms)
+	poseCount := 0
+	if scene.Live == nil {
+		poseCount = len(scene.Frames[0].Transforms)
+	}
 	if b.configure(handle, pointer(scene.Camera[:]), pointer(scene.TerrainRect[:]), int32(poseCount)) == 0 {
 		return nil, fmt.Errorf("metalproto: allocate pose buffers")
 	}
 	runtime.KeepAlive(scene)
 	rows := make([]nativeRow, opts.Frames+opts.Warmup)
+	var liveRows []liveRow
+	var packing livePacking
+	if scene.Live != nil {
+		liveRows = make([]liveRow, len(rows))
+		packing.spans = make([]meshSpan, len(scene.Meshes))
+		packing.cursor = make([]uint32, len(scene.Meshes))
+	}
 	var before, after runtime.MemStats
 	started := time.Now()
 	measuredStart := started
@@ -182,14 +200,38 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			measuredStart = time.Now()
 		}
 		seconds := time.Since(started).Seconds()
-		sample := seconds * 30
-		tick := int(sample)
-		alpha := float32(sample - float64(tick))
-		a := scene.Frames[tick%len(scene.Frames)].Transforms
-		next := scene.Frames[(tick+1)%len(scene.Frames)].Transforms
-		status := b.frame(handle, pointer(a), pointer(next), alpha, seconds)
-		runtime.KeepAlive(a)
-		runtime.KeepAlive(next)
+		var status int32
+		if scene.Live != nil {
+			var input nativeInput
+			b.input(handle, uintptr(unsafe.Pointer(&input)))
+			nextStart := time.Now()
+			live, err := scene.Live.Next(seconds, meshscene.Input{PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0})
+			nextMS := float64(time.Since(nextStart)) / float64(time.Millisecond)
+			if err != nil {
+				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
+			}
+			prepStart := time.Now()
+			upload, metrics, err := packing.prepare(scene, live, seconds)
+			if err != nil {
+				return nil, err
+			}
+			metrics.NextMS = nextMS
+			metrics.PrepMS = float64(time.Since(prepStart)) / float64(time.Millisecond)
+			liveRows[i] = metrics
+			status = b.liveFrame(handle, uintptr(unsafe.Pointer(&upload)))
+			runtime.KeepAlive(live)
+			runtime.KeepAlive(packing)
+			runtime.KeepAlive(upload)
+		} else {
+			sample := seconds * 30
+			tick := int(sample)
+			alpha := float32(sample - float64(tick))
+			a := scene.Frames[tick%len(scene.Frames)].Transforms
+			next := scene.Frames[(tick+1)%len(scene.Frames)].Transforms
+			status = b.frame(handle, pointer(a), pointer(next), alpha, seconds)
+			runtime.KeepAlive(a)
+			runtime.KeepAlive(next)
+		}
 		if status < 0 {
 			break
 		}
@@ -229,6 +271,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["submission_elapsed_seconds"] = submittedAt.Sub(measuredStart).Seconds()
 	report["go_allocations"] = after.Mallocs - before.Mallocs
 	report["go_allocated_bytes"] = after.TotalAlloc - before.TotalAlloc
+	report["go_allocation_scope"] = "process-wide Go allocations during measured submission plus final drain"
+	if scene.Live != nil {
+		report["go_allocation_scope"] = "process-wide Go allocations including concurrent live-source worker during measured submission plus final drain"
+	}
 	report["retained_vertex_bytes"] = vertexBytes
 	report["retained_index_bytes"] = indexBytes
 	report["retained_instance_bytes"] = instanceBytes
@@ -239,6 +285,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["model_indices_drawn"] = drawnIndices
 	report["model_triangles_drawn"] = drawnIndices / 3
 	report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA)
+	if scene.Live != nil {
+		report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA) + len(scene.SpriteAtlas.RGBA)
+		addLiveReport(report, liveRows[opts.Warmup:n])
+		if err := writeLiveRows(opts.OutputDir, liveRows[:n], opts.Warmup); err != nil {
+			return nil, err
+		}
+	}
 	report["terrain_triangles_drawn"] = 2
 	if err := writeArtifacts(opts.OutputDir, report, rows, opts.Warmup); err != nil {
 		return nil, err
@@ -247,16 +300,22 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 }
 
 func validate(s *meshscene.Scene) error {
-	if s == nil || len(s.Frames) == 0 || len(s.Frames[0].Transforms) == 0 {
-		return fmt.Errorf("metalproto: scene has no sampled poses")
+	if s == nil {
+		return fmt.Errorf("metalproto: nil scene")
 	}
-	n := len(s.Frames[0].Transforms)
-	if n > math.MaxInt32 {
-		return fmt.Errorf("metalproto: pose count too large")
-	}
-	for _, f := range s.Frames {
-		if len(f.Transforms) != n {
-			return fmt.Errorf("metalproto: pose topology changes across frames")
+	n := 0
+	if s.Live == nil {
+		if len(s.Frames) == 0 || len(s.Frames[0].Transforms) == 0 {
+			return fmt.Errorf("metalproto: scene has no sampled poses")
+		}
+		n = len(s.Frames[0].Transforms)
+		if n > math.MaxInt32 {
+			return fmt.Errorf("metalproto: pose count too large")
+		}
+		for _, f := range s.Frames {
+			if len(f.Transforms) != n {
+				return fmt.Errorf("metalproto: pose topology changes across frames")
+			}
 		}
 	}
 	if unsafe.Sizeof(meshscene.Vertex{}) != 48 {
@@ -277,12 +336,18 @@ func validate(s *meshscene.Scene) error {
 			}
 		}
 	}
-	for _, instance := range s.Instances {
-		if instance.Mesh < 0 || instance.Mesh >= len(s.Meshes) || instance.PoseOffset < 0 || instance.PoseOffset+s.Meshes[instance.Mesh].Pieces > n {
-			return fmt.Errorf("metalproto: instance has invalid mesh or pose span")
+	if s.Live == nil {
+		for _, instance := range s.Instances {
+			if instance.Mesh < 0 || instance.Mesh >= len(s.Meshes) || instance.PoseOffset < 0 || instance.PoseOffset+s.Meshes[instance.Mesh].Pieces > n {
+				return fmt.Errorf("metalproto: instance has invalid mesh or pose span")
+			}
 		}
 	}
-	for _, t := range []meshscene.Texture{s.Atlas, s.Terrain} {
+	textures := []meshscene.Texture{s.Atlas, s.Terrain}
+	if s.Live != nil {
+		textures = append(textures, s.SpriteAtlas)
+	}
+	for _, t := range textures {
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || int64(t.Width)*int64(t.Height)*4 != int64(len(t.RGBA)) {
 			return fmt.Errorf("metalproto: invalid RGBA texture")
 		}
