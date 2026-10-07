@@ -1314,3 +1314,62 @@ brightness gap with matched captures. Artifacts, tools and captures:
 `~/nanolathe-bench/metal-depth-slabs-2026-10-07/` (`matrix.sh`, `summarize.py`,
 `timeline.py`, `summary.txt`). No tests were added or run; the prototype
 remains unmerged.
+
+### Second round: shading, GPU passes, Go preparation and palette (2026-10-07)
+
+**Slab shading approximation.** The slab fragment averages the four 2×2
+sub-sample texels (exact two-chain lanes for quad-mapped faces, UV
+derivatives otherwise), and the final pass softens silhouettes where a
+4-neighbour lies in another paint band (25%, 40% with two or more). Edge
+sharpness now matches the atlas and Modern (33.4 / 33.4 / 33.3); interior
+speckle is gone. Shade rows and keys still come from one sample, and the edge
+blend is an estimate, not geometric coverage.
+
+**GPU passes** (all captures identical unless stated):
+- One drawable pass replaces world resolve, full-frame distortion copy,
+  distortion target, fog and the glow composite; distortion quads resolve the
+  unchanged world at their displaced position (0.3% of coastal pixels move by
+  >8 levels, all inside distortion). `NANOLATHE_METAL_LEGACY_POST=1` restores it.
+- Without lens snapshots, every stock-effect layer and commit phase draws into
+  one world encoder (`NANOLATHE_METAL_SPLIT_WORLD=1` restores the split).
+- The shadow silhouette raster ran full model shading and stored an unread
+  emission target; a coverage-only fragment and tile-only emission cut the
+  large field view from 10.77 to 8.12 ms. Ablation
+  (`NANOLATHE_METAL_ABLATE=shadows|shadowraster|shadowcommit|groundlight|glow|water|effects`)
+  located it; shadows had been 4.1 ms of 10.65.
+- Atlas raster passes clear and store only the frame's page of their
+  grow-only textures (no measured change here; the page already filled them).
+
+**Go preparation** (merged from `metal-cpu-prep`): reusable storage for the
+stock-effect drawlists (`drawlist.List.CloneInto`), publication recycling,
+integer sprite tallies and a material-walk cache (restricted on merge to walks
+with no live DontCache piece and no debris). Per-tick world build 3.99 → 2.52
+ms, allocation −55–78%; per-draw Record stays 2.4–4.2 ms, spread over
+producers that are genuinely per draw. Lower needs background pre-recording
+with double-buffered native inputs and a client join point, as Modern does.
+
+**Palette.** Terrain used the client's gamma-adjusted display palette, every
+other retained art source used PALETTE.PAL, so with the saved gamma objects
+drew about 1.19× brighter than Modern. All art now uses the display palette,
+and features sample whole texels. Coastal 1080p against Modern: mean absolute
+difference 4.88 → 1.80, pixels differing by >8 levels 19.6% → 5.7%; the
+remainder is model edges and atlas-path construction subjects.
+
+**Final matrix** (same host session, load 3–4; draws/s, Metal GPU span p50):
+
+| Scene | Modern | Metal 193e663f | Metal now |
+|---|---:|---:|---:|
+| Coastal 1080p frozen | 110.3 | 116.0 (9.35 ms) | 120.0 (5.96 ms) |
+| Field 1080p frozen | 120.0 | 119.5 (5.57 ms) | 119.5 (5.58 ms) |
+| Field 3456×2160 frozen | 82.2 | 80.9 (13.04 ms) | 119.3 (8.07 ms) |
+| Coastal 1080p full | 102.5 | 103.8 | 112.3 |
+| Field 1080p full | 97.0 | 94.7 | 100.9 |
+| Field 3456×2160 full | 70.6 | 65.4 | 80.9 |
+
+Renderer-only, Metal now holds the 120 Hz cap in every scene, including the
+large view where Modern draws 82/s. With the simulation stepped synchronously
+on the draw thread every fourth draw, Metal leads by 4–15%; the remaining
+limit is the benchmark's synchronous step plus per-draw Go preparation. Next:
+background pre-recording, live palette reload, and geometric slab edge
+coverage if the approximation is judged insufficient. Results, captures and
+tools: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round2/`.
