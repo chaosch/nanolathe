@@ -77,7 +77,7 @@ func Load(opts LoadOptions) (*Scene, error) {
 			return nil, err
 		}
 	}
-	art, err := buildAtlas(fs, models, pal, opts.TextureScale)
+	art, err := buildAtlas(fs, models, pal, opts.TextureScale, opts.MaterialSource)
 	if err != nil {
 		return nil, err
 	}

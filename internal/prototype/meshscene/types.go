@@ -14,12 +14,13 @@ type Vertex struct {
 	ShadeNormal [3]float32 // unnormalized average of authored retail face normals
 }
 type Mesh struct {
-	Name        string
-	Vertices    []Vertex
-	Indices     []uint32
-	EdgeIndices []uint32 // original authored edges, independent of face subdivision
-	Pieces      int
-	SourceFaces int
+	Name          string
+	Vertices      []Vertex
+	Indices       []uint32
+	EdgeIndices   []uint32 // original authored edges, independent of face subdivision
+	Pieces        int
+	SourceFaces   int
+	MaterialSlots []ModelMaterialSlot
 }
 type Texture struct {
 	Width, Height int
@@ -37,7 +38,8 @@ const (
 )
 
 type Instance struct {
-	CoolingAge   float32 // committed wreck age plus one; zero means no cooling treatment
+	Materials    []NativeModelMaterial // mesh-local primitive selections; immutable through submission
+	CoolingAge   float32               // committed wreck age plus one; zero means no cooling treatment
 	Phase        uint32
 	Subject      uint64 // keyed carrier and cargo share one cloak resolve
 	SubjectOrder uint32 // parent first, then published Cargo order
@@ -47,19 +49,22 @@ type Instance struct {
 }
 type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
-	Playable      bool
-	OverlayAtlas  Texture
-	FogAtlas      Texture // authored fog masks, followed by the 256-entry palette row
-	DitheredFog   bool    // production display option; independent of committed LOS
-	Name          string
-	Meshes        []Mesh
-	Atlas         Texture
-	Terrain       Texture
-	SpriteAtlas   Texture
-	Materials     []Material
-	TextureFrames [][4]float32
-	HeightField   HeightField
-	Live          LiveSource // nil retains the original recorded-pose workload
+	Playable                 bool
+	OverlayAtlas             Texture
+	FogAtlas                 Texture // authored fog masks, followed by the 256-entry palette row
+	DitheredFog              bool    // production display option; independent of committed LOS
+	Name                     string
+	Meshes                   []Mesh
+	Atlas                    Texture
+	Terrain                  Texture
+	WaterMask                Texture // production projected wet/dry/shore mask; zero disables the layer
+	WaterMaskStep            int
+	WaterLava, WaterDamaging bool
+	SpriteAtlas              Texture
+	Materials                []Material
+	TextureFrames            [][4]float32
+	HeightField              HeightField
+	Live                     LiveSource // nil retains the original recorded-pose workload
 	// Terrain rectangle in world x,z; it is a flat 2D backdrop.
 	TerrainRect [4]float32
 	Instances   []Instance
@@ -70,6 +75,7 @@ type Scene struct {
 	Metadata map[string]any
 }
 type LoadOptions struct {
+	MaterialSource *ModelMaterialSource
 	Root           string
 	Map            string
 	Units          int
