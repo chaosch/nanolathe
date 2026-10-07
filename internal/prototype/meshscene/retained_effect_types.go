@@ -14,6 +14,7 @@ const (
 	EffectOpQuads uint32 = iota
 	EffectOpLens
 	EffectOpGeometry
+	EffectOpRetainedModel
 )
 
 // EffectLensSample carries the production executor's cropped destination and
@@ -37,6 +38,18 @@ type EffectLens struct {
 type EffectGeometry struct {
 	Model                   drawlist.Model
 	Scale, OffsetX, OffsetY float32
+	Vertices                []EffectVertex
+	Suppressed              string
+	QuadSpanFaces           uint32
+	SupersampleIgnored      bool
+}
+
+// EffectVertex is a 48-byte projected triangle corner: physical packing scales
+// PositionUV.xy once, leaves normalized UVs and texture bounds unchanged, and
+// premultiplies Color only in the shader. Bounds prevent an out-of-frame model
+// texel sample from reaching a neighboring retained atlas resource.
+type EffectVertex struct {
+	PositionUV, Color, Bounds [4]float32
 }
 
 // EffectSources keeps the original Enhanced operands, including whole composite
@@ -68,10 +81,11 @@ type EffectCounts struct {
 // factor min(2,1+row/30) and coverage in alpha. Normal sprites retain their
 // ordinary palette colors and half-alpha. No glow is baked into body pixels.
 type EffectLayer struct {
-	Quads   []OverlayQuad
-	Ops     []EffectOp
-	Lenses  []EffectLens
-	Models  []EffectGeometry
-	Sources []EffectSources
-	Counts  EffectCounts
+	Quads          []OverlayQuad
+	Ops            []EffectOp
+	Lenses         []EffectLens
+	Models         []EffectGeometry
+	RetainedModels []drawlist.Model
+	Sources        []EffectSources
+	Counts         EffectCounts
 }
