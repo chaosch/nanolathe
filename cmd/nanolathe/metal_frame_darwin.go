@@ -25,6 +25,16 @@ func prepareMetalScene(scene *meshscene.Scene, terrain *world.Terrain) {
 }
 
 func prepareMetalFrame(cl *client.Client, world *meshscene.RetainedBattle, scene *meshscene.Scene, live *meshscene.LiveFrame, current *frame.Frame, width, height int) {
+	live.LightControls &= 1
+	if cl.Effects().Finish {
+		live.LightControls |= 2
+	}
+	if cl.Effects().Glint {
+		live.LightControls |= 4
+	}
+	if cl.Effects().Supersample {
+		live.LightControls |= 8
+	}
 	if live.ModelRules == nil {
 		live.ModelRules = applyMetalModelRules(cl, world, live, current)
 	}

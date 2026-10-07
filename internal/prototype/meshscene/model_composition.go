@@ -58,6 +58,7 @@ type ModelComposition struct {
 	InstanceRanks           []uint32 // production member order, including factory children
 	Slots                   []ModelSlot
 	AtlasWidth, AtlasHeight int
+	ProjectileSlots         []uint32 // production body markers, including zero for culled retained slots
 	Paint                   []ModelPaint
 	FeatureSprites          []FeatureSpritePaint // ordered zero-based ORIGINAL live.Sprites references
 	SpriteSources           []SpriteSource       // aligned to original live.Sprites, before native filtering

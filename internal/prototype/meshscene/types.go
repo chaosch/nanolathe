@@ -14,13 +14,14 @@ type Vertex struct {
 	ShadeNormal [3]float32 // unnormalized average of authored retail face normals
 }
 type Mesh struct {
-	Name          string
-	Vertices      []Vertex
-	Indices       []uint32
-	EdgeIndices   []uint32 // original authored edges, independent of face subdivision
-	Pieces        int
-	SourceFaces   int
-	MaterialSlots []ModelMaterialSlot
+	Name             string
+	Vertices         []Vertex
+	Indices          []uint32
+	EdgeIndices      []uint32 // original authored edges, independent of face subdivision
+	Pieces           int
+	SourceFaces      int
+	PrimitiveCenters [][4]float32 // retained authored face centroids, indexed by MaterialSlots
+	MaterialSlots    []ModelMaterialSlot
 }
 type Texture struct {
 	Width, Height int
