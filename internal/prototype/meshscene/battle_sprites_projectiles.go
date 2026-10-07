@@ -28,7 +28,7 @@ func spriteProjectileName(family, selector int32, base bool) string {
 
 func spriteBeamCenter(v frame.ProjectileView) [4]float32 {
 	h, t := spritePosition(v.X, v.Y, v.Z), spritePosition(v.TailX, v.TailY, v.TailZ)
-	return [4]float32{(h[0] + t[0]) * 0.5, (h[1] + t[1]) * 0.5, (h[2] + t[2]) * 0.5, 1}
+	return [4]float32{(h[0] + t[0]) * 0.5, (h[1] + t[1]) * 0.5, (h[2] + t[2]) * 0.5, 0}
 }
 
 func (b *BattleSprites) appendProjectiles(dst []Sprite, lights []Light, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {

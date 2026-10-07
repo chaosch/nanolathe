@@ -17,12 +17,12 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @interface NMRing : NSObject
 @property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload;
 @property NSMutableData* spans;
-@property NSUInteger spriteCount,distortionCount,overlayCount;
+@property NSUInteger spriteCount,groundSpriteCount,distortionCount,overlayCount;
 @property id<MTLTexture> fog,overlayAtlas;
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==208,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==216,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -336,10 +336,12 @@ static void encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
  pass.depthAttachment.texture=r.depthImage;pass.depthAttachment.loadAction=MTLLoadActionClear;pass.depthAttachment.storeAction=MTLStoreActionDontCare;pass.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setDepthStencilState:r.depth];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setCullMode:MTLCullModeNone];[enc setFragmentBuffer:ring?ring.lights:r.emptyLights offset:0 atIndex:4];
  [enc setRenderPipelineState:r.terrain];[enc setDepthStencilState:r.spriteDepth];[enc setFragmentTexture:r.terrainImage atIndex:0];[enc setFragmentTexture:r.heights atIndex:1];[enc setFragmentTexture:r.shadowMask atIndex:2];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+ // Short features are painted after TNT and before any model [03 R-RAST-01 §6].
+ if(ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.groundSpriteCount];}
  [enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];[enc setVertexBuffer:poses offset:0 atIndex:2];[enc setFragmentTexture:r.atlas atIndex:0];
  [enc setVertexBuffer:r.materials offset:0 atIndex:6];[enc setVertexBuffer:r.textureFrames offset:0 atIndex:7];drawMeshes(r,enc,ring,0);
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.outline];[enc setDepthStencilState:r.spriteDepth];NMUniforms outlineU=u;outlineU.mode.z=1;[enc setVertexBytes:&outlineU length:sizeof(outlineU) atIndex:3];drawMeshes(r,enc,ring,2);[enc setVertexBytes:&u length:sizeof(u) atIndex:3];}
- if(ring.spriteCount>0){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount];}
+ if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
  [enc endEncoding];
  if(r->effects){
  id<MTLComputeCommandEncoder> compute=[cb computeCommandEncoder];[compute setComputePipelineState:r.blur];vector_float2 d={1,0};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.emission atIndex:0];[compute setTexture:r.blurA atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurA.width,r.blurA.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
@@ -375,7 +377,7 @@ static id<MTLBuffer> growPoseOutput(NMRenderer* r,id<MTLBuffer> old,NSUInteger b
 }
 int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  @autoreleasepool {
- NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
+ NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX||upload->ground_sprite_count>upload->sprite_count)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
  double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();id<CAMetalDrawable> drawable=nil;
  if(!r->offscreen){drawable=[r.layer nextDrawable];if(!drawable){dispatch_semaphore_signal(r->available);return 0;}}
  double ready=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];
@@ -406,7 +408,7 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  if(upload->overlay_count)memcpy(ring.overlay.contents,upload->overlay,upload->overlay_count*64);ring.overlayCount=upload->overlay_count;
  if(upload->sprite_count)memcpy(ring.sprites.contents,upload->sprites,upload->sprite_count*96);
  if(upload->light_count)memcpy(ring.lights.contents,upload->lights,upload->light_count*32);
- if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*24];if(r.meshes.count)memcpy(ring.spans.mutableBytes,upload->spans,r.meshes.count*24);ring.spriteCount=upload->sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*3;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)memcpy(ring.selectors.contents,upload->selectors,selectorCount*4);
+ if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*24];if(r.meshes.count)memcpy(ring.spans.mutableBytes,upload->spans,r.meshes.count*24);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*3;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)memcpy(ring.selectors.contents,upload->selectors,selectorCount*4);
  NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.visual.x=r->visualPasses?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;
  NSUInteger generation=++r->rowCount;NSUInteger rowIndex=(generation-1)%r->rowCapacity;NMRow* row=&r->rows[rowIndex];@synchronized(r){memset(row,0,sizeof(*row));r->rowGenerations[rowIndex]=generation;}row->wait=(acquired-start)*1000;row->drawable_wait=(ready-acquired)*1000;
  id<MTLCommandBuffer> cb=[r.queue commandBuffer];

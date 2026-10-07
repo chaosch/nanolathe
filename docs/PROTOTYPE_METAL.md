@@ -894,3 +894,94 @@ with corrected stock fog and model appearance, but do not replace the shipping
 renderer yet: subject overlap, rigid interpolation, remaining effects/water,
 resource lifetime and a complete match remain the useful next checks. Steady
 144 Hz has not been re-established. No tests were added or run.
+
+
+## Rigid motion and short-feature ordering follow-up
+
+The next prototype iteration keeps the production HUD/input host and changes
+only presentation. Rotating pieces now use shortest-path quaternion slerp in
+one GPU compute invocation per piece. Body, shadow and outline draws reuse its
+64-byte output, rather than blending matrices separately in every vertex
+invocation. The conversion removes and restores the existing world-Z reflection,
+keeps equal bases and spatial endpoints exact, and preserves current shading
+metadata and the existing either-endpoint visibility gate. This prevents the
+matrix-blending shrink during turns. Already-composed piece origins still blend
+linearly: joint spacing can change during articulated rotation, so full hierarchy
+interpolation remains unfinished.
+
+Short sprite features (authored height below 10) now draw in publication order,
+shadow before body, between TNT and models. That restores the existing client's
+short-feature rule [03 R-RAST-01 §6]. The remainder of the sprite batch sorts
+stably at the displayed interpolation fraction, including depth bias and clamps,
+instead of sorting once at the current tick's position. Native uploads use one
+216-byte descriptor, with a count marking the ground-sprite prefix. Publication
+slices remain immutable; sorting uses reusable presentation scratch. This adds
+one sprite draw when both groups are present. Tall-feature rows, airborne/strip
+phases and cloak subject composition are still approximations.
+
+### Verification and measurements
+
+Root reviewed the delegated compute implementation and the sprite changes,
+including reflection/quaternion signs, endpoint ownership, the 216-byte ABI,
+slot lifetime and shader depth arithmetic. Review caught and fixed a default
+position W lane that would otherwise have tagged every sprite as a ground
+feature. Both Go commands built with cgo disabled, the native bridge built with
+Clang, and runtime Metal shader compilation and command completion succeeded.
+No tests were added or run. The branch is still unmerged.
+
+The fixed Solar and commander PNGs are byte-identical to the preceding corrected
+build. A new `--metal-model-capture armcom-ground` fixture copies the opening
+commander pose onto the nearest actual short sprite feature, without modifying
+the simulation. Against a control bridge that draws that prefix late, it changes
+49 pixels around the lower legs in the inspected capture; the rest of the image
+is identical. This is a narrow overlap check, not proof of general composition.
+The retained replay path also ran and produced an inspected capture with the new
+compute pass. Root inspected the battle and production-HUD opening captures;
+complete effects/metal art and the authored crisp fog fringe remain visible.
+
+Sequential M3 Pro runs used seed 7, GOMAXPROCS=2, 5× subdivision, doubled model
+atlas dimensions, all visual passes and the 120 Hz panel. The larger run uses
+Town & Country, three 500-unit armies, 1200 lead-in ticks, player 1 visibility,
+zoom 1.35, 240 warmup frames and **7200 measured frames**. The ordinary opening
+uses The Pass, the Modern computer, the production HUD, 120 warmup frames and
+3600 measured frames. These are local observations, not confidence intervals.
+
+| Case | Presented Hz | GPU mean / p99 | Presentation p99 / max | Peak Metal allocation |
+|---|---:|---:|---:|---:|
+| Longer large battle, 3456×2234 | 118.41 | 6.73 / 12.44 ms | 8.340 / 133.33 ms | 854 MiB |
+| Production-HUD opening, 2880×1800 | 119.11 | 3.69 / 6.34 ms | 8.338 / 91.66 ms | 605 MiB |
+
+The large run delivered 99.33% of presentation intervals within 105% of the
+120 Hz budget; the opening delivered 99.78%. All measured presentation timestamps
+arrived, all command rows completed, and neither run reported a native error or
+input overflow. The longer battle had seven missed simulation-worker deadlines
+within measured ticks 1262–3079. Its separate census maxima were 1502 units,
+1123 moving units, 51 nanoframes, 139 projectiles, 631 effects and 38 burning
+features; submissions peaked at 843 model instances, 557305 body triangles,
+2254 sprites and 39 distortion quads. Both sprite passes ran in every measured
+frame. The three computed-pose slots added about 3 MiB of GPU buffer capacity.
+Go heap at the end was 981 MiB for the battle and 422 MiB for the opening,
+separate from Metal allocations. Battle packing p99 was 0.223 ms and native
+encoding p99 was 0.508 ms; dynamic uploads averaged 1.122 MiB/frame.
+
+This longer result does **not** establish steady 120 Hz. It has occasional
+stalls despite an 8.33 ms median display interval. The prior 30-second result
+covered less simulation time and was smoother; these runs do not isolate the
+cause of the difference. Profile slow-frame clusters and allocation/resource
+lifetime next, alongside tall-feature/aircraft/cloak composition. Retain the
+architecture and try the new playable build, but defer replacing the shipping
+renderer. Visible 144 Hz and a complete match through victory/defeat remain
+unverified.
+
+The preceding user match's saved report reached tick 9313 (5:10), with six human
+units, factory/construction activity and no native error; its final image was
+inspected. That is useful play evidence, not a completed-match result. Interactive
+reports keep a bounded timing tail, so its timing cannot characterize the entire
+five minutes. This iteration's automated opening check does not claim fresh
+manual verification of all mouse/keyboard actions.
+
+Current binaries, launch command, hashes, manifests and captures are retained at
+`/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-motion/`.
+Runs are `battle-1500-fog-01`, `opening-01`, `solar-01`, `commander-01`,
+`ground-early-01`, `ground-late-01` and `replay-01`. The earlier `metal-match`
+package remains available for comparison.

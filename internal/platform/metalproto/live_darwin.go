@@ -33,8 +33,11 @@ type liveUpload struct {
 	OverlayVersion                                                                                        uint64
 	OverlayWidth, OverlayHeight                                                                           uint32
 	OverlayDirty                                                                                          [4]uint32
+	GroundSpriteCount                                                                                     uint32
 }
 type livePacking struct {
+	spriteOrder                 []orderedSprite
+	sprites                     []meshscene.Sprite
 	spans                       []meshSpan
 	cursor, offsets             []uint32
 	visuals                     []meshscene.ModelVisual
@@ -52,7 +55,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 208 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 216 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.Previous) != len(f.Current) || len(f.Current) > math.MaxInt32 || len(f.Instances) > math.MaxInt32 || len(f.Sprites) > math.MaxInt32 || len(f.Overlay) > math.MaxInt32 || f.Alpha < 0 || f.Alpha > 1 || math.IsNaN(float64(f.Alpha)) {
@@ -111,7 +114,8 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 			return u, r, fmt.Errorf("metalproto: invalid overlay blend selector")
 		}
 	}
-	u = liveUpload{Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(f.Sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
+	groundSprites := p.orderSprites(f.Sprites, f.Alpha, f.Camera)
+	u = liveUpload{GroundSpriteCount: uint32(groundSprites), Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(p.sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(f.Sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
 	if f.OverlayVersion != 0 && f.OverlayVersion != p.overlayVersion {
 		t := f.OverlayTexture
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || uint64(t.Width)*uint64(t.Height)*4 != uint64(len(t.RGBA)) {
@@ -139,6 +143,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	r.Instances = len(f.Instances)
 	r.Poses = len(f.Current)
 	r.Sprites = len(f.Sprites)
+	r.GroundSprites = groundSprites
 	r.Lights = len(lights)
 	r.DroppedLights = len(f.Lights) - len(lights)
 	r.Distortions = len(f.Distortions)
@@ -189,8 +194,11 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		u.Selectors = pointer(p.selectors)
 		r.UploadBytes += uint64(len(p.selectors)) * 4
 	}
-	if r.Sprites > 0 {
-		r.SpriteDraws = 1
+	if r.GroundSprites > 0 {
+		r.SpriteDraws++
+	}
+	if r.Sprites > r.GroundSprites {
+		r.SpriteDraws++
 	}
 	return u, r, nil
 }

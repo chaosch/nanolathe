@@ -74,7 +74,7 @@ func (b *BattleSprites) SetTerrain(t *world.Terrain) {
 }
 
 func spritePosition(x, y, z numeric.Fixed) [4]float32 {
-	return [4]float32{float32(x) / 65536, float32(y) / 65536, float32(z) / 65536, 1}
+	return [4]float32{float32(x) / 65536, float32(y) / 65536, float32(z) / 65536, 0}
 }
 
 func spritePrevious(m map[uint64][4]float32, id uint64, p [4]float32) [4]float32 {
@@ -298,7 +298,15 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 				emission = 1
 				lights = b.appendArtLight(lights, a, p, b.sequenceExtent(v.Filename, name), "fire", current.Tick, camera, viewport)
 			}
+			start := len(dst)
 			dst = b.appendSprite(dst, a, p, p, color, emission, camera, viewport, kind)
+			if v.Height < 10 {
+				// Short features precede all subjects [03 R-RAST-01 §6].
+				for i := start; i < len(dst); i++ {
+					dst[i].Current[3] = 1
+					b.counts["ground_feature_sprites"]++
+				}
+			}
 		}
 	}
 	for _, v := range current.Effects {
@@ -390,11 +398,8 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	}
 	dst, lights = b.appendProjectiles(dst, lights, current, camera, viewport)
 	lights = b.appendWreckLights(lights, current, camera, viewport)
-	// Live native depth is 0.5-(z-camera.z+2*y)*scale. Larger z+2*y is nearer;
-	// transparent fragments test opaque depth but never write it.
-	sort.SliceStable(dst, func(i, j int) bool {
-		return dst[i].Current[2]+2*dst[i].Current[1] < dst[j].Current[2]+2*dst[j].Current[1]
-	})
+	// Preserve publication order here. The native packer keeps short features
+	// in that order before models, then sorts other sprites at displayed alpha.
 	if b.totals == nil {
 		b.totals = make(map[string]int)
 	}

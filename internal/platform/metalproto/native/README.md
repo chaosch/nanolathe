@@ -92,7 +92,7 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 208-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 216-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
 owns pose input and computed output, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
@@ -301,7 +301,7 @@ captured before Cocoa can interpret them as contextual-menu input. Playable
 mode hides the system cursor while the production HUD draws its own cursor.
 Command-Q closes the window so the run can drain and write its report.
 
-The synchronous live upload is 208 bytes. It includes a 64-byte-per-quad HUD
+The synchronous live upload is 216 bytes. It includes a 64-byte-per-quad HUD
 stream copied into the reusable three-slot native resource ring. The initial
 overlay atlas uploads once at texture slot 3; model/terrain/sprite remain slots
 0/1/2. A nonzero changed `LiveFrame.OverlayVersion` uploads `OverlayTexture`;
@@ -370,3 +370,13 @@ a visible runtime check.
 Apple's contracts: [CFRunLoopRunInMode](https://developer.apple.com/documentation/corefoundation/cfrunloopruninmode(_:_:_:))
 defines a zero interval as one nonblocking pass, and the [run-loop guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html)
 explains source, timer and observer dispatch.
+
+
+Short sprite features (authored height below 10) carry Current.w=1. Go packs
+these in publication order at the beginning of the sprite upload, preserving
+each feature's shadow/body order. NMLiveUpload.ground_sprite_count marks the
+prefix; the native encoder draws it between TNT and the models, with no depth
+writes. Other sprites draw after models and are stably sorted at display alpha
+using the same biased/clamped anchor depth as the vertex shader. This fixes the
+short-feature pass and interpolation ordering, not the remaining tall-feature,
+strip-phase, airborne or cloak subject-composition approximations.

@@ -21,6 +21,7 @@ typedef struct {
  const void *overlay_texture;
  uint64_t overlay_version;
  uint32_t overlay_width,overlay_height,overlay_dirty[4];
+ uint32_t ground_sprite_count;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
