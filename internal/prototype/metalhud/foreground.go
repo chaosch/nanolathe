@@ -35,6 +35,7 @@ type Foreground struct {
 	markers       map[markerKey]region
 	surfaces      map[surfaceKey]*surfaceEntry
 	surfaceUses   map[uint64]int
+	effectArt     map[effectArtKey]region
 }
 
 var _ drawlist.Sink = (*Foreground)(nil)
@@ -56,6 +57,17 @@ func New(pal *palette.Tables, width, height int) *Foreground {
 // Version changes only when retained texture bytes change. An error rejects the
 // entire foreground rather than quietly omitting unsupported art.
 func (f *Foreground) Prepare(list *drawlist.List) ([]meshscene.OverlayQuad, meshscene.Texture, uint64, error) {
+	f.beginPrepare()
+	if list != nil {
+		list.Replay(f)
+	}
+	if f.err != nil {
+		return nil, f.atlas, f.version, f.err
+	}
+	return f.quads, f.atlas, f.version, nil
+}
+
+func (f *Foreground) beginPrepare() {
 	f.quads = f.quads[:0]
 	f.dirty = [4]int{}
 	if f.first {
@@ -73,13 +85,6 @@ func (f *Foreground) Prepare(list *drawlist.List) ([]meshscene.OverlayQuad, mesh
 	if f.w <= 0 || f.h <= 0 {
 		f.fail("invalid logical surface %dx%d", f.w, f.h)
 	}
-	if list != nil {
-		list.Replay(f)
-	}
-	if f.err != nil {
-		return nil, f.atlas, f.version, f.err
-	}
-	return f.quads, f.atlas, f.version, nil
 }
 
 // DirtyRect returns the bounding rectangle of atlas texels changed by the most
