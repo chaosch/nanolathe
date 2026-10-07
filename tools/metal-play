@@ -6,8 +6,8 @@ if [ "$(uname -s)" != Darwin ]; then
     echo 'nanolathe: Metal prototype requires macOS' >&2
     exit 1
 fi
-: "${GOMAXPROCS:=2}"
-export GOMAXPROCS
+# A match uses Go's default processor count, as the production game does.
+# Set GOMAXPROCS=2 for the benchmark's stress budget.
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT
