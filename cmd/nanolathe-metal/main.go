@@ -36,7 +36,7 @@ func run() error {
 	var prepareOnly bool
 	flag.StringVar(&load.Root, "root", filepath.Join(home, "TotalAnnihilation"), "retail asset installation")
 	flag.StringVar(&load.Map, "map", "Expanded Confluence", "retail terrain map")
-	flag.IntVar(&load.Units, "units", 1000, "visible unit instances")
+	flag.IntVar(&load.Units, "units", 1000, "submitted unit instances")
 	flag.IntVar(&load.QuadMultiplier, "quads", 1, "authored-face subdivision multiplier (1, 2 or 5)")
 	flag.IntVar(&load.TextureScale, "textures", 1, "shared atlas linear scale (1 or 2)")
 	flag.IntVar(&load.Samples, "samples", 120, "30 Hz animation samples prepared before measurement")
