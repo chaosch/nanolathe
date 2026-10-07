@@ -35,11 +35,11 @@ static BOOL nmGroundDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,cons
   BOOL trail=marks[i].cross_kind[2]<.5;
   NSUInteger end=i+1;while(end<(NSUInteger)first+count&&(marks[end].cross_kind[2]<.5)==trail)end++;
   if(!trail&&(!r.waterMask||r->water[4]<=0)){s.suppressed+=end-i;i=end;continue;}
-  if(!enc)enc=nmEffectsEncoder(r,cb,u);
+  if(!enc)enc=nmFxShared?:nmEffectsEncoder(r,cb,u);
   [enc setRenderPipelineState:trail?s.multiply:s.color];[enc setVertexBuffer:f.marks offset:0 atIndex:0];
   if(!trail){vector_float4 control={r->water[4],f.ages.x,f.ages.y,0};[enc setFragmentBytes:&control length:sizeof(control) atIndex:0];[enc setFragmentTexture:r.waterMask atIndex:0];}
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:end-i baseInstance:i];s.drawn+=end-i;submitted=YES;i=end;
  }
- if(enc)[enc endEncoding];return submitted;
+ if(enc&&enc!=nmFxShared)[enc endEncoding];return submitted;
 }
 static NSDictionary* nmGroundInfo(NMRenderer* r){NMGroundState* s=r.groundState;if(!s)return @{@"ground_effects_enabled":@NO};return @{@"ground_effects_enabled":@YES,@"ground_effects_prepared_frames":@(s.prepared),@"ground_effects_drawn_marks":@(s.drawn),@"ground_effects_suppressed_marks":@(s.suppressed)};}

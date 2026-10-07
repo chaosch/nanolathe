@@ -49,7 +49,7 @@ static id<MTLRenderPipelineState> nmEffectsPipeline(NMRenderer* r,id<MTLLibrary>
  if(blend>=0){a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=blend==2?MTLBlendFactorOne:MTLBlendFactorOneMinusSourceAlpha;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;
   if(blend==1){a.sourceRGBBlendFactor=MTLBlendFactorZero;a.destinationRGBBlendFactor=MTLBlendFactorSourceColor;a.sourceAlphaBlendFactor=MTLBlendFactorZero;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
  }
- return [r.device newRenderPipelineStateWithDescriptor:d error:error];
+ d.colorAttachments[1].pixelFormat=MTLPixelFormatRGBA16Float;d.colorAttachments[1].writeMask=MTLColorWriteMaskNone;d.depthAttachmentPixelFormat=MTLPixelFormatDepth32Float;return [r.device newRenderPipelineStateWithDescriptor:d error:error];
 }
 
 static BOOL nmEffectsInitialize(NMRenderer* r,id<MTLLibrary> lib,NSError** error) {
@@ -131,10 +131,16 @@ static void nmEffectsBegin(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb) {
  [blit endEncoding];f.uploadPending=NO;r.effectState.version=f.version;r.effectState.atlasNeedsFullUpload=NO;r.effectState.atlasUploads++;r.effectState.atlasBytes+=(uint64_t)f.uploadW*f.uploadH*4;
 }
 
+// Effects share the world pass format so delegated projectile commits and
+// ground marks draw into the open encoder instead of splitting the layer.
+// Emission is write-masked and depth is never tested here.
+static id<MTLRenderCommandEncoder> nmFxShared;
 static id<MTLRenderCommandEncoder> nmEffectsEncoder(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u) {
- MTLRenderPassDescriptor* pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.color;pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
- id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,pass,"effects.nmEffectsEncoder#1");[enc setCullMode:MTLCullModeNone];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];return enc;
+ id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,worldPass(r,NO),"effects.nmEffectsEncoder#1");
+ [enc setCullMode:MTLCullModeNone];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];
+ return enc;
 }
+static void nmEffectsRestore(id<MTLRenderCommandEncoder> enc,NMUniforms u){[enc setCullMode:MTLCullModeNone];[enc setDepthStencilState:nil];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];}
 
 static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSUInteger layerIndex,NMUniforms u) {
  NMEffectsRing* f=ring.effectRing;NMEffectsState* s=r.effectState;if(!f||!s||layerIndex>=f.layerCount)return;
@@ -143,10 +149,11 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
  id<MTLRenderCommandEncoder> enc=nil;
  for(NSUInteger i=layer.first;i<(NSUInteger)layer.first+layer.count;i++){
   NMEffectsOp op=ops[i];if(!op.count)continue;
-  if(op.kind==4){if(enc){[enc endEncoding];enc=nil;}if(!s.groundDrawer||!s.groundDrawer(r,ring,cb,&u,op.first,op.count))s.groundMarkerSuppressed+=op.count;continue;}
+  if(op.kind==4){if(!enc)enc=nmEffectsEncoder(r,cb,u);nmFxShared=enc;BOOL drawn=s.groundDrawer&&s.groundDrawer(r,ring,cb,&u,op.first,op.count);nmFxShared=nil;nmEffectsRestore(enc,u);if(!drawn)s.groundMarkerSuppressed+=op.count;continue;}
   if(op.kind==3){
-   if(enc){[enc endEncoding];enc=nil;}
-   if(s.retainedDrawer&&s.retainedDrawer(r,ring,cb,&u,op.first,op.reserved)){if(op.reserved&2)s.retainedChildren++;else s.retainedSubmitted++;}else{s.retainedSuppressed++;}
+   if(!enc)enc=nmEffectsEncoder(r,cb,u);nmFxShared=enc;
+   BOOL drawn=s.retainedDrawer&&s.retainedDrawer(r,ring,cb,&u,op.first,op.reserved);nmFxShared=nil;nmEffectsRestore(enc,u);
+   if(drawn){if(op.reserved&2)s.retainedChildren++;else s.retainedSubmitted++;}else{s.retainedSuppressed++;}
    continue;
   }
   if(op.kind==1){

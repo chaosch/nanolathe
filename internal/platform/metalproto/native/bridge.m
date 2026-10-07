@@ -457,7 +457,7 @@ static BOOL nmRetainedProjectile(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer>
  if(flags&1)return NO;const uint32_t* paint=ring.compositionPaint.contents;NSUInteger at=0,body=0;
  for(;at<ring.compositionPaintCount;at++)if(paint[at*4+3]==2){if(body++==slot)break;}
  if(at==ring.compositionPaintCount||!paint[at*4])return NO;if(flags&2)return YES;NMUniforms u=*(const NMUniforms*)uniforms;
- id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,worldPass(r,NO),"effects.projectileCommit");[enc setDepthStencilState:nil];[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:at*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];[enc endEncoding];return YES;
+ id<MTLRenderCommandEncoder> enc=nmFxShared?:nmRenderEncoder(cb,worldPass(r,NO),"effects.projectileCommit");[enc setDepthStencilState:nil];[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:at*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];if(enc!=nmFxShared)[enc endEncoding];return YES;
 }
 static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
  // Compute once per submitted piece in this acquired slot. Body, outline and
@@ -484,12 +484,12 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
  if(!ring){
   modelBindings(r,enc,poses,nil,u);[enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];drawMeshes(r,enc,nil,0);[enc endEncoding];
  }else if(ring.composed){
-  nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;nmEffectsDraw(r,ring,cb,0,u);
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitShortFeatures");nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];nmEffectsDraw(r,ring,cb,1,u);
+  nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(!nmAblate("water")){if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;}if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,0,u);
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitShortFeatures");nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,1,u);
   enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitGround");nmDirectPhase(r,ring,enc,poses,u,1);nmCompositionCommit(r,ring,enc,u,1);
   if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:nil];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
-  if(!ring.effectRing.layerCount)nmCompositionCommit(r,ring,enc,u,2);[enc endEncoding];nmEffectsDraw(r,ring,cb,2,u);
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitAir");nmDirectPhase(r,ring,enc,poses,u,3);nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];nmEffectsDraw(r,ring,cb,3,u);nmEffectsDraw(r,ring,cb,4,u);
+  if(!ring.effectRing.layerCount)nmCompositionCommit(r,ring,enc,u,2);[enc endEncoding];if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,2,u);
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitAir");nmDirectPhase(r,ring,enc,poses,u,3);nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,3,u);if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,4,u);
  }else if(!ring.cloakCount){
   // Keep opaque phases in one tile render pass. A depth-only fullscreen draw
   // resets pass B's ownership without storing/reloading both HDR attachments.
@@ -504,7 +504,7 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   [enc endEncoding];encodeCloaks(r,cb,poses,ring,u,1);
   if(ring.airCount){enc=nmRenderEncoder(cb,worldPass(r,YES),"world.depthPhaseAir");drawPhase(r,enc,poses,ring,u,2);[enc endEncoding];encodeCloaks(r,cb,poses,ring,u,2);}
  }
- if(ring.glowEnabled){if(!nmGlowEncode(r.productionGlow,cb,r.emission,r.color,ring.effectRing.atlas,r.color,ring.glowVertices,ring.glowCount,ring.glowParams))r.lastError=@"Production glow submission failed";}
+ if(ring.glowEnabled&&!nmAblate("glow")){if(!nmGlowEncode(r.productionGlow,cb,r.emission,r.color,ring.effectRing.atlas,r.color,ring.glowVertices,ring.glowCount,ring.glowParams))r.lastError=@"Production glow submission failed";}
  if(r->effects&&!ring.glowEnabled){
  id<MTLComputeCommandEncoder> compute=nmComputeEncoder(cb,"bloom.blurX");[compute setComputePipelineState:r.blur];vector_float2 d={1,0};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.emission atIndex:0];[compute setTexture:r.blurA atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurA.width,r.blurA.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
  compute=nmComputeEncoder(cb,"bloom.blurY");[compute setComputePipelineState:r.blur];d=(vector_float2){0,1};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.blurA atIndex:0];[compute setTexture:r.blurB atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurB.width,r.blurB.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
