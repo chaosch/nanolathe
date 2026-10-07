@@ -62,7 +62,8 @@ type Scene struct {
 	Atlas                    Texture
 	ModelPalette             Texture
 	Terrain                  Texture
-	WaterMask                Texture // production projected wet/dry/shore mask; zero disables the layer
+	TerrainTiles             *TerrainTiles // live full-resolution TNT; Terrain is the standalone/minimap fallback
+	WaterMask                Texture       // production projected wet/dry/shore mask; zero disables the layer
 	WaterMaskStep            int
 	WaterLava, WaterDamaging bool
 	SpriteAtlas              Texture
