@@ -86,7 +86,8 @@ The installed SDK headers also document these methods and timing availability.
 source retains the original sampled replay. The caller owns `LiveSource.Close`.
 Live scenes need no `Frames` array. They supply a third immutable input texture,
 `Scene.SpriteAtlas`, uploaded once as slot 2, and all meshes upload at startup,
-including meshes with no initial instances.
+including meshes with no initial instances or empty/nonrendering geometry.
+Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
 then passes one 96-byte `NMLiveUpload` pointer through purego. The bridge copies
@@ -125,7 +126,8 @@ Keys reset on focus loss. Offscreen input is empty. No command/order UI or other
 input is implemented here.
 
 `live-frames.csv` includes warmup rows, source `Next` time, Go validation/packing
-preparation time, tick, dynamic draw/geometry counts and exact uploads (poses,
+preparation time, committed tick, the wall seconds passed to `Next`, its returned
+interpolation alpha, dynamic draw/geometry counts and exact uploads (poses,
 offsets, sprites and lights). Native encoding includes native buffer growth,
 memcpy and command encoding; GPU span covers the encoded passes. These costs
 are separate; `Next` may sample a background source and is not the simulation's

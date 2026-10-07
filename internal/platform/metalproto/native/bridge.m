@@ -96,7 +96,17 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int c
  }
 }
 int nm_mesh(void* handle,const void* vertices,int vertexCount,const uint32_t* indices,int indexCount,const uint32_t* offsets,int instances) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NMMesh* m=[NMMesh new];m.vertices=[r.device newBufferWithBytes:vertices length:vertexCount*48 options:MTLResourceStorageModeShared];m.indices=[r.device newBufferWithBytes:indices length:indexCount*4 options:MTLResourceStorageModeShared];m.instances=[r.device newBufferWithLength:MAX(instances*4,4) options:MTLResourceStorageModeShared];if(instances>0)memcpy(m.instances.contents,offsets,instances*4);m.indexCount=indexCount;m.instanceCount=instances;if(!m.vertices||!m.indices||!m.instances)return 0;[r.meshes addObject:m];return 1;}
+ @autoreleasepool {
+ NMRenderer* r=(__bridge NMRenderer*)handle;NMMesh* m=[NMMesh new];
+ m.vertices=[r.device newBufferWithLength:MAX((NSUInteger)vertexCount*48,48) options:MTLResourceStorageModeShared];
+ m.indices=[r.device newBufferWithLength:MAX((NSUInteger)indexCount*4,4) options:MTLResourceStorageModeShared];
+ m.instances=[r.device newBufferWithLength:MAX((NSUInteger)instances*4,4) options:MTLResourceStorageModeShared];
+ if(!m.vertices||!m.indices||!m.instances)return 0;
+ if(vertexCount>0)memcpy(m.vertices.contents,vertices,(NSUInteger)vertexCount*48);
+ if(indexCount>0)memcpy(m.indices.contents,indices,(NSUInteger)indexCount*4);
+ if(instances>0)memcpy(m.instances.contents,offsets,(NSUInteger)instances*4);
+ m.indexCount=indexCount;m.instanceCount=instances;[r.meshes addObject:m];return 1;
+ }
 }
 int nm_texture(void* handle,int slot,int width,int height,const void* rgba) {
  @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;MTLTextureDescriptor* d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:width height:height mipmapped:NO];d.storageMode=MTLStorageModeShared;d.usage=MTLTextureUsageShaderRead;id<MTLTexture> t=[r.device newTextureWithDescriptor:d];if(!t)return 0;[t replaceRegion:MTLRegionMake2D(0,0,width,height) mipmapLevel:0 withBytes:rgba bytesPerRow:width*4];if(slot==0)r.atlas=t;else if(slot==1)r.terrainImage=t;else r.spriteAtlas=t;return 1;}

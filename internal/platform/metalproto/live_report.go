@@ -10,6 +10,8 @@ import (
 )
 
 type liveRow struct {
+	Seconds                                                                   float64
+	Alpha                                                                     float32
 	Tick                                                                      uint32
 	NextMS, PrepMS                                                            float64
 	Instances, Poses, Sprites, Lights, DroppedLights, ModelDraws, SpriteDraws int
@@ -65,11 +67,11 @@ func writeLiveRows(dir string, rows []liveRow, warmup int) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	if err = w.Write([]string{"frame", "warmup", "tick", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes"}); err != nil {
+	if err = w.Write([]string{"frame", "warmup", "tick", "source_seconds", "alpha", "source_next_ms", "cpu_prep_ms", "instances", "poses", "sprites", "lights", "dropped_lights", "model_draws", "sprite_draws", "model_vertices", "model_triangles", "sprite_triangles", "dynamic_upload_bytes"}); err != nil {
 		return err
 	}
 	for i, r := range rows {
-		if err = w.Write([]string{strconv.Itoa(i), strconv.FormatBool(i < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes)}); err != nil {
+		if err = w.Write([]string{strconv.Itoa(i), strconv.FormatBool(i < warmup), fmt.Sprint(r.Tick), strconv.FormatFloat(r.Seconds, 'f', 9, 64), strconv.FormatFloat(float64(r.Alpha), 'f', 9, 64), strconv.FormatFloat(r.NextMS, 'f', 6, 64), strconv.FormatFloat(r.PrepMS, 'f', 6, 64), fmt.Sprint(r.Instances), fmt.Sprint(r.Poses), fmt.Sprint(r.Sprites), fmt.Sprint(r.Lights), fmt.Sprint(r.DroppedLights), fmt.Sprint(r.ModelDraws), fmt.Sprint(r.SpriteDraws), fmt.Sprint(r.ModelVertices), fmt.Sprint(r.ModelIndices / 3), fmt.Sprint(r.Sprites * 2), fmt.Sprint(r.UploadBytes)}); err != nil {
 			return err
 		}
 	}
