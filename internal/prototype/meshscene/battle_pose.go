@@ -24,6 +24,7 @@ type battlePublication struct {
 	byID       map[battleEntityKey]battlePoseSpan
 	census     battleCensus
 	blendStart time.Time
+	previous   *battlePublication // bounded presentation fallback; its own previous is nil
 }
 type battlePoseScratch struct {
 	states     []model.PieceState

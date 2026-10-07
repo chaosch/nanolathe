@@ -175,6 +175,8 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Metadata["atlas"] = atlas.metadata
 	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT crop, no mesh terrain or elevation occlusion"}
 	scene.Metadata["pose_source"] = "worker reads pinned completed frame pairs; InstanceID matching snaps births, suppresses deaths and prevents slot-reuse blending"
+	scene.Metadata["presentation_buffer_ticks"] = 1
+	scene.Metadata["presentation_buffer_seconds"] = battlePeriod.Seconds()
 	scene.Metadata["viewport"] = [2]int{opts.Width, opts.Height}
 	scene.Metadata["camera_policy"] = "native pixels per world unit; pan clamped to crop, zoom 0.1..4; views wider than crop expose limited terrain; renderer input only"
 	scene.Metadata["render_limitations"] = []string{"spectator draws published participants without retail visibility/cloak filtering", "fixed first GAF model texture frame, owner-zero logos", "conventional depth and Lambert shading; matrix interpolation can shrink rotating pieces", "construction models shown complete, without nanoframe reveal", "cargo hierarchy/composition and piece-less cargo suppression unsupported", "flat terrain, no fog, unit shadows, GUI, audio or animated model texture cursors", "projectile secondary-model replacement and detached mesh debris omitted"}

@@ -70,7 +70,7 @@ func (s *battleSource) publishInitial() error {
 	pub := s.buildPublication(previous, current, s.camera, nil)
 	s.sess.Snapshot.Unpin(current)
 	s.sess.Snapshot.Unpin(previous)
-	pub.blendStart = time.Now()
+	pub.blendStart = time.Now().Add(battlePeriod)
 	s.latest.Store(pub)
 	return nil
 }
@@ -88,7 +88,8 @@ func (s *battleSource) Next(seconds float64, input Input) (LiveFrame, error) {
 		s.camera = s.scene.Camera
 		if initial := s.latest.Load(); initial != nil {
 			copyPublication := *initial
-			copyPublication.blendStart = time.Now()
+			copyPublication.blendStart = time.Now().Add(battlePeriod)
+			copyPublication.previous = nil
 			s.latest.Store(&copyPublication)
 		}
 		s.started = true
@@ -113,6 +114,10 @@ func (s *battleSource) Next(seconds float64, input Input) (LiveFrame, error) {
 	}
 	camera, paused, workerErr := s.camera, s.paused, s.workerErr
 	pub := s.latest.Load()
+	now := time.Now()
+	if pub != nil && !paused && now.Before(pub.blendStart) && pub.previous != nil {
+		pub = pub.previous
+	}
 	s.renderCalls++
 	if pub != nil {
 		if s.lastRenderTick == pub.frame.Tick {
@@ -130,8 +135,10 @@ func (s *battleSource) Next(seconds float64, input Input) (LiveFrame, error) {
 	}
 	result := pub.frame
 	result.Camera = camera
-	result.Alpha = float32(min(max(float64(time.Since(pub.blendStart))/float64(battlePeriod), 0), 1))
+	result.Alpha = float32(min(max(float64(now.Sub(pub.blendStart))/float64(battlePeriod), 0), 1))
 	if paused {
+		// Pause intentionally snaps to the latest committed pose, rather than
+		// leaving an unfinished interpolation running while gameplay is stopped.
 		result.Alpha = 1
 	}
 	return result, workerErr
@@ -214,12 +221,20 @@ func (s *battleSource) run() {
 			s.mu.Unlock()
 			return
 		}
-		pub := s.buildPublication(previous, current, camera, s.latest.Load())
+		old := s.latest.Load()
+		pub := s.buildPublication(previous, current, camera, old)
 		s.sess.Snapshot.Unpin(current)
 		s.sess.Snapshot.Unpin(previous)
 		drained = s.sess.Snapshot.DrainCommittedEvents(drained)
 		finish := time.Now()
-		pub.blendStart = deadline
+		// One fixed tick of presentation buffering lets preparation complete
+		// before this pair begins blending, without extrapolating world state.
+		pub.blendStart = deadline.Add(battlePeriod)
+		if old != nil {
+			prior := *old
+			prior.previous = nil // Never retain a chain of the entire battle.
+			pub.previous = &prior
+		}
 		deadline = deadline.Add(battlePeriod)
 		missed := 0
 		if !finish.Before(deadline) {
@@ -274,6 +289,9 @@ func (s *battleSource) Close() map[string]any {
 			rate = float64(len(s.tickRecords)) / active
 		}
 		s.finalReport = map[string]any{"tick_records": s.tickRecords, "tick_range": tickRange, "ticks": len(s.tickRecords), "elapsed_seconds": elapsed, "paused_seconds": s.pausedSeconds, "active_seconds": active, "actual_ticks_per_active_second": rate, "target_ticks_per_second": 30, "missed_30hz_deadlines": s.missedDeadlines, "render_calls": s.renderCalls, "render_calls_holding_same_tick": s.heldRenderCalls, "worker_publications_skipped_by_renderer": s.skippedPublications, "missing_models": missing, "sprites": s.spriteReport(), "scheduler_policy": "one ordinary tick per available 30 Hz deadline; missed opportunities skipped; no display-driven stepping", "publication_storage": "immutable detached slices; Go owns lifetime, no retained sampled replay", "final_session_state": s.sess.State}
+		s.finalReport["presentation_buffer_ticks"] = 1
+		s.finalReport["presentation_buffer_seconds"] = battlePeriod.Seconds()
+		s.finalReport["presentation_policy"] = "fixed one-tick buffering; only current and immediately prior publication retained; pause snaps to latest committed pose; no extrapolation"
 		if pub := s.latest.Load(); pub != nil {
 			s.finalReport["final_census"] = pub.census
 		}
