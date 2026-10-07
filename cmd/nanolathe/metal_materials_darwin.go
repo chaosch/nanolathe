@@ -14,15 +14,26 @@ func metalMaterialSource(cl *client.Client) *meshscene.ModelMaterialSource {
 	if cl == nil {
 		return nil
 	}
+	prepare := func(q meshscene.ModelMaterialRequest) meshscene.ModelMaterialResolver {
+		return metalPreparedMaterial{cl.PrepareRetainedMaterial(client.RetainedMaterialRequest{
+			Frame: q.Frame, Unit: q.Unit, Feature: q.Feature,
+			Projectile: q.Projectile, Debris: q.Debris,
+		})}
+	}
 	return &meshscene.ModelMaterialSource{
-		Frames: cl.RetainedMaterialFrames(),
+		Frames:  cl.RetainedMaterialFrames(),
+		Prepare: prepare,
 		Resolve: func(q meshscene.ModelMaterialRequest) (meshscene.ModelMaterialSelection, bool) {
-			m, ok := cl.ResolveRetainedMaterial(client.RetainedMaterialRequest{
-				Piece: q.Piece, Primitive: q.Primitive, Current: q.Current,
-				Frame: q.Frame, Unit: q.Unit, Feature: q.Feature,
-				Projectile: q.Projectile, Debris: q.Debris,
-			})
-			return meshscene.ModelMaterialSelection{Frame: m.Frame, Color: m.Color, Skip: m.Skip, Material: m.Material, Glint: m.Glint}, ok
+			return prepare(q).Resolve(q.Piece, q.Primitive, q.Current)
 		},
 	}
+}
+
+type metalPreparedMaterial struct {
+	source client.RetainedMaterialResolver
+}
+
+func (m metalPreparedMaterial) Resolve(piece, primitive int, current bool) (meshscene.ModelMaterialSelection, bool) {
+	s, ok := m.source.Resolve(piece, primitive, current)
+	return meshscene.ModelMaterialSelection{Frame: s.Frame, Color: s.Color, Skip: s.Skip, Material: s.Material, Glint: s.Glint}, ok
 }

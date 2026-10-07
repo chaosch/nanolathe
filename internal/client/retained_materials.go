@@ -30,45 +30,71 @@ type RetainedMaterialSelection struct {
 	Material, Glint uint8
 }
 
-// ResolveRetainedMaterial uses the same base resolution, team selector, phase-7
-// cursor and post-selection skin as the production material walk. It reads only
-// an already-installed battle registry; no model or cursor is loaded here [I6].
-func (c *Client) ResolveRetainedMaterial(q RetainedMaterialRequest) (RetainedMaterialSelection, bool) {
+// RetainedMaterialResolver borrows one subject's loaded model, selected skin
+// and owner selector. Use only during the pinned presentation that prepared it;
+// prepare again for each subject draw so ownership/skin/registry changes take
+// effect on the next draw. No animation frame or cursor position is cached.
+type RetainedMaterialResolver struct {
+	client     *Client
+	model      *unitModel
+	refs       *modelTexRefs
+	skin       *ModelSkin
+	selector   teamColor
+	projectile bool
+}
+
+// PrepareRetainedMaterial resolves subject-wide inputs once. The immutable
+// texture-reference table is the production generation-checked table; each
+// primitive still reads its selected cached/live cursor [I6, GPU design §38].
+func (c *Client) PrepareRetainedMaterial(q RetainedMaterialRequest) RetainedMaterialResolver {
 	if c == nil || c.modelTextures == nil || c.modelTextures.standalone {
-		return RetainedMaterialSelection{}, false
+		return RetainedMaterialResolver{}
 	}
-	var m *unitModel
-	var skin *ModelSkin
-	var selector teamColor
-	projectile := false
+	r := RetainedMaterialResolver{client: c}
 	switch {
 	case q.Unit != nil:
-		m = c.modelForUnit(*q.Unit)
-		skin = c.selectedModelSkin(q.Unit.InstanceID, q.Unit.Owner)
-		selector = unitTeamColor(*q.Unit)
+		r.model = c.modelForUnit(*q.Unit)
+		r.skin = c.selectedModelSkin(q.Unit.InstanceID, q.Unit.Owner)
+		r.selector = unitTeamColor(*q.Unit)
 	case q.Feature != nil:
-		m = c.modelForFeature(*q.Feature)
+		r.model = c.modelForFeature(*q.Feature)
 		if q.Frame != nil && q.Frame.Players[0].Present {
-			selector = teamColor{index: q.Frame.Players[0].Logo, known: true}
+			r.selector = teamColor{index: q.Frame.Players[0].Logo, known: true}
 		}
 	case q.Projectile != nil:
-		m, projectile = c.modelForProjectile(*q.Projectile), true
+		r.model, r.projectile = c.modelForProjectile(*q.Projectile), true
 	case q.Debris != nil:
-		m = c.modelForDebris(*q.Debris)
-		selector = teamColor{index: q.Debris.OwnerColor, known: q.Debris.OwnerColorKnown}
+		r.model = c.modelForDebris(*q.Debris)
+		r.selector = teamColor{index: q.Debris.OwnerColor, known: q.Debris.OwnerColorKnown}
 	default:
+		return RetainedMaterialResolver{}
+	}
+	if r.model != nil {
+		r.refs = c.modelTexRefs(r.model.compiled)
+	}
+	return r
+}
+
+// ResolveRetainedMaterial retains the one-primitive compatibility API, using
+// the same prepared descriptor and material selection as the subject path.
+func (c *Client) ResolveRetainedMaterial(q RetainedMaterialRequest) (RetainedMaterialSelection, bool) {
+	return c.PrepareRetainedMaterial(q).Resolve(q.Piece, q.Primitive, q.Current)
+}
+
+// Resolve selects one primitive through the existing phase-7 cursor and
+// post-selection skin. It never advances or registers a texture player.
+func (r RetainedMaterialResolver) Resolve(pieceIndex, primitiveIndex int, current bool) (RetainedMaterialSelection, bool) {
+	c, m, skin, selector, projectile := r.client, r.model, r.skin, r.selector, r.projectile
+	if m == nil || m.compiled == nil || pieceIndex < 0 || pieceIndex >= len(m.compiled.Pieces) {
 		return RetainedMaterialSelection{}, false
 	}
-	if m == nil || m.compiled == nil || q.Piece < 0 || q.Piece >= len(m.compiled.Pieces) {
+	piece := &m.compiled.Pieces[pieceIndex]
+	if primitiveIndex < 0 || primitiveIndex >= len(piece.Primitives) {
 		return RetainedMaterialSelection{}, false
 	}
-	piece := &m.compiled.Pieces[q.Piece]
-	if q.Primitive < 0 || q.Primitive >= len(piece.Primitives) {
-		return RetainedMaterialSelection{}, false
-	}
-	pr := &piece.Primitives[q.Primitive]
+	pr := &piece.Primitives[primitiveIndex]
 	out := RetainedMaterialSelection{Color: uint8(pr.ColorIndex)}
-	ref, resolved := c.resolveModelTexture(pr.TextureName)
+	ref, resolved := c.texRefAt(r.refs, pieceIndex, primitiveIndex, pr.TextureName)
 	if pr.IsColored&1 == 0 {
 		if len(pr.VertexIndices) != 4 || pr.TextureName == "" {
 			out.Skip = true
@@ -80,7 +106,7 @@ func (c *Client) ResolveRetainedMaterial(q RetainedMaterialRequest) (RetainedMat
 		}
 		switch ref.kind {
 		case texAnimated:
-			out.Frame = c.modelTextures.animatedFrameSelected(m.compiled, q.Piece, q.Primitive, ref, !q.Current)
+			out.Frame = c.modelTextures.animatedFrameSelected(m.compiled, pieceIndex, primitiveIndex, ref, !current)
 		case texTeam:
 			if projectile {
 				out.Frame = ref.frame // Standalone projectiles have no colour branch [03 R-COMP-02 §6].
