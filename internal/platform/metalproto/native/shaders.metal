@@ -136,14 +136,28 @@ float4 modelTexel(texture2d<float> atlas,texture2d<float> palette,float2 uv,bool
 }
 float modelKey(Out in) { float k=floor(in.heightKey)+in.clip.w;return k-floor(k/256)*256; }
 float4 modelVerdict(Out in,float key) { return key<in.reveal.y?in.below:key>=in.reveal.x?in.above:in.band; }
-ModelResult shadeModel(Out in,texture2d<float> atlas,constant Uniforms& u,device const Light* lights,texture2d<float> palette,device const nm_face_Prepared* faces,device const ModelRules* groupRules) {
+ModelResult shadeModel(Out in,texture2d<float> atlas,constant Uniforms& u,device const Light* lights,texture2d<float> palette,device const nm_face_Prepared* faces,device const ModelRules* groupRules,bool footprint=false) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
- if(u.mode.w==2&&in.faceIndex!=0xffffffffu){nm_face_Prepared f=faces[in.faceIndex];if(!nm_face_admitted(f))discard_fragment();if(nm_face_mapped(f)){float4 lanes=nm_face_lanes(f,in.position.xy-in.atlasRect.xy);in.uv=nm_face_uv(lanes,float2(atlas.get_width(),atlas.get_height()));in.heightKey=lanes.z-in.clip.w;in.shadeRow=nm_face_shade(f,lanes);}}
+ // Slab subjects shade one pixel where the staged image resolves four 2x2
+ // samples: average the four sub-sample texels (premultiplied) instead.
+ float2 duvx=footprint?dfdx(in.uv):0,duvy=footprint?dfdy(in.uv):0;bool mappedFace=false;
+ if(u.mode.w==2&&in.faceIndex!=0xffffffffu){nm_face_Prepared f=faces[in.faceIndex];if(!nm_face_admitted(f))discard_fragment();if(nm_face_mapped(f)){mappedFace=true;float4 lanes=nm_face_lanes(f,in.position.xy-in.atlasRect.xy);in.uv=nm_face_uv(lanes,float2(atlas.get_width(),atlas.get_height()));in.heightKey=lanes.z-in.clip.w;in.shadeRow=nm_face_shade(f,lanes);}}
  float key=modelKey(in);bool ruled=u.visual.w>0.5;
  bool blue=ruled&&(u.mode.w==2&&in.groupMember.x?nm_group_blue(key,in.groupMember,groupRules):(in.clip.x>1.5&&key<=in.clip.y));
  bool staged=u.mode.w>1.5;
  if(staged&&(any(in.position.xy<in.atlasRect.xy)||any(in.position.xy>=in.atlasRect.xy+in.atlasRect.zw)))discard_fragment();
- float4 tex=modelTexel(atlas,palette,in.uv,blue);bool erased=tex.a<0.02;
+ float4 tex;
+ if(footprint){
+  float4 acc=0;float2 size=float2(atlas.get_width(),atlas.get_height());
+  float2 lim=4/size;duvx=clamp(duvx,-lim,lim);duvy=clamp(duvy,-lim,lim);
+  for(int k=0;k<4;k++){
+   float2 o=float2((k&1)?.5:-.5,(k&2)?.5:-.5);float2 uv;
+   if(mappedFace)uv=nm_face_uv(nm_face_lanes(faces[in.faceIndex],in.position.xy+o-in.atlasRect.xy),size);
+   else uv=in.uv+o.x*.5*duvx+o.y*.5*duvy;
+   float4 t=modelTexel(atlas,palette,uv,blue);acc+=float4(t.rgb*t.a,t.a);
+  }
+  tex=acc.a>0?float4(acc.rgb/acc.a,acc.a*.25):float4(0);
+ }else tex=modelTexel(atlas,palette,in.uv,blue);bool erased=tex.a<0.02;
  if(ruled&&((in.clip.x>0.5&&in.clip.x<1.5&&key<=in.clip.y)||(in.clip.z>0.5&&key<=in.clip.w)))erased=true;
  float4 verdict=ruled&&in.reveal.z>0.5?modelVerdict(in,key):float4(0,0,0,-1);
  if(verdict.w<-1.5)erased=true;
@@ -188,7 +202,7 @@ fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[te
 // match the staged image; the band keeps later paint ranks in front.
 fragment ModelMRT model_direct_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]],constant NMDirect& direct [[buffer(30)]]) {
  in.position.xy=(in.position.xy-direct.screen.xy)*(direct.atlas.zw/direct.screen.zw)+direct.atlas.xy;
- ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);
+ ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules,true);
  if(a.color.a<0.001)discard_fragment();
  ModelMRT o;o.color=a.color;o.glow=a.glow;o.depth=(direct.slab.x-direct.slab.y-1+a.depth)/direct.slab.x;return o;
 }
@@ -287,8 +301,20 @@ fragment ModelMRT outline_fragment(Out in [[stage_in]],constant Uniforms& u [[bu
  if(u.mode.w>1.5&&(any(in.position.xy<in.atlasRect.xy)||any(in.position.xy>=in.atlasRect.xy+in.atlasRect.zw)))discard_fragment();
  if(in.state.z<=0||in.outline.a<=0)discard_fragment();ModelMRT o;o.color=float4(in.outline.rgb*in.outline.a,in.outline.a);o.glow=0;o.depth=u.mode.w>1.5?(in.reveal.w>0.5?(256-modelKey(in))/257.0:0.5):in.position.z;return o;
 }
-fragment float4 world_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],constant Uniforms& u [[buffer(3)]]) {
+// bands>0: slab subjects are present. Their silhouettes are softened where a
+// 4-neighbour lies in another paint band, approximating the staged image's
+// 2x2 coverage resolve that slab bodies no longer get. Non-slab pixels keep
+// depth 1 and are only blended next to a slab body.
+fragment float4 world_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],depth2d<float> depth [[texture(2)]],constant Uniforms& u [[buffer(3)]],constant float& bands [[buffer(4)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float3 c=color.sample(s,in.uv).rgb;
+ if(bands>0){
+  int2 p=int2(in.p.xy),size=int2(color.get_width(),color.get_height());float d=depth.read(uint2(p));
+  float band=d<1?floor((1-d)*bands)+1:0;float3 acc=0;float k=0;
+  const int2 o[4]={int2(1,0),int2(-1,0),int2(0,1),int2(0,-1)};
+  for(int i=0;i<4;i++){int2 q=p+o[i];if(any(q<0)||any(q>=size))continue;float dq=depth.read(uint2(q));if(min(d,dq)>=1)continue;
+   if((dq<1?floor((1-dq)*bands)+1:0)==band)continue;acc+=color.read(uint2(q)).rgb;k++;}
+  if(k>0)c=mix(c,acc/k,k>1?.4:.25);
+ }
  if(u.timing.w>0.5)c+=glow.sample(s,in.uv).rgb*0.65;return float4(c,1);
 }
 // Same cell op encoding and ordered 2x2 mask walk as the production fog pass
