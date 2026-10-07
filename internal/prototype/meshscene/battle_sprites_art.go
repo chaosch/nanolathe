@@ -30,6 +30,9 @@ type spriteBankCensus struct {
 	Path                                       string `json:"path"`
 	Entries, Frames, UniqueCells, UniquePixels int
 	MaxWidth, MaxHeight                        int
+	RawPixels, CroppedPixels                   int64
+	FullyTransparentFrames                     int
+	MaxCroppedWidth, MaxCroppedHeight          int
 }
 
 // NewBattleSprites resolves immutable art before the measured loop. The bank
@@ -172,6 +175,18 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 				// children need destination-index access absent from this RGBA host.
 				// TODO(question): port destination-dependent GAF ALP children to the
 				// native composite; until then decoded plain children alone draw [fmt gaf].
+				b.rawSpritePixels += int64(w) * int64(h)
+				census.RawPixels += int64(w) * int64(h)
+				var minX, minY int
+				var empty bool
+				rgba, w, h, minX, minY, empty = cropSpriteMargins(rgba, w, h)
+				census.MaxCroppedWidth, census.MaxCroppedHeight = max(census.MaxCroppedWidth, w), max(census.MaxCroppedHeight, h)
+				b.croppedSpritePixels += int64(w) * int64(h)
+				census.CroppedPixels += int64(w) * int64(h)
+				if empty {
+					b.fullyTransparentFrames++
+					census.FullyTransparentFrames++
+				}
 				header := make([]byte, 8)
 				binary.LittleEndian.PutUint32(header, uint32(w))
 				binary.LittleEndian.PutUint32(header[4:], uint32(h))
@@ -188,7 +203,10 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 					census.UniqueCells++
 					census.UniquePixels += w * h
 				}
-				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset), yoff: int(f.YOffset), hold: max(int32(meta.Frames[i].Value), 1), hue: hue, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
+				// Top-left after cropping is anchor-oldOffset+min: subtract min
+				// from the offset so every retained texel keeps its authored point.
+				// The dispatch identity keeps the original authored canvas metadata.
+				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset) - minX, yoff: int(f.YOffset) - minY, hold: max(int32(meta.Frames[i].Value), 1), hue: hue, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
 				b.framesLoaded++
 				census.Frames++
 			}
@@ -200,6 +218,41 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 		return nil, err
 	}
 	return b, nil
+}
+
+// cropSpriteMargins preserves every nonzero-alpha texel verbatim, with one
+// source-transparent pixel of margin wherever the canvas provides it. This
+// keeps the linear sampler's edge coverage and transparent atlas gutters;
+// position/art is preserved, not bit-exact filtered output under centre UVs.
+// A wholly transparent frame retains a transparent 1x1 raster, its slot and
+// hold: it must not disappear from animation timing or dispatch counts.
+func cropSpriteMargins(rgba []byte, width, height int) (pixels []byte, w, h, minX, minY int, empty bool) {
+	minX, minY = width, height
+	maxX, maxY := -1, -1
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			if rgba[(y*width+x)*4+3] == 0 {
+				continue
+			}
+			minX, minY = min(minX, x), min(minY, y)
+			maxX, maxY = max(maxX, x), max(maxY, y)
+		}
+	}
+	if maxX < 0 {
+		return []byte{0, 0, 0, 0}, 1, 1, 0, 0, true
+	}
+	minX, minY = max(minX-1, 0), max(minY-1, 0)
+	maxX, maxY = min(maxX+1, width-1), min(maxY+1, height-1)
+	w, h = maxX-minX+1, maxY-minY+1
+	if w == width && h == height {
+		return rgba, w, h, 0, 0, false
+	}
+	pixels = make([]byte, w*h*4)
+	for y := 0; y < h; y++ {
+		source := ((minY+y)*width + minX) * 4
+		copy(pixels[y*w*4:(y+1)*w*4], rgba[source:source+w*4])
+	}
+	return pixels, w, h, minX, minY, false
 }
 
 func (b *BattleSprites) spriteFeatureScope(cat *content.Catalog, names []string) []*content.FeatureDef {
