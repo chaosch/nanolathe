@@ -37,11 +37,13 @@ type livePacking struct {
 	selectors       []uint32
 }
 
-func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, seconds float64, visualPasses bool) (liveUpload, liveRow, error) {
+func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, seconds float64, visualPasses, effects bool) (liveUpload, liveRow, error) {
 	var u liveUpload
 	var r liveRow
-	if !visualPasses {
+	if !visualPasses || !effects {
 		f.Distortions = nil
+	}
+	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
 	if unsafe.Sizeof(u) != 152 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {

@@ -154,7 +154,7 @@ light and ring workload; these new passes run only for live scenes.
 
 Enabled live pass order is:
 
-1. Eligible mesh instances draw into a full-size HDR shadow mask under maximum
+1. Eligible mesh instances draw into a full-size R8 shadow mask under maximum
    blending. Models with no shadow flag are absent from its sparse instance list.
 2. Flat painted TNT renders with that mask. Four inverse half-height-shear
    iterations query the immutable R32F height field to write terrain surface depth
@@ -171,7 +171,8 @@ Enabled live pass order is:
    a covered later source replaces an earlier one from the same immutable sample.
    Discards preserve prior coverage, so there is no recursive refraction.
 6. Final composition samples fog modulation in original projected world X/Z,
-   after bloom and distortion. Fog coordinates are never distorted.
+   after bloom and distortion. Fog coordinates are never distorted. Effects off
+   suppresses real distortion as well as lighting/emission/bloom.
 
 The distortion GPU clock is committed age/clock plus Alpha minus one. Alpha one
 therefore freezes at the committed tick. Ring expansion, attack and quadratic
@@ -197,7 +198,7 @@ These are prototype display approximations, not new retail claims:
   terrain's original projection. Steep slopes, liquid depth and sentinel cells
   need capture review; no terrain tessellation changes the photograph.
 - Real distortion retains **two** extra full-size RGBA16F world targets and a
-  full-size RGBA16F shadow mask, 24 bytes per output pixel. The immutable snapshot
+  full-size R8 shadow mask, 17 bytes per output pixel. The immutable snapshot
   copies the whole viewport on active frames, unlike production's clipped-region
   copy. This memory/bandwidth cost is explicitly included in native allocation
   and frame timing. No extra copy or distortion batch runs without sources.
