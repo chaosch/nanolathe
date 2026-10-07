@@ -249,7 +249,8 @@ vertex SpriteOut sprite_vertex(uint v [[vertex_id]],uint iid [[instance_id]],dev
  SpriteOut o;o.position=project(world,u);o.position.xy+=float2(corner.x/u.viewport.x*2,-corner.y/u.viewport.y*2);o.position.z=clamp(o.position.z+s.params.w,0.0001,0.9998);o.uv=mix(s.uv.xy,s.uv.zw,c[v]);o.color=s.color;o.emissionAdditive=s.params.xy;return o;
 }
 fragment MRT sprite_fragment(SpriteOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]]) {
- constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float4 tex=atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;if(alpha<0.001)discard_fragment();
+ // Authored GAF art is indexed: whole texels, as the production sprite path draws them.
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float4 tex=atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;if(alpha<0.001)discard_fragment();
  float3 premult=tex.rgb*in.color.rgb*alpha;MRT out;out.color=float4(premult,in.emissionAdditive.y>0.5?0:alpha);out.glow=float4(premult*max(in.emissionAdditive.x,0.0)*smoothstep(0.45,1.0,max(tex.r,max(tex.g,tex.b)))*u.timing.w,0);return out;
 }
 struct Screen { float4 p [[position]];float2 uv; };
