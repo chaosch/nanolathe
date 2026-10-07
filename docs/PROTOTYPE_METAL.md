@@ -1239,3 +1239,78 @@ case command with a fresh output path. Earlier near-120 Hz experiments used a
 less complete presentation path and are not the final comparison above.
 
 Artifact directory: `/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/renderer-comparison`.
+
+## Depth-slab experiment and per-pass timing (2026-10-07, branch `metal-depth-slabs`)
+
+Question: can ordinary depth testing reproduce the production painter
+composition, without per-subject atlas images, and is that composition what
+keeps Metal near Modern's speed?
+
+**Encoding.** Each subject's depth is `(bands - paintIndex - 1 + local) / bands`,
+where `local` is its staged height-key depth (`(256-key)/257`, or 0.5 when
+keyless). A later paint rank is always nearer, so it covers every earlier
+subject regardless of local depth, as the row painter does; within one subject
+the key still orders faces, with equal keys resolved by draw order (LessEqual).
+`NANOLATHE_METAL_DEPTH_SLABS=1` draws every opaque, single-member subject
+outside the effects phase, with no construction reveal/outline and no water
+reflection/refraction source, straight into the world with the unchanged staged
+face mapping (function constant 0 specializes `model_vertex`). The remaining
+subjects keep the atlas path. Commit, shadow and sprite quads keep paint order
+and are depth tested inside their own band through a zero-height viewport
+depth range. On the frozen coastal frame the result has no solid difference
+from the atlas render (after a 2-pixel erosion, nothing differs by more than 32).
+
+**Diagnostics added.** `NANOLATHE_METAL_PASS_TIMING=<csv>` records
+stage-boundary GPU timestamps for all 45 encoder sites (labelled for GPU
+captures); `NANOLATHE_BENCH_FREEZE=1` stops the simulation after warmup so
+measured draws contain presentation work only, for all three renderers;
+`NANOLATHE_METAL_ABLATE=effects,glow,water` skips families for whole-frame A/B.
+Tile-GPU passes overlap, so per-pass spans are attribution hints; decisions use
+whole-frame spans and ablations.
+
+**Other changes found by the timers.** Projectile commits and ground marks each
+closed the stock-effect encoder and opened a world pass: 116 passes per coastal
+frame. Effects now share one world-format encoder per layer (36 passes,
+pixel-identical), the largest single GPU win. The reflection face budget ran
+on one GPU thread (1.6 ms span) but overlapped other work; a parallel pre-pass
+with the exact serial fallback removed it without changing whole-frame time.
+The HUD draws inside the final drawable pass.
+
+**Results** (M3 Pro, GOMAXPROCS=2, 120 Hz requested; frozen = 480 draws,
+renderer only; full = 3,600 draws with the synchronous simulation every fourth
+draw; host load 3–7 from other agents during the full runs). Draws/s, with
+Metal GPU span p50 for frozen runs:
+
+| Scene | Modern | Metal atlas (193e663f) | Metal slab + fixes |
+|---|---:|---:|---:|
+| Coastal 1080p frozen | 110.4 | 117.5 (9.32 ms) | 119.9 (6.31 ms) |
+| Field 1080p frozen | 117.0 | 119.8 (5.42 ms) | 119.7 (5.36 ms) |
+| Field 3456×2160 frozen | 80.0 | 89.6 (14.00 ms) | 104.2 (11.85 ms) |
+| Coastal 1080p full | 101.0 | 96.4 | 101.9 |
+| Field 1080p full | 92.9 | 92.9 | 94.4 |
+| Field 3456×2160 full | 69.4 | 71.3 | 73.6 |
+
+Renderer-only, the slab build is 30% faster than Modern in the large view and
+holds the 120 Hz cap at 1080p. With the simulation on the draw thread all three
+stay within a few percent: Metal's Go preparation (`Record` p50 2.8–4.4 ms
+against Modern's pre-recorded 0.5–0.9 ms) and native encoding (1.1–3.8 ms) are
+the bottleneck. Full-simulation GPU spans are not comparable between builds,
+because an idle GPU lowers its clock.
+
+**Fidelity gaps found.** (1) Slab bodies shade once per pixel: edges are aliased
+and interiors show texel speckle that the 2×2-resolved atlas, like Modern's
+supersampling, filters away (`edges-4x.png`). Parity needs supersampled
+shading for slab bodies (4× MSAA with per-sample shading, or four averaged
+sub-samples in the fragment), not only edge AA. (2) Both Metal paths draw tree
+sprites and some units lighter than Modern while terrain matches exactly
+(`ratio-map.png`), and explosion ground light is smaller or weaker.
+
+**Next.** Move Metal's per-draw Go preparation to per-tick or background
+pre-recording (effect list cloning, publication rebuild, composer/shadow
+preparation); reduce the full-screen post chain (resolve, full-frame
+distortion copy, fog; ~2.8 ms at 3456×2160), the ground light field (~1.7 ms)
+and glow (~1 ms); then add supersampled slab shading and settle the sprite
+brightness gap with matched captures. Artifacts, tools and captures:
+`~/nanolathe-bench/metal-depth-slabs-2026-10-07/` (`matrix.sh`, `summarize.py`,
+`timeline.py`, `summary.txt`). No tests were added or run; the prototype
+remains unmerged.
