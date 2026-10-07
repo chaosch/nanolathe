@@ -16,6 +16,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/platform/benchlock"
 	"github.com/nanolathe-gg/nanolathe/internal/platform/metalproto"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
+	_ "github.com/nanolathe-gg/nanolathe/mods/aikit"
 )
 
 func init() {
@@ -34,7 +35,9 @@ func run() error {
 	home, _ := os.UserHomeDir()
 	var load meshscene.LoadOptions
 	var render metalproto.Options
-	var prepareOnly, battle, profile bool
+	var prepareOnly, battle, profile, play bool
+	var difficulty int
+	var computerAI string
 	var armySize, preticks, viewPlayer int
 	var seed uint
 	var zoom float64
@@ -63,7 +66,40 @@ func run() error {
 	flag.UintVar(&seed, "seed", 7, "live battle simulation and CRT seed")
 	flag.Float64Var(&zoom, "zoom", 0.75, "live battle pixels per world unit")
 	flag.BoolVar(&profile, "profile", false, "write a CPU profile of rendering and live simulation")
+	flag.BoolVar(&play, "play", false, "play an ordinary commander skirmish with native HUD and commands")
+	flag.IntVar(&difficulty, "difficulty", 1, "computer difficulty: 0 easy, 1 medium, 2 hard")
+	flag.StringVar(&computerAI, "ai", "modern", "computer controller: classic or modern")
 	flag.Parse()
+	explicit := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if play {
+		battle = true
+		viewPlayer = 0
+		if !explicit["map"] {
+			load.Map = "The Pass"
+		}
+		if !explicit["preticks"] {
+			preticks = 0
+		}
+		if !explicit["frames"] {
+			render.Frames = 0
+		}
+		if !explicit["warmup"] {
+			render.Warmup = 0
+		}
+		if !explicit["zoom"] {
+			zoom = 3
+		}
+		if !explicit["width"] {
+			render.Width = 2880
+		}
+		if !explicit["height"] {
+			render.Height = 1800
+		}
+		if difficulty < 0 || difficulty > 2 || (computerAI != "classic" && computerAI != "modern") {
+			return fmt.Errorf("nanolathe: Metal match: invalid AI or difficulty")
+		}
+	}
 	if battle {
 		mapExplicit := false
 		flag.Visit(func(f *flag.Flag) {
@@ -71,7 +107,7 @@ func run() error {
 				mapExplicit = true
 			}
 		})
-		if !mapExplicit {
+		if !mapExplicit && !play {
 			load.Map = "Town & Country"
 		}
 		if viewPlayer < -1 || viewPlayer > 9 || armySize < 250 || armySize > 1000 || preticks < 0 || preticks > 18000 || seed > 0xffffffff || zoom < 0.1 || zoom > 4 {
@@ -81,7 +117,7 @@ func run() error {
 	if render.OutputDir == "" {
 		return fmt.Errorf("nanolathe: Metal prototype: --out is required")
 	}
-	if load.Units < 1 || load.Units > 1500 || load.Samples < 2 || load.Samples > 240 || render.Frames < 1 || render.Frames > 100000 || render.Warmup < 0 || render.Width < 64 || render.Height < 64 || render.Width > 8192 || render.Height > 8192 || render.FPS < 0 || render.FPS > 1000 {
+	if load.Units < 1 || load.Units > 1500 || load.Samples < 2 || load.Samples > 240 || render.Frames < 0 || (render.Frames == 0 && (!play || render.Offscreen)) || render.Frames > 100000 || render.Warmup < 0 || render.Width < 64 || render.Height < 64 || render.Width > 8192 || render.Height > 8192 || render.FPS < 0 || render.FPS > 1000 {
 		return fmt.Errorf("nanolathe: Metal prototype: invalid workload bounds")
 	}
 	if load.QuadMultiplier != 1 && load.QuadMultiplier != 2 && load.QuadMultiplier != 5 {
@@ -109,7 +145,7 @@ func run() error {
 	start := time.Now()
 	var scene *meshscene.Scene
 	if battle {
-		scene, err = meshscene.LoadBattle(meshscene.BattleOptions{LoadOptions: load, ArmySize: armySize, Preticks: preticks, Seed: uint32(seed), Width: render.Width, Height: render.Height, Zoom: float32(zoom), ViewPlayer: viewPlayer})
+		scene, err = meshscene.LoadBattle(meshscene.BattleOptions{LoadOptions: load, Playable: play, Difficulty: difficulty, ComputerAI: computerAI, ArmySize: armySize, Preticks: preticks, Seed: uint32(seed), Width: render.Width, Height: render.Height, Zoom: float32(zoom), ViewPlayer: viewPlayer})
 	} else {
 		scene, err = meshscene.Load(load)
 	}
@@ -154,7 +190,7 @@ func run() error {
 	if err = writeJSON(filepath.Join(render.OutputDir, "scene.json"), census); err != nil {
 		return err
 	}
-	for name, texture := range map[string]meshscene.Texture{"atlas": scene.Atlas, "terrain": scene.Terrain, "sprites": scene.SpriteAtlas} {
+	for name, texture := range map[string]meshscene.Texture{"atlas": scene.Atlas, "terrain": scene.Terrain, "sprites": scene.SpriteAtlas, "hud": scene.OverlayAtlas} {
 		if err = writePNG(filepath.Join(render.OutputDir, name+".png"), texture); err != nil {
 			return err
 		}

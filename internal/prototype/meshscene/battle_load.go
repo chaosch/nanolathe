@@ -33,6 +33,9 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	}
 	if opts.Map == "" {
 		opts.Map = headless.SimBenchDefaultMap
+		if opts.Playable {
+			opts.Map = "The Pass"
+		}
 	}
 	if opts.ArmySize == 0 {
 		opts.ArmySize = headless.SimBenchDefaultArmySize
@@ -55,6 +58,12 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	if opts.ViewPlayer < -1 || opts.ViewPlayer > 9 || opts.ArmySize < 250 || opts.ArmySize > 1000 || opts.Preticks < 0 || opts.Preticks > 36000 || opts.Width < 1 || opts.Height < 1 || opts.Zoom < 0.1 || opts.Zoom > 4 || (opts.QuadMultiplier != 1 && opts.QuadMultiplier != 2 && opts.QuadMultiplier != 5) || (opts.TextureScale != 1 && opts.TextureScale != 2) {
 		return nil, fmt.Errorf("nanolathe: live prototype options invalid: logical path battle, providers searched [options], expected view -1..9, army 250..1000, preticks 0..36000, positive viewport, zoom 0.1..4, geometry 1/2/5 and textures 1/2")
 	}
+	if opts.Playable {
+		opts.ViewPlayer = 0
+		if opts.ComputerAI == "" {
+			opts.ComputerAI = "modern"
+		}
+	}
 	fs := vfs.New()
 	defer func() {
 		if resultErr != nil {
@@ -73,11 +82,22 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		return nil, err
 	}
 	mapName := battleModelMapName(opts.Map)
-	composed, fixture, err := headless.ComposeSimBenchBattle(headless.SimBenchOptions{Map: mapName, ArmySize: opts.ArmySize, UnitLimit: max(headless.SimBenchDefaultUnitLimit, opts.ArmySize+1), Gameplay: gameplay.Modern, Seed: opts.Seed, Difficulty: 1}, fs, cat)
+	var composed headless.FreshBattle
+	var fixture *headless.SimBenchScene
+	if opts.Playable {
+		composed, err = composePlayBattle(opts, fs, cat)
+	} else {
+		composed, fixture, err = headless.ComposeSimBenchBattle(headless.SimBenchOptions{Map: mapName, ArmySize: opts.ArmySize, UnitLimit: max(headless.SimBenchDefaultUnitLimit, opts.ArmySize+1), Gameplay: gameplay.Modern, Seed: opts.Seed, Difficulty: 1}, fs, cat)
+	}
 	if err != nil {
 		return nil, err
 	}
 	sess := composed.Session
+	defer func() {
+		if resultErr != nil {
+			closePlayControllers(sess)
+		}
+	}()
 	// The camera policy selects an existing session view; the default spectator
 	// uses the production field host's ordinary +nowisee command [I6].
 	if opts.ViewPlayer < 0 {
@@ -101,7 +121,12 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	if opts.ViewPlayer >= 0 && sess.Snapshot.Current().ViewingPlayer != uint8(opts.ViewPlayer) {
 		return nil, fmt.Errorf("nanolathe: live prototype view unavailable: logical path player %d, providers searched [session player records], expected present active participant", opts.ViewPlayer)
 	}
-	cx, cz := float32(fixture.CentreX), float32(fixture.CentreZ)
+	cx, cz := float32(0), float32(0)
+	if opts.Playable {
+		cx, cz = playOpeningCamera(sess)
+	} else {
+		cx, cz = float32(fixture.CentreX), float32(fixture.CentreZ)
+	}
 	originY := float32(0) // Live geometry retains published world height; screen Y uses z-y/2.
 
 	// Preload the complete mounted objects3d namespace, including otherwise
@@ -136,7 +161,7 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		return nil, err
 	}
 	atlas.useMaterials = true
-	scene := &Scene{Name: "live ordinary three-army battle", Atlas: atlas.texture, Materials: atlas.materials, TextureFrames: atlas.frames, Camera: [3]float32{cx, cz, opts.Zoom}, Metadata: map[string]any{}}
+	scene := &Scene{Playable: opts.Playable, Name: "live ordinary three-army battle", Atlas: atlas.texture, Materials: atlas.materials, TextureFrames: atlas.frames, Camera: [3]float32{cx, cz, opts.Zoom}, Metadata: map[string]any{}}
 	census := make([]meshCensus, len(models))
 	vertices, indices, edges := 0, 0, 0
 	for i, m := range models {
@@ -152,6 +177,10 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		return nil, err
 	}
 	scene.Terrain, scene.TerrainRect = bakeTerrain(terrain, pal, cx, cz, 4096, 4096)
+	if opts.Playable {
+		scene.Terrain, scene.TerrainRect = bakePlayTerrain(terrain, pal)
+		scene.Name = "Playable Metal skirmish"
+	}
 	scene.HeightField = battleHeightField(sess.World)
 	source := newBattleSource(scene, sess, fs, models, modelIndices, originY, [2]int{opts.Width, opts.Height})
 	source.spectator, source.palette = opts.ViewPlayer < 0, pal
@@ -160,6 +189,13 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	}
 	if err := source.prepareSprites(pal, cat); err != nil {
 		return nil, err
+	}
+	if opts.Playable {
+		source.play, err = NewPlayController(fs, sess.Catalog, sess, models, source.viewport)
+		if err != nil {
+			return nil, err
+		}
+		scene.OverlayAtlas = source.play.OverlayAtlas()
 	}
 	if err := source.publishInitial(); err != nil {
 		return nil, err
@@ -202,6 +238,15 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Metadata["camera_policy"] = "native pixels per world unit; pan clamped to crop, zoom 0.1..4; views wider than crop expose limited terrain; renderer input only"
 	scene.Metadata["render_limitations"] = []string{"conventional depth and Lambert shading; matrix interpolation can shrink rotating pieces", "ordinary perspective applies published LOS and cloak admission; fog uses 8-pixel authored mask samples and scalar gray modulation rather than destination palette lookup", "unknown or out-of-range logo colour uses frame zero/clamping rather than retail texture omission", "construction height cutoff and authored ring lines approximate the five-stage height-key reveal and raster row extremes", "cargo uses committed world poses and shared native depth; carrier staged height-key composition and one final parent ALP commit omitted", "cloak is straight opacity 0.5 rather than source-major destination-palette ALP", "unit shadows use authored gates and immutable ground receiver; native projection/depth differs from retail silhouette clipping and structure cache", "flat terrain crop with height occlusion, no GUI, audio or ordinary animated model texture cursors", "projectile secondary-model replacement and paired triangle fragments omitted", "wreck shimmer uses neutral-pose model bounds rather than changing heading/pose bounds", "feature visibility reuses the current stock tall-feature admission approximation"}
 	scene.Metadata["sprites"] = source.spriteReport()
+	if opts.Playable {
+		scene.Metadata["scene_kind"] = "ordinary direct 1v1 skirmish; human ARM versus computer CORE; no fixture armies"
+		scene.Metadata["computer_ai"] = opts.ComputerAI
+		scene.Metadata["difficulty"] = opts.Difficulty
+		scene.Metadata["configured_unit_limit"] = sess.Units.UnitLimit()
+		scene.Metadata["terrain_policy"] = "whole map, native TNT pixels up to 8192 per axis; larger maps nearest downsampled"
+		scene.Metadata["playable"] = true
+		scene.Metadata["hud_atlas_bytes"] = len(scene.OverlayAtlas.RGBA)
+	}
 	return scene, nil
 }
 

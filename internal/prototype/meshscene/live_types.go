@@ -32,6 +32,10 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	// Optional replacement of the retained UI atlas. The native host uploads it
+	// only when this nonzero version changes; slices live until Next returns.
+	OverlayTexture    Texture
+	OverlayVersion    uint64
 	Overlay           []OverlayQuad
 	Previous, Current []Mat4
 	Instances         []Instance

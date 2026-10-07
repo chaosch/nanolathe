@@ -20,5 +20,6 @@ type PlayInput struct {
 // OverlayQuad is a 64-byte display-only quad. Rect is target-pixel x/y/w/h;
 // UV is normalized corners; Color is straight RGBA. Params.x selects the
 // retained texture: zero OverlayAtlas, one terrain, two fog. Other params
-// are reserved. Overlay runs after fog and never writes world depth.
+// Params.y selects normal premultiplied blending (0) or destination RGB
+// multiplication (1). Overlay runs after fog and never writes world depth.
 type OverlayQuad struct{ Rect, UV, Color, Params [4]float32 }

@@ -50,6 +50,13 @@ func newPlayFont() (Texture, playFont) {
 		}
 	}
 	font := playFont{cap: float32(face.Cap)}
+	// Whitespace has an advance but no coverage image. Retain its metrics even
+	// though it never needs a rectangle in the glyph texture.
+	for r := 32; r < 127; r++ {
+		if g, ok := face.Glyphs[rune(r)]; ok {
+			font.glyphs[r].advance = float32(g.Advance)
+		}
+	}
 	for _, q := range packedGlyphs {
 		g := face.Glyphs[rune(q.r)]
 		img := g.Levels[0]

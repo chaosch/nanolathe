@@ -27,6 +27,10 @@ type battleSource struct {
 	originY                                           float32
 	viewport                                          [2]int
 	sprites                                           battleSpriteAdapter
+	play                                              *PlayController
+	pendingInputs                                     []PlayInput
+	inputOverflow                                     uint64
+	ended                                             bool
 	spectator                                         bool
 	palette                                           *palette.Tables
 	fogGray, fogBlack                                 [4]*formats.GAFEntry
@@ -44,6 +48,7 @@ type battleSource struct {
 	closeOnce                                         sync.Once
 	finalReport                                       map[string]any
 	// Everything below is worker-owned until Close joins it.
+	totalTicks         uint64
 	tickRecords        []battleTickRecord
 	missingModels      map[string]int
 	startTime, endTime time.Time
@@ -73,6 +78,9 @@ func (s *battleSource) publishInitial() error {
 		return fmt.Errorf("nanolathe: live prototype publication unavailable: logical path committed frame, providers searched [session snapshot], expected opening battle frame")
 	}
 	pub := s.buildPublication(previous, current, s.camera, nil)
+	if s.play != nil {
+		pub.frame.Overlay = s.play.Overlay(current, s.camera, false)
+	}
 	s.sess.Snapshot.Unpin(current)
 	s.sess.Snapshot.Unpin(previous)
 	pub.blendStart = time.Now().Add(battlePeriod)
@@ -114,10 +122,23 @@ func (s *battleSource) Next(seconds float64, input Input) (LiveFrame, error) {
 	}
 	s.camera[2] = min(max(s.camera[2], 0.1), 4)
 	s.clampCamera()
+	if s.play != nil {
+		for _, event := range input.Events {
+			sample := PlayInput{Event: event, Camera: s.camera}
+			n := len(s.pendingInputs)
+			if n > 0 && event.Kind == 1 && event.WheelX == 0 && event.WheelY == 0 && s.pendingInputs[n-1].Event.Kind == 1 && s.pendingInputs[n-1].Event.WheelX == 0 && s.pendingInputs[n-1].Event.WheelY == 0 {
+				s.pendingInputs[n-1] = sample
+			} else if n < 8192 {
+				s.pendingInputs = append(s.pendingInputs, sample)
+			} else {
+				s.inputOverflow++
+			}
+		}
+	}
 	if input.PauseToggle {
 		s.paused = !s.paused
 	}
-	camera, paused, workerErr := s.camera, s.paused, s.workerErr
+	camera, paused, workerErr := s.camera, s.paused || s.ended, s.workerErr
 	pub := s.latest.Load()
 	now := time.Now()
 	if pub != nil && !paused && now.Before(pub.blendStart) && pub.previous != nil {
@@ -150,20 +171,48 @@ func (s *battleSource) Next(seconds float64, input Input) (LiveFrame, error) {
 }
 func (s *battleSource) clampCamera() {
 	r := s.scene.TerrainRect
+	leading, trailing := [2]float32{}, [2]float32{}
+	if s.play != nil {
+		scale := max(float32(1), min(float32(s.viewport[0])/1440, float32(s.viewport[1])/900))
+		leading = [2]float32{300 * scale, 56 * scale}
+		trailing = [2]float32{0, 36 * scale}
+	}
 	for axis := 0; axis < 2; axis++ {
 		lo, hi := r[axis], r[axis+2]
 		half := float32(s.viewport[axis]) / (2 * s.camera[2])
-		if 2*half >= hi-lo {
-			s.camera[axis] = (lo + hi) / 2
+		a, b := lo+half-leading[axis]/s.camera[2], hi-half+trailing[axis]/s.camera[2]
+		if a > b {
+			s.camera[axis] = (a + b) / 2
 		} else {
-			s.camera[axis] = min(max(s.camera[axis], lo+half), hi-half)
+			s.camera[axis] = min(max(s.camera[axis], a), b)
 		}
 	}
 }
-func (s *battleSource) inputSnapshot() ([3]float32, bool) {
+func (s *battleSource) inputSnapshot() ([3]float32, bool, []PlayInput) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.camera, s.paused
+	events := s.pendingInputs
+	s.pendingInputs = nil
+	return s.camera, s.paused, events
+}
+func (s *battleSource) processInput(camera [3]float32, events []PlayInput) [3]float32 {
+	if s.play == nil {
+		return camera
+	}
+	// Session access and controller state are confined to this worker.
+	current, previous := s.sess.Snapshot.PinLatest()
+	moved := s.play.Process(events, current, camera)
+	s.sess.Snapshot.Unpin(current)
+	s.sess.Snapshot.Unpin(previous)
+	s.mu.Lock()
+	// Preserve a newer native pan/zoom while the worker was processing commands.
+	if s.camera == camera {
+		s.camera = moved
+		s.clampCamera()
+	}
+	camera = s.camera
+	s.mu.Unlock()
+	return camera
 }
 
 // A deadline consumes one ordinary tick. If processing misses intervals, the
@@ -198,11 +247,30 @@ func (s *battleSource) run() {
 			return
 		case <-timer.C:
 		}
-		camera, paused := s.inputSnapshot()
-		if paused {
+		camera, paused, events := s.inputSnapshot()
+		camera = s.processInput(camera, events)
+		ended := s.sess.State == session.StatePostBattle
+		if f := s.sess.Snapshot.Current(); f != nil && f.Result.Ended {
+			ended = true
+		}
+		if paused || ended {
 			if pausedAt.IsZero() {
 				pausedAt = time.Now()
 			}
+			if s.play != nil {
+				current, previous := s.sess.Snapshot.PinLatest()
+				if current != nil {
+					pub := s.buildPublication(previous, current, camera, s.latest.Load())
+					pub.frame.Overlay = s.play.Overlay(current, camera, paused)
+					pub.blendStart = time.Now().Add(-battlePeriod)
+					s.latest.Store(pub)
+				}
+				s.sess.Snapshot.Unpin(current)
+				s.sess.Snapshot.Unpin(previous)
+			}
+			s.mu.Lock()
+			s.ended = ended
+			s.mu.Unlock()
 			deadline = time.Now().Add(battlePeriod)
 			continue
 		}
@@ -228,6 +296,9 @@ func (s *battleSource) run() {
 		}
 		old := s.latest.Load()
 		pub := s.buildPublication(previous, current, camera, old)
+		if s.play != nil {
+			pub.frame.Overlay = s.play.Overlay(current, camera, false)
+		}
 		s.sess.Snapshot.Unpin(current)
 		s.sess.Snapshot.Unpin(previous)
 		drained = s.sess.Snapshot.DrainCommittedEvents(drained)
@@ -248,7 +319,12 @@ func (s *battleSource) run() {
 			s.missedDeadlines += missed
 		}
 		record := battleTickRecord{Tick: pub.frame.Tick, ElapsedSeconds: finish.Sub(s.startTime).Seconds(), SimulationMS: float64(simDone.Sub(start)) / 1e6, PosePreparationMS: float64(finish.Sub(simDone)) / 1e6, TickWorkMS: float64(finish.Sub(start)) / 1e6, StartLatenessMS: float64(late) / 1e6, MissedDeadlines: missed, Camera: camera, Census: pub.census}
-		s.tickRecords = append(s.tickRecords, record)
+		if s.play != nil && len(s.tickRecords) >= 8192 {
+			s.tickRecords[s.totalTicks%8192] = record
+		} else {
+			s.tickRecords = append(s.tickRecords, record)
+		}
+		s.totalTicks++
 		// Publishing fully prepared, detached slices requires no snapshot pins on
 		// the renderer. Old arrays are never overwritten while any Next owns them.
 		s.latest.Store(pub)
@@ -268,6 +344,11 @@ func (s *battleSource) Close() map[string]any {
 			<-s.done
 		} else {
 			close(s.done)
+		}
+		if s.play != nil && s.totalTicks > 8192 {
+			at := int(s.totalTicks % 8192)
+			ordered := append([]battleTickRecord(nil), s.tickRecords[at:]...)
+			s.tickRecords = append(ordered, s.tickRecords[:at]...)
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -291,9 +372,9 @@ func (s *battleSource) Close() map[string]any {
 		}
 		rate := float64(0)
 		if active > 0 {
-			rate = float64(len(s.tickRecords)) / active
+			rate = float64(s.totalTicks) / active
 		}
-		s.finalReport = map[string]any{"tick_records": s.tickRecords, "tick_range": tickRange, "ticks": len(s.tickRecords), "elapsed_seconds": elapsed, "paused_seconds": s.pausedSeconds, "active_seconds": active, "actual_ticks_per_active_second": rate, "target_ticks_per_second": 30, "missed_30hz_deadlines": s.missedDeadlines, "render_calls": s.renderCalls, "render_calls_holding_same_tick": s.heldRenderCalls, "worker_publications_skipped_by_renderer": s.skippedPublications, "missing_models": missing, "sprites": s.spriteReport(), "scheduler_policy": "one ordinary tick per available 30 Hz deadline; missed opportunities skipped; no display-driven stepping", "publication_storage": "immutable detached slices; Go owns lifetime, no retained sampled replay", "final_session_state": s.sess.State}
+		s.finalReport = map[string]any{"tick_records": s.tickRecords, "tick_range": tickRange, "ticks": s.totalTicks, "retained_tick_records": len(s.tickRecords), "elapsed_seconds": elapsed, "paused_seconds": s.pausedSeconds, "active_seconds": active, "actual_ticks_per_active_second": rate, "target_ticks_per_second": 30, "missed_30hz_deadlines": s.missedDeadlines, "render_calls": s.renderCalls, "render_calls_holding_same_tick": s.heldRenderCalls, "worker_publications_skipped_by_renderer": s.skippedPublications, "missing_models": missing, "sprites": s.spriteReport(), "scheduler_policy": "one ordinary tick per available 30 Hz deadline; missed opportunities skipped; no display-driven stepping", "publication_storage": "immutable detached slices; Go owns lifetime, no retained sampled replay", "final_session_state": s.sess.State}
 		s.finalReport["presentation_buffer_ticks"] = 1
 		s.finalReport["presentation_buffer_seconds"] = battlePeriod.Seconds()
 		s.finalReport["presentation_policy"] = "fixed one-tick buffering; only current and immediately prior publication retained; pause snaps to latest committed pose; no extrapolation"
@@ -303,6 +384,11 @@ func (s *battleSource) Close() map[string]any {
 		if s.workerErr != nil {
 			s.finalReport["worker_error"] = s.workerErr.Error()
 		}
+		if s.play != nil {
+			s.finalReport["play"] = s.play.Report()
+			s.finalReport["input_queue_overflow"] = s.inputOverflow
+		}
+		closePlayControllers(s.sess)
 		if err := s.fs.Close(); err != nil {
 			s.finalReport["content_close_error"] = err.Error()
 		}
