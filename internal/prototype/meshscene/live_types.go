@@ -83,13 +83,18 @@ type HeightField struct {
 	Rect          [4]float32
 }
 
-// FogFrame carries detached RGBA8 fog modulation: RGB multiply final world
-// colour, A is unused. Empty data disables fog. Rect is in projected world X,
-// Z-minus-half-height coordinates, matching the committed fog cache.
+// FogFrame carries one detached RGBA8 operation texel per committed fog cell.
+// R encodes channel one (1 gray fill, 2 checker fill, 3+slot gray mask,
+// 59+slot checker mask); G encodes channel zero (1 dark fill, 2+slot black mask).
+// A is 255 and B is zero. Slots are variant*14+frame within each atlas family.
+// Empty data disables fog. Rect is in projected world X, Z-minus-half-height
+// coordinates and retains the full committed cache bounds, including its +16
+// cell-origin offset. Dithered participates in the cached encoding's identity.
 type FogFrame struct {
 	Width, Height int
 	RGBA          []byte
 	Rect          [4]float32
+	Dithered      bool
 }
 
 // Distortion is 64 bytes. Positions are world xyz, with GPU interpolation.

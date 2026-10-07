@@ -6,6 +6,7 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
+	"github.com/nanolathe-gg/nanolathe/internal/render"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
 )
@@ -64,82 +65,61 @@ func (s *battleSource) prepareFog() error {
 			}
 		}
 	}
+	atlas, err := battleFogAtlas(s.fogGray, s.fogBlack, s.palette)
+	if err != nil {
+		return err
+	}
+	s.scene.FogAtlas = atlas
 	return nil
 }
 
-// The native modulation uses authored GAF mask geometry and world-anchored
-// variants [03 §3.3], sampled every eight world pixels. Current fog multiplies
-// RGB by 0.5 rather than performing retail's destination-palette gray lookup;
-// this is an explicit low-resolution prototype approximation, not LOS smoothing.
+// Retain the production cell operations rather than sampling the authored masks
+// on the CPU. The native compositor visits the same ordered 2x2 neighbourhood
+// and reads native mask pixels from Scene.FogAtlas (DESIGN_GPU_RENDERER C-G7).
 func (s *battleSource) appendFog(cur *frame.Frame, old *battlePublication) FogFrame {
 	if s.spectator || cur == nil || !cur.Fog.Valid {
 		return FogFrame{}
 	}
 	src := cur.Fog
-	if old != nil && src.Source != 0 && old.fogSource == src.Source && old.fogVersion == src.Version {
+	dithered := s.scene.DitheredFog
+	if old != nil && src.Source != 0 && old.fogSource == src.Source && old.fogVersion == src.Version && old.frame.Fog.Dithered == dithered {
 		return old.frame.Fog
 	}
 	if src.W <= 0 || src.H <= 0 || int64(src.W)*int64(src.H) != int64(len(src.Ch0)) || len(src.Ch1) != len(src.Ch0) {
 		return FogFrame{}
 	}
-	const sample = 8
-	const samplesPerCell = 32 / sample
-	dst := FogFrame{Width: int(src.W) * samplesPerCell, Height: int(src.H) * samplesPerCell, Rect: [4]float32{float32(src.OriginX*32 + 16), float32(src.OriginZ*32 + 16), float32((src.OriginX+src.W)*32 + 16), float32((src.OriginZ+src.H)*32 + 16)}}
-	dst.RGBA = make([]byte, dst.Width*dst.Height*4)
-	for i := range dst.RGBA {
-		dst.RGBA[i] = 255
+	const cell = render.FogTilePixels
+	dst := FogFrame{
+		Width: int(src.W), Height: int(src.H), Dithered: dithered,
+		Rect: [4]float32{float32(src.OriginX*cell + cell/2), float32(src.OriginZ*cell + cell/2), float32((src.OriginX+src.W)*cell + cell/2), float32((src.OriginZ+src.H)*cell + cell/2)},
+		RGBA: make([]byte, len(src.Ch0)*4),
 	}
-	fill := func(col, row int, shade byte) {
-		for y := row * samplesPerCell; y < (row+1)*samplesPerCell; y++ {
-			for x := col * samplesPerCell; x < (col+1)*samplesPerCell; x++ {
-				i := (y*dst.Width + x) * 4
-				dst.RGBA[i], dst.RGBA[i+1], dst.RGBA[i+2] = shade, shade, shade
-			}
-		}
-	}
-	mask := func(entry *formats.GAFEntry, nibble byte, col, row int, shade byte) {
-		if entry == nil || len(entry.Frames) == 0 {
-			return
-		}
-		fi := min(int(nibble)-1, len(entry.Frames)-1)
-		f := entry.Frames[fi].Frame
-		if f == nil {
-			return
-		}
-		left, top := col*32-int(f.XOffset), row*32-int(f.YOffset)
-		for y := max(0, (top-sample/2+sample-1)/sample); y < dst.Height && y*sample+sample/2 < top+int(f.Height); y++ {
-			for x := max(0, (left-sample/2+sample-1)/sample); x < dst.Width && x*sample+sample/2 < left+int(f.Width); x++ {
-				ix, iy := x*sample+sample/2-left, y*sample+sample/2-top
-				if ix < 0 || iy < 0 {
-					continue
-				}
-				p := iy*int(f.Width) + ix
-				if p >= len(f.Pixels) || (p < len(f.Transparent) && f.Transparent[p]) {
-					continue
-				}
-				i := (y*dst.Width + x) * 4
-				for k := 0; k < 3; k++ {
-					dst.RGBA[i+k] = byte(uint16(dst.RGBA[i+k]) * uint16(shade) / 255)
-				}
-			}
-		}
-	}
-	for row := 0; row < int(src.H); row++ {
-		for col := 0; col < int(src.W); col++ {
-			i := row*int(src.W) + col
+	for row := 0; row < dst.Height; row++ {
+		for col := 0; col < dst.Width; col++ {
+			i := row*dst.Width + col
+			at := i * 4
+			dst.RGBA[at+3] = 255
 			black, gray := src.Ch0[i], src.Ch1[i]
+			// Solid unexplored cells suppress channel one [03 §3.3].
 			if black == 15 {
-				fill(col, row, 0)
+				dst.RGBA[at+1] = 1
 				continue
 			}
-			variant := int((int32(col) + src.OriginX + int32(row) + src.OriginZ + 2) & 3)
+			variant := render.FogVariant(src.OriginX+int32(col), src.OriginZ+int32(row), nil)
 			if gray == 15 {
-				fill(col, row, 128)
-			} else if gray != 0 {
-				mask(s.fogGray[variant], gray, col, row, 128)
+				dst.RGBA[at] = 1
+				if dithered {
+					dst.RGBA[at] = 2
+				}
+			} else if gray >= 1 && gray <= battleFogColumns && battleFogFramePresent(s.fogGray[variant], int(gray)-1, true) {
+				slot := byte(variant*battleFogColumns) + gray - 1
+				dst.RGBA[at] = 3 + slot
+				if dithered {
+					dst.RGBA[at] += battleFogSlots
+				}
 			}
-			if black != 0 {
-				mask(s.fogBlack[variant], black, col, row, 0)
+			if black >= 1 && black <= battleFogColumns && battleFogFramePresent(s.fogBlack[variant], int(black)-1, false) {
+				dst.RGBA[at+1] = 2 + byte(variant*battleFogColumns) + black - 1
 			}
 		}
 	}
