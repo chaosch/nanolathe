@@ -95,6 +95,7 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 			k = float32(world.Zoom) / float32(camera.ZoomUnit) / step
 		}
 	}
+	live.WaterObjectScales = [3]float32{step, step * k, scale}
 	k *= scale
 	v.lights = v.lights[:0]
 	for _, source := range v.lighting.GatherSources() {

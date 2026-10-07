@@ -37,6 +37,7 @@ func prepareMetalFrame(cl *client.Client, world *meshscene.RetainedBattle, scene
 	}
 	if live.ModelRules == nil {
 		live.ModelRules = applyMetalModelRules(cl, world, live, current)
+		live.WaterObjects = applyMetalWaterObjects(cl, world, live, current)
 	}
 	z := live.Camera[2]
 	if z <= 0 {

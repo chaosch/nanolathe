@@ -38,6 +38,7 @@ typedef struct {
  const void* glow_vertices;uint32_t glow_count,glow_enabled;float glow_parameters[12];
  const NMGroundUpload* ground_effects;
  NMShadowUpload shadows;
+ const void* water_objects;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings

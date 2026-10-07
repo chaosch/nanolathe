@@ -36,7 +36,7 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
   if(!u->topology)return NO;const NMShadowMeshUpload* meshes=(const NMShadowMeshUpload*)u->topology;
   for(uint32_t i=0;i<u->topology_count;i++){
    NMShadowMesh* mesh=[NMShadowMesh new];const NMShadowMeshUpload* src=&meshes[i];mesh.indexCount=src->index_count;
-   if(src->vertex_count&&!src->vertices||src->index_count&&!src->indices)return NO;
+   if((src->vertex_count&&!src->vertices)||(src->index_count&&!src->indices))return NO;
    mesh.vertices=[r.device newBufferWithLength:MAX((NSUInteger)src->vertex_count*64,32) options:MTLResourceStorageModeShared];mesh.indices=[r.device newBufferWithLength:MAX((NSUInteger)src->index_count*4,32) options:MTLResourceStorageModeShared];
    if(!mesh.vertices||!mesh.indices)return NO;
    if(src->vertex_count)memcpy(mesh.vertices.contents,(const void*)src->vertices,src->vertex_count*64);
@@ -58,7 +58,7 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
  if(u->projected_count)memcpy(f.projectedDraws.mutableBytes,(const void*)u->projected_draws,f.projectedDraws.length);
  NSUInteger w=MAX(s.body.width,u->width),h=MAX(s.body.height,u->height);
  if(w&&h&&(w!=s.body.width||h!=s.body.height)){
-  s.body=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.emission=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget);
+  s.body=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.emission=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget);
   s.depth=target(r,w,h,MTLPixelFormatDepth32Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.mask=target(r,w,h,MTLPixelFormatR8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
   if(!s.body||!s.emission||!s.depth||!s.mask)return NO;
  }
@@ -78,11 +78,11 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.body;p.colorAttachments[1].texture=s.emission;
  for(int i=0;i<2;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=s.depth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;
- id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];modelBindings(r,enc,poses,ring,u);[enc setVertexBuffer:ring.subjectLights offset:0 atIndex:17];[enc setRenderPipelineState:r.atlasModel];[enc setDepthStencilState:r.depth];
+ id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:ring.subjectLights offset:0 atIndex:17];[enc setRenderPipelineState:r.atlasModel];[enc setDepthStencilState:r.depth];
  const NMShadowDraw* draws=f.bodyDraws.bytes;const float* visuals=ring.visuals.contents;
  for(NSUInteger i=0;i<f.bodyCount;i++)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,NO);
  // Outline coverage is part of the finished silhouette, before the shadow.
- if(u.visual.x>0.5){[enc setRenderPipelineState:r.outline];[enc setDepthStencilState:r.depth];for(NSUInteger i=0;i<f.bodyCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,YES);}
+ if(u.visual.x>0.5){[enc setRenderPipelineState:r.shadowOutline];[enc setDepthStencilState:r.depth];for(NSUInteger i=0;i<f.bodyCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,YES);}
  [enc endEncoding];
  p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.mask;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
  enc=[cb renderCommandEncoderWithDescriptor:p];[enc setRenderPipelineState:s.projected];[enc setDepthStencilState:nil];[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:poses offset:0 atIndex:2];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:f.pieceFlags offset:0 atIndex:17];vector_float4 tint=f.tint;[enc setVertexBytes:&tint length:16 atIndex:18];

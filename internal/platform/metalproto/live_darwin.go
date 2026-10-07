@@ -64,8 +64,13 @@ type liveUpload struct {
 	GlowParams                                                                                                       meshscene.RetainedGlowParameters
 	GroundEffects                                                                                                    uintptr
 	Shadows                                                                                                          nativeShadowUpload
+	WaterObjects                                                                                                     uintptr
 }
 type livePacking struct {
+	waterPacking                                     waterObjectsPacking
+	waterUpload                                      nativeWaterObjectsUpload
+	waterObjects                                     []meshscene.WaterObject
+	seabed                                           []uint32
 	groundPacking                                    groundEffectsPacking
 	groundUpload                                     nativeGroundUpload
 	shadowPacking                                    ShadowPacking
@@ -101,7 +106,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 616 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 624 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -264,6 +269,21 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		return u, r, err
 	}
 	r.UploadBytes += uint64(len(f.Composition.Slots)*48 + len(p.compositionSelectors)*4 + len(p.compositionDraws)*16 + len(p.compositionPaint)*16)
+	if f.Composed {
+		if len(f.WaterObjects) != len(f.Instances) {
+			return u, r, fmt.Errorf("metalproto: water objects differ from instances")
+		}
+		p.waterObjects = slices.Grow(p.waterObjects[:0], len(f.Instances))[:len(f.Instances)]
+		for i, o := range f.WaterObjects {
+			p.waterObjects[p.sourcePacked[i]] = o
+		}
+		var err error
+		p.waterUpload, err = p.waterPacking.Prepare(p.waterObjects, p.seabed, f.WaterObjectScales[0], f.WaterObjectScales[1], f.WaterObjectScales[2])
+		if err != nil {
+			return u, r, err
+		}
+		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+	}
 	var shadowErr error
 	u.Shadows, shadowErr = p.shadowPacking.Prepare(f.Shadows, p.sourcePacked)
 	if shadowErr != nil {

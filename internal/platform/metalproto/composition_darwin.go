@@ -14,6 +14,7 @@ import (
 func (p *livePacking) prepareComposition(f meshscene.LiveFrame, u *liveUpload) error {
 	p.compositionDraws = p.compositionDraws[:0]
 	p.compositionPaint = p.compositionPaint[:0]
+	p.seabed = p.seabed[:0]
 	if !f.Composed {
 		return nil
 	}
@@ -49,6 +50,10 @@ func (p *livePacking) prepareComposition(f meshscene.LiveFrame, u *liveUpload) e
 	for _, paint := range c.FeatureSprites {
 		if int(paint.Source) >= len(p.spritePacked) {
 			return fmt.Errorf("metalproto: feature sprite outside publication")
+		}
+		if paint.Submerged {
+			p.seabed = append(p.seabed, p.spritePacked[paint.Source])
+			continue
 		}
 		p.compositionPaint = append(p.compositionPaint, [4]uint32{p.spritePacked[paint.Source] + 1, paint.Phase, paint.Rank, 1})
 	}

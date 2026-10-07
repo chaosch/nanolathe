@@ -19,8 +19,8 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  NSUInteger w=MAX(r.modelAtlasColor.width,u->composition_width*rasterScale),h=MAX(r.modelAtlasColor.height,u->composition_height*rasterScale);
  if(w&&h&&(w!=r.modelAtlasColor.width||h!=r.modelAtlasColor.height)){
   r.modelMetadata=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
-  r.modelAtlasColor=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
-  r.modelAtlasEmission=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
+  r.modelAtlasColor=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
+  r.modelAtlasEmission=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
   r.modelAtlasDepth=target(r,w,h,MTLPixelFormatDepth32Float,MTLTextureUsageRenderTarget);
   if(!r.modelMetadata||!r.modelAtlasColor||!r.modelAtlasEmission||!r.modelAtlasDepth)return NO;
  }
@@ -32,7 +32,7 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  for(int i=0;i<3;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=r.modelAtlasDepth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionDontCare;p.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];u.mode.z=0;u.mode.w=2;
- modelBindings(r,enc,poses,ring,u);[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
+ modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
  const NMCloakDraw* draws=ring.compositionDraws.bytes;const float* visuals=ring.visuals.contents;
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++)drawSubjectMember(r,enc,ring,draws[i],NO);
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.atlasOutline];[enc setDepthStencilState:r.spriteDepth];for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)drawSubjectMember(r,enc,ring,draws[i],YES);}
@@ -47,7 +47,7 @@ static void nmCompositionCommit(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEn
   while(sprite&&stop<end&&paint[stop*4+3]==1&&paint[stop*4]==paint[stop*4-4]+1)stop++;
   if(!sprite)nmShadowsCommitSlot(r,r.shadows,ring.shadows,enc,u,paint[begin*4]);
   if(sprite){[enc setRenderPipelineState:r.sprite];[enc setVertexBuffer:ring.sprites offset:(paint[begin*4]-1)*96 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];}
-  else{[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:begin*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];}
+  else{[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:begin*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];nmWaterObjectsBindCommit(r,ring,enc,u);}
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:stop-begin];begin=stop;
  }
 }
