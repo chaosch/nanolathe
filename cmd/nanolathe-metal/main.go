@@ -35,7 +35,7 @@ func run() error {
 	var load meshscene.LoadOptions
 	var render metalproto.Options
 	var prepareOnly, battle, profile bool
-	var armySize, preticks int
+	var armySize, preticks, viewPlayer int
 	var seed uint
 	var zoom float64
 	flag.StringVar(&load.Root, "root", filepath.Join(home, "TotalAnnihilation"), "retail asset installation")
@@ -51,12 +51,14 @@ func run() error {
 	flag.IntVar(&render.FPS, "fps", 120, "target frame cadence; zero runs uncapped")
 	flag.BoolVar(&render.Offscreen, "offscreen", false, "render without display presentation")
 	flag.BoolVar(&render.VSync, "vsync", true, "synchronize visible presentation with display")
-	flag.BoolVar(&render.Effects, "effects", true, "enable prototype lighting, bloom and distortion stress")
+	flag.BoolVar(&render.Effects, "effects", true, "enable prototype lighting, bloom and distortion")
+	flag.BoolVar(&render.VisualPasses, "visual-passes", true, "enable reveal, shadows, terrain depth, distortion and fog passes")
 	flag.StringVar(&render.OutputDir, "out", "", "new output directory outside the repository (required)")
 	flag.StringVar(&render.LibraryPath, "library", os.Getenv("NANOLATHE_METAL_LIBRARY"), "native Metal bridge dylib")
 	flag.BoolVar(&prepareOnly, "prepare-only", false, "write scene census and texture previews without rendering")
 	flag.BoolVar(&battle, "battle", false, "run the ordinary three-army battle instead of the retained-pose replay")
 	flag.IntVar(&armySize, "army-size", 250, "units per computer army in live battle (250..1000)")
+	flag.IntVar(&viewPlayer, "view-player", -1, "battle perspective: -1 omniscient, 0..9 ordinary published player view")
 	flag.IntVar(&preticks, "preticks", 1200, "ordinary battle ticks to advance before opening the window")
 	flag.UintVar(&seed, "seed", 7, "live battle simulation and CRT seed")
 	flag.Float64Var(&zoom, "zoom", 0.75, "live battle pixels per world unit")
@@ -72,7 +74,7 @@ func run() error {
 		if !mapExplicit {
 			load.Map = "Town & Country"
 		}
-		if armySize < 250 || armySize > 1000 || preticks < 0 || preticks > 18000 || seed > 0xffffffff || zoom < 0.1 || zoom > 4 {
+		if viewPlayer < -1 || viewPlayer > 9 || armySize < 250 || armySize > 1000 || preticks < 0 || preticks > 18000 || seed > 0xffffffff || zoom < 0.1 || zoom > 4 {
 			return fmt.Errorf("nanolathe: Metal battle: invalid army size, lead-in ticks, seed or zoom")
 		}
 	}
@@ -107,7 +109,7 @@ func run() error {
 	start := time.Now()
 	var scene *meshscene.Scene
 	if battle {
-		scene, err = meshscene.LoadBattle(meshscene.BattleOptions{LoadOptions: load, ArmySize: armySize, Preticks: preticks, Seed: uint32(seed), Width: render.Width, Height: render.Height, Zoom: float32(zoom)})
+		scene, err = meshscene.LoadBattle(meshscene.BattleOptions{LoadOptions: load, ArmySize: armySize, Preticks: preticks, Seed: uint32(seed), Width: render.Width, Height: render.Height, Zoom: float32(zoom), ViewPlayer: viewPlayer})
 	} else {
 		scene, err = meshscene.Load(load)
 	}
@@ -122,10 +124,11 @@ func run() error {
 		scene.Camera[2] *= min(float32(render.Width)/1600, float32(render.Height)/900)
 	}
 	census := map[string]any{"name": scene.Name, "metadata": scene.Metadata, "options": load, "preparation_seconds": time.Since(start).Seconds(), "runtime": runtime.Version(), "gomaxprocs": runtime.GOMAXPROCS(0), "instances": len(scene.Instances), "frames": len(scene.Frames), "camera": scene.Camera, "terrain_rect": scene.TerrainRect}
-	var vertices, indices, faces, pieces int
+	var vertices, indices, edges, faces, pieces int
 	for _, m := range scene.Meshes {
 		vertices += len(m.Vertices)
 		indices += len(m.Indices)
+		edges += len(m.EdgeIndices)
 		faces += m.SourceFaces
 		pieces += m.Pieces
 	}
@@ -134,7 +137,11 @@ func run() error {
 	census["unique_triangles"] = indices / 3
 	census["source_faces"] = faces
 	census["unique_pieces"] = pieces
-	census["mesh_bytes"] = vertices*48 + indices*4
+	census["mesh_bytes"] = vertices*64 + (indices+edges)*4
+	census["edge_indices"] = edges
+	census["materials"] = len(scene.Materials)
+	census["material_frames"] = len(scene.TextureFrames)
+	census["height_field_bytes"] = len(scene.HeightField.Values) * 4
 	census["atlas_bytes"] = len(scene.Atlas.RGBA)
 	census["terrain_bytes"] = len(scene.Terrain.RGBA)
 	census["atlas_size"] = []int{scene.Atlas.Width, scene.Atlas.Height}

@@ -97,10 +97,11 @@ func Load(opts LoadOptions) (*Scene, error) {
 	if err := samplePoses(scene, opts, fs, cat, roster, models, cols, rows, pitch, cx, cz, mapName); err != nil {
 		return nil, err
 	}
-	meshVertices, meshIndices, drawnTriangles, pieceMatrices := 0, 0, 0, 0
+	meshVertices, meshIndices, meshEdges, drawnTriangles, pieceMatrices := 0, 0, 0, 0, 0
 	for _, m := range scene.Meshes {
 		meshVertices += len(m.Vertices)
 		meshIndices += len(m.Indices)
+		meshEdges += len(m.EdgeIndices)
 	}
 	instancesPerMesh := make([]int, len(models))
 	for _, instance := range scene.Instances {
@@ -118,7 +119,7 @@ func Load(opts LoadOptions) (*Scene, error) {
 	scene.Metadata["retained_vertices"] = meshVertices
 	scene.Metadata["retained_triangles"] = meshIndices / 3
 	scene.Metadata["triangles_per_frame"] = drawnTriangles
-	scene.Metadata["retained_mesh_bytes"] = meshVertices*48 + meshIndices*4
+	scene.Metadata["retained_mesh_bytes"] = meshVertices*64 + (meshIndices+meshEdges)*4
 	scene.Metadata["matrices_per_sample"] = pieceMatrices
 	scene.Metadata["pose_sample_bytes"] = pieceMatrices * 64 * len(scene.Frames)
 	scene.Metadata["pose_samples"] = len(scene.Frames)

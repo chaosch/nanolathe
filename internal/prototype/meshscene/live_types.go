@@ -82,7 +82,9 @@ type FogFrame struct {
 // Distortion is 64 bytes. Positions are world xyz, with GPU interpolation.
 // Kind Shape.w=0 is a blast: Shape.xyz=end radius, band half-width, base strength;
 // Params.x is committed age in ticks. Kind 1 is a heat plume: Shape.xyz=half
-// width, half height, strength; Params.xyz=committed clock ticks, phase, Y offset.
+// width, half height, strength; Params.xyz=committed clock ticks, phase, bottom
+// screen-Y offset in world pixels from the projected anchor. The plume rises
+// two half-heights from this bottom edge.
 // The GPU samples clock/age at Params.x+Alpha-1, freezing when Alpha is 1.
 // Source order is blast rings, wreck heat, vegetation heat; later coverage wins.
 type Distortion struct{ Previous, Current, Shape, Params [4]float32 }
