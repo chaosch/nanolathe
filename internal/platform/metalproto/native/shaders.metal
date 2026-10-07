@@ -10,6 +10,59 @@ struct Material { uint firstFrame,frameCount,kind,reserved; };
 struct ModelVisual { float4 state,bounds,outline,emission; };
 struct Distortion { float4 previous,current,shape,params; };
 struct Sprite { float4 previous,current,rect,uv,color,params; };
+// Presentation-only rigid interpolation of already composed endpoints
+// (DESIGN_GPU_RENDERER §5.3). Their final world-Z reflection is not a rotation.
+float4 poseQuaternion(float4x4 m) {
+ float3 reflection=float3(1,1,-1);
+ // Fixed-point endpoint composition introduces small scale/orthogonality
+ // errors. Gram-Schmidt gives a right-handed unit basis before conversion.
+ float3 x=normalize(m[0].xyz*reflection);
+ float3 y=m[1].xyz*reflection;y=normalize(y-x*dot(x,y));
+ float3 z=cross(x,y);
+ float4 q;
+ float trace=x.x+y.y+z.z;
+ if(trace>0){float s=2*sqrt(trace+1);q=float4((y.z-z.y)/s,(z.x-x.z)/s,(x.y-y.x)/s,s*0.25);}
+ else if(x.x>y.y&&x.x>z.z){float s=2*sqrt(1+x.x-y.y-z.z);q=float4(s*0.25,(y.x+x.y)/s,(z.x+x.z)/s,(y.z-z.y)/s);}
+ else if(y.y>z.z){float s=2*sqrt(1+y.y-x.x-z.z);q=float4((y.x+x.y)/s,s*0.25,(z.y+y.z)/s,(z.x-x.z)/s);}
+ else {float s=2*sqrt(1+z.z-x.x-y.y);q=float4((z.x+x.z)/s,(z.y+y.z)/s,s*0.25,(x.y-y.x)/s);}
+ return normalize(q);
+}
+float4 poseSlerp(float4 a,float4 b,float alpha) {
+ float cosine=dot(a,b);
+ // q and -q denote the same rotation; select the shorter path.
+ if(cosine<0){b=-b;cosine=-cosine;}
+ cosine=clamp(cosine,0.0,1.0);
+ // Avoid division by a vanishing sine for nearly identical rotations.
+ if(cosine>0.9995)return normalize(mix(a,b,alpha));
+ float angle=acos(cosine);
+ return normalize((sin((1-alpha)*angle)*a+sin(alpha*angle)*b)/sin(angle));
+}
+float4x4 poseRotation(float4 q) {
+ float x=q.x,y=q.y,z=q.z,w=q.w;float3 reflection=float3(1,1,-1);
+ return float4x4(float4(float3(1-2*(y*y+z*z),2*(x*y+z*w),2*(x*z-y*w))*reflection,0),
+                 float4(float3(2*(x*y-z*w),1-2*(x*x+z*z),2*(y*z+x*w))*reflection,0),
+                 float4(float3(2*(x*z+y*w),2*(y*z-x*w),1-2*(x*x+y*y))*reflection,0),float4(0,0,0,1));
+}
+kernel void interpolate_poses(device const float4x4* endpoints [[buffer(0)]],device float4x4* poses [[buffer(1)]],constant Uniforms& u [[buffer(3)]],uint at [[thread_position_in_grid]]) {
+ uint count=uint(u.timing.z);if(at>=count)return;
+ float4x4 a=endpoints[at],b=endpoints[at+count];
+ // Visibility remains an either-endpoint gate, including at alpha zero/one.
+ if(a[3].w<0.5||b[3].w<0.5){poses[at]=float4x4(0.0);return;}
+ float alpha=clamp(u.timing.x,0.0,1.0);float4x4 m;
+ if(alpha<=0)m=a;
+ else if(alpha>=1)m=b;
+ else {
+  // Keep equal bases exact, including translating but nonrotating pieces:
+  // normalization noise would otherwise perturb integer corner-height ties.
+  bool same=all(a[0].xyz==b[0].xyz)&&all(a[1].xyz==b[1].xyz)&&all(a[2].xyz==b[2].xyz);
+  m=same?a:poseRotation(poseSlerp(poseQuaternion(a),poseQuaternion(b),alpha));
+  if(!all(a[3].xyz==b[3].xyz))m[3].xyz=mix(a[3].xyz,b[3].xyz,alpha);
+  else m[3].xyz=b[3].xyz;
+ }
+ // Mat4[3] is metadata, not part of the affine basis. Shade always follows
+ // the current endpoint; Mat4[15] retains its current visibility marker.
+ m[0].w=b[0].w;m[3].w=b[3].w;poses[at]=m;
+}
 struct Out { float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float heightKey; float keyOrigin [[flat]]; float shadeRow; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; };
 float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
  if(u.visual.y<0.5)return 0;
@@ -28,12 +81,10 @@ float4 project(float3 p, constant Uniforms& u) {
 vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],device const Material* materials [[buffer(6)]],device const float4* frames [[buffer(7)]],device const uint* selectors [[buffer(8)]]) {
  if(u.mode.z>0.5)iid=selectors[iid];
  Vertex v=vertices[vid]; uint at=offsets[iid]+v.piece;
- float4x4 a=poses[at], b=poses[at+uint(u.timing.z)];
+ float4x4 m=poses[at];
  // Hidden pieces carry a zero matrix. Suppress either-hidden endpoint instead
  // of blending it toward world origin; appearance snaps one sample late.
- if(a[3].w<0.5||b[3].w<0.5){Out hidden={};hidden.position=float4(2,2,2,1);hidden.uv=0;hidden.color=0;hidden.normal=float3(0,1,0);hidden.world=0;return hidden;}
- // Linear matrix blending is deliberately approximate for large rotations.
- float4x4 m=float4x4(mix(a[0],b[0],u.timing.x),mix(a[1],b[1],u.timing.x),mix(a[2],b[2],u.timing.x),mix(a[3],b[3],u.timing.x));
+ if(m[3].w<0.5){Out hidden={};hidden.position=float4(2,2,2,1);hidden.uv=0;hidden.color=0;hidden.normal=float3(0,1,0);hidden.world=0;return hidden;}
  float3 w=(m*float4(float3(v.p),1)).xyz;
  ModelVisual visual=visuals[iid];
  Out o={}; o.position=project(w,u);o.uv=v.uv;
@@ -43,8 +94,8 @@ vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device c
  // Production SHD uses the model-space light before final world-Z reflection.
  float3 shadeNormal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);
  uint shadeRow=uint(int(dot(shadeNormal,float3(-0.8,1,0.25))*5.0))&31;
- if(b[0].w>1.5)shadeRow=15;
- o.shadeRow=b[0].w>0.5&&b[0].w<1.5?-1.0:float(shadeRow);o.color=float3(v.color);o.normal=normalize((m*float4(float3(v.n),0)).xyz);o.world=w;return o;
+ if(m[0].w>1.5)shadeRow=15;
+ o.shadeRow=m[0].w>0.5&&m[0].w<1.5?-1.0:float(shadeRow);o.color=float3(v.color);o.normal=normalize((m*float4(float3(v.n),0)).xyz);o.world=w;return o;
 }
 fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
@@ -134,9 +185,8 @@ fragment float4 composite_fragment(Screen in [[stage_in]],texture2d<float> color
 // Shadow placement is a prototype display departure: vertical terrain receiver,
 // five-world-pixel X offset; no retail silhouette copy, ALP or body punch.
 vertex Out shadow_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const Vertex* vertices [[buffer(0)]],device const uint* offsets [[buffer(1)]],device const float4x4* poses [[buffer(2)]],constant Uniforms& u [[buffer(3)]],device const ModelVisual* visuals [[buffer(5)]],texture2d<float> heights [[texture(1)]],device const uint* selectors [[buffer(8)]]) {
- iid=selectors[iid];Out o={};ModelVisual visual=visuals[iid];Vertex v=vertices[vid];uint at=offsets[iid]+v.piece;float4x4 a=poses[at],b=poses[at+uint(u.timing.z)];
- if(visual.state.w<0.5||a[3].w<0.5||b[3].w<0.5){o.position=float4(2,2,2,1);return o;}
- float4x4 m=float4x4(mix(a[0],b[0],u.timing.x),mix(a[1],b[1],u.timing.x),mix(a[2],b[2],u.timing.x),mix(a[3],b[3],u.timing.x));
+ iid=selectors[iid];Out o={};ModelVisual visual=visuals[iid];Vertex v=vertices[vid];uint at=offsets[iid]+v.piece;float4x4 m=poses[at];
+ if(visual.state.w<0.5||m[3].w<0.5){o.position=float4(2,2,2,1);return o;}
  float3 w=(m*float4(float3(v.p),1)).xyz;w.x+=5;w.y=u.visual.y>0.5?terrainHeight(w.xz,heights,u):visual.bounds.z;
  o.position=project(w,u);o.state=visual.state;return o;
 }
