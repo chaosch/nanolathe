@@ -51,22 +51,37 @@ func samplePoses(scene *Scene, opts LoadOptions, fs *vfs.FS, cat *content.Catalo
 		if sess.Movement != nil {
 			sess.Movement.EnsureUnit(unit)
 		}
-		queue, ok := unit.Orders.(*orders.Queue)
-		if !ok || queue == nil {
-			return fmt.Errorf("nanolathe: prototype template order queue unavailable: logical path %s, providers searched [unit record], expected ordinary movement queue", name)
-		}
-		order := orders.Lookup("Move_Ground")
+		// Staged units have no queue until an order producer binds it. Use the
+		// session's ordinary command path, which also selects VTOL movement
+		// for aircraft instead of forcing a ground row.
+		sess.BindStagedOrderQueue(unit)
 		goalX, goalZ := x+numeric.FixedFromInt(400), z+numeric.FixedFromInt(120)
-		queue.Push(order, orders.NewNodeForOrder(order, 0, goalX, sess.World.HeightAt(goalX, goalZ), goalZ, sess.Clock.GlobalTick, handle, false))
+		sess.StageGroupMove(0, []pool.Handle{handle}, goalX, goalZ, 1)
+		if queue := orders.QueueOfUnit(unit); queue == nil || queue.Head() == nil {
+			return fmt.Errorf("nanolathe: prototype template movement order unavailable: logical path %s, providers searched [session command], expected ordinary staged move", name)
+		}
 		templates[i] = poseTemplate{handle: handle, initial: [3]numeric.Fixed{x, y, z}}
 	}
 	var drained []frame.EventView
 	firstTick, lastTick := uint32(0), uint32(0)
+	pumps := 0
 	// Only completed, published frames cross this boundary. We never inspect a
 	// mutable COB state to make a rendered pose (DESIGN_GPU_RENDERER §13.5; I6).
 	for sample := 0; sample < opts.Samples; sample++ {
-		sess.Step(sess.Clock.ScaledAnchor + 1)
-		committed := sess.Snapshot.Current()
+		// Battle-entry dispatches complete loading before the clock can issue
+		// its first tick. Advance through those dispatches without treating
+		// an empty or repeated publication as a pose sample.
+		previousTick := sess.Clock.GlobalTick
+		var committed *frame.Frame
+		for pump := 0; pump < 16; pump++ {
+			sess.Step(sess.Clock.ScaledAnchor + 1)
+			pumps++
+			committed = sess.Snapshot.Current()
+			if committed != nil && committed.Tick > previousTick {
+				break
+			}
+			committed = nil
+		}
 		if committed == nil {
 			return fmt.Errorf("nanolathe: prototype pose publication missing: logical path committed frame, providers searched [session snapshot], expected completed 30 Hz sample")
 		}
@@ -117,11 +132,17 @@ func samplePoses(scene *Scene, opts LoadOptions, fs *vfs.FS, cat *content.Catalo
 			}
 		}
 	}
+	observed := make([]templatePoseCensus, len(templates))
+	for i, template := range templates {
+		observed[i] = summarizeTemplate(roster[i], models[i].Name, template)
+	}
+	scene.Metadata["template_observed_motion"] = observed
 	scene.Metadata["pose_source"] = "ordinary skirmish committed frame; ordinary unit allocator and movement orders; published script-piece link; model.Compose hierarchy"
 	scene.Metadata["template_units"] = len(templates)
 	scene.Metadata["template_roster"] = roster
 	scene.Metadata["template_session_mode"] = "modern"
 	scene.Metadata["template_tick_range"] = [2]uint32{firstTick, lastTick}
+	scene.Metadata["template_host_pumps"] = pumps
 	scene.Metadata["template_seed_pair"] = [2]uint32{12345, 6789}
 	scene.Metadata["template_initial_positions"] = func() [][3]float32 {
 		p := make([][3]float32, len(templates))
@@ -188,6 +209,45 @@ func committedMatrices(m *model.Model, view frame.UnitView) []Mat4 {
 		}
 		matrix[12], matrix[13], matrix[14] = float32(origin[0])/65536, float32(origin[1])/65536, -float32(origin[2])/65536
 		result[piece] = matrix
+	}
+	return result
+}
+
+// Report measured differences in committed samples, so a short load or a
+// blocked mover cannot silently be described as an animated workload.
+type templatePoseCensus struct {
+	Unit                    string     `json:"unit"`
+	Model                   string     `json:"model"`
+	PositionChangedSamples  int        `json:"position_changed_samples"`
+	PiecePoseChangedSamples int        `json:"piece_pose_changed_samples"`
+	ChangedPieceSamples     int        `json:"changed_piece_samples"`
+	VisiblePiecesMin        int        `json:"visible_pieces_min"`
+	VisiblePiecesMax        int        `json:"visible_pieces_max"`
+	FirstPosition           [3]float32 `json:"first_position_offset"`
+	LastPosition            [3]float32 `json:"last_position_offset"`
+}
+
+func summarizeTemplate(unit, modelName string, template poseTemplate) templatePoseCensus {
+	result := templatePoseCensus{Unit: unit, Model: modelName, VisiblePiecesMin: len(template.poses[0]), FirstPosition: template.positions[0], LastPosition: template.positions[len(template.positions)-1]}
+	for sample, pose := range template.poses {
+		visible, changed := 0, 0
+		for piece, matrix := range pose {
+			if matrix[15] != 0 {
+				visible++
+			}
+			if sample > 0 && matrix != template.poses[sample-1][piece] {
+				changed++
+			}
+		}
+		result.VisiblePiecesMin = min(result.VisiblePiecesMin, visible)
+		result.VisiblePiecesMax = max(result.VisiblePiecesMax, visible)
+		result.ChangedPieceSamples += changed
+		if changed > 0 {
+			result.PiecePoseChangedSamples++
+		}
+		if sample > 0 && template.positions[sample] != template.positions[sample-1] {
+			result.PositionChangedSamples++
+		}
 	}
 	return result
 }
