@@ -90,8 +90,19 @@ func (f *Foreground) Cursor(c drawlist.Cursor) {
 	if c.Frame == nil {
 		return
 	}
-	f.textured(f.image(imageKey{gaf: c.Frame}), int(c.HotX), int(c.HotY), false, 0, 0, 0, 0, [4]float32{1, 1, 1, 1})
+	r, x, y := f.image(imageKey{gaf: c.Frame}), int(c.HotX), int(c.HotY)
+	start := len(f.quads)
+	f.textured(r, x, y, false, 0, 0, 0, 0, [4]float32{1, 1, 1, 1})
+	// A host may move an unpinned cursor to a later pointer sample after this
+	// list was recorded. Only a whole quad can move: a clipped one would carry
+	// its clipped edge to the new position.
+	if !c.Pinned && len(f.quads) == start+1 && x >= 0 && y >= 0 && x+r.w <= f.cw && y+r.h <= f.ch {
+		f.cursorQuads = append(f.cursorQuads, start)
+	}
 }
+
+// CursorQuads returns the indices of the last Prepare's movable cursor quads.
+func (f *Foreground) CursorQuads() []int { return f.cursorQuads }
 
 func (f *Foreground) Surface(s drawlist.Surface) {
 	w, h, sw, sh := int(s.Dst.W), int(s.Dst.H), int(s.SrcW), int(s.SrcH)

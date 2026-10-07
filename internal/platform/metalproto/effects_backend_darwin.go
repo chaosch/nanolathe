@@ -29,7 +29,7 @@ type nativeEffectsLens struct {
 
 // nativeEffectsUpload matches NMEffectsUpload (152 bytes on the supported
 // 64-bit host). Its uintptr values borrow packing storage until the synchronous
-// nm_live_frame copy returns; the host must keep effectsPacking alive then.
+// nm_live_upload copy returns; the host must keep effectsPacking alive then.
 type nativeEffectsUpload struct {
 	Quads, Vertices, Samples, Lenses, Ops, Layers, Atlas                                             uintptr
 	Version                                                                                          uint64

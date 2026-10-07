@@ -31,7 +31,8 @@ type bridge struct {
 	texture         func(uintptr, int32, int32, int32, uintptr) int32
 	configure       func(uintptr, uintptr, uintptr, int32) int32
 	frame           func(uintptr, uintptr, uintptr, float32, float64) int32
-	liveFrame       func(uintptr, uintptr) int32
+	liveUpload      func(uintptr, uintptr) int32
+	livePresent     func(uintptr) int32
 	input           func(uintptr, uintptr)
 	events          func(uintptr, uintptr, int32) int32
 	playable        func(uintptr, int32)
@@ -121,7 +122,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
 	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
 	purego.RegisterLibFunc(&b.frame, lib, "nm_frame")
-	purego.RegisterLibFunc(&b.liveFrame, lib, "nm_live_frame")
+	purego.RegisterLibFunc(&b.liveUpload, lib, "nm_live_upload")
+	purego.RegisterLibFunc(&b.livePresent, lib, "nm_live_present")
 	purego.RegisterLibFunc(&b.input, lib, "nm_input")
 	purego.RegisterLibFunc(&b.events, lib, "nm_events")
 	purego.RegisterLibFunc(&b.playable, lib, "nm_playable")
@@ -265,6 +267,55 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if opts.FPS > 0 {
 		interval = time.Duration(float64(time.Second) / float64(opts.FPS))
 	}
+	// A live frame is the source's Next plus packing. With PrepareAhead, the
+	// next frame's preparation runs on a worker while this thread presents
+	// (drawable wait and encoding) and paces, so the render thread's critical
+	// path is the remaining join wait plus native submission. liveUpload
+	// copies every caller buffer before it returns and the worker starts only
+	// after that, so one set of Go buffers suffices. Native input is polled on
+	// this thread before the worker starts: a prepared-ahead frame sees input
+	// one draw earlier.
+	type preparedLive struct {
+		live           meshscene.LiveFrame
+		upload         liveUpload
+		metrics        liveRow
+		source, packed float64
+		err            error
+	}
+	prepareLive := func(seconds float64, in meshscene.Input) (p preparedLive) {
+		start := time.Now()
+		p.live, p.err = scene.Live.Next(seconds, in)
+		p.source = float64(time.Since(start)) / float64(time.Millisecond)
+		if p.err != nil || p.live.Exit {
+			return p
+		}
+		start = time.Now()
+		p.upload, p.metrics, p.err = packing.prepare(scene, p.live, seconds, opts.VisualPasses, opts.Effects)
+		p.packed = float64(time.Since(start)) / float64(time.Millisecond)
+		return p
+	}
+	pollLive := func(at time.Time) (meshscene.Input, error) {
+		var input nativeInput
+		b.input(handle, uintptr(unsafe.Pointer(&input)))
+		eventCount := int(b.events(handle, pointer(events), int32(len(events))))
+		runtime.KeepAlive(events)
+		if eventCount < 0 || eventCount > len(events) {
+			return meshscene.Input{}, fmt.Errorf("metalproto: invalid native event count")
+		}
+		return meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0, At: at}, nil
+	}
+	sourceSeconds := func(frame int, at time.Time) float64 {
+		if opts.Benchmark != nil {
+			return float64(frame) / float64(opts.FPS)
+		}
+		return at.Sub(started).Seconds()
+	}
+	var ahead chan preparedLive
+	defer func() {
+		if ahead != nil {
+			<-ahead
+		}
+	}()
 	for i := 0; interactive || i < len(rows); i++ {
 		var entry time.Time
 		if opts.Benchmark != nil {
@@ -313,46 +364,81 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		var status int32
 		var frameMetrics liveRow
 		if scene.Live != nil {
-			var input nativeInput
-			b.input(handle, uintptr(unsafe.Pointer(&input)))
-			eventCount := int(b.events(handle, pointer(events), int32(len(events))))
-			runtime.KeepAlive(events)
-			if eventCount < 0 || eventCount > len(events) {
-				return nil, fmt.Errorf("metalproto: invalid native event count")
+			// The measurement boundary runs host callbacks, so the first
+			// measured frame is never prepared across it; nothing follows the
+			// final frame.
+			next := i + 1
+			prepareNext := opts.PrepareAhead != nil && (interactive || next < len(rows)) &&
+				(opts.Benchmark == nil || next != opts.Warmup) && opts.PrepareAhead(next)
+			var p preparedLive
+			var nextInput meshscene.Input
+			polled := false
+			if ahead != nil {
+				joinStart := time.Now()
+				p = <-ahead
+				ahead = nil
+				hostRow.Ahead = true
+				hostRow.Join = float64(time.Since(joinStart)) / 1e6
+				// Poll now when the next frame is prepared ahead: the newest
+				// pointer places this frame's cursor, and the same input then
+				// feeds the next frame's preparation.
+				if prepareNext && p.err == nil && !p.live.Exit {
+					var err error
+					if nextInput, err = pollLive(time.Time{}); err != nil {
+						return nil, err
+					}
+					polled = true
+					lateCursor(&p.live, nextInput.Events)
+				}
+			} else {
+				in, err := pollLive(drawStart)
+				if err != nil {
+					return nil, err
+				}
+				p = prepareLive(sourceSeconds(i, drawStart), in)
 			}
-			nextStart := time.Now()
-			live, err := scene.Live.Next(seconds, meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0})
-			nextMS := float64(time.Since(nextStart)) / float64(time.Millisecond)
-			hostRow.Source = nextMS
-			if err != nil {
-				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
+			hostRow.Source, hostRow.Packing = p.source, p.packed
+			if p.err != nil {
+				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, p.err)
 			}
-			if live.Exit {
+			if p.live.Exit {
 				break
 			}
-			if b.pointerCapture(handle, boolInt(live.PointerCaptured)) == 0 {
+			if b.pointerCapture(handle, boolInt(p.live.PointerCaptured)) == 0 {
 				return nil, fmt.Errorf("metalproto: native pointer capture unavailable")
 			}
-			prepStart := time.Now()
-			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses, opts.Effects)
-			if err != nil {
-				return nil, err
-			}
-			metrics.NextMS = nextMS
-			metrics.PrepMS = float64(time.Since(prepStart)) / float64(time.Millisecond)
-			hostRow.Packing = metrics.PrepMS
-			frameMetrics = metrics
+			p.metrics.NextMS, p.metrics.PrepMS = p.source, p.packed
+			frameMetrics = p.metrics
 			var submitStart time.Time
 			if opts.Benchmark != nil {
 				submitStart = time.Now()
 			}
-			status = b.liveFrame(handle, uintptr(unsafe.Pointer(&upload)))
+			status = b.liveUpload(handle, uintptr(unsafe.Pointer(&p.upload)))
+			runtime.KeepAlive(p.live)
+			runtime.KeepAlive(packing)
+			runtime.KeepAlive(p.upload)
+			if status == 1 {
+				if prepareNext {
+					at := time.Now()
+					if opts.FPS > 0 && deadline.Add(interval).After(at) {
+						at = deadline.Add(interval)
+					}
+					if !polled {
+						var err error
+						if nextInput, err = pollLive(at); err != nil {
+							return nil, err
+						}
+					}
+					nextInput.At = at
+					seconds, in := sourceSeconds(next, at), nextInput
+					ahead = make(chan preparedLive, 1)
+					go func(done chan<- preparedLive) { done <- prepareLive(seconds, in) }(ahead)
+				}
+				status = b.livePresent(handle)
+			}
 			if opts.Benchmark != nil {
 				hostRow.Submit = float64(time.Since(submitStart)) / 1e6
 			}
-			runtime.KeepAlive(live)
-			runtime.KeepAlive(packing)
-			runtime.KeepAlive(upload)
 		} else {
 			sample := seconds * 30
 			tick := int(sample)
@@ -493,6 +579,31 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		return nil, err
 	}
 	return report, nil
+}
+
+// lateCursor moves a prepared-ahead frame's movable cursor quads to the newest
+// pointer sample in events, where the source's own late positioning would have
+// placed them had it run now.
+func lateCursor(f *meshscene.LiveFrame, events []meshscene.NativeEvent) {
+	if len(f.CursorQuads) == 0 || f.CursorScale <= 0 {
+		return
+	}
+	x, y, found := 0, 0, false
+	for _, e := range events {
+		if e.Kind == 1 || e.Kind == 2 || e.Kind == 3 || e.Kind == 9 {
+			x, y, found = int(e.X/f.CursorScale), int(e.Y/f.CursorScale), true
+		}
+	}
+	if !found {
+		return
+	}
+	dx, dy := float32(x-f.CursorAt[0])*f.CursorScale, float32(y-f.CursorAt[1])*f.CursorScale
+	for _, i := range f.CursorQuads {
+		if i >= 0 && i < len(f.Overlay) {
+			f.Overlay[i].Rect[0] += dx
+			f.Overlay[i].Rect[1] += dy
+		}
+	}
 }
 
 func validate(s *meshscene.Scene) error {

@@ -10,6 +10,8 @@ import (
 // BenchmarkOptions selects the production benchmark's fixed draw schedule and
 // measurement boundaries. Callbacks execute synchronously on the render host;
 // they must not launch a competing simulation or presentation reader [I6].
+// With PrepareAhead, AfterFrame for one frame may run while the source
+// prepares the next on the worker.
 type BenchmarkOptions struct {
 	BeforeMeasure, AfterMeasure func() error
 	AfterFrame                  func(BenchmarkFrame)
@@ -18,11 +20,14 @@ type BenchmarkOptions struct {
 // BenchmarkFrame brackets the complete Go/native host call after pacing.
 // Submit includes native queue/drawable waits and encoding; it is never GPU
 // execution or a presentation timestamp. Native CSV keeps those separately.
+// Ahead marks a frame prepared during the previous frame's pacing; its Source
+// and Packing ran on the worker, and only Join (the remaining wait) is in
+// DrawWork.
 type BenchmarkFrame struct {
 	Frame                                    int
-	CadenceValid                             bool
+	CadenceValid, Ahead                      bool
 	PaceWait, OutsideDraw, DrawWork, Cadence float64
-	Source, Packing, Submit                  float64
+	Source, Packing, Submit, Join            float64
 }
 
 // Match the production windowed benchmark's forced-GC and profiling protocol.

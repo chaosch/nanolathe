@@ -1,8 +1,11 @@
 package meshscene
 
+import "time"
+
 // LiveSource publishes presentation data from a running ordinary session.
-// Next is called on the render thread; Close stops and joins its worker.
-// Returned slices remain immutable through the next Next call.
+// Next is called on the render thread or on the host's single prepare-ahead
+// worker, never concurrently; Close stops and joins its worker. Returned
+// slices remain immutable through the next Next call.
 type LiveSource interface {
 	Next(seconds float64, input Input) (LiveFrame, error)
 	Close() map[string]any
@@ -13,6 +16,9 @@ type Input struct {
 	PanX, PanZ  float32 // held arrow/WASD axes, -1..1
 	Zoom        float32 // accumulated wheel delta
 	PauseToggle bool
+	// At is the instant the frame is prepared for. A frame prepared ahead
+	// is sampled at its predicted draw start, not when its worker runs.
+	At time.Time
 }
 
 // Sprite is a 96-byte GPU instance. Positions are world x,y,z; Rect is
@@ -54,10 +60,16 @@ type LiveFrame struct {
 	Exit bool // host requested an orderly window close after this input service
 	// Optional replacement of the retained UI atlas. The native host uploads it
 	// only when this nonzero version changes; slices live until Next returns.
-	OverlayDirty      [4]uint32 // changed atlas rectangle x/y/width/height; empty means full texture
-	OverlayTexture    Texture
-	OverlayVersion    uint64
-	Overlay           []OverlayQuad
+	OverlayDirty   [4]uint32 // changed atlas rectangle x/y/width/height; empty means full texture
+	OverlayTexture Texture
+	OverlayVersion uint64
+	Overlay        []OverlayQuad
+	// CursorQuads index Overlay quads placed for the logical pointer CursorAt;
+	// a host may move them to a later pointer sample. Event positions divide
+	// by CursorScale, and quads move by whole logical pixels times it.
+	CursorQuads       []int
+	CursorAt          [2]int
+	CursorScale       float32
 	Previous, Current []Mat4
 	Instances         []Instance
 	Sprites           []Sprite

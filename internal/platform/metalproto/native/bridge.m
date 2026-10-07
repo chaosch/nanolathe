@@ -67,7 +67,8 @@ _Static_assert(sizeof(NMEvent)==32,"event layout");
 _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @interface NMRenderer : NSObject {
 @public
- NMUniforms uniforms, lastUniforms;
+ NMUniforms uniforms, lastUniforms, pendingUniforms;
+ BOOL livePending,pendingOverlay;NSUInteger pendingOverlayRect[5];uint32_t pendingRetainedLights;double pendingWait,pendingCopy;
  float water[20];
  NMRow* rows;
  uint64_t* rowGenerations;
@@ -108,6 +109,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property NSMutableArray<id<MTLBuffer>> *poses,*interpolatedPoses;
 @property NSMutableArray<NMRing*>* rings;
 @property NMRing* lastRing;
+@property NMRing* pendingRing;
 @property id<MTLBuffer> emptyLights,materials,textureFrames;
 @property id<MTLTexture> spriteAtlas,overlayAtlas,fogAtlas,waterMask,modelPalette;
 @property id<MTLTexture> atlas,terrainImage,color,emission,blurA,blurB,depthImage,output,heights,shadowMask,worldSnapshot,postColor,emptyFog,subjectColor,subjectEmission,subjectDepth;
@@ -576,12 +578,15 @@ static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
 static id<MTLBuffer> growPoseOutput(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
  if(old.length>=MAX(bytes,64))return old;NSUInteger capacity=MAX(old.length,4096);while(capacity<bytes)capacity*=2;return [r.device newBufferWithLength:capacity options:MTLResourceStorageModePrivate];
 }
-int nm_live_frame(void* handle,const NMLiveUpload* upload) {
+// nm_live_upload copies one live frame into the next free ring slot and
+// nm_live_present acquires a drawable, encodes and commits it. Every read of
+// caller memory happens in the upload, so the caller may reuse its buffers
+// once the upload returns, while presentation waits for a drawable.
+int nm_live_upload(void* handle,const NMLiveUpload* upload) {
  @autoreleasepool {
- NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX||upload->ground_sprite_count>upload->sprite_count||upload->cloak_count>upload->instance_count||upload->air_count>upload->instance_count)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
- double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();id<CAMetalDrawable> drawable=nil;
- if(!r->offscreen){drawable=[r.layer nextDrawable];if(!drawable){dispatch_semaphore_signal(r->available);return 0;}}
- double ready=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];
+ NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX||upload->ground_sprite_count>upload->sprite_count||upload->cloak_count>upload->instance_count||upload->air_count>upload->instance_count)return 0;if(r->livePending)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
+ double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();
+ double copyStart=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];
  if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects)){dispatch_semaphore_signal(r->available);return 0;}
  if(!ring.shadows)ring.shadows=[NMShadowFrame new];if(!nmShadowsPrepare(r,r.shadows,ring.shadows,&upload->shadows)){r.lastError=@"Shadow preparation failed";dispatch_semaphore_signal(r->available);return 0;}
  ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)memcpy(ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;memcpy(&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;
@@ -627,17 +632,28 @@ int nm_live_frame(void* handle,const NMLiveUpload* upload) {
  if(!nmGroupsPrepare(r,ring,upload->groups)||!nmFacesPrepare(r,ring,upload->instance_count)||!nmFaceReflectionsPrepare(r,ring)||!nmOutlineRowsPrepare(r,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmWaterObjectsPrepare(r,ring,upload->water_objects)||!nmWaterObjectsPrepareSources(r,ring,upload->water_sources)){dispatch_semaphore_signal(r->available);return 0;}
  NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.lightControl=(vector_float4){upload->retained_light_count,(upload->light_controls&1)?1:0,(upload->light_controls&2)?1:0,(upload->light_controls&4)?1:0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,(upload->light_controls&8)?2:1,upload->composition_slot_count};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;
- NSUInteger generation=++r->rowCount;NSUInteger rowIndex=(generation-1)%r->rowCapacity;NMRow* row=&r->rows[rowIndex];@synchronized(r){memset(row,0,sizeof(*row));r->rowGenerations[rowIndex]=generation;}row->wait=(acquired-start)*1000;row->drawable_wait=(ready-acquired)*1000;
+ r.pendingRing=ring;r->pendingUniforms=u;r->pendingOverlay=uploadOverlay;r->pendingOverlayRect[0]=overlayX;r->pendingOverlayRect[1]=overlayY;r->pendingOverlayRect[2]=overlayW;r->pendingOverlayRect[3]=overlayH;r->pendingOverlayRect[4]=overlayRowBytes;
+ r->pendingRetainedLights=upload->retained_light_count;r->pendingWait=(acquired-start)*1000;r->pendingCopy=(CACurrentMediaTime()-copyStart)*1000;r->livePending=YES;return 1;
+ }
+}
+int nm_live_present(void* handle) {
+ @autoreleasepool {
+ NMRenderer* r=(__bridge NMRenderer*)handle;if(!r->livePending)return 0;r->livePending=NO;NMRing* ring=r.pendingRing;r.pendingRing=nil;NMUniforms u=r->pendingUniforms;BOOL uploadOverlay=r->pendingOverlay;
+ NSUInteger overlayX=r->pendingOverlayRect[0],overlayY=r->pendingOverlayRect[1],overlayW=r->pendingOverlayRect[2],overlayH=r->pendingOverlayRect[3],overlayRowBytes=r->pendingOverlayRect[4];
+ double acquired=CACurrentMediaTime();id<CAMetalDrawable> drawable=nil;
+ if(!r->offscreen){drawable=[r.layer nextDrawable];if(!drawable){dispatch_semaphore_signal(r->available);return 0;}}
+ double ready=CACurrentMediaTime();
+ NSUInteger generation=++r->rowCount;NSUInteger rowIndex=(generation-1)%r->rowCapacity;NMRow* row=&r->rows[rowIndex];@synchronized(r){memset(row,0,sizeof(*row));r->rowGenerations[rowIndex]=generation;}row->wait=r->pendingWait;row->drawable_wait=(ready-acquired)*1000;
  id<MTLCommandBuffer> cb=[r.queue commandBuffer];nmTimingBegin(r.device,r->frameNumber);
  // GPU writes are ordered after previous readers on this serial queue. Only
  // the acquired ring's CPU staging bytes are modified; the atlas is never
  // replaceRegion-written while an earlier command buffer can sample it.
  if(uploadOverlay){id<MTLBlitCommandEncoder> blit=nmBlitEncoder(cb,"hud.atlasUpload");[blit copyFromBuffer:ring.overlayUpload sourceOffset:0 sourceBytesPerRow:overlayRowBytes sourceBytesPerImage:overlayRowBytes*overlayH sourceSize:MTLSizeMake(overlayW,overlayH,1) toTexture:ring.overlayAtlas destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(overlayX,overlayY,0)];[blit endEncoding];}
- nmEffectsSetLighting(ring,ring.retainedLights,upload->retained_light_count);
+ nmEffectsSetLighting(ring,ring.retainedLights,r->pendingRetainedLights);
  nmEffectsBegin(r,ring,cb);
  if(!encode(r,cb,ring.poses,ring.interpolatedPoses,u,drawable?drawable.texture:r.output,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(drawable){dispatch_group_enter(r->presentations);[drawable addPresentedHandler:^(id<MTLDrawable> d){@synchronized(r){if(r->rowGenerations[rowIndex]==generation)r->rows[rowIndex].presented=d.presentedTime;}dispatch_group_leave(r->presentations);}];[cb presentDrawable:drawable];}
- row->encode=(CACurrentMediaTime()-ready)*1000;row->submit=CACurrentMediaTime();row->memory=r.device.currentAllocatedSize;dispatch_group_enter(r->pending);
+ row->encode=r->pendingCopy+(CACurrentMediaTime()-ready)*1000;row->submit=CACurrentMediaTime();row->memory=r.device.currentAllocatedSize;dispatch_group_enter(r->pending);
  {void (^timing)(void)=nmTimingCompletion(r->frameNumber);if(timing)[cb addCompletedHandler:^(id<MTLCommandBuffer> b){(void)b;timing();}];}[cb addCompletedHandler:^(id<MTLCommandBuffer> b){@synchronized(r){if(r->rowGenerations[rowIndex]==generation){NMRow* result=&r->rows[rowIndex];result->gpu_start=b.GPUStartTime;result->gpu_end=b.GPUEndTime;result->completed=CACurrentMediaTime();result->status=(int)b.status;}}if(b.error)r.lastError=b.error.localizedDescription;nmOutlineRowsCompleted(r,ring);dispatch_semaphore_signal(r->available);dispatch_group_leave(r->pending);}];[cb commit];r->frameNumber++;return 1;
  }
 }

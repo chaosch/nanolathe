@@ -22,10 +22,10 @@ import (
 
 type metalBenchmarkRow struct {
 	Frame                                                          int
-	CadenceValid, SimulationStep                                   bool
+	CadenceValid, SimulationStep, Ahead                            bool
 	TickPhase                                                      int
 	Step, Record, Submit, Cadence, PaceWait, OutsideDraw, DrawWork float64
-	Source, Packing, CensusMS                                      float64
+	Source, Packing, CensusMS, Join                                float64
 	// Parts splits Record: begin+camera, world frame, visuals, foreground+HUD,
 	// frame sources, projection, composer, shadows (milliseconds, diagnostic).
 	Parts  [20]float64
@@ -67,13 +67,34 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 	host := &metalBenchmarkSource{b: b, c: c, world: world, scene: scene,
 		hud:  metalhud.New(c.PaletteTables(), options.Width, options.Height),
 		step: step, census: census, options: options,
-		rows: make([]metalBenchmarkRow, 0, options.Frames)}
+		rows: make([]metalBenchmarkRow, 0, options.Frames), measured: make(chan metalBenchmarkRow, 2)}
 	scene.Live = host
+	// Every draw, the synchronous step included, is prepared on a worker while
+	// the previous draw presents and paces, as the match host prepares every
+	// frame. "nonstep" matches the production benchmark's pre-record
+	// (DESIGN_GPU_RENDERER §13.10): a stepping draw is prepared after pacing.
+	// "0" prepares every draw after pacing. Every policy issues the same
+	// source calls in the same order, so captures are identical.
+	drawsPerTick := options.TPS / 30
+	var prepareAhead func(int) bool
+	policy := os.Getenv("NANOLATHE_METAL_PIPELINE")
+	switch policy {
+	case "nonstep":
+		prepareAhead = func(frame int) bool { return frame%drawsPerTick != 0 }
+	case "", "all":
+		policy = "all"
+		prepareAhead = func(int) bool { return true }
+	case "0":
+	default:
+		return fmt.Errorf("nanolathe: NANOLATHE_METAL_PIPELINE must be nonstep, all or 0, not %q", policy)
+	}
+	metadata["prepare_ahead"] = policy
 	report, err := metalproto.Run(scene, metalproto.Options{
 		Width: options.Width, Height: options.Height, Frames: options.Frames, Warmup: options.TPS * 2, FPS: options.TPS,
 		VSync: true, Effects: true, VisualPasses: true, OutputDir: options.Directory, LibraryPath: opts.MetalLibrary,
 		Benchmark: &metalproto.BenchmarkOptions{BeforeMeasure: options.BeforeMeasure, AfterMeasure: options.AfterMeasure,
 			AfterFrame: host.afterFrame},
+		PrepareAhead: prepareAhead,
 	})
 	if err != nil {
 		return err
@@ -128,6 +149,9 @@ type metalBenchmarkSource struct {
 	atlasEpoch, atlasVersion uint64
 	row                      metalBenchmarkRow
 	rows                     []metalBenchmarkRow
+	// measured carries each measured draw's source row to afterFrame, which
+	// may run while the worker already prepares the following draw.
+	measured chan metalBenchmarkRow
 }
 
 func benchmarkElapsed(start time.Time) float64 { return float64(time.Since(start)) / 1e6 }
@@ -233,17 +257,19 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		start := time.Now()
 		h.row.Census = h.census()
 		h.row.CensusMS = benchmarkElapsed(start)
+		h.measured <- h.row
 	}
 	h.draw++
 	return h.frame, nil
 }
 
 func (h *metalBenchmarkSource) afterFrame(t metalproto.BenchmarkFrame) {
-	row := h.row
+	row := <-h.measured
 	row.CadenceValid, row.Cadence = t.CadenceValid, t.Cadence
 	row.PaceWait, row.OutsideDraw, row.DrawWork = t.PaceWait, t.OutsideDraw, t.DrawWork
 	row.Record += t.Packing
 	row.Submit, row.Source, row.Packing = t.Submit, t.Source, t.Packing
+	row.Ahead, row.Join = t.Ahead, t.Join
 	h.rows = append(h.rows, row)
 }
 

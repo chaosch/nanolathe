@@ -93,7 +93,15 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	scene.Metadata["logical_surface"] = []int{logicalW, logicalH}
 	scene.Metadata["prototype_limits"] = "one battle per launch; fixed drawable; native world effects and annotation depth remain prototype approximations"
 	renderOptions := metalproto.Options{Width: width, Height: height, Frames: opts.MetalFrames, Warmup: 120, FPS: 120, VSync: true, Effects: true, VisualPasses: true, OutputDir: opts.MetalPrototype, LibraryPath: opts.MetalLibrary}
+	// Every match frame is prepared during the previous frame's pacing, as the
+	// production window pre-records (DESIGN_GPU_RENDERER §13.10); the simulation
+	// already runs on its own goroutine. NANOLATHE_METAL_PIPELINE=0 restores
+	// preparation after pacing.
+	if os.Getenv("NANOLATHE_METAL_PIPELINE") != "0" {
+		renderOptions.PrepareAhead = func(int) bool { return true }
+	}
 	if opts.MetalModelCapture != "" {
+		renderOptions.PrepareAhead = nil
 		scene.Live, err = newMetalModelCapture(scene, retained, sess, opts.MetalModelCapture, width, height, cs.fs)
 		if err != nil {
 			return err
@@ -152,7 +160,12 @@ type metalBattleHost struct {
 }
 
 func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.LiveFrame, error) {
-	now := time.Now()
+	// A frame prepared ahead steps and samples the camera at its predicted
+	// draw start rather than when the worker happens to run.
+	now := in.At
+	if now.IsZero() {
+		now = time.Now()
+	}
 	if h.started.IsZero() {
 		h.started = now
 		h.due = now
@@ -245,6 +258,10 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		for j := range quads[i].Rect {
 			quads[i].Rect[j] *= 2
 		}
+	}
+	h.frame.CursorQuads = nil
+	if h.cursorObserved && !h.cl.PointerCaptured() {
+		h.frame.CursorQuads, h.frame.CursorAt, h.frame.CursorScale = h.hud.CursorQuads(), [2]int{h.cursorX, h.cursorY}, 2
 	}
 	dirty := h.hud.DirtyRect()
 	h.frame.Overlay = quads

@@ -28,6 +28,7 @@ type Foreground struct {
 	first         bool
 	x, y, shelf   int
 	quads         []meshscene.OverlayQuad
+	cursorQuads   []int
 	effectLayers  []meshscene.EffectLayer
 	err           error
 	world         bool
@@ -75,6 +76,7 @@ func (f *Foreground) beginPrepare() {
 		resetEffectLayer(&f.effectLayers[i])
 	}
 	f.quads = f.quads[:0]
+	f.cursorQuads = f.cursorQuads[:0]
 	f.dirty = [4]int{}
 	if f.first {
 		f.dirty = [4]int{0, 0, atlasSize, atlasSize}
