@@ -375,7 +375,11 @@ fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[tex
 // One pass on the drawable replaces world resolve, full-frame snapshot copy,
 // distortion target and fog: the resolved world is never stored. bands>0
 // softens slab silhouettes; bloom adds the half-size blur.
-struct NMFinal { float bands,bloom,pad0,pad1; };
+// gain rescales the finished world when the display gamma factor has moved
+// since the world's art was baked: palette = min(255, base*factor), so a new
+// factor is the old colour times new/old, clamped (zero means unchanged).
+struct NMFinal { float bands,bloom,gain,pad1; };
+float3 nmFinalGain(float3 c,constant NMFinal& f) { return f.gain>0?min(c*f.gain,float3(1)):c; }
 // Production glow octaves, screened at the final pass instead of a separate
 // full-screen composite into the world colour (same arithmetic as the glow
 // resolve fragment). flags.x enables it for this frame.
@@ -407,7 +411,7 @@ fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[t
  }
  c=nmFinalGlow(c,in.p.xy,octaves,g);
  if(f.bloom>0.5)c+=glow.sample(s,in.uv).rgb*0.65;
- return float4(nmFinalFog(c,in.p.xy,fog,masks,u),1);
+ return float4(nmFinalGain(nmFinalFog(c,in.p.xy,fog,masks,u),f),1);
 }
 struct DistortionOut { float4 position [[position]]; float2 local; float4 shape [[flat]]; float4 params [[flat]]; };
 vertex DistortionOut distortion_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const Distortion* sources [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
@@ -493,5 +497,5 @@ fragment float4 distortion_final_fragment(DistortionOut in [[stage_in]],texture2
  float2 shift=nmDistortionShift(in,u);
  float2 uv=clamp((in.position.xy+shift*u.camera.z)/u.viewport.xy,float2(0),float2(1));
  float3 c=nmFinalGlow(color.sample(s,uv).rgb,uv*u.viewport.xy,octaves,g);if(f.bloom>0.5)c+=glow.sample(s,uv).rgb*0.65;
- return float4(nmFinalFog(c,in.position.xy,fog,masks,u),1);
+ return float4(nmFinalGain(nmFinalFog(c,in.position.xy,fog,masks,u),f),1);
 }

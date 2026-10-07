@@ -41,6 +41,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @property id<MTLBuffer> glowVertices;
 @property NSUInteger glowCount;
 @property BOOL glowEnabled;
+@property float worldGain;
 @property NMGlowParameters glowParams;
 @property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload,rules,materialOffsets,materialOverrides,retainedLights,subjectLights;
 @property NSMutableData *spans,*cloaks,*compositionDraws;
@@ -59,7 +60,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==680,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==688,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -549,7 +550,7 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
 // drawable; the HUD follows in the same encoder (NANOLATHE_METAL_LEGACY_POST=1
 // restores the stored resolve, snapshot copy and separate fog pass).
  if(u.visual.x>0.5&&!getenv("NANOLATHE_METAL_LEGACY_POST")){
-  struct {float bands,bloom,pad0,pad1;} f={ring.directSlotCount?(float)ring.compositionPaintCount+1:0,(u.timing.w>0.5&&!ring.glowEnabled)?1.f:0.f,0,0};
+  struct {float bands,bloom,gain,pad1;} f={ring.directSlotCount?(float)ring.compositionPaintCount+1:0,(u.timing.w>0.5&&!ring.glowEnabled)?1.f:0.f,ring.worldGain,0};
   MTLRenderPassDescriptor* last=[MTLRenderPassDescriptor renderPassDescriptor];last.colorAttachments[0].texture=destination;last.colorAttachments[0].loadAction=MTLLoadActionDontCare;last.colorAttachments[0].storeAction=MTLStoreActionStore;
   enc=nmRenderEncoder(cb,last,"post.final");
   [enc setRenderPipelineState:r.finalPass];
@@ -600,7 +601,7 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
  @autoreleasepool {
  NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX||upload->ground_sprite_count>upload->sprite_count||upload->cloak_count>upload->instance_count||upload->air_count>upload->instance_count)return 0;if(r->livePending)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
  double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();
- double copyStart=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];
+ double copyStart=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];ring.worldGain=upload->world_gain;
  if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects)){dispatch_semaphore_signal(r->available);return 0;}
  if(!ring.shadows)ring.shadows=[NMShadowFrame new];if(!nmShadowsPrepare(r,r.shadows,ring.shadows,&upload->shadows)){r.lastError=@"Shadow preparation failed";dispatch_semaphore_signal(r->available);return 0;}
  ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)memcpy(ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;memcpy(&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;

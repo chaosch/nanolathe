@@ -81,6 +81,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	// Selected-unit quads are drawn in their units' paint slots, not the HUD.
 	cl.SetExternalSelection(true)
 	display := cl.DisplayPalette()
+	worldGamma := cl.GammaFactor()
 	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
@@ -90,7 +91,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 		return err
 	}
 	prepareMetalScene(scene, sess.World)
-	host := &metalBattleHost{fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
+	host := &metalBattleHost{worldGamma: worldGamma, fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	scene.Live = host
 	if path := os.Getenv("NANOLATHE_METAL_INPUT_TRACE"); path != "" {
 		if host.trace.out, err = os.Create(path); err != nil {
@@ -107,6 +108,16 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	// preparation after pacing.
 	if os.Getenv("NANOLATHE_METAL_PIPELINE") != "0" {
 		renderOptions.PrepareAhead = func(int) bool { return true }
+	}
+	// Diagnostics: a windowless run for scripted checks, and a +gamma command
+	// issued at a host frame ("frame:value").
+	if os.Getenv("NANOLATHE_METAL_OFFSCREEN") == "1" {
+		renderOptions.Offscreen, renderOptions.FPS, renderOptions.PrepareAhead = true, 0, nil
+	}
+	if v := os.Getenv("NANOLATHE_METAL_TEST_GAMMA"); v != "" {
+		if _, err := fmt.Sscanf(v, "%d:%d", &host.testGammaFrame, &host.testGamma); err != nil {
+			return fmt.Errorf("nanolathe: NANOLATHE_METAL_TEST_GAMMA wants frame:value: %w", err)
+		}
 	}
 	if opts.MetalModelCapture != "" {
 		renderOptions.PrepareAhead = nil
@@ -154,6 +165,7 @@ type metalBattleHost struct {
 	world                         *meshscene.RetainedBattle
 	hud                           *metalhud.Foreground
 	displayPalette                [256][4]byte
+	worldGamma                    float32 // display gamma factor the world art was built with
 	atlasEpoch, atlasLocalVersion uint64
 	input                         *metalInput
 	width, height                 int
@@ -168,6 +180,8 @@ type metalBattleHost struct {
 	steps, inputs                 uint64
 	cursorX, cursorY              int
 	cursorObserved                bool
+	frames                        int
+	testGammaFrame, testGamma     int
 }
 
 func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.LiveFrame, error) {
@@ -182,6 +196,9 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.due = now
 	}
 	h.fps.observe(time.Now(), in.Timing)
+	if h.frames++; h.testGammaFrame > 0 && h.frames == h.testGammaFrame {
+		h.battle.setGammaCommand(h.testGamma)
+	}
 	h.events = append(h.events, in.Events...)
 	for _, event := range in.Events {
 		if event.Kind == 1 || event.Kind == 2 || event.Kind == 3 || event.Kind == 9 {
@@ -245,6 +262,12 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	}
 	h.frame.Camera = camera
 	h.frame.Alpha = float32(fraction) / 65536
+	// The world art keeps its load-time palette; a later gamma factor scales
+	// the finished world, exactly below the palette's clamp.
+	h.frame.WorldGain = 0
+	if g := h.cl.GammaFactor(); h.worldGamma > 0 && g != h.worldGamma {
+		h.frame.WorldGain = g / h.worldGamma
+	}
 	display := h.cl.DisplayPalette()
 	if display != h.displayPalette {
 		var pal palette.Tables
@@ -319,6 +342,7 @@ func (h *metalBattleHost) Close() map[string]any {
 	result := h.world.Report()
 	result["host_steps"] = h.steps
 	result["selection_unplaced"] = h.selection.unplaced
+	result["world_gamma"] = map[string]float32{"built": h.worldGamma, "final": h.cl.GammaFactor(), "gain": h.frame.WorldGain}
 	result["native_events"] = h.inputs
 	result["elapsed_seconds"] = time.Since(h.started).Seconds()
 	if current := h.sess.Snapshot.Current(); current != nil {

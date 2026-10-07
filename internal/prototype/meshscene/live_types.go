@@ -89,10 +89,13 @@ type LiveFrame struct {
 	// CursorQuads index Overlay quads placed for the logical pointer CursorAt;
 	// a host may move them to a later pointer sample. Event positions divide
 	// by CursorScale, and quads move by whole logical pixels times it.
-	CursorQuads       []int
-	CursorAt          [2]int
-	CursorScale       float32
-	Annotations       []Annotation
+	CursorQuads []int
+	CursorAt    [2]int
+	CursorScale float32
+	Annotations []Annotation
+	// WorldGain is the display gamma factor over the factor the retained
+	// world art was built with; zero means unchanged.
+	WorldGain         float32
 	Previous, Current []Mat4
 	Instances         []Instance
 	Sprites           []Sprite

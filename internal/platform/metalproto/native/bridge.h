@@ -46,6 +46,8 @@ typedef struct {
  // Per-slot rectangles drawn in the slot's paint band before its body:
  // {x,y,w,h,r,g,b,a} physical pixels; ranges are {first,count} per slot.
  const void* annotations;const uint32_t* annotation_ranges;uint32_t annotation_count,annotation_range_count;
+ // Display gamma factor now over the factor the world art was baked with.
+ float world_gain;uint32_t reserved;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
