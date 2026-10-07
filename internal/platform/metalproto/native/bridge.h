@@ -29,6 +29,9 @@ typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // are 7/8/9. Key events carry the Cocoa virtual keycode in button.
 typedef struct { uint32_t kind,key,button,modifiers; float x,y,wheel_x,wheel_y; } NMEvent;
 void nm_playable(void* renderer,int playable);
+// Capture delivers cumulative virtual drawable coordinates; release restores
+// the pre-capture content-view position. Returns zero on a CoreGraphics error.
+int nm_pointer_capture(void* renderer,int captured);
 int nm_events(void* renderer,NMEvent* events,int capacity);
 void nm_input(void* renderer,NMInput* input);
 int nm_live_frame(void* renderer,const NMLiveUpload* upload);

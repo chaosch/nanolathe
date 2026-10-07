@@ -40,7 +40,10 @@ _Static_assert(sizeof(NMEvent)==32,"event layout");
  dispatch_group_t pending, presentations;
  BOOL presentationDrainTimedOut;
  NSUInteger presentationDrainRowCount;
- BOOL interactive,playable,wasKey,cursorHidden;
+ BOOL interactive,playable,wasKey,cursorHidden,pointerCaptured;
+ NSPoint pointerRestore;
+ double pointerWarpX,pointerWarpY;
+ uint32_t pointerModifiers;
  uint64_t overlayVersion,overlayTextureUploads,overlayTextureBytes;
  BOOL offscreen,effects,visualPasses,held[128],pressed[128],pauseToggle;
  float wheel;
@@ -158,6 +161,43 @@ static void pushEvent(NMRenderer* r,NMEvent event) {
 static uint32_t modifiers(NSEvent* event) {
  NSEventModifierFlags f=event.modifierFlags;return ((f&NSEventModifierFlagShift)?1:0)|((f&NSEventModifierFlagControl)?2:0)|((f&NSEventModifierFlagOption)?4:0)|((f&NSEventModifierFlagCommand)?8:0);
 }
+static CGPoint quartzPoint(NSPoint point) {
+ NSScreen* primary=NSScreen.screens.firstObject;return CGPointMake(point.x,NSMaxY(primary.frame)-point.y);
+}
+static NSPoint viewToScreen(NMRenderer* r,NSPoint point) {
+ return [r.window convertPointToScreen:[r.window.contentView convertPoint:point toView:nil]];
+}
+static BOOL restorePointer(NMRenderer* r) {
+ if(!r->pointerCaptured)return YES;
+ r->pointerCaptured=NO;r->pointerWarpX=r->pointerWarpY=0;
+ CGError warp=CGWarpMouseCursorPosition(quartzPoint(viewToScreen(r,r->pointerRestore)));
+ // Reassociation follows the warp, matching the production Cocoa host path's
+ // ordering so the restored cursor resumes immediate ordinary movement.
+ CGError associate=CGAssociateMouseAndMouseCursorPosition(true);
+ if(warp!=kCGErrorSuccess||associate!=kCGErrorSuccess)r.lastError=@"Native pointer restoration failed";
+ NSView* view=r.window.contentView;NSRect bounds=view.bounds;
+ r->pointerX=(r->pointerRestore.x-NSMinX(bounds))*r.layer.drawableSize.width/MAX(bounds.size.width,1);
+ r->pointerY=(view.flipped?r->pointerRestore.y-NSMinY(bounds):NSMaxY(bounds)-r->pointerRestore.y)*r.layer.drawableSize.height/MAX(bounds.size.height,1);
+ pushEvent(r,(NMEvent){.kind=1,.modifiers=r->pointerModifiers,.x=r->pointerX,.y=r->pointerY});
+ return warp==kCGErrorSuccess&&associate==kCGErrorSuccess;
+}
+int nm_pointer_capture(void* handle,int captured) {
+ @autoreleasepool {
+ NMRenderer* r=(__bridge NMRenderer*)handle;
+ if(!captured)return restorePointer(r)?1:0;
+ if(r->offscreen||!r->playable||!r.window.keyWindow)return 1;
+ if(r->pointerCaptured)return 1;
+ NSView* view=r.window.contentView;NSRect bounds=view.bounds;NSPoint screen=NSEvent.mouseLocation;
+ r->pointerRestore=[view convertPoint:[r.window convertPointFromScreen:screen] fromView:nil];
+ NSPoint center=NSMakePoint(NSMidX(bounds),NSMidY(bounds));NSPoint centerScreen=viewToScreen(r,center);
+ CGError warp=CGWarpMouseCursorPosition(quartzPoint(centerScreen));
+ if(warp!=kCGErrorSuccess){r.lastError=@"Native pointer centering failed";return 0;}
+ CGError associate=CGAssociateMouseAndMouseCursorPosition(false);
+ if(associate!=kCGErrorSuccess){CGWarpMouseCursorPosition(quartzPoint(screen));CGAssociateMouseAndMouseCursorPosition(true);r.lastError=@"Native relative pointer capture failed";return 0;}
+ r->pointerWarpX=centerScreen.x-screen.x;r->pointerWarpY=screen.y-centerScreen.y;
+ r->pointerCaptured=YES;return 1;
+ }
+}
 static void clearFocus(NMRenderer* r) {
  // Clear the native poll state and publish releases for the production held
  // state. Modifier flags are their own event, including a complete chord tap.
@@ -165,7 +205,7 @@ static void clearFocus(NMRenderer* r) {
  memset(r->held,0,sizeof(r->held));memset(r->pressed,0,sizeof(r->pressed));r->pauseToggle=NO;r->wheel=0;
  if(r->playable)pushEvent(r,(NMEvent){.kind=6});
  for(uint32_t button=0;button<3;button++)if(r->mouseHeld&(1u<<button))pushEvent(r,(NMEvent){.kind=3,.button=button,.x=r->pointerX,.y=r->pointerY});
- r->mouseHeld=0;
+ r->mouseHeld=0;r->pointerModifiers=0;restorePointer(r);
 }
 static void observeFocus(NMRenderer* r) {
  BOOL focused=r.window.keyWindow;
@@ -192,6 +232,7 @@ static void pump(NMRenderer* r) {
  if(r->offscreen)return;observeFocus(r);
  NSEvent* event;while((event=[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES])){
   BOOL consumed=NO;BOOL ours=event.window==r.window;
+  if(ours)r->pointerModifiers=modifiers(event);
   if(ours&&event.type==NSEventTypeFlagsChanged){if(r->playable){pushEvent(r,(NMEvent){.kind=6,.modifiers=modifiers(event)});consumed=YES;}}
   if(ours&&(event.type==NSEventTypeKeyDown||event.type==NSEventTypeKeyUp)){
    unsigned short k=event.keyCode;BOOL down=event.type==NSEventTypeKeyDown;
@@ -213,7 +254,15 @@ static void pump(NMRenderer* r) {
    float x=(point.x-NSMinX(bounds))*r.layer.drawableSize.width/MAX(bounds.size.width,1);
    float y=(view.flipped?point.y-NSMinY(bounds):NSMaxY(bounds)-point.y)*r.layer.drawableSize.height/MAX(bounds.size.height,1);
    BOOL inside=NSPointInRect(point,bounds);uint32_t button=event.buttonNumber==1?1:event.buttonNumber==2?2:0;
-   if(inside||r->mouseHeld){r->pointerX=x;r->pointerY=y;
+   if(r->pointerCaptured){
+    // Relative deltas remain device-independent Cocoa points. Scale into the
+    // same drawable-pixel lane as ordinary absolute positions; the production
+    // adapter divides once by its device scale. A center warp is host motion,
+    // never camera movement [07 R-CAM-01 §11].
+    if(move){r->pointerX+=((double)event.deltaX-r->pointerWarpX)*r.layer.drawableSize.width/MAX(bounds.size.width,1);r->pointerY+=((double)event.deltaY-r->pointerWarpY)*r.layer.drawableSize.height/MAX(bounds.size.height,1);r->pointerWarpX=r->pointerWarpY=0;}
+    x=r->pointerX;y=r->pointerY;
+   }
+   if(inside||r->mouseHeld||r->pointerCaptured){r->pointerX=x;r->pointerY=y;
     if(scroll){r->wheel+=(float)event.scrollingDeltaY;consumed=YES;}
     if(r->playable){if(down){[r.window makeKeyWindow];r->mouseHeld|=1u<<button;}if(up)r->mouseHeld&=~(1u<<button);
      uint32_t key=down?(uint32_t)event.clickCount:0;
@@ -364,6 +413,6 @@ int nm_capture(void* handle,const char* path) {
  NSData* png=[image representationUsingType:NSBitmapImageFileTypePNG properties:@{}];return [png writeToFile:[NSString stringWithUTF8String:path] atomically:YES]?1:0;}
 }
 void nm_info(void* handle,char* output,int capacity) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSData* d=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
+ @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"pointer_captured":@(r->pointerCaptured),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSData* d=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
 }
-void nm_destroy(void* handle) { @autoreleasepool {NMRenderer* r=(__bridge_transfer NMRenderer*)handle;nm_drain((__bridge void*)r);if(r->cursorHidden){[NSCursor unhide];r->cursorHidden=NO;}[r.window orderOut:nil];[r.window close];} }
+void nm_destroy(void* handle) { @autoreleasepool {NMRenderer* r=(__bridge_transfer NMRenderer*)handle;nm_drain((__bridge void*)r);restorePointer(r);if(r->cursorHidden){[NSCursor unhide];r->cursorHidden=NO;}[r.window orderOut:nil];[r.window close];} }
