@@ -1,9 +1,44 @@
 package metalhud
 
 import (
+	"fmt"
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
+
+// GlowAtlas is a read-only view of art already packed by PrepareEffectLayers.
+// Lookups never change texture bytes, version or the aggregate dirty rectangle.
+// Sprite RGB is unpremultiplied displayed palette RGB and alpha is coverage;
+// the producer's half-alpha remains separate in Sprite.Kind. Palette tables are
+// immutable for an adapter's lifetime: recreate it when the palette changes.
+type GlowAtlas struct{ foreground *Foreground }
+
+func (f *Foreground) GlowAtlas() GlowAtlas { return GlowAtlas{foreground: f} }
+
+// Frame returns atlas TEXEL ENDPOINTS [x0,y0,x1,y1] for a replayed GAF leaf.
+// Complete composites belong to lighting measurement; glow follows recorded
+// ordered leaves instead [DESIGN_GPU_RENDERER §19, §23].
+func (a GlowAtlas) Frame(frame *formats.GAFFrame) ([4]float32, error) {
+	if a.foreground != nil && frame != nil && len(frame.Subframes) == 0 {
+		if r, ok := a.foreground.images[imageKey{gaf: frame}]; ok && r.w > 0 && r.h > 0 {
+			return [4]float32{float32(r.x), float32(r.y), float32(r.x + r.w), float32(r.y + r.h)}, nil
+		}
+	}
+	return [4]float32{}, fmt.Errorf("nanolathe: native glow source has no prepared GAF leaf")
+}
+
+// Flash returns texel endpoints for the existing generated row raster. Red is
+// row/255, alpha is coverage; its emission high lane is min(1+row/30,2)-1,
+// retaining the production single-precision addition and subtraction order.
+func (a GlowAtlas) Flash(flash drawlist.Flash) ([4]float32, error) {
+	if a.foreground != nil && flash.Side > 0 && len(flash.Rows) > 0 {
+		if r, ok := a.foreground.effectArt[effectArtKey{rows: &flash.Rows[0], side: flash.Side}]; ok && r.w > 0 && r.h > 0 {
+			return [4]float32{float32(r.x), float32(r.y), float32(r.x + r.w), float32(r.y + r.h)}, nil
+		}
+	}
+	return [4]float32{}, fmt.Errorf("nanolathe: native glow source has no prepared calculated flash")
+}
 
 // EffectBatch retains the distinction between projectile models, whose native
 // producer already owns their bodies, and direct fragment/debris packets.
@@ -14,6 +49,7 @@ type EffectBatch struct {
 
 type effectArtKey struct {
 	rows         *uint8
+	model        *formats.GAFFrame
 	side, radius int32
 	row          uint8
 }
@@ -116,6 +152,9 @@ func (s *effectSink) Points(c drawlist.Points) {
 func (s *effectSink) Model(c drawlist.Model) {
 	if s.projectileModels {
 		s.layer.Counts.ProjectileModels++
+		i := len(s.layer.RetainedModels)
+		s.layer.RetainedModels = append(s.layer.RetainedModels, c)
+		s.layer.Ops = append(s.layer.Ops, meshscene.EffectOp{Kind: meshscene.EffectOpRetainedModel, First: i, Count: 1})
 		return
 	}
 	if c.Geometry == nil {
@@ -128,9 +167,109 @@ func (s *effectSink) Model(c drawlist.Model) {
 	if s.world {
 		scale, ox, oy = s.scale, s.ox, s.oy
 	}
-	s.layer.Models = append(s.layer.Models, meshscene.EffectGeometry{Model: c, Scale: scale, OffsetX: ox, OffsetY: oy})
+	packet := meshscene.EffectGeometry{Model: c, Scale: scale, OffsetX: ox, OffsetY: oy}
+	s.projectModel(&packet)
+	s.layer.Models = append(s.layer.Models, packet)
 	s.layer.Ops = append(s.layer.Ops, meshscene.EffectOp{Kind: meshscene.EffectOpGeometry, First: i, Count: 1})
 	s.layer.Counts.Geometry++
+}
+
+// Direct fragments/debris have no subject key, staging or SHD. This native
+// inspection lane retains painter order and the production positive-area gate
+// and half-texel sampling grid. Quads use projected fan interpolation here;
+// QuadSpanFaces reports the missing production two-chain UV mapping explicitly
+// (GPU design §11.2). SupersampleIgnored reports the unused doubled raster.
+func (s *effectSink) projectModel(out *meshscene.EffectGeometry) {
+	g := out.Model.Geometry
+	if !g.Eligible || g.Fallback != drawlist.ModelFallbackNone || out.Model.ShadowOnly ||
+		g.KeyPlane || g.Reveal != nil || g.Waterline != drawlist.ModelWaterlineNone ||
+		g.Digger || g.Cloaked || g.Shadow != nil || len(g.Children) != 0 || len(g.Outline) != 0 ||
+		len(g.LiveFaces) != 0 || g.Scale != 1 {
+		out.Suppressed = "direct effects require eligible keyless unstaged native geometry"
+		return
+	}
+	for _, face := range g.Faces {
+		if face.Shaded {
+			out.Suppressed = "SHD effect geometry requires subject raster composition"
+			return
+		}
+		// A winning composition-background write must erase an earlier face
+		// before the finished subject is blitted [03 R-REN-03A §1]. Immediate
+		// framebuffer triangles cannot represent that subject-local hole.
+		if face.Texture == nil && face.Color == 1 {
+			out.Suppressed = "model background winner requires subject-local composition"
+			return
+		}
+		if tex := face.Texture; tex != nil {
+			for i, index := range tex.Pixels {
+				if i < len(tex.Transparent) && tex.Transparent[i] {
+					out.Suppressed = "masked model texture requires subject-local composition"
+					return
+				}
+				if index == 1 {
+					out.Suppressed = "model background winner requires subject-local composition"
+					return
+				}
+			}
+		}
+	}
+	out.SupersampleIgnored = g.Supersample != nil
+	for _, face := range g.Faces {
+		v := face.Vertices
+		if len(v) < 3 {
+			continue
+		}
+		var area int64
+		prev := v[len(v)-1]
+		for _, cur := range v {
+			area += int64(prev.X)*int64(cur.Y) - int64(prev.Y)*int64(cur.X)
+			prev = cur
+		}
+		if area <= 0 {
+			continue
+		}
+		if len(v) == 4 {
+			out.QuadSpanFaces++
+		}
+		color := s.color(face.Color)
+		u, vv := float32(.5/atlasSize), float32(.5/atlasSize)
+		bounds := [4]float32{0, 0, 1, 1}
+		var r region
+		if face.Texture != nil {
+			tex := face.Texture
+			w, h := int(tex.Width), int(tex.Height)
+			if w <= 0 || h <= 0 || int64(w)*int64(h) > int64(len(tex.Pixels)) || len(tex.Subframes) != 0 {
+				out.Suppressed = "direct effect texture is not a resolved raster"
+				out.Vertices = nil
+				return
+			}
+			// Model rasters use zero-coverage borders, unlike replicated sprite
+			// edges. Explicit bounds in the fragment supply that distinction.
+			r = s.rowRaster(effectArtKey{model: tex}, w, h, func(x, y int) [4]byte {
+				i := y*w + x
+				if i < len(tex.Transparent) && tex.Transparent[i] {
+					return [4]byte{}
+				}
+				a, b, c, d := s.pal.RGBA(tex.Pixels[i])
+				return [4]byte{a, b, c, d}
+			})
+			color = [4]float32{1, 1, 1, 1}
+			bounds = [4]float32{float32(r.x) / atlasSize, float32(r.y) / atlasSize, float32(r.x+r.w) / atlasSize, float32(r.y+r.h) / atlasSize}
+		}
+		corner := func(a drawlist.ModelVertex) meshscene.EffectVertex {
+			if face.Texture != nil {
+				u, vv = (float32(r.x)+float32(a.U))/atlasSize, (float32(r.y)+float32(a.V))/atlasSize
+			}
+			// Production modelSamplePos biases the raster by half a recording
+			// pixel before the world transform [03 R-RAST-01 §1].
+			x := (float32(a.X)+float32(g.AnchorX)-float32(g.OriginX)+.5)*out.Scale + out.OffsetX
+			y := (float32(a.Y)+float32(g.AnchorY)-float32(g.OriginY)+.5)*out.Scale + out.OffsetY
+			return meshscene.EffectVertex{PositionUV: [4]float32{x, y, u, vv}, Color: color, Bounds: bounds}
+		}
+		for i := 1; i+1 < len(v); i++ {
+			out.Vertices = append(out.Vertices, corner(v[0]), corner(v[i]), corner(v[i+1]))
+		}
+	}
 }
 
 // Generated row rasters use the same normalized nearest sampling as the modern
