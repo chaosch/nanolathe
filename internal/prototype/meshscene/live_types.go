@@ -16,8 +16,9 @@ type Input struct {
 
 // Sprite is a 96-byte GPU instance. Positions are world x,y,z; Rect is
 // screen-space offset x,y,width,height in world pixels before camera zoom.
-// UV is u0,v0,u1,v1. Color is straight RGBA; the shader premultiplies it.
-// Params: emission, additive (0/1), screen rotation radians, depth bias.
+// Live screen Y projects world z-y/2; UV is u0,v0,u1,v1. Color is straight RGBA; the shader premultiplies it.
+// Params: emission, additive (0/1), screen rotation radians, normalized
+// clip-depth bias (negative brings the sprite toward the camera).
 type Sprite struct {
 	Previous, Current       [4]float32
 	Rect, UV, Color, Params [4]float32

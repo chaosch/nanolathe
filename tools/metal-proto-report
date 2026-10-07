@@ -24,14 +24,30 @@ for directory in sys.argv[1:]:
         rows = [row for row in csv.DictReader(file) if row["warmup"] == "false"]
     submission = [(float(b["submit_seconds"])-float(a["submit_seconds"]))*1000 for a, b in zip(rows, rows[1:])]
     presentation = [(float(b["presented_seconds"])-float(a["presented_seconds"]))*1000 for a, b in zip(rows, rows[1:]) if float(a["presented_seconds"])>0 and float(b["presented_seconds"])>0]
-    metrics = {"directory": str(path), "units": report["instances"], "triangles": report["model_triangles_drawn"],
+    metrics = {"directory": str(path), "units": report["instances"], "triangles": report.get("model_triangles_drawn", report.get("final_model_triangles", 0)),
                "offscreen": report["offscreen"], "effects": report["effects"], "cap": report["fps_cap"],
                "cpu_encode": summary([float(row["encode_ms"]) for row in rows]),
                "gpu": summary([float(row["gpu_ms"]) for row in rows]),
                "submit": summary(submission), "present": summary(presentation),
                "device_mib": report["peak_device_allocated_bytes"]/1048576,
                "atlas_mib": report["scene"]["atlas_bytes"]/1048576,
-               "pose_upload_mib_per_frame": report["pose_upload_bytes_per_frame"]/1048576}
+               "pose_upload_mib_per_frame": report.get("pose_upload_bytes_per_frame", report.get("live_frame_counts", {}).get("dynamic_upload_bytes", {}).get("mean", 0))/1048576}
+    if report.get("live"):
+        with (path / "live-frames.csv").open() as file:
+            live = [row for row in csv.DictReader(file) if row["warmup"] == "false"]
+        errors = []
+        for i in range(1, min(len(live), len(rows))):
+            before, after = live[i-1], live[i]
+            dt = (float(rows[i]["presented_seconds"]) - float(rows[i-1]["presented_seconds"]))*1000
+            if float(rows[i-1]["presented_seconds"]) <= 0 or dt <= 0:
+                dt = (float(rows[i]["submit_seconds"]) - float(rows[i-1]["submit_seconds"]))*1000
+            world = (int(after["tick"])-int(before["tick"])+float(after["alpha"])-float(before["alpha"]))*1000/30
+            errors.append(abs(world-dt))
+        metrics["motion_step_error"] = summary(errors)
+        metrics["motion_step_error"]["over_4ms"] = sum(e > 4 for e in errors)
+        metrics["tick_range"] = [int(live[0]["tick"]), int(live[-1]["tick"])]
+        metrics["live_counts"] = report["live_frame_counts"]
+        metrics["battle"] = {key: value for key, value in report.get("battle", {}).items() if key not in ["tick_records", "census", "tick_samples", "samples"]}
     for key, intervals in [("submit", submission), ("present", presentation)]:
         for hz in [120, 144]:
             if intervals:
@@ -44,4 +60,6 @@ for directory in sys.argv[1:]:
             print(f"  {key}: unavailable")
             continue
         print(f"  {key:10} mean {value['mean_ms']:.3f} ms; p50 {value['p50_ms']:.3f}; p95 {value['p95_ms']:.3f}; p99 {value['p99_ms']:.3f}" + (f"; {value['hz']:.1f} Hz" if key in ["submit", "present"] else ""))
-    print(f"  device {metrics['device_mib']:.2f} MiB; shared atlas {metrics['atlas_mib']:.2f} MiB; pose upload {metrics['pose_upload_mib_per_frame']:.3f} MiB/frame")
+    if report.get("live"):
+        print(f"  committed ticks {metrics['tick_range']}; motion-step error p99 {metrics['motion_step_error']['p99_ms']:.3f} ms; >4 ms {metrics['motion_step_error']['over_4ms']}")
+    print(f"  device {metrics['device_mib']:.2f} MiB; shared atlas {metrics['atlas_mib']:.2f} MiB; dynamic upload {metrics['pose_upload_mib_per_frame']:.3f} MiB/frame")

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/platform/benchlock"
@@ -33,7 +34,10 @@ func run() error {
 	home, _ := os.UserHomeDir()
 	var load meshscene.LoadOptions
 	var render metalproto.Options
-	var prepareOnly bool
+	var prepareOnly, battle, profile bool
+	var armySize, preticks int
+	var seed uint
+	var zoom float64
 	flag.StringVar(&load.Root, "root", filepath.Join(home, "TotalAnnihilation"), "retail asset installation")
 	flag.StringVar(&load.Map, "map", "Expanded Confluence", "retail terrain map")
 	flag.IntVar(&load.Units, "units", 1000, "submitted unit instances")
@@ -51,7 +55,27 @@ func run() error {
 	flag.StringVar(&render.OutputDir, "out", "", "new output directory outside the repository (required)")
 	flag.StringVar(&render.LibraryPath, "library", os.Getenv("NANOLATHE_METAL_LIBRARY"), "native Metal bridge dylib")
 	flag.BoolVar(&prepareOnly, "prepare-only", false, "write scene census and texture previews without rendering")
+	flag.BoolVar(&battle, "battle", false, "run the ordinary three-army battle instead of the retained-pose replay")
+	flag.IntVar(&armySize, "army-size", 250, "units per computer army in live battle (250..1000)")
+	flag.IntVar(&preticks, "preticks", 1200, "ordinary battle ticks to advance before opening the window")
+	flag.UintVar(&seed, "seed", 7, "live battle simulation and CRT seed")
+	flag.Float64Var(&zoom, "zoom", 0.75, "live battle pixels per world unit")
+	flag.BoolVar(&profile, "profile", false, "write a CPU profile of rendering and live simulation")
 	flag.Parse()
+	if battle {
+		mapExplicit := false
+		flag.Visit(func(f *flag.Flag) {
+			if f.Name == "map" {
+				mapExplicit = true
+			}
+		})
+		if !mapExplicit {
+			load.Map = "Town & Country"
+		}
+		if armySize < 250 || armySize > 1000 || preticks < 0 || preticks > 18000 || seed > 0xffffffff || zoom < 0.1 || zoom > 4 {
+			return fmt.Errorf("nanolathe: Metal battle: invalid army size, lead-in ticks, seed or zoom")
+		}
+	}
 	if render.OutputDir == "" {
 		return fmt.Errorf("nanolathe: Metal prototype: --out is required")
 	}
@@ -81,12 +105,22 @@ func run() error {
 	}
 	fmt.Fprintln(os.Stderr, "nanolathe: Metal prototype: preparing retail meshes and animation samples")
 	start := time.Now()
-	scene, err := meshscene.Load(load)
+	var scene *meshscene.Scene
+	if battle {
+		scene, err = meshscene.LoadBattle(meshscene.BattleOptions{LoadOptions: load, ArmySize: armySize, Preticks: preticks, Seed: uint32(seed), Width: render.Width, Height: render.Height, Zoom: float32(zoom)})
+	} else {
+		scene, err = meshscene.Load(load)
+	}
 	if err != nil {
 		return err
 	}
-	// Keep framing comparable when varying render-target resolution.
-	scene.Camera[2] *= min(float32(render.Width)/1600, float32(render.Height)/900)
+	if scene.Live != nil {
+		defer scene.Live.Close()
+	}
+	// Replay holds its framing across target sizes; live zoom is pixels/world unit.
+	if !battle {
+		scene.Camera[2] *= min(float32(render.Width)/1600, float32(render.Height)/900)
+	}
 	census := map[string]any{"name": scene.Name, "metadata": scene.Metadata, "options": load, "preparation_seconds": time.Since(start).Seconds(), "runtime": runtime.Version(), "gomaxprocs": runtime.GOMAXPROCS(0), "instances": len(scene.Instances), "frames": len(scene.Frames), "camera": scene.Camera, "terrain_rect": scene.TerrainRect}
 	var vertices, indices, faces, pieces int
 	for _, m := range scene.Meshes {
@@ -113,7 +147,7 @@ func run() error {
 	if err = writeJSON(filepath.Join(render.OutputDir, "scene.json"), census); err != nil {
 		return err
 	}
-	for name, texture := range map[string]meshscene.Texture{"atlas": scene.Atlas, "terrain": scene.Terrain} {
+	for name, texture := range map[string]meshscene.Texture{"atlas": scene.Atlas, "terrain": scene.Terrain, "sprites": scene.SpriteAtlas} {
 		if err = writePNG(filepath.Join(render.OutputDir, name+".png"), texture); err != nil {
 			return err
 		}
@@ -122,9 +156,31 @@ func run() error {
 	if prepareOnly {
 		return nil
 	}
+	var profileFile *os.File
+	if profile {
+		profileFile, err = os.Create(filepath.Join(render.OutputDir, "cpu.pprof"))
+		if err != nil {
+			return err
+		}
+		if err = pprof.StartCPUProfile(profileFile); err != nil {
+			profileFile.Close()
+			return err
+		}
+	}
 	result, err := metalproto.Run(scene, render)
+	if profile {
+		pprof.StopCPUProfile()
+		profileFile.Close()
+	}
 	if err != nil {
 		return err
+	}
+	if scene.Live != nil {
+		battleReport := scene.Live.Close()
+		result["battle"] = battleReport
+		if err = writeJSON(filepath.Join(render.OutputDir, "battle.json"), battleReport); err != nil {
+			return err
+		}
 	}
 	result["scene"] = census
 	result["options"] = render
