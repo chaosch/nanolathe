@@ -39,39 +39,44 @@ type nativeAssets struct {
 	Rect                                     [4]float32
 }
 type liveUpload struct {
-	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors, Overlay     uintptr
-	Camera, FogRect                                                                                       [4]float32
-	Alpha                                                                                                 float32
-	PoseCount, InstanceCount, SpriteCount, LightCount, DistortionCount, FogWidth, FogHeight, OverlayCount uint32
-	Seconds                                                                                               float64
-	OverlayTexture                                                                                        uintptr
-	OverlayVersion                                                                                        uint64
-	OverlayWidth, OverlayHeight                                                                           uint32
-	OverlayDirty                                                                                          [4]uint32
-	GroundSpriteCount                                                                                     uint32
-	Cloaks                                                                                                uintptr
-	CloakCount, AirCount                                                                                  uint32
-	Water                                                                                                 meshscene.WaterUniform
-	Rules, MaterialOffsets, Materials                                                                     uintptr
-	RulesCount, MaterialCount                                                                             uint32
+	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors, Overlay                uintptr
+	Camera, FogRect                                                                                                  [4]float32
+	Alpha                                                                                                            float32
+	PoseCount, InstanceCount, SpriteCount, LightCount, DistortionCount, FogWidth, FogHeight, OverlayCount            uint32
+	Seconds                                                                                                          float64
+	OverlayTexture                                                                                                   uintptr
+	OverlayVersion                                                                                                   uint64
+	OverlayWidth, OverlayHeight                                                                                      uint32
+	OverlayDirty                                                                                                     [4]uint32
+	GroundSpriteCount                                                                                                uint32
+	Cloaks                                                                                                           uintptr
+	CloakCount, AirCount                                                                                             uint32
+	Water                                                                                                            meshscene.WaterUniform
+	Rules, MaterialOffsets, Materials                                                                                uintptr
+	RulesCount, MaterialCount                                                                                        uint32
+	CompositionSlots, CompositionSelectors, CompositionDraws, CompositionPaint                                       uintptr
+	CompositionSlotCount, CompositionDrawCount, CompositionPaintCount, CompositionWidth, CompositionHeight, Composed uint32
 }
 type livePacking struct {
-	rules                       []meshscene.ModelRules
-	materialOffsets             []uint32
-	materials                   []meshscene.NativeModelMaterial
-	phases                      []uint32
-	cloaks                      []cloakDraw
-	cloakSubjects               []cloakSubject
-	cloakMembers                []cloakMember
-	cloakIndices                map[uint64]int
-	spriteOrder                 []orderedSprite
-	sprites                     []meshscene.Sprite
-	spans                       []meshSpan
-	cursor, offsets             []uint32
-	visuals                     []meshscene.ModelVisual
-	selectors                   []uint32
-	overlayVersion              uint64
-	overlayWidth, overlayHeight int
+	compositionSelectors, sourcePacked []uint32
+	compositionDraws                   []cloakDraw
+	compositionPaint                   [][4]uint32
+	rules                              []meshscene.ModelRules
+	materialOffsets                    []uint32
+	materials                          []meshscene.NativeModelMaterial
+	phases                             []uint32
+	cloaks                             []cloakDraw
+	cloakSubjects                      []cloakSubject
+	cloakMembers                       []cloakMember
+	cloakIndices                       map[uint64]int
+	spriteOrder                        []orderedSprite
+	sprites                            []meshscene.Sprite
+	spans                              []meshSpan
+	cursor, offsets                    []uint32
+	visuals                            []meshscene.ModelVisual
+	selectors                          []uint32
+	overlayVersion                     uint64
+	overlayWidth, overlayHeight        int
 }
 
 func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, seconds float64, visualPasses, effects bool) (liveUpload, liveRow, error) {
@@ -83,7 +88,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 344 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 400 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -119,8 +124,10 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	clear(p.rules)
 	clear(p.materialOffsets)
 	p.materials = p.materials[:0]
+	p.sourcePacked = slices.Grow(p.sourcePacked[:0], len(f.Instances))[:len(f.Instances)]
 	for sourceIndex, instance := range f.Instances {
 		at := p.cursor[instance.Mesh]
+		p.sourcePacked[sourceIndex] = at
 		if sourceIndex < len(f.ModelRules) {
 			p.rules[at] = f.ModelRules[sourceIndex]
 		}
@@ -208,10 +215,14 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 
 	p.cloaks = p.cloaks[:0]
 	p.cloakSubjects = p.cloakSubjects[:0]
-	if visualPasses {
+	if visualPasses && !f.Composed {
 		p.prepareCloaks(f)
 	}
 	u.Cloaks, u.CloakCount = pointer(p.cloaks), uint32(len(p.cloaks))
+	if err := p.prepareComposition(f, &u); err != nil {
+		return u, r, err
+	}
+	r.UploadBytes += uint64(len(f.Composition.Slots)*48 + len(p.compositionSelectors)*4 + len(p.compositionDraws)*16 + len(p.compositionPaint)*16)
 	r.CloakSubjects = len(p.cloakSubjects)
 	for _, phase := range p.phases {
 		if phase == meshscene.PhaseAir {

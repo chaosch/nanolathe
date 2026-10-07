@@ -100,6 +100,7 @@ type metalBenchmarkSource struct {
 	c                        *client.Client
 	world                    *meshscene.RetainedBattle
 	scene                    *meshscene.Scene
+	composer                 *metalModelComposer
 	hud                      *metalhud.Foreground
 	step                     func()
 	census                   func() any
@@ -172,6 +173,14 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		h.frame.OverlayDirty[i] = uint32(value)
 	}
 	prepareMetalFrame(h.c, h.world, h.scene, &h.frame, current, h.options.Width, h.options.Height)
+	if h.composer == nil {
+		h.composer = newMetalModelComposer(h.scene)
+	}
+	composition, err := h.composer.Prepare(h.c, h.world, &h.frame, current, h.options.Width, h.options.Height)
+	if err != nil {
+		return meshscene.LiveFrame{}, err
+	}
+	h.frame.Composition, h.frame.Composed = composition, true
 	h.row.Record = benchmarkElapsed(start)
 	if h.draw >= h.options.TPS*2 {
 		start := time.Now()

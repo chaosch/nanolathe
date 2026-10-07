@@ -34,6 +34,9 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	Composition ModelComposition
+	Composed    bool
+
 	Water      WaterUniform
 	ModelRules []ModelRules
 
