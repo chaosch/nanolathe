@@ -39,6 +39,10 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 	if err != nil {
 		return err
 	}
+	scene.TerrainTiles, err = meshscene.BuildBattleTerrainTiles(c.BattleTerrainSources(), c.DisplayPalette())
+	if err != nil {
+		return err
+	}
 	prepareMetalScene(scene, b.sess.World)
 	scene.Playable = false
 	metadata := maps.Clone(options.Metadata)

@@ -66,8 +66,12 @@ type liveUpload struct {
 	Shadows                                                                                                          nativeShadowUpload
 	WaterObjects                                                                                                     uintptr
 	WaterSources                                                                                                     uintptr
+	Groups                                                                                                           uintptr
+	TerrainFlags                                                                                                     uint32
 }
 type livePacking struct {
+	groupPacking                                     GroupPacking
+	groupUpload                                      nativeGroupUpload
 	waterPacking                                     waterObjectsPacking
 	waterUpload                                      nativeWaterObjectsUpload
 	waterSourcesUpload                               nativeWaterSourcesUpload
@@ -108,7 +112,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 632 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 648 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -272,6 +276,12 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	}
 	r.UploadBytes += uint64(len(f.Composition.Slots)*48 + len(p.compositionSelectors)*4 + len(p.compositionDraws)*16 + len(p.compositionPaint)*16)
 	if f.Composed {
+		var groupErr error
+		p.groupUpload, groupErr = p.groupPacking.Prepare(f.Composition, p.sourcePacked)
+		if groupErr != nil {
+			return u, r, groupErr
+		}
+		u.Groups = uintptr(unsafe.Pointer(&p.groupUpload))
 		if len(f.WaterObjects) != len(f.Instances) {
 			return u, r, fmt.Errorf("metalproto: water objects differ from instances")
 		}
@@ -285,6 +295,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 			return u, r, err
 		}
 		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+		u.TerrainFlags = f.TerrainFlags
 		p.waterSourcesUpload, err = p.waterPacking.PrepareSources(f.WaterSources, f.WaterObjectScales[2])
 		if err != nil {
 			return u, r, err

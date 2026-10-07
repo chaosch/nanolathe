@@ -149,7 +149,7 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 			return fail("valid retained mesh and pose span")
 		}
 		c.indices[modelInstanceKey{in.Mesh, in.PoseOffset}] = i
-		slot := live.Composition.InstanceSlots[i]
+		slot := live.Composition.FinalSlotForInstance(i)
 		if slot != 0 {
 			c.members[slot] = append(c.members[slot], i)
 		}
@@ -227,7 +227,7 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		if !ok {
 			continue
 		}
-		commit := live.Composition.InstanceSlots[i]
+		commit := live.Composition.FinalSlotForInstance(i)
 		if commit == 0 {
 			// TODO(question): support admitted shadow-only subjects whose body
 			// is outside the viewport. An ordered shadow-only native paint

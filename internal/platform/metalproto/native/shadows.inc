@@ -74,7 +74,7 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
  if(!f.subjectCount)return;
  // The target can grow after another ring was prepared. Use actual texture
  // dimensions for clip-space, retaining this frame's own slot coordinates.
- u.composition.x=s.body.width;u.composition.y=s.body.height;u.composition.z=f.tint.w;u.lightControl.y=0;u.mode.z=0;u.mode.w=2;
+ u.composition.x=s.body.width;u.composition.y=s.body.height;u.composition.z=f.tint.w;u.lightControl.y=0;u.mode.z=0;u.mode.w=3;
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.body;p.colorAttachments[1].texture=s.emission;
  for(int i=0;i<2;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=s.depth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;

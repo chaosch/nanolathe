@@ -11,7 +11,7 @@ struct nm_face_Visual {float4 state,bounds,outline,emission;};
 struct nm_face_Rules {float4 reveal,below,band,above,clip,shadow,outline;};
 struct nm_face_Slot {float4 screen,atlas,params;};
 struct nm_face_Control {uint4 span;float4 texture;};
-struct nm_face_Prepared {int4 x,y,key,shade,step;float4 uv,pixel;uint4 control;};
+struct nm_face_Prepared {int4 x,y,key,shade,step;float4 uv,pixel;uint4 control;float4 centroid;};
 // control: bottom's rotated index, original top index, flags, corner count.
 // flags: admitted=1, quad mapping=2, shaded=4, unsupported coordinate=8, above-water corner=16.
 // x/y use the production +8192 bias, making signed division the arithmetic
@@ -38,7 +38,7 @@ kernel void nm_face_prepare(device const nm_face_Corner* corners [[buffer(0)]],d
  if(f.material){nm_face_Material material=materials[f.material];uint frame=material.kind==1?min(uint(max(visual.state.x,0.f)),max(material.frameCount,1u)-1):0;uv=frames[material.firstFrame+frame];
   if(u[4].x>.5&&materialOffsets[iid]){nm_face_Selected s=selected[materialOffsets[iid]-1+material.reserved];uv=s.uv;admitted=s.params.x>=.5;}
  }
- if(c.span.w){uint slot=selectors[iid];if(!slot){output[dest]=p;return;}nm_face_Slot placement=slots[slot-1];p.pixel.xy=placement.atlas.zw/placement.screen.zw;p.pixel.zw=placement.atlas.xy-placement.screen.xy*p.pixel.xy;}
+ if(c.span.w){uint slot=selectors[iid];if(!slot){output[dest]=p;return;}nm_face_Slot placement=slots[slot-1];p.pixel.xy=placement.atlas.zw/placement.screen.zw;p.pixel.zw=-placement.screen.xy*p.pixel.xy;}
  // TODO(retained-projection): production cached corners floor relative XYZ
  // before placement and restore odd-height halves in the doubled lane. Poses
  // publish origin Y only; origin X/Z and cached/direct admission are needed to
@@ -49,14 +49,15 @@ kernel void nm_face_prepare(device const nm_face_Corner* corners [[buffer(0)]],d
  p.uv=round(uv*c.texture.xyxy-.5);
  float keyOrigin=m[2].w>.5?m[1].w:visual.bounds.w;
  int bias=u[7].w>.5?int(rules[iid].clip.w):0;
- bool shaded=!(m[0].w>.5&&m[0].w<1.5);uint2 area=uint2(0);int2 first=0,last=0;bool fits=true,high=false;uint top=0,bottom=0;int minY=0,maxY=0,minX=0,maxX=0;
+ bool shaded=!(m[0].w>.5&&m[0].w<1.5);uint2 area=uint2(0);int2 first=0,last=0;bool fits=true,high=false;float2 sum=0;uint top=0,bottom=0;int minY=0,maxY=0,minX=0,maxX=0;
  int4 xx=0,yy=0,keys=0,shade=0;
  for(uint i=0;i<f.cornerCount;i++){
   nm_face_Corner v=corners[f.cornerStart+i];float3 w=(m*float4(float3(v.p),1)).xyz;if(c.texture.z>.5&&w.y>waterObjects[iid].y)high=true;float2 pixel=floor(nm_face_screen(w,u)*p.pixel.xy+p.pixel.zw)+8192;
   if(!all(isfinite(pixel))||any(pixel<0)||any(pixel>65535)){fits=false;continue;}
-  int2 xy=int2(pixel);if(i==0){first=xy;minY=maxY=xy.y;minX=maxX=xy.x;}else{area=nm_face_area_add(area,uint(last.x)*uint(xy.y),uint(last.y)*uint(xy.x));if(xy.y<minY){minY=xy.y;top=i;}if(xy.y>maxY){maxY=xy.y;bottom=i;}minX=min(minX,xy.x);maxX=max(maxX,xy.x);}last=xy;
+  sum+=pixel-8192;int2 xy=int2(pixel);if(i==0){first=xy;minY=maxY=xy.y;minX=maxX=xy.x;}else{area=nm_face_area_add(area,uint(last.x)*uint(xy.y),uint(last.y)*uint(xy.x));if(xy.y<minY){minY=xy.y;top=i;}if(xy.y>maxY){maxY=xy.y;bottom=i;}minX=min(minX,xy.x);maxX=max(maxX,xy.x);}last=xy;
   if(f.cornerCount==4){xx[i]=xy.x;yy[i]=xy.y;keys[i]=int(floor(w.y-keyOrigin))+bias;float3 normal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);shade[i]=m[0].w>1.5?15:int(dot(normal,float3(-.8,1,.25))*5)&31;}
  }
+ p.centroid.xy=f.cornerCount?sum/float(f.cornerCount):float2(0);
  area=nm_face_area_add(area,uint(last.x)*uint(first.y),uint(last.y)*uint(first.x));
  bool front=(area.y&0x80000000u)==0&&any(area!=uint2(0));p.control.z=(admitted&&fits&&front?1u:0u)|(shaded?4u:0u)|(!fits?8u:0u)|(high?16u:0u);p.control.y=top;
  // Admission is the original whole integer ring, even for subdivided/folded

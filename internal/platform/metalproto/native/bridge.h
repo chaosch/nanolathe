@@ -40,6 +40,8 @@ typedef struct {
  NMShadowUpload shadows;
  const void* water_objects;
  const void* water_sources;
+ const void* groups;
+ uint32_t terrain_flags;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
@@ -53,6 +55,7 @@ void nm_playable(void* renderer,int playable);
 int nm_pointer_capture(void* renderer,int captured);
 int nm_events(void* renderer,NMEvent* events,int capacity);
 void nm_input(void* renderer,NMInput* input);
+int nm_terrain_tiles(void* renderer,const void* upload);
 int nm_live_frame(void* renderer,const NMLiveUpload* upload);
 void nm_drain(void* renderer);
 int nm_rows(void* renderer,void* rows,int capacity);

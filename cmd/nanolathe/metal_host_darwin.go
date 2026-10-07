@@ -82,6 +82,10 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	if err != nil {
 		return err
 	}
+	scene.TerrainTiles, err = meshscene.BuildBattleTerrainTiles(cl.BattleTerrainSources(), cl.DisplayPalette())
+	if err != nil {
+		return err
+	}
 	prepareMetalScene(scene, sess.World)
 	host := &metalBattleHost{scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	scene.Live = host

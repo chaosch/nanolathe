@@ -96,6 +96,13 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 		}
 	}
 	live.WaterObjectScales = [3]float32{step, step * k, scale}
+	live.TerrainFlags = 0
+	if k != 1 || world.OffsetX != 0 || world.OffsetY != 0 {
+		live.TerrainFlags |= 1
+	}
+	if world.Step == camera.ViewScaleDetail {
+		live.TerrainFlags |= 2
+	}
 	k *= scale
 	v.lights = v.lights[:0]
 	for _, source := range v.lighting.GatherSources() {

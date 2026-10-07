@@ -22,7 +22,7 @@ _Static_assert(sizeof(NMFaceUpload)==40,"authored face upload layout");
 @end
 static BOOL nmFacesFail(NMRenderer* r,NSString* error){r.lastError=error;return NO;}
 static BOOL nmFacesInitialize(NMRenderer* r,id<MTLLibrary> lib,NSError** error){
- NMFaceState* s=[NMFaceState new];s.prepare=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"nm_face_prepare"] error:error];s.empty=[r.device newBufferWithLength:128 options:MTLResourceStorageModeShared];if(!s.prepare||!s.empty)return NO;memset(s.empty.contents,0,128);r.faceState=s;return YES;
+ NMFaceState* s=[NMFaceState new];s.prepare=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"nm_face_prepare"] error:error];s.empty=[r.device newBufferWithLength:144 options:MTLResourceStorageModeShared];if(!s.prepare||!s.empty)return NO;memset(s.empty.contents,0,144);r.faceState=s;return YES;
 }
 int nm_mesh_faces(void* renderer,uint32_t meshIndex,const NMFaceUpload* u){
  NMRenderer* r=(__bridge NMRenderer*)renderer;if(!r||!u||meshIndex>=r.meshes.count)return 0;
@@ -39,9 +39,9 @@ static BOOL nmFacesPrepare(NMRenderer* r,NMRing* ring,uint32_t instanceCount){
  if(instanceCount>INT32_MAX||ring.spans.length<r.meshes.count*8)return nmFacesFail(r,@"Invalid authored face instance spans");
  const uint32_t* spans=ring.spans.bytes;uint64_t total=0;
  for(NSUInteger i=0;i<r.meshes.count;i++){NSUInteger start=spans[i*2],count=spans[i*2+1];if(start>instanceCount||count>instanceCount-start)return nmFacesFail(r,@"Authored face span exceeds instance storage");NMFaceMesh* m=r.meshes[i].faceMesh;total+=(uint64_t)count*m.faceCount;}
- if(total>UINT32_MAX-1||total>r.device.maxBufferLength/128||(uint64_t)instanceCount*4>r.device.maxBufferLength)return nmFacesFail(r,@"Prepared face device buffer limit");
+ if(total>UINT32_MAX-1||total>r.device.maxBufferLength/144||(uint64_t)instanceCount*4>r.device.maxBufferLength)return nmFacesFail(r,@"Prepared face device buffer limit");
  NMFaceRing* f=ring.faceRing;if(!f){f=[NMFaceRing new];ring.faceRing=f;}
- f.prepared=grow(r,f.prepared,MAX((NSUInteger)total*128,128));f.bases=grow(r,f.bases,MAX((NSUInteger)instanceCount*4,4));if(!f.prepared||!f.bases)return nmFacesFail(r,@"Prepared face allocation failed");
+ f.prepared=grow(r,f.prepared,MAX((NSUInteger)total*144,144));f.bases=grow(r,f.bases,MAX((NSUInteger)instanceCount*4,4));if(!f.prepared||!f.bases)return nmFacesFail(r,@"Prepared face allocation failed");
  memset(f.bases.contents,0,MAX((NSUInteger)instanceCount*4,4));uint32_t* bases=f.bases.contents;uint32_t base=1;
  for(NSUInteger i=0;i<r.meshes.count;i++){NMFaceMesh* m=r.meshes[i].faceMesh;for(NSUInteger j=0;j<spans[i*2+1];j++){if(m.faceCount){bases[spans[i*2]+j]=base;base+=(uint32_t)m.faceCount;}}}
  f.faceCount=(NSUInteger)total;f.instanceCount=instanceCount;return YES;

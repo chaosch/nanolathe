@@ -21,6 +21,8 @@ import (
 var shaderSource string
 
 type bridge struct {
+	terrainTiles   func(uintptr, uintptr) int32
+	meshFaces      func(uintptr, uint32, uintptr) int32
 	pointerCapture func(uintptr, int32) int32
 	create         func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
 	mesh           func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, uintptr, int32) int32
@@ -109,8 +111,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	// the last command buffer has completed. Unmapping its callback code is unsafe.
 	var b bridge
 	purego.RegisterLibFunc(&b.create, lib, "nm_create")
+	purego.RegisterLibFunc(&b.terrainTiles, lib, "nm_terrain_tiles")
 	purego.RegisterLibFunc(&b.pointerCapture, lib, "nm_pointer_capture")
 	purego.RegisterLibFunc(&b.mesh, lib, "nm_mesh")
+	purego.RegisterLibFunc(&b.meshFaces, lib, "nm_mesh_faces")
 	purego.RegisterLibFunc(&b.assets, lib, "nm_assets")
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
 	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
@@ -124,7 +128,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + shaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
+	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
@@ -158,11 +162,19 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals), pointer(m.PrimitiveCenters), int32(len(m.PrimitiveCenters))) == 0 {
 			return nil, fmt.Errorf("metalproto: upload mesh %s", m.Name)
 		}
+		faces, err := PrepareMeshFaces(&m)
+		if err != nil {
+			return nil, err
+		}
+		if b.meshFaces(handle, uint32(drawCalls), uintptr(unsafe.Pointer(&faces))) == 0 {
+			return nil, fmt.Errorf("metalproto: upload authored faces %s", m.Name)
+		}
+		runtime.KeepAlive(faces)
 		runtime.KeepAlive(m)
 		runtime.KeepAlive(offsets)
 		runtime.KeepAlive(visuals)
-		vertexBytes += uint64(len(m.Vertices)) * 64
-		indexBytes += uint64(len(m.Indices)+len(m.EdgeIndices)) * 4
+		vertexBytes += uint64(len(m.Vertices)+len(m.FaceCorners))*64 + uint64(len(m.Faces))*32
+		indexBytes += uint64(len(m.Indices)+len(m.EdgeIndices)+len(m.FaceIndices)) * 4
 		instanceBytes += uint64(len(offsets)) * 68
 		drawnVertices += uint64(len(m.Vertices)) * uint64(len(offsets))
 		drawnIndices += uint64(len(m.Indices)) * uint64(len(offsets))
@@ -174,6 +186,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	runtime.KeepAlive(scene)
 	runtime.KeepAlive(assets)
+	if scene.TerrainTiles != nil {
+		upload, err := packTerrainTiles(scene.TerrainTiles)
+		if err != nil {
+			return nil, err
+		}
+		if b.terrainTiles(handle, uintptr(unsafe.Pointer(&upload))) == 0 {
+			return nil, fmt.Errorf("metalproto: terrain tile upload failed")
+		}
+		runtime.KeepAlive(scene.TerrainTiles)
+	}
 	textures := []meshscene.Texture{scene.Atlas, scene.Terrain}
 	if scene.Live != nil {
 		textures = append(textures, scene.SpriteAtlas)

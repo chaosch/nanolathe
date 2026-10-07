@@ -34,6 +34,7 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	TerrainFlags      uint32 // production fractional filtering (1), detail record step (2)
 	StockEffects      *StockFrame
 	Lighting          RetainedLightingFrame
 	LightControls     uint32 // production lighting present, finish, glint, supersample
