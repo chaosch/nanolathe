@@ -14,6 +14,15 @@ import (
 type ModelMaterialSource struct {
 	Frames  []*formats.GAFFrame
 	Resolve func(ModelMaterialRequest) (ModelMaterialSelection, bool)
+	// Prepare borrows subject-wide inputs for this material walk only.
+	// Resolve is the compatibility fallback when Prepare is absent.
+	Prepare func(ModelMaterialRequest) ModelMaterialResolver
+}
+
+// ModelMaterialResolver selects primitive frames without retaining mutable
+// animation phase. The descriptor is discarded after the subject's face walk.
+type ModelMaterialResolver interface {
+	Resolve(piece, primitive int, current bool) (ModelMaterialSelection, bool)
 }
 
 type ModelMaterialRequest struct {
@@ -85,12 +94,18 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 			}
 		}
 	}
+	var prepared ModelMaterialResolver
+	if s.materialSource != nil && s.materialSource.Prepare != nil {
+		prepared = s.materialSource.Prepare(q)
+	}
 	for i, slot := range mesh.MaterialSlots {
 		q.Piece, q.Primitive = slot.Piece, slot.Primitive
 		q.Current = q.Projectile != nil || q.Debris != nil || currentPieces[slot.Piece]
 		var selection ModelMaterialSelection
 		resolved := false
-		if s.materialSource != nil && s.materialSource.Resolve != nil {
+		if prepared != nil {
+			selection, resolved = prepared.Resolve(slot.Piece, slot.Primitive, q.Current)
+		} else if s.materialSource != nil && s.materialSource.Resolve != nil {
 			selection, resolved = s.materialSource.Resolve(q)
 		}
 		if !resolved {
