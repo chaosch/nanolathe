@@ -10,7 +10,7 @@ int nm_mesh_faces(void* renderer,uint32_t mesh_index,const NMFaceUpload* upload)
 @class NMRenderer,NMRing,NMFaceState,NMFaceMesh,NMFaceRing;
 static BOOL nmFacesInitialize(NMRenderer*,id<MTLLibrary>,NSError**);
 static BOOL nmFacesPrepare(NMRenderer*,NMRing*,uint32_t instance_count);
-static BOOL nmFacesEncode(NMRenderer*,NMRing*,id<MTLCommandBuffer>,id<MTLBuffer> poses,NMUniforms);
+static BOOL nmFacesEncode(NMRenderer*,NMRing*,id<MTLCommandBuffer>,id<MTLBuffer> poses,id<MTLBuffer> water_objects,NMUniforms);
 // Bind bases with the same instance offset as offsets/visuals on EVERY model
 // draw, including selectors and per-subject draws. Slot 21 is frame-wide.
 static void nmFacesBind(NMRing*,id<MTLRenderCommandEncoder>,NSUInteger instance_start);
