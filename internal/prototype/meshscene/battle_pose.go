@@ -1,6 +1,7 @@
 package meshscene
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -368,7 +369,21 @@ type battleSpriteAdapter interface {
 // Sprite construction is linked by the parallel art adapter; there are no
 // filesystem reads or sprite-cursor writes on the render thread.
 func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog) error {
-	sprites, err := NewBattleSprites(s.fs, pal, cat)
+	current, previous := s.sess.Snapshot.PinLatest()
+	if current == nil {
+		s.sess.Snapshot.Unpin(previous)
+		return fmt.Errorf("nanolathe: live prototype sprite preparation unavailable: logical path committed frame, providers searched [session snapshot], expected placed feature definitions")
+	}
+	featureNames := make([]string, 0, max(len(current.Features), 1))
+	for _, feature := range current.Features {
+		featureNames = append(featureNames, feature.DefName)
+	}
+	s.sess.Snapshot.Unpin(current)
+	s.sess.Snapshot.Unpin(previous)
+	if len(featureNames) == 0 {
+		featureNames = append(featureNames, "") // Explicit scope: unit corpse chains only.
+	}
+	sprites, err := NewBattleSprites(s.fs, pal, cat, featureNames...)
 	if err != nil {
 		return err
 	}
