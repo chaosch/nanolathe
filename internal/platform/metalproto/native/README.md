@@ -79,3 +79,57 @@ Apple's primary API contracts:
 [drawables guidance](https://developer.apple.com/library/archive/documentation/3DDrawing/Conceptual/MTLBestPracticesGuide/Drawables.html),
 [device allocation](https://developer.apple.com/documentation/metal/mtldevice/currentallocatedsize).
 The installed SDK headers also document these methods and timing availability.
+
+## Live streaming
+
+`Scene.Live != nil` switches `Run` to `LiveSource.Next(seconds, input)`; an absent
+source retains the original sampled replay. The caller owns `LiveSource.Close`.
+Live scenes need no `Frames` array. They supply a third immutable input texture,
+`Scene.SpriteAtlas`, uploaded once as slot 2, and all meshes upload at startup,
+including meshes with no initial instances.
+
+Every live submission packs per-mesh instance spans and pose offsets in Go,
+then passes one 96-byte `NMLiveUpload` pointer through purego. The bridge copies
+all slices synchronously before returning. Each of the three reusable slots
+owns pose, instance-offset, sprite and light buffers plus CPU draw spans. A slot
+is modified only after bounded-queue acquisition; the serial Metal command queue
+has finished the earlier work that used it. Growth replaces only that free
+slot's buffer, doubling capacity; it does not wait for or resize other slots.
+Command buffers retain their encoded resources. The final capture uses the last
+slot's poses, spans, sprites, lights and uniform snapshot after the GPU drains.
+Actual ring capacities are reported separately from exact per-frame upload bytes.
+
+Sprites match `meshscene.Sprite`'s six float4 lanes (96 bytes); lights match its
+two float4 lanes (32 bytes). Sprite positions blend on the GPU. Live projection uses the production world
+anchor shear, z minus half of world height; replay retains its original z minus
+full-height basis. Live depth uses the independent z-plus-twice-height axis.
+Normals and light distances stay in physical world coordinates. Rect corners are
+rotated about the world anchor in screen space, scaled by camera zoom and drawn
+as instanced billboards. `Params.w` is added directly to normalized clip depth:
+negative values bring a sprite forward. Billboards test model depth without
+writing depth, retain supplied source order, and blend premultiplied RGB with
+ordinary alpha or additive color. Sprite glow is additive emission. Transparent
+sprite overlaps are not sorted by depth; material lighting, palette brightening
+and exact retail overlap/composition behavior remain outside this prototype.
+
+Live mode uses up to the first 32 submitted lights for diffuse model lighting
+and terrain spill. Additional lights are counted as dropped. Only actual sprite
+emission feeds bloom; replay's synthetic lights, model threshold emission and
+shock rings are suppressed. The Effects option controls lights/emission/bloom,
+while ordinary sprites remain visible. Real battle distortion is omitted.
+
+Native input polls held arrows/WASD, accumulated vertical wheel delta and a
+non-repeating space pause toggle. The source owns camera movement, zoom and
+pause behavior; the renderer only delivers input and uses the returned camera.
+Keys reset on focus loss. Offscreen input is empty. No command/order UI or other
+input is implemented here.
+
+`live-frames.csv` includes warmup rows, source `Next` time, Go validation/packing
+preparation time, tick, dynamic draw/geometry counts and exact uploads (poses,
+offsets, sprites and lights). Native encoding includes native buffer growth,
+memcpy and command encoding; GPU span covers the encoded passes. These costs
+are separate; `Next` may sample a background source and is not the simulation's
+per-tick CPU time. Go allocation totals are process-wide and include a live
+source's concurrent worker, rather than isolating render-thread allocations.
+JSON contains their percentiles and per-frame quantity ranges,
+means and totals. Live counters replace replay's constant geometry/upload fields.

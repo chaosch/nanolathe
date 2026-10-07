@@ -7,6 +7,17 @@ int nm_mesh(void* renderer,const void* vertices,int vertex_count,const uint32_t*
 int nm_texture(void* renderer,int slot,int width,int height,const void* rgba);
 int nm_configure(void* renderer,const float* camera,const float* rect,int pose_count);
 int nm_frame(void* renderer,const void* previous,const void* next,float alpha,double seconds);
+// Pointer-only upload descriptor; all data is copied before this call returns.
+typedef struct {
+ const void *previous,*current,*offsets,*spans,*sprites,*lights;
+ float camera[4];
+ float alpha;
+ uint32_t pose_count,instance_count,sprite_count,light_count,reserved;
+ double seconds;
+} NMLiveUpload;
+typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
+void nm_input(void* renderer,NMInput* input);
+int nm_live_frame(void* renderer,const NMLiveUpload* upload);
 void nm_drain(void* renderer);
 int nm_rows(void* renderer,void* rows,int capacity);
 int nm_capture(void* renderer,const char* path);
