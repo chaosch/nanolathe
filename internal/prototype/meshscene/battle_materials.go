@@ -4,6 +4,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
+	"strings"
 )
 
 // ModelMaterialSource borrows the production presentation owner's immutable
@@ -72,25 +73,28 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	m := s.models[instance.Mesh]
 	q.Model = m.Name
 	instance.Materials = make([]NativeModelMaterial, len(mesh.MaterialSlots))
-	for i, slot := range mesh.MaterialSlots {
-		q.Piece, q.Primitive = slot.Piece, slot.Primitive
-		q.Current = q.Projectile != nil || q.Debris != nil
-		if q.Unit != nil {
-			// The retained path combines cached and live pieces. Completed live
-			// pieces read their existing cursor; construction keeps frame zero
-			// [03 R-REN-03A §5]. Historical cached/direct lane staging remains
-			// an explicit prototype limitation, not a second cursor lifecycle.
-			for _, p := range q.Unit.Pieces {
-				if p.Index == slot.Piece || p.Name != "" && canonicalTexture(p.Name) == canonicalTexture(m.Pieces[slot.Piece].Name) {
-					q.Current = p.DontCache && q.Unit.BuildRemaining <= 0
+	// Resolve the script alias once per piece, not once per face. The last
+	// matching lane remains authoritative, as in the original retained walk.
+	currentPieces := make([]bool, len(m.Pieces))
+	if q.Unit != nil && q.Unit.BuildRemaining <= 0 {
+		for pi, piece := range m.Pieces {
+			for _, lane := range q.Unit.Pieces {
+				if lane.Index == pi || lane.Name != "" && strings.EqualFold(lane.Name, piece.Name) {
+					currentPieces[pi] = lane.DontCache
 				}
 			}
 		}
-		selection := s.baseModelMaterial(q)
+	}
+	for i, slot := range mesh.MaterialSlots {
+		q.Piece, q.Primitive = slot.Piece, slot.Primitive
+		q.Current = q.Projectile != nil || q.Debris != nil || currentPieces[slot.Piece]
+		var selection ModelMaterialSelection
+		resolved := false
 		if s.materialSource != nil && s.materialSource.Resolve != nil {
-			if selected, ok := s.materialSource.Resolve(q); ok {
-				selection = selected
-			}
+			selection, resolved = s.materialSource.Resolve(q)
+		}
+		if !resolved {
+			selection = s.baseModelMaterial(q)
 		}
 		out := &instance.Materials[i]
 		if selection.Skip {

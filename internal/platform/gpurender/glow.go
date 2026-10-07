@@ -467,22 +467,8 @@ func (r *Renderer) glowLine(l drawlist.Line) {
 	if weapons <= 0 || !r.glowActive() {
 		return
 	}
-	s := &r.sched
-	x0, y0 := s.txx(float32(l.X0)+0.5), s.txy(float32(l.Y0)+0.5)
-	x1, y1 := s.txx(float32(l.X1)+0.5), s.txy(float32(l.Y1)+0.5)
-	// The stroke itself is one record pixel wide, so its halo has to take its
-	// width from the view scale rather than from the stroke: at the 2x step the
-	// free-zoom factor alone is half the screen pixels a world pixel covers.
-	hw := float32(glowLineWidth) * 0.5 * r.noteGlowViewScale()
-	if hw < 1 {
-		hw = 1
-	}
-	xs, ys := glowStrokeCorners(x0, y0, x1, y1, hw)
-	custom := [4]float32{0, 0, 0, glowOpSolid}
-	r.glow.quad([4]*ebiten.Image{1: r.tables.atlas}, xs, ys,
-		[4]float32{}, [4]float32{},
-		[4]float32{float32(l.Index), glowGain * weapons, 0, 0},
-		[4][4]float32{custom, custom, custom, custom})
+	q := r.glowLinePacket(l)
+	q.submit(&r.glow, [4]*ebiten.Image{1: r.tables.atlas})
 }
 
 // glowSprite appends a keyed GAF sprite whose top-left is (x, y) in record
@@ -497,22 +483,13 @@ func (r *Renderer) glowSprite(f *formats.GAFFrame, x, y, clipX, clipY, clipW, cl
 	if !e.ok {
 		return
 	}
-	r.noteGlowViewScale()
-	fw, fh := int(f.Width), int(f.Height)
-	minX, minY := max(clipX, 0), max(clipY, 0)
-	maxX, maxY := min(clipX+clipW, r.clipW()), min(clipY+clipH, r.clipH())
-	col0, col1 := max(0, minX-x), min(fw, maxX-x)
-	row0, row1 := max(0, minY-y), min(fh, maxY-y)
-	if col0 >= col1 || row0 >= row1 {
+	q, ok := r.glowSpritePacket(f, x, y, clipX, clipY, clipW, clipH, gain, weapons, float32(e.x), float32(e.y))
+	if !ok {
 		return
 	}
-	s := &r.sched
 	imgs := r.sceneImages(e)
 	imgs[1] = r.tables.atlas
-	r.glow.rect(imgs,
-		s.txx(float32(x+col0)), s.txy(float32(y+row0)), s.txx(float32(x+col1)), s.txy(float32(y+row1)),
-		float32(int(e.x)+col0), float32(int(e.y)+row0), float32(int(e.x)+col1), float32(int(e.y)+row1),
-		[4]float32{0, gain * glowSpriteGain * glowGain * weapons, glowThreshold, 0}, [4]float32{0, 0, 0, glowOpKeyed})
+	q.submit(&r.glow, imgs)
 }
 
 // glowFlash appends one explosion disc: the same magnified atlas quad Flash
@@ -523,12 +500,8 @@ func (r *Renderer) glowFlash(cx0, cy0, cx1, cy1 int, sx0, sy0, sx1, sy1 float32)
 	if weapons <= 0 || !r.glowActive() || r.sched.flash.img == nil {
 		return
 	}
-	r.noteGlowViewScale()
-	s := &r.sched
-	r.glow.rect([4]*ebiten.Image{0: s.flash.img, 1: r.tables.atlas, 2: r.surfaces[0]},
-		s.txx(float32(cx0)), s.txy(float32(cy0)), s.txx(float32(cx1)), s.txy(float32(cy1)),
-		sx0, sy0, sx1, sy1,
-		[4]float32{0, glowLightGain * glowGain * weapons, 0, 0}, [4]float32{0, 0, 0, glowOpLight})
+	q := r.glowFlashPacket(cx0, cy0, cx1, cy1, sx0, sy0, sx1, sy1)
+	q.submit(&r.glow, [4]*ebiten.Image{0: r.sched.flash.img, 1: r.tables.atlas, 2: r.surfaces[0]})
 }
 
 // glowHalo appends one flat ground halo: the disc test of destOpHalo over the
@@ -539,19 +512,8 @@ func (r *Renderer) glowHalo(cx0, cy0, cx1, cy1 int, high, lx0, ly0, lx1, ly1, r2
 	if weapons <= 0 || !r.glowActive() || high <= 0 {
 		return
 	}
-	r.noteGlowViewScale()
-	s := &r.sched
-	r.glow.quad([4]*ebiten.Image{1: r.tables.atlas, 2: r.surfaces[0]},
-		[4]float32{s.txx(float32(cx0)), s.txx(float32(cx1)), s.txx(float32(cx0)), s.txx(float32(cx1))},
-		[4]float32{s.txy(float32(cy0)), s.txy(float32(cy0)), s.txy(float32(cy1)), s.txy(float32(cy1))},
-		[4]float32{}, [4]float32{},
-		[4]float32{high, glowLightGain * glowGain * weapons, 0, 0},
-		[4][4]float32{
-			{lx0, ly0, r2, glowOpHalo},
-			{lx1, ly0, r2, glowOpHalo},
-			{lx0, ly1, r2, glowOpHalo},
-			{lx1, ly1, r2, glowOpHalo},
-		})
+	q := r.glowHaloPacket(cx0, cy0, cx1, cy1, high, lx0, ly0, lx1, ly1, r2)
+	q.submit(&r.glow, [4]*ebiten.Image{1: r.tables.atlas, 2: r.surfaces[0]})
 }
 
 // ensurePlanes sizes the planes to the frame (glowRegions).

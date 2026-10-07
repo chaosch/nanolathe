@@ -14,6 +14,8 @@ const (
 	EffectOpQuads uint32 = iota
 	EffectOpLens
 	EffectOpGeometry
+	EffectOpRetainedModel
+	EffectOpGround
 )
 
 // EffectLensSample carries the production executor's cropped destination and
@@ -37,6 +39,18 @@ type EffectLens struct {
 type EffectGeometry struct {
 	Model                   drawlist.Model
 	Scale, OffsetX, OffsetY float32
+	Vertices                []EffectVertex
+	Suppressed              string
+	QuadSpanFaces           uint32
+	SupersampleIgnored      bool
+}
+
+// EffectVertex is a 48-byte projected triangle corner: physical packing scales
+// PositionUV.xy once, leaves normalized UVs and texture bounds unchanged, and
+// premultiplies Color only in the shader. Bounds prevent an out-of-frame model
+// texel sample from reaching a neighboring retained atlas resource.
+type EffectVertex struct {
+	PositionUV, Color, Bounds [4]float32
 }
 
 // EffectSources keeps the original Enhanced operands, including whole composite
@@ -68,10 +82,33 @@ type EffectCounts struct {
 // factor min(2,1+row/30) and coverage in alpha. Normal sprites retain their
 // ordinary palette colors and half-alpha. No glow is baked into body pixels.
 type EffectLayer struct {
-	Quads   []OverlayQuad
-	Ops     []EffectOp
-	Lenses  []EffectLens
-	Models  []EffectGeometry
-	Sources []EffectSources
-	Counts  EffectCounts
+	Quads           []OverlayQuad
+	Ops             []EffectOp
+	Lenses          []EffectLens
+	Models          []EffectGeometry
+	RetainedModels  []drawlist.Model
+	ProjectileOrder []EffectProjectileModel // aligned to RetainedModels, preserved through culling
+	Sources         []EffectSources
+	Counts          EffectCounts
+	Ground          []EffectGround
+}
+
+// EffectProjectileModel names an actual recorded standalone call. Member is
+// parent=0 or first header child=1. The retained projectile slot contains both
+// pieces: resolve it at the parent marker once, then acknowledge the child
+// marker without resolving the combined slot a second time [03 §5.4].
+type EffectProjectileModel struct {
+	ID     uint64
+	Member uint32
+}
+
+// EffectGround is an 80-byte replay operand. CentreAxis is centre/along vector,
+// CrossKind is cross vector/kind/reserved (0 trail, 1 scorch, 2 surface wake).
+// Values retains age, opacity/strength, variant and shape. Mapping is painted
+// map origin XY, inverse presentation scale and reserved; the native mask step
+// comes from the already-uploaded production water mask. Clip is framebuffer
+// xywh. All geometry is logical framebuffer pixels until native packing (§15,
+// §26, §29); local quad coordinates and tuning are evaluated by the shader.
+type EffectGround struct {
+	CentreAxis, CrossKind, Values, Mapping, Clip [4]float32
 }

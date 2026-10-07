@@ -119,8 +119,10 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 }
 
 type metalBattleHost struct {
+	visuals                       metalVisuals
 	scene                         *meshscene.Scene
 	composer                      *metalModelComposer
+	shadows                       *metalShadowComposer
 	shell                         *gameShell
 	cl                            *client.Client
 	battle                        *battleSession
@@ -223,6 +225,9 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.atlasEpoch += h.atlasLocalVersion + 1
 		h.atlasLocalVersion = 0
 	}
+	if err := h.visuals.Prepare(h.cl, &h.frame, h.width, h.height, 2); err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	list := h.cl.RecordRetainedForeground()
 	if h.cursorObserved {
 		h.cl.PositionPresentationCursor(list, h.cursorX, h.cursorY)
@@ -254,6 +259,13 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		return meshscene.LiveFrame{}, err
 	}
 	h.frame.Composition, h.frame.Composed = composition, true
+	if h.shadows == nil {
+		h.shadows = newMetalShadowComposer(h.world)
+	}
+	h.frame.Shadows, err = h.shadows.Prepare(h.cl, h.world, &h.frame, cur, h.width*2, h.height*2, h.composer.order)
+	if err != nil {
+		return meshscene.LiveFrame{}, err
+	}
 	return h.frame, nil
 }
 func (h *metalBattleHost) Close() map[string]any {

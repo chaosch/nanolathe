@@ -34,8 +34,12 @@ type Light struct {
 }
 
 type LiveFrame struct {
-	Composition ModelComposition
-	Composed    bool
+	StockEffects  *StockFrame
+	Lighting      RetainedLightingFrame
+	LightControls uint32 // production lighting present, finish, glint, supersample
+	Composition   ModelComposition
+	Shadows       ShadowComposition
+	Composed      bool
 
 	Water      WaterUniform
 	ModelRules []ModelRules
