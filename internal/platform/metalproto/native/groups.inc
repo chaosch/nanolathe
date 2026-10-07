@@ -64,7 +64,7 @@ static BOOL nmGroupsEncode(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NM
  for(id<MTLTexture> texture in @[r.modelAtlasColor,r.modelAtlasEmission,r.modelMetadata])if(!(texture.usage&MTLTextureUsageShaderWrite))return nmGroupsFail(r,@"Group atlas lacks shader-write usage");
  if(ring.rules.length<f.instanceCount*112ull)return nmGroupsFail(r,@"Group parent rules exceed retained span");
  const NMGroup* groups=f.descriptors.contents;const float* slots=ring.compositionSlots.contents;
- id<MTLComputeCommandEncoder> enc=[cb computeCommandEncoder];[enc setComputePipelineState:r.groups.merge];
+ id<MTLComputeCommandEncoder> enc=nmComputeEncoder(cb,"groups.nmGroupsEncode#1");[enc setComputePipelineState:r.groups.merge];
  [enc setBuffer:f.descriptors offset:0 atIndex:0];[enc setBuffer:f.members offset:0 atIndex:1];[enc setBuffer:ring.compositionSlots offset:0 atIndex:2];[enc setBytes:&u length:sizeof(u) atIndex:3];[enc setBuffer:ring.rules offset:0 atIndex:4];
  [enc setTexture:r.modelAtlasColor atIndex:0];[enc setTexture:r.modelAtlasEmission atIndex:1];[enc setTexture:r.modelMetadata atIndex:2];
  for(uint32_t i=0;i<f.groupCount;i++){

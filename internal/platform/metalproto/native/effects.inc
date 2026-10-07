@@ -124,16 +124,16 @@ static BOOL nmEffectsPrepare(NMRenderer* r,NMRing* ring,const NMEffectsUpload* u
 
 static void nmEffectsBegin(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb) {
  NMEffectsRing* f=ring.effectRing;if(!f)return;
- if(f.smokeCount){uint32_t lightCount=f.lightCount;id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];[e setComputePipelineState:r.effectState.selectSmoke];[e setBuffer:f.smoke offset:0 atIndex:0];[e setBuffer:f.lights?:r.effectState.emptyLights offset:0 atIndex:16];[e setBuffer:f.smokeSubjects offset:0 atIndex:17];[e setBytes:&lightCount length:sizeof(lightCount) atIndex:18];NSUInteger group=MIN((NSUInteger)64,r.effectState.selectSmoke.maxTotalThreadsPerThreadgroup);[e dispatchThreads:MTLSizeMake(f.smokeCount,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];[e endEncoding];}
+ if(f.smokeCount){uint32_t lightCount=f.lightCount;id<MTLComputeCommandEncoder> e=nmComputeEncoder(cb,"effects.nmEffectsBegin#1");[e setComputePipelineState:r.effectState.selectSmoke];[e setBuffer:f.smoke offset:0 atIndex:0];[e setBuffer:f.lights?:r.effectState.emptyLights offset:0 atIndex:16];[e setBuffer:f.smokeSubjects offset:0 atIndex:17];[e setBytes:&lightCount length:sizeof(lightCount) atIndex:18];NSUInteger group=MIN((NSUInteger)64,r.effectState.selectSmoke.maxTotalThreadsPerThreadgroup);[e dispatchThreads:MTLSizeMake(f.smokeCount,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];[e endEncoding];}
  if(!f.uploadPending)return;
- id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];
+ id<MTLBlitCommandEncoder> blit=nmBlitEncoder(cb,"effects.nmEffectsBegin#2");
  [blit copyFromBuffer:f.atlasUpload sourceOffset:0 sourceBytesPerRow:f.uploadRowBytes sourceBytesPerImage:f.uploadRowBytes*f.uploadH sourceSize:MTLSizeMake(f.uploadW,f.uploadH,1) toTexture:f.atlas destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(f.uploadX,f.uploadY,0)];
  [blit endEncoding];f.uploadPending=NO;r.effectState.version=f.version;r.effectState.atlasNeedsFullUpload=NO;r.effectState.atlasUploads++;r.effectState.atlasBytes+=(uint64_t)f.uploadW*f.uploadH*4;
 }
 
 static id<MTLRenderCommandEncoder> nmEffectsEncoder(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u) {
  MTLRenderPassDescriptor* pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.color;pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
- id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];[enc setCullMode:MTLCullModeNone];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];return enc;
+ id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,pass,"effects.nmEffectsEncoder#1");[enc setCullMode:MTLCullModeNone];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];return enc;
 }
 
 static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSUInteger layerIndex,NMUniforms u) {
@@ -158,7 +158,7 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
     if(!l.count||x>=ex||y>=ey){s.emptyLenses++;continue;}
     // Each lens reads its own earlier composite. The snapshot is ring-owned;
     // the same command buffer orders the copy before this lens's keyed writes.
-    id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];[blit copyFromTexture:r.color sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(x,y,0) sourceSize:MTLSizeMake(ex-x,ey-y,1) toTexture:f.snapshot destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(x,y,0)];[blit endEncoding];
+    id<MTLBlitCommandEncoder> blit=nmBlitEncoder(cb,"effects.nmEffectsDraw#1");[blit copyFromTexture:r.color sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(x,y,0) sourceSize:MTLSizeMake(ex-x,ey-y,1) toTexture:f.snapshot destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(x,y,0)];[blit endEncoding];
     id<MTLRenderCommandEncoder> lens=nmEffectsEncoder(r,cb,u);[lens setRenderPipelineState:s.lens];[lens setVertexBuffer:f.samples offset:0 atIndex:0];[lens setFragmentTexture:f.snapshot atIndex:0];[lens drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:l.count baseInstance:l.first];[lens endEncoding];s.drawnLenses++;
    }
    continue;

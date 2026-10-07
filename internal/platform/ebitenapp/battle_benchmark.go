@@ -31,6 +31,9 @@ type BenchmarkOptions struct {
 	Metadata map[string]any
 	// Diagnostic snapshots run outside the measured profile/counter window.
 	BeforeMeasure, AfterMeasure func() error
+	// Frozen reports a diagnostic render-only measurement: the harness stops
+	// stepping after warmup, so the presented pair and epoch stay fixed.
+	Frozen func() bool
 }
 type benchmarkRow struct {
 	Frame int
@@ -252,7 +255,7 @@ func (g *battleBenchmark) Draw(screen *ebiten.Image) {
 	phase, drawsPerTick := g.tickPhase()
 	stepped := phase == 0
 	step := 0.0
-	if stepped {
+	if stepped && (g.options.Frozen == nil || !g.options.Frozen()) {
 		g.step()
 		g.c.BumpPresentationEpoch()
 		step = benchmarkMS(start)

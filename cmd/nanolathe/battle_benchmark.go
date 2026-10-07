@@ -77,7 +77,13 @@ func runBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *clien
 	}
 	millis := &shotMillisSource{}
 	b.millisSource = millis
+	// NANOLATHE_BENCH_FREEZE=1 is a diagnostic render-only mode: lead-in and
+	// warmup step normally, then the measured draws repeat the final pair.
+	freeze, frozen := os.Getenv("NANOLATHE_BENCH_FREEZE") == "1", false
 	step := func() {
+		if frozen {
+			return
+		}
 		diagnostics.Step(func() { millis.step++; b.viewerStep(1.0/30, c) })
 	}
 	positionCamera := func() {
@@ -213,6 +219,7 @@ func runBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *clien
 	var measuredOpeningTick uint32
 	beforeMeasure := func() error {
 		measuredOpeningTick = s.Clock.GlobalTick
+		frozen = freeze
 		if err := appendState("window-open"); err != nil {
 			return err
 		}
@@ -220,6 +227,9 @@ func runBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *clien
 	}
 	afterMeasure := func() error {
 		expected := measuredOpeningTick + uint32((opts.BenchmarkFrames+opts.BenchmarkTPS/30-1)/(opts.BenchmarkTPS/30))
+		if frozen {
+			expected = measuredOpeningTick
+		}
 		if s.Clock.GlobalTick != expected {
 			return fmt.Errorf("nanolathe: benchmark measurement stopped advancing: expected tick %d, got %d", expected, s.Clock.GlobalTick)
 		}
@@ -231,7 +241,9 @@ func runBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *clien
 		}
 		return battleBenchmarkWriteJSON(filepath.Join(opts.BattleBenchmark, "benchmark-state.json"), statePoints)
 	}
-	benchmark := ebitenapp.BenchmarkOptions{Directory: opts.BattleBenchmark, Renderer: opts.Renderer, Frames: opts.BenchmarkFrames, TPS: opts.BenchmarkTPS, Width: int(b.cam.ViewW), Height: int(b.cam.ViewH), BeforeMeasure: beforeMeasure, AfterMeasure: afterMeasure, Metadata: metadata}
+	benchmark := ebitenapp.BenchmarkOptions{Directory: opts.BattleBenchmark, Renderer: opts.Renderer, Frames: opts.BenchmarkFrames, TPS: opts.BenchmarkTPS, Width: int(b.cam.ViewW), Height: int(b.cam.ViewH), BeforeMeasure: beforeMeasure, AfterMeasure: afterMeasure, Metadata: metadata,
+		Frozen: func() bool { return frozen }}
+	metadata["simulation_frozen_during_measurement"] = freeze
 	if opts.BenchmarkRenderer == "metal" {
 		err = runMetalBattleBenchmark(opts, cs, b, c, step, census, benchmark)
 	} else {

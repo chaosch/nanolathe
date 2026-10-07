@@ -130,7 +130,7 @@ func benchmarkElapsed(start time.Time) float64 { return float64(time.Since(start
 func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.LiveFrame, error) {
 	phase, drawsPerTick := h.draw%(h.options.TPS/30), h.options.TPS/30
 	h.row = metalBenchmarkRow{Frame: h.draw, SimulationStep: phase == 0, TickPhase: phase}
-	if phase == 0 {
+	if phase == 0 && (h.options.Frozen == nil || !h.options.Frozen()) {
 		start := time.Now()
 		before := h.b.sess.Clock.GlobalTick
 		h.step()

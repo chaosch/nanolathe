@@ -23,7 +23,7 @@ static BOOL nmWaterTilesEncode(NMWaterTilesState* state,NMWaterTilesFrame* frame
  if(!frame.flags||frame.flags.length<bytes)frame.flags=[state.device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
  if(!frame.flags)return nmWaterTilesFail(error,@"Reflection tile allocation failed");
  if(state.enabled){
-  id<MTLComputeCommandEncoder> encoder=[cb computeCommandEncoder];if(!encoder)return nmWaterTilesFail(error,@"Reflection tile compute encoder failed");
+  id<MTLComputeCommandEncoder> encoder=nmComputeEncoder(cb,"water_tiles.nmWaterTilesEncode#1");if(!encoder)return nmWaterTilesFail(error,@"Reflection tile compute encoder failed");
   [encoder setComputePipelineState:state.classify];[encoder setTexture:color atIndex:0];[encoder setTexture:soft atIndex:1];[encoder setBuffer:frame.flags offset:0 atIndex:0];
   [encoder dispatchThreadgroups:MTLSizeMake(columns,rows,1) threadsPerThreadgroup:MTLSizeMake(NMWaterTileThreads,1,1)];[encoder endEncoding];state.classifiedTiles+=columns*rows;
  }else{

@@ -33,7 +33,7 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=r.modelAtlasColor;p.colorAttachments[1].texture=r.modelAtlasEmission;p.colorAttachments[2].texture=r.modelMetadata;
  for(int i=0;i<3;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=r.modelAtlasDepth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionDontCare;p.depthAttachment.clearDepth=1;
- id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:p];u.mode.z=0;u.mode.w=2;
+ id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"composition.nmCompositionRaster#1");u.mode.z=0;u.mode.w=2;
  modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
  const NMCloakDraw* draws=ring.compositionDraws.bytes;
  for(NSUInteger i=0;i<ring.compositionDrawCount;i++)drawSubjectMember(r,enc,ring,draws[i],NO);

@@ -31,8 +31,8 @@ static BOOL nmFaceReflectionsPrepare(NMRenderer* r,NMRing* ring){
 static BOOL nmFaceReflectionsEncode(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> objects,uint32_t objectCount){
  NMFaceReflectionFrame* f=ring.faceReflections;if(!f)return nmFacesFail(r,@"Reflection face budget was not prepared");f.encoded=NO;
  if(objectCount&&(!objects||objects.length<(NSUInteger)objectCount*16))return nmFacesFail(r,@"Reflection objects exceed admission buffer");
- id<MTLBlitCommandEncoder> clear=[cb blitCommandEncoder];if(!clear)return nmFacesFail(r,@"Reflection face admission clear failed");[clear fillBuffer:f.admission range:NSMakeRange(0,MAX(f.faceCount*4,4)) value:0];[clear endEncoding];
- id<MTLComputeCommandEncoder> e=[cb computeCommandEncoder];if(!e)return nmFacesFail(r,@"Reflection face budget encoder failed");
+ id<MTLBlitCommandEncoder> clear=nmBlitEncoder(cb,"face_reflections.nmFaceReflectionsEncode#1");if(!clear)return nmFacesFail(r,@"Reflection face admission clear failed");[clear fillBuffer:f.admission range:NSMakeRange(0,MAX(f.faceCount*4,4)) value:0];[clear endEncoding];
+ id<MTLComputeCommandEncoder> e=nmComputeEncoder(cb,"face_reflections.nmFaceReflectionsEncode#2");if(!e)return nmFacesFail(r,@"Reflection face budget encoder failed");
  uint32_t counts[4]={(uint32_t)f.recordCount,objectCount,(uint32_t)f.faceCount,0};[e setComputePipelineState:r.faceReflections.budget];[e setBuffer:f.records offset:0 atIndex:0];[e setBuffer:objects?:r.faceState.empty offset:0 atIndex:18];[e setBuffer:ring.faceRing.prepared?:r.faceState.empty offset:0 atIndex:21];[e setBuffer:f.admission offset:0 atIndex:25];[e setBuffer:f.budget offset:0 atIndex:26];[e setBytes:counts length:sizeof(counts) atIndex:27];[e dispatchThreads:MTLSizeMake(1,1,1) threadsPerThreadgroup:MTLSizeMake(1,1,1)];[e endEncoding];f.encoded=YES;return YES;
 }
 static void nmFaceReflectionsBind(NMRing* ring,id<MTLRenderCommandEncoder> e){NMFaceReflectionFrame* f=ring.faceReflections;if(!f||!f.encoded)return;[e setVertexBuffer:f.admission offset:0 atIndex:25];[e setVertexBuffer:f.budget offset:0 atIndex:26];}
