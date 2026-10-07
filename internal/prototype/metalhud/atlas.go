@@ -1,8 +1,11 @@
 package metalhud
 
 import (
+	"bytes"
+
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
+	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
 
 type region struct{ x, y, w, h int }
@@ -173,4 +176,53 @@ func (f *Foreground) textured(r region, x, y int, has bool, clipX, clipY, clipW,
 	const a = float32(atlasSize)
 	f.emit(float32(x0), float32(y0), float32(x1), float32(y1),
 		float32(r.x+x0-x)/a, float32(r.y+y0-y)/a, float32(r.x+x1-x)/a, float32(r.y+y1-y)/a, color, false)
+}
+
+// Image draws a host-owned RGBA bitmap at logical (x, y) after the list's
+// commands, such as the +fps panel. Its region is retained per key and size
+// and rewritten only when revision changes. Call between Prepare and
+// DirtyRect; it returns the frame's quads and the atlas version.
+func (f *Foreground) Image(key, revision uint64, x, y, w, h int, rgba []byte) ([]meshscene.OverlayQuad, uint64) {
+	if w <= 0 || h <= 0 || len(rgba) < w*h*4 {
+		return f.quads, f.version
+	}
+	k := surfaceKey{identity: key, ordinal: -1, w: w, h: h, sw: w, sh: h}
+	e := f.surfaces[k]
+	if e == nil {
+		e = &surfaceEntry{region: f.allocate(w, h)}
+		if f.err != nil {
+			return f.quads, f.version
+		}
+		f.surfaces[k] = e
+	}
+	if !e.initialized || e.revision != revision {
+		f.writeRGBA(e.region, rgba)
+		e.revision, e.initialized = revision, true
+	}
+	f.textured(e.region, x, y, false, 0, 0, 0, 0, [4]float32{1, 1, 1, 1})
+	return f.quads, f.version
+}
+
+// writeRGBA is write for a whole bitmap, compared and copied a row at a time
+// with the same duplicated edge texels.
+func (f *Foreground) writeRGBA(r region, rgba []byte) {
+	changed := false
+	for y := -1; y <= r.h; y++ {
+		sy := max(0, min(y, r.h-1))
+		src := rgba[sy*r.w*4 : (sy+1)*r.w*4]
+		at := ((r.y+y)*atlasSize + r.x) * 4
+		dst := f.atlas.RGBA[at-4 : at+r.w*4+4]
+		if bytes.Equal(dst[4:len(dst)-4], src) && bytes.Equal(dst[:4], src[:4]) && bytes.Equal(dst[len(dst)-4:], src[len(src)-4:]) {
+			continue
+		}
+		copy(dst[4:], src)
+		copy(dst[:4], src[:4])
+		copy(dst[len(dst)-4:], src[len(src)-4:])
+		f.dirtyPixel(r.x-1, r.y+y)
+		f.dirtyPixel(r.x+r.w, r.y+y)
+		changed = true
+	}
+	if changed {
+		f.version++
+	}
 }

@@ -118,22 +118,34 @@ func (c *Client) worldObjectScreen(unit, rel [3]numeric.Fixed) (int32, int32) {
 // resolved once [03 R-WATER-01 §1] rule 4. The caller places it immediately
 // before the unit's model present in the same depth slot (rule 5).
 func (c *Client) drawSelectionQuad(v frame.UnitView) {
-	if c == nil {
+	lines, ok := c.selectionQuadLines(v)
+	if !ok {
 		return
+	}
+	for _, l := range lines {
+		// Record then execute inline: classicSink.Line runs the same Bresenham
+		// primitive drawIndexedLine this used to call directly [03 R-WATER-01 §1].
+		c.emitLine(l)
+	}
+}
+
+// selectionQuadLines returns the quad's four corner-to-corner lines.
+func (c *Client) selectionQuadLines(v frame.UnitView) (lines [4]drawlist.Line, ok bool) {
+	if c == nil {
+		return lines, false
 	}
 	m := c.modelForUnit(v)
 	if m == nil || m.compiled == nil {
-		return
+		return lines, false
 	}
 	points, ok := c.selectionQuadScreen(m.compiled, v)
 	if !ok {
-		return
+		return lines, false
 	}
 	color := c.paletteIndex(selectionQuadLogicalColor) // resolved once [03 R-WATER-01 §1]
 	for i := 0; i < 4; i++ {
 		a, b := points[i], points[(i+1)%4]
-		// Record then execute inline: classicSink.Line runs the same Bresenham
-		// primitive drawIndexedLine this used to call directly [03 R-WATER-01 §1].
-		c.emitLine(drawlist.Line{X0: a[0], Y0: a[1], X1: b[0], Y1: b[1], Index: color})
+		lines[i] = drawlist.Line{X0: a[0], Y0: a[1], X1: b[0], Y1: b[1], Index: color}
 	}
+	return lines, true
 }

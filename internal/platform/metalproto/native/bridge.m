@@ -45,6 +45,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload,rules,materialOffsets,materialOverrides,retainedLights,subjectLights;
 @property NSMutableData *spans,*cloaks,*compositionDraws;
 @property id<MTLBuffer> compositionSlots,compositionSelectors,compositionPaint;
+@property id<MTLBuffer> annotations;@property NSMutableData* annotationRanges;@property NSUInteger annotationRangeCount;
 @property NSMutableData* slotRanks; // per slot: paint index, or UINT32_MAX
 @property NSUInteger directSlotCount;
 @property NSUInteger compositionPageWidth,compositionPageHeight; // this frame's raster-scaled page
@@ -58,7 +59,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==656,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==680,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -101,7 +102,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property NMFaceReflectionState* faceReflections;
 @property id<MTLDevice> device;
 @property id<MTLCommandQueue> queue;
-@property id<MTLRenderPipelineState> directModel,finalPass,distortionFinal,shadowBody;
+@property id<MTLRenderPipelineState> directModel,finalPass,distortionFinal,shadowBody,annotation;
 @property id<MTLRenderPipelineState> model,subjectModel,subjectResolve,atlasModel,atlasModelMetadata,atlasOutline,shadowOutline,atlasCommit,groundLight,clearDepth,terrain,composite,sprite,shadow,outline,world,distortion,fog,overlay,overlayMultiply;
 @property id<MTLComputePipelineState> blur,interpolatePoses,selectLights;
 @property id<MTLDepthStencilState> depth,spriteDepth,alwaysDepth;
@@ -131,7 +132,7 @@ static id<MTLRenderPipelineState> pipeline(NMRenderer* r,id<MTLLibrary> l,NSStri
  MTLRenderPipelineDescriptor* d=[MTLRenderPipelineDescriptor new];if([vertex isEqualToString:@"model_vertex"]){MTLFunctionConstantValues* values=[MTLFunctionConstantValues new];bool on=[fragment isEqualToString:@"model_direct_fragment"];[values setConstantValue:&on type:MTLDataTypeBool atIndex:0];d.vertexFunction=[l newFunctionWithName:vertex constantValues:values error:error];if(!d.vertexFunction)return nil;}else d.vertexFunction=[l newFunctionWithName:vertex];d.fragmentFunction=[l newFunctionWithName:[fragment isEqualToString:@"shadow_outline"]?@"outline_fragment":([fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"atlas_model"])?@"model_fragment":fragment];d.colorAttachments[0].pixelFormat=(mrt||[fragment isEqualToString:@"world_fragment"]||[fragment isEqualToString:@"distortion_fragment"]||[fragment isEqualToString:@"shadow_fragment"])?MTLPixelFormatRGBA16Float:MTLPixelFormatBGRA8Unorm;
  if([vertex isEqualToString:@"overlay_vertex"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceAlpha;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  if([fragment isEqualToString:@"overlay_multiply_fragment"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.sourceRGBBlendFactor=MTLBlendFactorZero;a.destinationRGBBlendFactor=MTLBlendFactorSourceColor;a.sourceAlphaBlendFactor=MTLBlendFactorZero;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
- if([vertex isEqualToString:@"sprite_vertex"]||[fragment isEqualToString:@"model_fragment"]||[fragment isEqualToString:@"outline_fragment"]||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"subject_resolve_fragment"]||[fragment isEqualToString:@"model_commit_fragment"]||[fragment isEqualToString:@"model_direct_fragment"]){
+ if([vertex isEqualToString:@"sprite_vertex"]||[vertex isEqualToString:@"annotation_vertex"]||[fragment isEqualToString:@"model_fragment"]||[fragment isEqualToString:@"outline_fragment"]||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"subject_resolve_fragment"]||[fragment isEqualToString:@"model_commit_fragment"]||[fragment isEqualToString:@"model_direct_fragment"]){
  for(int i=0;i<2;i++){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[i];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=(i==0||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"model_direct_fragment"])?MTLBlendFactorOneMinusSourceAlpha:MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  }
  if([fragment isEqualToString:@"shadow_fragment"]){d.colorAttachments[0].pixelFormat=MTLPixelFormatR8Unorm;MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.rgbBlendOperation=MTLBlendOperationMax;a.alphaBlendOperation=MTLBlendOperationMax;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
@@ -176,7 +177,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.materials=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];r.textureFrames=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];
  MTLTextureDescriptor* hd=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR32Float width:1 height:1 mipmapped:NO];hd.storageMode=MTLStorageModeShared;hd.usage=MTLTextureUsageShaderRead;r.heights=[r.device newTextureWithDescriptor:hd];float zero=0;[r.heights replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&zero bytesPerRow:4];
  hd.pixelFormat=MTLPixelFormatRGBA8Unorm;r.emptyFog=[r.device newTextureWithDescriptor:hd];uint32_t white=0xffffffff;[r.emptyFog replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];
- r.sprite=pipeline(r,lib,@"sprite_vertex",@"sprite_fragment",YES,&e);
+ r.sprite=pipeline(r,lib,@"sprite_vertex",@"sprite_fragment",YES,&e);r.annotation=pipeline(r,lib,@"annotation_vertex",@"annotation_fragment",YES,&e);
  r.blur=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"blur"] error:&e];
  r.selectLights=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"select_subject_lights"] error:&e];
  r.interpolatePoses=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"interpolate_poses"] error:&e];
@@ -291,9 +292,15 @@ static void clearFocus(NMRenderer* r) {
  for(uint32_t button=0;button<3;button++)if(r->mouseHeld&(1u<<button))pushEvent(r,(NMEvent){.kind=3,.button=button,.x=r->pointerX,.y=r->pointerY});
  r->mouseHeld=0;r->pointerModifiers=0;restorePointer(r);
 }
+// Diagnostic: NANOLATHE_METAL_FOCUS_LOG=1 prints AppKit's focus state.
+static void nmFocusLog(NMRenderer* r,const char* what) {
+ static int enabled=-1;if(enabled<0)enabled=getenv("NANOLATHE_METAL_FOCUS_LOG")!=NULL;if(!enabled)return;
+ fprintf(stderr,"focus: %s key=%d active=%d appKey=%d main=%d wasKey=%d\n",what,r.window.keyWindow,NSApp.active,NSApp.keyWindow==r.window,r.window.mainWindow,r->wasKey);
+}
 static void observeFocus(NMRenderer* r) {
  BOOL focused=r.window.keyWindow;
  if(r->wasKey==focused)return;
+ nmFocusLog(r,focused?"gained":"lost");
  if(!focused)clearFocus(r);
  if(r->playable)pushEvent(r,(NMEvent){.kind=8,.key=focused?1:0});
  r->wasKey=focused;
@@ -348,7 +355,14 @@ static void pump(NMRenderer* r) {
    }
    if(inside||r->mouseHeld||r->pointerCaptured){r->pointerX=x;r->pointerY=y;
     if(scroll){r->wheel+=(float)event.scrollingDeltaY;consumed=YES;}
-    if(r->playable){if(down){[r.window makeKeyWindow];r->mouseHeld|=1u<<button;}if(up)r->mouseHeld&=~(1u<<button);
+    if(r->playable){if(down&&(!NSApp.active||!r.window.keyWindow)){
+     // A click that returns to the game activates it only when AppKit sees the
+     // mouse-down: the window server makes the process frontmost, but NSApp
+     // stays inactive and the window never becomes key (so focus, keyboard,
+     // trackpad pan and every focus-gated gesture stay off) unless the event
+     // reaches sendEvent. The view ignores the click itself.
+     nmFocusLog(r,"down while not key");[NSApp sendEvent:event];if(!r.window.keyWindow)[r.window makeKeyWindow];nmFocusLog(r,"after forwarding");}
+     if(down){r->mouseHeld|=1u<<button;}if(up)r->mouseHeld&=~(1u<<button);
      uint32_t key=down?(uint32_t)event.clickCount:0;
      if(scroll){BOOL precise=event.hasPreciseScrollingDeltas,momentum=event.momentumPhase!=NSEventPhaseNone;key=4|(precise?1:0)|(momentum?2:0);int64_t notch=0;
       if(!precise&&!momentum){CGEventRef cg=event.CGEvent;if(cg)notch=CGEventGetIntegerValueField(cg,kCGScrollWheelEventDeltaAxis1);double y=event.scrollingDeltaY;if((y>0&&notch<0)||(y<0&&notch>0))notch=-notch;if(notch==0)notch=y>0?1:y<0?-1:0;}

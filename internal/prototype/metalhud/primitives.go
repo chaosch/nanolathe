@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
 
 // The factors are the existing Enhanced executor's destination-table arithmetic
@@ -141,6 +142,23 @@ func (f *Foreground) Line(l drawlist.Line) {
 		}
 	}
 	flush()
+}
+
+// WorldLines rasterizes world-region lines exactly as the list path does,
+// into dst rather than the foreground, for a host that composes them in the
+// world. The foreground's own quads and error are untouched.
+func (f *Foreground) WorldLines(ws drawlist.WorldSpace, lines []drawlist.Line, dst []meshscene.OverlayQuad) []meshscene.OverlayQuad {
+	quads, err := f.quads, f.err
+	f.quads, f.err = dst, nil
+	ws.Begin = true
+	f.World(ws)
+	for _, l := range lines {
+		f.Line(l)
+	}
+	f.World(drawlist.WorldSpace{})
+	out := f.quads
+	f.quads, f.err = quads, err
+	return out
 }
 
 func (f *Foreground) litPoint(x, y int, row byte) {

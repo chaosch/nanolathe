@@ -92,13 +92,18 @@ type Client struct {
 	hostStepDue time.Time
 	// frameTiming is presentation-only instrumentation for the +fps overlay.
 	// The window adapter changes it only after joining any pre-record worker.
-	frameTiming             bool
-	blendNanos              int64
-	arrival                 arrivalPresentation
-	presentationPaused      bool
-	pausedWorldRevision     uint64
-	pausedLayer             pausedRecordLayer
-	retainedForeground      bool
+	frameTiming         bool
+	blendNanos          int64
+	arrival             arrivalPresentation
+	presentationPaused  bool
+	pausedWorldRevision uint64
+	pausedLayer         pausedRecordLayer
+	retainedForeground  bool
+	// externalSelection hands selected-unit quads to the retained host, which
+	// draws them in each unit's paint slot (RetainedSelections).
+	externalSelection       bool
+	retainedSelections      []RetainedSelection
+	retainedSelectionWS     drawlist.WorldSpace
 	retainedProjectileOrder *[]RetainedProjectileModel // active only during the source-only projectile batch
 	communityHUD            CommunityHUDOptions
 	communityColors         communityColorState

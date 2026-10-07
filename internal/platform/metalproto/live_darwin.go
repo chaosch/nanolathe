@@ -69,6 +69,8 @@ type liveUpload struct {
 	Groups                                                                                                           uintptr
 	TerrainFlags                                                                                                     uint32
 	Projections                                                                                                      uintptr
+	Annotations, AnnotationRanges                                                                                    uintptr
+	AnnotationCount, AnnotationRangeCount                                                                            uint32
 }
 type livePacking struct {
 	projectionPacking                                ProjectionPacking
@@ -88,6 +90,9 @@ type livePacking struct {
 	compositionSelectors, sourcePacked, spritePacked []uint32
 	compositionDraws                                 []cloakDraw
 	compositionPaint                                 [][4]uint32
+	annotations                                      [][8]float32
+	annotationOrder                                  []meshscene.Annotation
+	annotationRanges                                 [][2]uint32
 	rules                                            []meshscene.ModelRules
 	materialOffsets                                  []uint32
 	materials                                        []meshscene.NativeModelMaterial
@@ -115,7 +120,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 656 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 680 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {

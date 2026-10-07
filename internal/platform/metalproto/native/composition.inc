@@ -7,7 +7,13 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  ring.compositionSelectors=grow(r,ring.compositionSelectors,(NSUInteger)u->instance_count*4);
  ring.compositionPaint=grow(r,ring.compositionPaint,(NSUInteger)u->composition_paint_count*16);
  if(!ring.compositionSlots||!ring.compositionSelectors||!ring.compositionPaint)return NO;
+ ring.annotationRangeCount=0;
  if(!u->composed)return YES;
+ if(u->annotation_count&&u->annotation_range_count==u->composition_slot_count&&u->annotations&&u->annotation_ranges){
+  ring.annotations=grow(r,ring.annotations,(NSUInteger)u->annotation_count*32);if(!ring.annotations)return NO;memcpy(ring.annotations.contents,u->annotations,(NSUInteger)u->annotation_count*32);
+  if(!ring.annotationRanges)ring.annotationRanges=[NSMutableData new];ring.annotationRanges.length=(NSUInteger)u->annotation_range_count*8;memcpy(ring.annotationRanges.mutableBytes,u->annotation_ranges,ring.annotationRanges.length);
+  ring.annotationRangeCount=u->annotation_range_count;
+ }
  if(u->composition_slot_count&&(!u->composition_slots||!u->composition_paint||!u->composition_width||!u->composition_height))return NO;
  if(u->composition_width>8192||u->composition_height>8192)return NO;
  if(u->instance_count)memcpy(ring.compositionSelectors.contents,u->composition_selectors,u->instance_count*4);
@@ -98,6 +104,14 @@ static void nmCompositionCommit(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEn
   // A shadow sits at the far edge of its band: behind its own body, in front of earlier ranks.
   if(slabs)nmSlabViewport(r,enc,nmSlabDepth(ring,begin,0.9999));
   if(!sprite)nmShadowsCommitSlot(r,r.shadows,ring.shadows,enc,u,paint[begin*4]);
+  // The selected-unit quad precedes its body in the same band: the body
+  // (direct depth or later commit) covers it, earlier ranks do not
+  // [03 R-WATER-01 §1] rule 5.
+  if(!sprite&&paint[begin*4+3]==0&&paint[begin*4]&&paint[begin*4]<=ring.annotationRangeCount){
+   const uint32_t* range=(const uint32_t*)ring.annotationRanges.bytes+(paint[begin*4]-1)*2;
+   if(range[1]){if(slabs){nmSlabViewport(r,enc,nmSlabDepth(ring,begin,0.9998));[enc setDepthStencilState:r.spriteDepth];}
+    [enc setRenderPipelineState:r.annotation];[enc setVertexBuffer:ring.annotations offset:(NSUInteger)range[0]*32 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:range[1]];}
+  }
   if(!sprite&&paint[begin*4+3]==0&&nmSlotDirect(ring,paint[begin*4])){begin=stop;continue;}
   if(slabs){nmSlabViewport(r,enc,nmSlabDepth(ring,begin,0.5));[enc setDepthStencilState:r.spriteDepth];}
   if(sprite){[enc setRenderPipelineState:r.sprite];[enc setVertexBuffer:ring.sprites offset:(paint[begin*4]-1)*96 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];}

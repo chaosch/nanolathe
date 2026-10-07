@@ -63,6 +63,30 @@ func (p *livePacking) prepareComposition(f meshscene.LiveFrame, u *liveUpload) e
 		}
 		return cmp.Compare(a[2], b[2])
 	})
+	// Annotations are grouped by slot; each slot's range is drawn in its paint
+	// band before the body commit.
+	p.annotations = p.annotations[:0]
+	p.annotationRanges = slices.Grow(p.annotationRanges[:0], len(c.Slots))[:len(c.Slots)]
+	clear(p.annotationRanges)
+	if len(f.Annotations) > 0 {
+		p.annotationOrder = append(p.annotationOrder[:0], f.Annotations...)
+		slices.SortStableFunc(p.annotationOrder, func(a, b meshscene.Annotation) int { return cmp.Compare(a.Slot, b.Slot) })
+		for _, a := range p.annotationOrder {
+			if a.Slot == 0 || int(a.Slot) > len(c.Slots) {
+				continue
+			}
+			r := &p.annotationRanges[a.Slot-1]
+			if r[1] == 0 {
+				r[0] = uint32(len(p.annotations))
+			}
+			r[1]++
+			p.annotations = append(p.annotations, [8]float32{a.Rect[0], a.Rect[1], a.Rect[2], a.Rect[3], a.Color[0], a.Color[1], a.Color[2], a.Color[3]})
+		}
+		u.Annotations = pointer(p.annotations)
+		u.AnnotationRanges = pointer(p.annotationRanges)
+		u.AnnotationCount = uint32(len(p.annotations))
+		u.AnnotationRangeCount = uint32(len(p.annotationRanges))
+	}
 	u.CompositionSlots = pointer(c.Slots)
 	u.CompositionSelectors = pointer(p.compositionSelectors)
 	u.CompositionDraws = pointer(p.compositionDraws)

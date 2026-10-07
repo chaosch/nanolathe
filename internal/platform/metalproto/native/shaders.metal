@@ -253,6 +253,15 @@ fragment MRT sprite_fragment(SpriteOut in [[stage_in]],texture2d<float> atlas [[
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float4 tex=atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;if(alpha<0.001)discard_fragment();
  float3 premult=tex.rgb*in.color.rgb*alpha;MRT out;out.color=float4(premult,in.emissionAdditive.y>0.5?0:alpha);out.glow=float4(premult*max(in.emissionAdditive.x,0.0)*smoothstep(0.45,1.0,max(tex.r,max(tex.g,tex.b)))*u.timing.w,0);return out;
 }
+// Selected-unit quads: physical-pixel rectangles drawn inside their unit's
+// paint band, so the unit's body covers them as the production painter does.
+struct Annotation { float4 rect,color; };
+struct AnnotationOut { float4 position [[position]];float4 color; };
+vertex AnnotationOut annotation_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const Annotation* a [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
+ const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
+ Annotation q=a[iid];float2 p=q.rect.xy+c[v]*q.rect.zw;AnnotationOut o;o.position=float4(p.x/u.viewport.x*2-1,1-p.y/u.viewport.y*2,0,1);o.color=q.color;return o;
+}
+fragment MRT annotation_fragment(AnnotationOut in [[stage_in]]) { MRT out;out.color=float4(in.color.rgb*in.color.a,in.color.a);out.glow=float4(0);return out; }
 struct Screen { float4 p [[position]];float2 uv; };
 vertex Screen screen_vertex(uint v [[vertex_id]]) {
  float2 p=float2((v<<1)&2,v&2);Screen o;o.p=float4(p*2-1,0,1);o.uv=float2(p.x,1-p.y);return o;

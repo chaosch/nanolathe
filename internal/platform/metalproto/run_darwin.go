@@ -294,6 +294,39 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		p.packed = float64(time.Since(start)) / float64(time.Millisecond)
 		return p
 	}
+	// Interactive diagnostics: every successful present appends one native
+	// row, so the presents counted here name those rows. Go-side phases wait
+	// in a small ring until the row's GPU completes and its present resolves.
+	var presents, reported uint64
+	var goTimes [64][2]float64
+	var recent [16]nativeRow
+	var timing []meshscene.FrameTiming
+	completedTiming := func() []meshscene.FrameTiming {
+		timing = timing[:0]
+		if !interactive || presents == reported {
+			return timing
+		}
+		n := int(b.rows(handle, pointer(recent[:]), int32(min(presents-reported, uint64(len(recent))))))
+		if n <= 0 || n > len(recent) {
+			return timing
+		}
+		first := presents - uint64(n)
+		reported = max(reported, first)
+		newest := recent[n-1].Submit
+		for i := int(reported - first); i < n; i++ {
+			row := recent[i]
+			// Rows complete in order. A present normally resolves a few
+			// refreshes after completion; one still unresolved after 100 ms
+			// was never shown.
+			if row.Completed == 0 || row.Presented == 0 && newest-row.Submit < .1 {
+				break
+			}
+			g := goTimes[(first+uint64(i))%uint64(len(goTimes))]
+			timing = append(timing, meshscene.FrameTiming{Presented: row.Presented, Next: g[0], Pack: g[1], Encode: row.Encode, Wait: row.Wait + row.DrawableWait, GPU: max(0, row.GPUEnd-row.GPUStart) * 1000})
+			reported = first + uint64(i) + 1
+		}
+		return timing
+	}
 	pollLive := func(at time.Time) (meshscene.Input, error) {
 		var input nativeInput
 		b.input(handle, uintptr(unsafe.Pointer(&input)))
@@ -302,7 +335,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if eventCount < 0 || eventCount > len(events) {
 			return meshscene.Input{}, fmt.Errorf("metalproto: invalid native event count")
 		}
-		return meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0, At: at}, nil
+		return meshscene.Input{Events: events[:eventCount], PanX: input.PanX, PanZ: input.PanZ, Zoom: input.Zoom, PauseToggle: input.PauseToggle != 0, At: at, Timing: completedTiming()}, nil
 	}
 	sourceSeconds := func(frame int, at time.Time) float64 {
 		if opts.Benchmark != nil {
@@ -453,6 +486,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 					ahead = true
 				}
 				status = b.livePresent(handle)
+				if status == 1 {
+					goTimes[presents%uint64(len(goTimes))] = [2]float64{p.source, p.packed}
+					presents++
+				}
 			}
 			if opts.Benchmark != nil {
 				hostRow.Submit = float64(time.Since(submitStart)) / 1e6

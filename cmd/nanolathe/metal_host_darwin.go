@@ -78,6 +78,8 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)
 	cl.SetFocused(true)
+	// Selected-unit quads are drawn in their units' paint slots, not the HUD.
+	cl.SetExternalSelection(true)
 	display := cl.DisplayPalette()
 	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
@@ -88,8 +90,14 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 		return err
 	}
 	prepareMetalScene(scene, sess.World)
-	host := &metalBattleHost{scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
+	host := &metalBattleHost{fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	scene.Live = host
+	if path := os.Getenv("NANOLATHE_METAL_INPUT_TRACE"); path != "" {
+		if host.trace.out, err = os.Create(path); err != nil {
+			return err
+		}
+		defer host.trace.out.Close()
+	}
 	scene.Metadata["logical_surface"] = []int{logicalW, logicalH}
 	scene.Metadata["prototype_limits"] = "one battle per launch; fixed drawable; native world effects and annotation depth remain prototype approximations"
 	renderOptions := metalproto.Options{Width: width, Height: height, Frames: opts.MetalFrames, Warmup: 120, FPS: 120, VSync: true, Effects: true, VisualPasses: true, OutputDir: opts.MetalPrototype, LibraryPath: opts.MetalLibrary}
@@ -133,6 +141,9 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 
 type metalBattleHost struct {
 	visuals                       metalVisuals
+	fps                           metalFPS
+	selection                     metalSelection
+	trace                         metalInputTrace
 	scene                         *meshscene.Scene
 	composer                      *metalModelComposer
 	shadows                       *metalShadowComposer
@@ -170,6 +181,7 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.started = now
 		h.due = now
 	}
+	h.fps.observe(time.Now(), in.Timing)
 	h.events = append(h.events, in.Events...)
 	for _, event := range in.Events {
 		if event.Kind == 1 || event.Kind == 2 || event.Kind == 3 || event.Kind == 9 {
@@ -182,9 +194,11 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	if !now.Before(h.due) {
 		h.cl.BumpPresentationEpoch()
 		h.input.Apply(h.events, uint32(clock.ScaledNow(uint32(h.due.Sub(monotonicHostStart)/time.Millisecond))))
+		trace := h.trace.before(h.battle, h.cl, h.events)
 		h.events = h.events[:0]
 		h.cl.SetHostStepDue(h.due)
 		h.cl.Step(1.0 / 30)
+		h.trace.after(trace, h.battle, h.cl)
 		if !h.cl.IsFocused() {
 			h.cl.SetPointerCaptured(false)
 		}
@@ -254,6 +268,12 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	if err != nil {
 		return meshscene.LiveFrame{}, err
 	}
+	// +fps: production draws its panel over the finished frame, cursor
+	// included; so does this, as the last HUD quad.
+	if h.battle.fpsShown() && h.battle.postBattle == nil && h.battle.hud != nil {
+		pixels, revision := h.fps.paint(time.Now(), h.battle.hud.developerFont)
+		quads, version = h.hud.Image(metalFPSImageKey, revision, max(0, h.width-metalFPSWidth-6), 6, metalFPSWidth, metalFPSHeight, pixels)
+	}
 	for i := range quads {
 		for j := range quads[i].Rect {
 			quads[i].Rect[j] *= 2
@@ -284,6 +304,7 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		return meshscene.LiveFrame{}, err
 	}
 	h.frame.Composition, h.frame.Composed = composition, true
+	h.frame.Annotations = h.selection.Prepare(h.cl, h.hud, h.composer.order, composition, 2)
 	if h.shadows == nil {
 		h.shadows = newMetalShadowComposer(h.world)
 	}
@@ -297,6 +318,7 @@ func (h *metalBattleHost) Close() map[string]any {
 	h.battle.stopSimulation(h.cl)
 	result := h.world.Report()
 	result["host_steps"] = h.steps
+	result["selection_unplaced"] = h.selection.unplaced
 	result["native_events"] = h.inputs
 	result["elapsed_seconds"] = time.Since(h.started).Seconds()
 	if current := h.sess.Snapshot.Current(); current != nil {

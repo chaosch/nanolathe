@@ -15,8 +15,35 @@ func (c *Client) RecordRetainedForeground() *drawlist.List {
 		return nil
 	}
 	c.retainedForeground = true
+	c.retainedSelections = c.retainedSelections[:0]
 	defer func() { c.retainedForeground = false }()
 	return c.recordPausedLayer(pausedForegroundLayer)
+}
+
+// RetainedSelection is one selected unit's footprint quad, left out of the
+// retained foreground for a host that draws it in the unit's own paint slot,
+// before the model, as presentUnit does [03 R-WATER-01 §1] rule 5.
+type RetainedSelection struct {
+	InstanceID uint64
+	Lines      [4]drawlist.Line // record pixels inside the returned world region
+}
+
+// SetExternalSelection makes RecordRetainedForeground collect selected-unit
+// quads for RetainedSelections instead of drawing them over the world.
+func (c *Client) SetExternalSelection(on bool) {
+	if c != nil {
+		c.externalSelection = on
+	}
+}
+
+// RetainedSelections returns the quads the last RecordRetainedForeground
+// collected and the world region their lines are recorded in. Both are
+// borrowed until the next record.
+func (c *Client) RetainedSelections() (drawlist.WorldSpace, []RetainedSelection) {
+	if c == nil {
+		return drawlist.WorldSpace{}, nil
+	}
+	return c.retainedSelectionWS, c.retainedSelections
 }
 
 func (c *Client) drawRetainedAnnotations(cur *frame.Frame) {
@@ -26,6 +53,7 @@ func (c *Client) drawRetainedAnnotations(cur *frame.Frame) {
 	}
 	c.frameTick = cur.Tick
 	c.emitWorldBegin()
+	c.retainedSelectionWS = c.worldSpace(true)
 	if !c.StrategicIconsActive() {
 		win := c.worldWindow()
 		for i := range cur.Units {
@@ -35,6 +63,12 @@ func (c *Client) drawRetainedAnnotations(cur *frame.Frame) {
 			}
 			row := unitBucketRow(u.Z, c.cam.Z)
 			if row < 0 || row >= win.bucketRows {
+				continue
+			}
+			if c.externalSelection {
+				if lines, ok := c.selectionQuadLines(*u); ok {
+					c.retainedSelections = append(c.retainedSelections, RetainedSelection{InstanceID: u.InstanceID, Lines: lines})
+				}
 				continue
 			}
 			c.drawSelectionQuad(*u)

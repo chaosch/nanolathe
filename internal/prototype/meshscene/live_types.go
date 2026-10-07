@@ -19,6 +19,28 @@ type Input struct {
 	// At is the instant the frame is prepared for. A frame prepared ahead
 	// is sampled at its predicted draw start, not when its worker runs.
 	At time.Time
+	// Timing lists frames completed since the previous Input, oldest first,
+	// for host diagnostics such as the +fps panel. Interactive runs only.
+	Timing []FrameTiming
+}
+
+// FrameTiming is one submitted frame's measured phases in milliseconds.
+// Presented is the display time in seconds on the host media clock, zero when
+// the drawable was never shown. Next and Pack run on the prepare worker;
+// Encode (staging copies plus command encoding) and Wait (ring and drawable
+// waits) on the render thread; GPU is the command buffer's execution span.
+type FrameTiming struct {
+	Presented                     float64
+	Next, Pack, Encode, Wait, GPU float64
+}
+
+// Annotation is one physical-pixel rectangle drawn in a composition slot's
+// paint band before that slot's body, as presentUnit draws the selected-unit
+// quad immediately before the model [03 R-WATER-01 §1]. Slot is one-based.
+type Annotation struct {
+	Slot  uint32
+	Rect  [4]float32
+	Color [4]float32
 }
 
 // Sprite is a 96-byte GPU instance. Positions are world x,y,z; Rect is
@@ -70,6 +92,7 @@ type LiveFrame struct {
 	CursorQuads       []int
 	CursorAt          [2]int
 	CursorScale       float32
+	Annotations       []Annotation
 	Previous, Current []Mat4
 	Instances         []Instance
 	Sprites           []Sprite
