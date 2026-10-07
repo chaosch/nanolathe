@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/nanolathe-gg/nanolathe/internal/content"
-	"github.com/nanolathe-gg/nanolathe/internal/effects"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
@@ -16,27 +15,39 @@ import (
 // scratch. Append and Report must run on the session worker; Texture may be
 // borrowed by the renderer for its one-time upload [I6].
 type BattleSprites struct {
-	texture                                             Texture
-	regions                                             []atlasRegion
-	sequences                                           map[string]*spriteSequence
-	missing                                             map[string]string
-	counts                                              map[string]int
-	totals                                              map[string]int
-	previousEffects, previousProjectiles, previousBeams map[uint64][4]float32
-	colors                                              [256][4]float32
-	logical                                             [256]byte
-	banksLoaded, framesLoaded, alternateChildrenOmitted int
-	anchorHeights                                       []int16
-	anchorW, anchorH                                    int
-	flashSides                                          [effects.FlashTableCount][]int
-	bankCensus                                          []spriteBankCensus
-	preparedFeatureNames, unresolvedFeatureNames        []string
-	featureScopeFiltered                                bool
-	rawSpritePixels, croppedSpritePixels                int64
-	fullyTransparentFrames                              int
+	spectator                                            bool
+	featureModelBounds                                   map[string][4]float32
+	texture                                              Texture
+	regions                                              []atlasRegion
+	sequences                                            map[string]*spriteSequence
+	missing                                              map[string]string
+	counts                                               map[string]int
+	totals                                               map[string]int
+	previousEffects, previousProjectiles, previousBeams  map[uint64][4]float32
+	colors                                               [256][4]float32
+	logical                                              [256]byte
+	banksLoaded, framesLoaded, alternateChildrenPrepared int
+	anchorHeights                                        []int16
+	anchorW, anchorH                                     int
+	bankCensus                                           []spriteBankCensus
+	preparedFeatureNames, unresolvedFeatureNames         []string
+	featureScopeFiltered                                 bool
+	rawSpritePixels, croppedSpritePixels                 int64
+	fullyTransparentFrames                               int
 }
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
+
+func (b *BattleSprites) SetSpectator(on bool) { b.spectator = on }
+
+// SetFeatureModelBounds copies prepared projected model bounds, relative to the
+// world anchor, before the session worker starts (GPU design §28).
+func (b *BattleSprites) SetFeatureModelBounds(bounds map[string][4]float32) {
+	b.featureModelBounds = make(map[string][4]float32, len(bounds))
+	for key, rect := range bounds {
+		b.featureModelBounds[battleModelKey(key)] = rect
+	}
+}
 
 // SetTerrain copies only the immutable height bytes needed by sprite feature
 // anchors. Call before the worker starts; no authoritative pointer survives.
@@ -164,14 +175,27 @@ func (b *BattleSprites) appendLight(dst []Light, p [4]float32, radius, strength 
 		b.counts["culled_lights"]++
 		return dst
 	}
-	if len(dst) >= 32 {
-		b.counts["lights_over_limit"]++
-		return dst
-	}
+
 	if hue == [3]float32{} {
 		hue = [3]float32{1, 1, 1}
 	}
-	return append(dst, Light{PositionRadius: [4]float32{p[0], p[1], p[2], radius}, ColorStrength: [4]float32{hue[0], hue[1], hue[2], strength}})
+	light := Light{PositionRadius: [4]float32{p[0], p[1], p[2], radius}, ColorStrength: [4]float32{hue[0], hue[1], hue[2], strength}}
+	if len(dst) < 32 {
+		return append(dst, light)
+	}
+	b.counts["lights_over_limit"]++
+	// Prototype's 32 slots retain the strongest, with source-order ties (§23).
+	at := 0
+	for i := 1; i < len(dst); i++ {
+		if battleLightPower(dst[i]) <= battleLightPower(dst[at]) {
+			at = i
+		}
+	}
+	if battleLightPower(light) > battleLightPower(dst[at]) {
+		copy(dst[at:], dst[at+1:])
+		dst[len(dst)-1] = light
+	}
+	return dst
 }
 
 // Append consumes committed copies only. Effect/projectile identities preserve
@@ -201,6 +225,10 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	white := spriteArt{cell: 0, width: 2, height: 2}
 	for _, v := range current.Features {
 		b.counts["features_seen"]++
+		if !battleFeatureVisible(current, v, b.spectator) {
+			b.counts["features_visibility_rejected"]++
+			continue
+		}
 		if v.Model != "" && v.Filename == "" {
 			b.counts["model_features_delegated"]++
 			continue
@@ -244,10 +272,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 				}
 			} else {
 				if name != "" {
-					a, ok = b.art(v.Filename, name, 0, false)
-				}
-				if !shadow && v.Animating {
-					b.counts["rest_feature_animations_frozen"]++
+					a, ok = b.restArt(v.Filename, name, current.Tick, v.Animating)
 				}
 			}
 			if name == "" {
@@ -268,26 +293,30 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			if shadow {
 				kind = "feature_shadows"
 			}
-			dst = b.appendSprite(dst, a, p, p, color, 0, camera, viewport, kind)
+			emission := float32(0)
+			if !shadow && v.IsBurning && battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
+				emission = 1
+				lights = b.appendArtLight(lights, a, p, b.sequenceExtent(v.Filename, name), "fire", current.Tick, camera, viewport)
+			}
+			dst = b.appendSprite(dst, a, p, p, color, emission, camera, viewport, kind)
 		}
 	}
 	for _, v := range current.Effects {
 		b.counts["effects_seen"]++
+		if !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
+			b.counts["effects_visibility_rejected"]++
+			continue
+		}
 		p := spritePosition(v.X, v.Y, v.Z)
 		old := spritePrevious(b.previousEffects, v.PresentationID, p)
 		a, ok := b.art(v.AssetID, v.Graphic, v.SeqA, true)
-		if v.Light && v.HasFlashDisc && v.FlashLevel >= 0 {
-			lights = b.appendLight(lights, p, float32(v.FlashRadius), float32(min(v.FlashLevel, 31)+1)/32, a.hue, camera, viewport)
-		} else if v.Light {
-			b.counts["unresolved_light_geometry"]++
+		if v.Light || v.ActiveB && v.HasCalculatedFlash {
+			b.counts["palette_flash_discs_omitted"]++
 		}
-		if v.ActiveB && v.HasCalculatedFlash && int(v.CalculatedTable) < len(b.flashSides) {
-			sides := b.flashSides[v.CalculatedTable]
-			if v.SeqB >= 0 && int(v.SeqB) < len(sides) {
-				lights = b.appendLight(lights, p, float32(sides[v.SeqB])/2, 1, a.hue, camera, viewport)
-				b.counts["calculated_discs_as_lights"]++
-			}
+		if ok && b.explosionVisible(v, current) {
+			lights = b.appendArtLight(lights, a, p, b.sequenceExtent(v.AssetID, v.Graphic), "explosion", current.Tick, camera, viewport)
 		}
+
 		if v.FragmentSlot != 0 || v.HasModel {
 			b.counts["model_effects_omitted"]++
 			continue
@@ -311,15 +340,28 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			b.counts["missing_effect_frames"]++
 			continue
 		}
-		dst = b.appendSprite(dst, a, old, p, [4]float32{1, 1, 1, 1}, 1, camera, viewport, "effect_sprites")
+		emission := float32(1)
+		if v.Kind == frame.KindSmokeStart.String() {
+			emission = 0
+			b.counts["smoke_receivers"]++
+		}
+		dst = b.appendSprite(dst, a, old, p, [4]float32{1, 1, 1, 1}, emission, camera, viewport, "effect_sprites")
 	}
 	for _, v := range current.Strips {
 		b.counts["strip_particles_seen"]++
+		if v.Family != frame.StripFamilyVentSteam && !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
+			b.counts["strips_visibility_rejected"]++
+			continue
+		}
 		p := spritePosition(v.X, v.Y, v.Z)
 		switch v.Family {
 		case frame.StripFamilySprinkle, frame.StripFamilyNano:
 			if v.Fill != 0 {
-				dst = b.appendSprite(dst, white, p, p, b.colors[v.Fill], 1, camera, viewport, "strip_fills")
+				emission := float32(0)
+				if v.Family == frame.StripFamilyNano && v.Y >= current.Visibility.SeaLevel {
+					emission = 0.16
+				}
+				dst = b.appendSprite(dst, white, p, p, b.colors[v.Fill], emission, camera, viewport, "strip_fills")
 			} else {
 				b.counts["strip_fill_missing"]++
 			}
@@ -330,12 +372,24 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 				continue
 			}
 			// Strip blits take the destination ALP path [03 R-FX-02 §2].
-			dst = b.appendSprite(dst, a, p, p, [4]float32{1, 1, 1, 0.5}, 1, camera, viewport, "strip_sprites")
+			emission := float32(0)
+			if v.Family == frame.StripFamilyFlame || v.Family == frame.StripFamilyFlameTrail {
+				emission = 0.5
+				kind := "fire"
+				if v.Family == frame.StripFamilyFlameTrail {
+					kind = "spark"
+				}
+				lights = b.appendArtLight(lights, a, p, float32(max(a.identity.Width, a.identity.Height)), kind, current.Tick, camera, viewport)
+			} else {
+				b.counts["smoke_receivers"]++
+			}
+			dst = b.appendSprite(dst, a, p, p, [4]float32{1, 1, 1, 0.5}, emission, camera, viewport, "strip_sprites")
 		default:
 			b.counts["unsupported_strip_family"]++
 		}
 	}
-	dst = b.appendProjectiles(dst, current, camera, viewport)
+	dst, lights = b.appendProjectiles(dst, lights, current, camera, viewport)
+	lights = b.appendWreckLights(lights, current, camera, viewport)
 	// Live native depth is 0.5-(z-camera.z+2*y)*scale. Larger z+2*y is nearer;
 	// transparent fragments test opaque depth but never write it.
 	sort.SliceStable(dst, func(i, j int) bool {
@@ -372,12 +426,15 @@ func (b *BattleSprites) Report() map[string]any {
 	for k, v := range b.totals {
 		totals[k] = v
 	}
-	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": len(b.texture.RGBA), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": b.alternateChildrenOmitted, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "crop_raw_texel_area": b.rawSpritePixels, "crop_retained_texel_area": b.croppedSpritePixels, "crop_rgba_margin_bytes_removed": (b.rawSpritePixels - b.croppedSpritePixels) * 4, "crop_fully_transparent_frames": b.fullyTransparentFrames, "crop_area_basis": "sum of decoded frame areas before deduplication and gutters; atlas_bytes is actual packed storage", "approximations": []string{
-		"rest feature animations use first authored frame; feature event cursors retain authored holds",
-		"native straight RGBA alpha approximates destination-palette ALP; alternate composite children omitted",
+	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": len(b.texture.RGBA), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": 0, "alternate_children_composited": b.alternateChildrenPrepared, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "crop_raw_texel_area": b.rawSpritePixels, "crop_retained_texel_area": b.croppedSpritePixels, "crop_rgba_margin_bytes_removed": (b.rawSpritePixels - b.croppedSpritePixels) * 4, "crop_fully_transparent_frames": b.fullyTransparentFrames, "crop_area_basis": "sum of decoded frame areas before deduplication and gutters; atlas_bytes is actual packed storage", "approximations": []string{
+		"rest feature animations and event cursors sample authored holds from committed ticks",
+		"native straight RGBA alpha approximates destination-palette ALP; ordered alternate children use authored half-alpha over transparent RGBA",
 		"strip particles snap at committed ticks; original nano palette retained without optional team-color ramp",
-		"omniscient battle presentation has no fog/LOS admission or retail strip barrier composition",
-		"LHT and calculated flash discs become bounded native radial lights from published geometry; no palette lookup or displacement lens",
+		"committed perspective admission; spectator bypass; retail strip barrier composition omitted",
+		"32 strongest explicit art/projectile/wreck lights; shipping 64-source family reserves and nano clustering omitted; palette flash discs and projectile displacement lenses omitted",
+		"smoke is a non-emissive receiver; native sprite shader does not yet apply smoke scattering",
+		"fire flicker, wreck cooling strength and light-source position sample committed ticks; source lighting itself is not GPU interpolated",
+		"wreck plumes use actual prepared static projected model bounds; orientation-dependent bounds are approximated",
 		"beams use continuous rotated quads and interpolate centres; span/angle snap to current endpoints",
 		"sprite depth uses native world anchor; tall billboard pixel depth and terrain overlap are approximations",
 	}, "terrain_anchor_snapshot": fmt.Sprintf("%dx%d", b.anchorW, b.anchorH)}
