@@ -79,6 +79,9 @@ type BattleOptions struct {
 	Width, Height      int
 	Zoom               float32
 	ViewPlayer         int // -1 omniscient; otherwise committed perspective 0..9
+	// DisplayPalette, when set, replaces PALETTE.PAL for all retained art so
+	// models, features and effects carry the same gamma as the terrain.
+	DisplayPalette *[256][4]byte
 }
 
 // Material is a 16-byte immutable texture binding. Index zero is reserved.

@@ -36,7 +36,8 @@ type metalBenchmarkRow struct {
 // The benchmark shares fixture, viewer step and census with both production
 // executors. Only translation, submission and the platform window differ.
 func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *client.Client, step func(), census func() any, options ebitenapp.BenchmarkOptions) error {
-	scene, world, err := meshscene.RetainBattle(meshscene.BattleOptions{
+	display := c.DisplayPalette()
+	scene, world, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display,
 		LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(c), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures},
 		Width:       options.Width, Height: options.Height, Zoom: float32(viewZoomOf(b).Float()),
 	}, cs.unmappedMount, b.sess)

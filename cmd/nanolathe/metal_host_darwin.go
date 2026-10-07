@@ -78,7 +78,8 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)
 	cl.SetFocused(true)
-	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
+	display := cl.DisplayPalette()
+	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
 	}

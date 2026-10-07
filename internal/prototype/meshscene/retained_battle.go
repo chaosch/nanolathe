@@ -42,6 +42,11 @@ func RetainBattle(opts BattleOptions, fs *vfs.FS, sess *session.Session) (*Scene
 	if err != nil {
 		return nil, nil, err
 	}
+	// The production renderers resolve every indexed source through the
+	// client's gamma-adjusted display palette; the terrain tiles already do.
+	if opts.DisplayPalette != nil {
+		pal.Base = *opts.DisplayPalette
+	}
 	opts.Playable = false
 	opts.Seed = sess.RNGSimSeed
 	opts.ViewPlayer = int(sess.LocalOwner)
