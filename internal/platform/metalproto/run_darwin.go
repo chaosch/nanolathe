@@ -271,6 +271,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["submission_elapsed_seconds"] = submittedAt.Sub(measuredStart).Seconds()
 	report["go_allocations"] = after.Mallocs - before.Mallocs
 	report["go_allocated_bytes"] = after.TotalAlloc - before.TotalAlloc
+	report["go_heap_bytes_before"] = before.HeapAlloc
+	report["go_heap_bytes_after"] = after.HeapAlloc
+	report["go_heap_reserved_bytes_after"] = after.HeapSys
+	report["go_gc_cycles"] = after.NumGC - before.NumGC
+	report["go_gc_pause_ms"] = float64(after.PauseTotalNs-before.PauseTotalNs) / 1e6
 	report["go_allocation_scope"] = "process-wide Go allocations during measured submission plus final drain"
 	if scene.Live != nil {
 		report["go_allocation_scope"] = "process-wide Go allocations including concurrent live-source worker during measured submission plus final drain"
