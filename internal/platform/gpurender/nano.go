@@ -130,13 +130,6 @@ func (r *Renderer) glowNano(f drawlist.Fill) {
 	if family <= 0 || f.NanoSubmerged || !r.glowActive() || !r.nanoInView(f) {
 		return
 	}
-	pad := 2 * nanoScale(f)
-	x0, y0 := max(float32(f.Rect.X)-pad, 0), max(float32(f.Rect.Y)-pad, 0)
-	x1 := min(float32(f.Rect.X+f.Rect.W)+pad, float32(r.clipW()))
-	y1 := min(float32(f.Rect.Y+f.Rect.H)+pad, float32(r.clipH()))
-	s := &r.sched
-	r.glow.rect([4]*ebiten.Image{1: r.tables.atlas},
-		s.txx(x0), s.txy(y0), s.txx(x1), s.txy(y1), 0, 0, 0, 0,
-		[4]float32{float32(f.Index), nanoGlowGain * glowGain * family, 0, 0},
-		[4]float32{0, 0, 0, glowOpSolid})
+	q := r.glowNanoPacket(f)
+	q.submit(&r.glow, [4]*ebiten.Image{1: r.tables.atlas})
 }
