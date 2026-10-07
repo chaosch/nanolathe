@@ -1,0 +1,20 @@
+#!/bin/sh
+# Isolated macOS prototype. No tests; native shader compilation happens at startup.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+if [ "$(uname -s)" != Darwin ]; then
+    echo 'nanolathe: Metal prototype requires macOS' >&2
+    exit 1
+fi
+: "${GOMAXPROCS:=2}"
+: "${NANOLATHE_TEST_P:=2}"
+. tools/go-budget
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+tools/host-run xcrun clang -dynamiclib -fobjc-arc -O3 -Wall -Wextra \
+    -framework Cocoa -framework Metal -framework QuartzCore \
+    internal/platform/metalproto/native/bridge.m -o "$work/libnanometal.dylib"
+tools/host-run go build -o "$work/nanolathe-metal" ./cmd/nanolathe-metal
+"$work/nanolathe-metal" --library "$work/libnanometal.dylib" "$@"

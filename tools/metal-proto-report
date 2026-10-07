@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Report retained Metal prototype measurements, separating display from submission."""
+import csv
+import json
+import pathlib
+import statistics
+import sys
+
+if len(sys.argv) < 2:
+    raise SystemExit("usage: tools/metal-proto-report OUTPUT_DIRECTORY [...]")
+
+def summary(values):
+    if not values:
+        return {"samples": 0}
+    ordered = sorted(values)
+    return {"samples": len(values), "mean_ms": statistics.mean(values),
+            **{f"p{int(q*100)}_ms": ordered[int((len(ordered)-1)*q)] for q in [.5, .95, .99]},
+            "max_ms": ordered[-1], "hz": 1000/statistics.mean(values) if statistics.mean(values) > 0 else 0}
+
+for directory in sys.argv[1:]:
+    path = pathlib.Path(directory)
+    report = json.loads((path / "summary.json").read_text())
+    with (path / "frames.csv").open() as file:
+        rows = [row for row in csv.DictReader(file) if row["warmup"] == "false"]
+    submission = [(float(b["submit_seconds"])-float(a["submit_seconds"]))*1000 for a, b in zip(rows, rows[1:])]
+    presentation = [(float(b["presented_seconds"])-float(a["presented_seconds"]))*1000 for a, b in zip(rows, rows[1:]) if float(a["presented_seconds"])>0 and float(b["presented_seconds"])>0]
+    metrics = {"directory": str(path), "units": report["instances"], "triangles": report["model_triangles_drawn"],
+               "offscreen": report["offscreen"], "effects": report["effects"], "cap": report["fps_cap"],
+               "cpu_encode": summary([float(row["encode_ms"]) for row in rows]),
+               "gpu": summary([float(row["gpu_ms"]) for row in rows]),
+               "submit": summary(submission), "present": summary(presentation),
+               "device_mib": report["peak_device_allocated_bytes"]/1048576,
+               "atlas_mib": report["scene"]["atlas_bytes"]/1048576,
+               "pose_upload_mib_per_frame": report["pose_upload_bytes_per_frame"]/1048576}
+    for key, intervals in [("submit", submission), ("present", presentation)]:
+        for hz in [120, 144]:
+            if intervals:
+                metrics[key][f"within_{hz}hz_105pct"] = sum(0 < ms <= 1000/hz*1.05 for ms in intervals)/len(intervals)
+    (path / "analysis.json").write_text(json.dumps(metrics, indent=2)+"\n")
+    print(f"{path.name}: {metrics['units']} instances, {metrics['triangles']:,} triangles; offscreen={metrics['offscreen']}, cap={metrics['cap']}, effects={metrics['effects']}")
+    for key in ["cpu_encode", "gpu", "submit", "present"]:
+        value = metrics[key]
+        if not value["samples"]:
+            print(f"  {key}: unavailable")
+            continue
+        print(f"  {key:10} mean {value['mean_ms']:.3f} ms; p50 {value['p50_ms']:.3f}; p95 {value['p95_ms']:.3f}; p99 {value['p99_ms']:.3f}" + (f"; {value['hz']:.1f} Hz" if key in ["submit", "present"] else ""))
+    print(f"  device {metrics['device_mib']:.2f} MiB; shared atlas {metrics['atlas_mib']:.2f} MiB; pose upload {metrics['pose_upload_mib_per_frame']:.3f} MiB/frame")
