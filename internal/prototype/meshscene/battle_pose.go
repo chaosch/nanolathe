@@ -72,17 +72,26 @@ type battleCensus struct {
 	ArmyUnits            int     `json:"army_units_owners_1_2_3"`
 }
 
-func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [3]float32, old *battlePublication) *battlePublication {
+// recycle, when non-nil, is a publication no reader still holds; its storage
+// is reused. It must not be old, which this build reads.
+func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [3]float32, old, recycle *battlePublication) *battlePublication {
 	matrixCapacity := len(current.Units)*12 + len(current.Projectiles)*2
 	if old != nil {
 		matrixCapacity = max(matrixCapacity, len(old.frame.Current)+128)
 	}
-	pub := &battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: make([]Mat4, 0, matrixCapacity), Previous: make([]Mat4, 0, matrixCapacity), Instances: make([]Instance, 0, len(current.Units)+len(current.Projectiles))}, byID: make(map[battleEntityKey]battlePoseSpan, len(current.Units)+len(current.Projectiles))}
+	var pub *battlePublication
+	if recycle != nil && recycle != old {
+		byID := recycle.byID
+		clear(byID)
+		*recycle = battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: recycle.frame.Current[:0], Previous: recycle.frame.Previous[:0], Instances: recycle.frame.Instances[:0],
+			Sprites: recycle.frame.Sprites[:0], Lights: recycle.frame.Lights[:0], Distortions: recycle.frame.Distortions[:0]}, byID: byID}
+		pub = recycle
+	} else {
+		pub = &battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: make([]Mat4, 0, matrixCapacity), Previous: make([]Mat4, 0, matrixCapacity), Instances: make([]Instance, 0, len(current.Units)+len(current.Projectiles))}, byID: make(map[battleEntityKey]battlePoseSpan, len(current.Units)+len(current.Projectiles))}
+	}
 	s.timing.begin()
 	census := battleCensus{Tick: current.Tick, Units: len(current.Units), Projectiles: len(current.Projectiles), Effects: len(current.Effects), Features: len(current.Features), Strips: len(current.Strips), Fragments: len(current.Fragments), Debris: len(current.Debris)}
-	previousUnits := make(map[uint64]*frame.UnitView, len(current.Units))
-	previousFeatures := map[uint64]*frame.FeatureView{}
-	previousProjectiles := map[uint64]*frame.ProjectileView{}
+	previousUnits, previousFeatures, previousProjectiles := s.lookup.previous()
 	if previous != nil {
 		for i := range previous.Units {
 			u := &previous.Units[i]
@@ -99,12 +108,12 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			previousProjectiles[p.PresentationID] = p
 		}
 	}
-	unitSlots := make(map[pool.Handle]*frame.UnitView, len(current.Units))
+	unitSlots := s.lookup.slots()
 	for i := range current.Units {
 		unitSlots[current.Units[i].Slot] = &current.Units[i]
 	}
 	s.timing.split(0)
-	currentUnits := make(map[uint64]bool, len(current.Units))
+	currentUnits := s.lookup.current()
 	for _, u := range current.Units {
 		currentUnits[u.InstanceID] = true
 		if int(u.Owner) < len(census.UnitsPerOwner) {
@@ -247,8 +256,8 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	}
 	s.timing.split(3)
 	if s.sprites != nil {
-		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(nil, nil, previous, current, camera, s.viewport)
-		pub.frame.Distortions = s.sprites.Distortions(nil, previous, current, camera, s.viewport)
+		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(pub.frame.Sprites, pub.frame.Lights, previous, current, camera, s.viewport)
+		pub.frame.Distortions = s.sprites.Distortions(pub.frame.Distortions, previous, current, camera, s.viewport)
 	}
 	s.timing.split(4)
 	census.SubmittedDebris = s.appendDetachedDebris(pub, current, camera, s.spectator)
@@ -486,4 +495,40 @@ func (s *battleSource) spriteReport() map[string]any {
 		return s.sprites.Report()
 	}
 	return map[string]any{"status": "sprite adapter pending integration"}
+}
+
+// publicationLookup keeps the per-build identity maps; each build clears them.
+// A battleSource builds on one goroutine, so one set suffices.
+type publicationLookup struct {
+	units       map[uint64]*frame.UnitView
+	features    map[uint64]*frame.FeatureView
+	projectiles map[uint64]*frame.ProjectileView
+	slotUnits   map[pool.Handle]*frame.UnitView
+	present     map[uint64]bool
+}
+
+func (l *publicationLookup) previous() (map[uint64]*frame.UnitView, map[uint64]*frame.FeatureView, map[uint64]*frame.ProjectileView) {
+	if l.units == nil {
+		l.units, l.features, l.projectiles = map[uint64]*frame.UnitView{}, map[uint64]*frame.FeatureView{}, map[uint64]*frame.ProjectileView{}
+	}
+	clear(l.units)
+	clear(l.features)
+	clear(l.projectiles)
+	return l.units, l.features, l.projectiles
+}
+
+func (l *publicationLookup) slots() map[pool.Handle]*frame.UnitView {
+	if l.slotUnits == nil {
+		l.slotUnits = map[pool.Handle]*frame.UnitView{}
+	}
+	clear(l.slotUnits)
+	return l.slotUnits
+}
+
+func (l *publicationLookup) current() map[uint64]bool {
+	if l.present == nil {
+		l.present = map[uint64]bool{}
+	}
+	clear(l.present)
+	return l.present
 }

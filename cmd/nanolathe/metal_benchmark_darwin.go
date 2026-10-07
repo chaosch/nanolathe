@@ -29,7 +29,7 @@ type metalBenchmarkRow struct {
 	// Parts splits Record: begin+camera, world frame, visuals, foreground+HUD,
 	// frame sources, projection, composer, shadows (milliseconds, diagnostic).
 	Parts  [20]float64
-	World  [11]float64
+	World  [17]float64
 	Census any
 }
 
@@ -171,6 +171,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		h.frame = h.world.Frame(sourcePrevious, current, camera)
 		copy(h.row.World[:], h.world.Timings[:])
 		h.row.World[9], h.row.World[10] = h.world.UnitPose, h.world.UnitVisual
+		copy(h.row.World[11:], h.world.SpriteSplits[:])
 		h.current, h.previous, h.camera = current, previous, camera
 	}
 	h.frame.Alpha = float32(fraction) / 65536

@@ -1,6 +1,8 @@
 package meshscene
 
 import (
+	"time"
+
 	"fmt"
 	"math"
 	"sort"
@@ -16,6 +18,11 @@ import (
 // scratch. Append and Report must run on the session worker; Texture may be
 // borrowed by the renderer for its one-time upload [I6].
 type BattleSprites struct {
+	// Splits times the last Append: setup, features, effects+strips, projectiles, wreck lights, totals (ms, diagnostic).
+	Splits [6]float64
+	// hot holds per-feature counters as integers; Append merges nonzero ones
+	// into counts so reports keep the same keys and values.
+	hot                                                  [hotSpriteCounters]int
 	spriteSources                                        []SpriteSource
 	spriteSourceTick                                     uint32
 	effects                                              drawlist.Effects
@@ -160,12 +167,23 @@ func absSprite(v float32) float32 {
 	return v
 }
 
+const (
+	hotFeaturesSeen = iota
+	hotFeaturesRejected
+	hotCulledSprites
+	hotFeatureALP
+	hotMissingFeatureFrames
+	hotSpriteCounters
+)
+
+var hotSpriteCounterNames = [hotSpriteCounters]string{"features_seen", "features_visibility_rejected", "culled_sprites", "feature_alp_approximations", "missing_feature_frames"}
+
 func (b *BattleSprites) appendSprite(dst []Sprite, a spriteArt, previous, current [4]float32, color [4]float32, emission float32, camera [3]float32, viewport [2]int, kind string) []Sprite {
 	r := b.regions[a.cell]
 	u0, u1 := r.uv([2]float32{}, b.texture.Width, b.texture.Height), r.uv([2]float32{1, 1}, b.texture.Width, b.texture.Height)
 	s := Sprite{Previous: previous, Current: current, Rect: [4]float32{-float32(a.xoff), -float32(a.yoff), float32(a.width), float32(a.height)}, UV: [4]float32{u0[0], u0[1], u1[0], u1[1]}, Color: color, Params: [4]float32{emission, 0, 0, 0}}
 	if !spriteVisible(s, camera, viewport) {
-		b.counts["culled_sprites"]++
+		b.hot[hotCulledSprites]++
 		return dst
 	}
 	b.counts[kind]++
@@ -209,7 +227,12 @@ func (b *BattleSprites) appendLight(dst []Light, p [4]float32, radius, strength 
 // movement interpolation; strip records have no published stable identity and
 // snap to their committed point instead of inventing a matching key [I6].
 func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
+	b.Splits = [6]float64{}
+	splitMark := time.Now()
+	split := func(i int) { now := time.Now(); b.Splits[i] = float64(now.Sub(splitMark)) / 1e6; splitMark = now }
+	defer split(5)
 	clear(b.counts)
+	b.hot = [hotSpriteCounters]int{}
 	// Metadata follows the original output indices, including a caller's
 	// unclassified prefix. Exact uint64 identities stay outside the GPU ABI.
 	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
@@ -241,11 +264,12 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			}
 		}
 	}
+	split(0)
 	white := spriteArt{cell: 0, width: 2, height: 2}
 	for fi, v := range current.Features {
-		b.counts["features_seen"]++
+		b.hot[hotFeaturesSeen]++
 		if !battleFeatureVisible(current, v, b.spectator) {
-			b.counts["features_visibility_rejected"]++
+			b.hot[hotFeaturesRejected]++
 			continue
 		}
 		if v.Model != "" && v.Filename == "" {
@@ -298,7 +322,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 				continue
 			}
 			if !ok {
-				b.counts["missing_feature_frames"]++
+				b.hot[hotMissingFeatureFrames]++
 				continue
 			}
 			color := [4]float32{1, 1, 1, 1}
@@ -306,7 +330,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			// conventional half-alpha is an explicit modern display approximation.
 			if trans && !v.RuntimeLive {
 				color[3] = 0.5
-				b.counts["feature_alp_approximations"]++
+				b.hot[hotFeatureALP]++
 			}
 			kind := "feature_bodies"
 			if shadow {
@@ -336,6 +360,7 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 		}
 	}
 	featureEnd := len(dst)
+	split(1)
 	for _, v := range current.Effects {
 		b.counts["effects_seen"]++
 		if !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
@@ -423,7 +448,9 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			b.counts["unsupported_strip_family"]++
 		}
 	}
+	split(2)
 	dst, lights = b.appendProjectiles(dst, lights, current, camera, viewport)
+	split(3)
 	// Includes fills, strips and specialized beam/projectile appenders. The
 	// production producer engine replaces this whole fallback source family.
 	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
@@ -431,10 +458,16 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 		b.spriteSources[i] = SpriteSource{Kind: SpriteSourceFallbackEffect}
 	}
 	lights = b.appendWreckLights(lights, current, camera, viewport)
+	split(4)
 	// Preserve publication order here. The native packer keeps short features
 	// in that order before models, then sorts other sprites at displayed alpha.
 	if b.totals == nil {
 		b.totals = make(map[string]int)
+	}
+	for i, n := range b.hot {
+		if n > 0 {
+			b.counts[hotSpriteCounterNames[i]] += n
+		}
 	}
 	for k, v := range b.counts {
 		b.totals[k] += v

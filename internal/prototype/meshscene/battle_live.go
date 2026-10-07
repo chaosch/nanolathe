@@ -42,6 +42,7 @@ type battleSource struct {
 	poseScratch                                       battlePoseScratch
 	timing                                            sectionTiming
 	materialCache                                     map[modelMaterialCacheKey][]NativeModelMaterial
+	lookup                                            publicationLookup
 	latest                                            atomic.Pointer[battlePublication]
 	mu                                                sync.Mutex // short camera/lifecycle exchange; never held while stepping
 	camera                                            [3]float32
@@ -84,7 +85,7 @@ func (s *battleSource) publishInitial() error {
 	if current == nil {
 		return fmt.Errorf("nanolathe: live prototype publication unavailable: logical path committed frame, providers searched [session snapshot], expected opening battle frame")
 	}
-	pub := s.buildPublication(previous, current, s.camera, nil)
+	pub := s.buildPublication(previous, current, s.camera, nil, nil)
 	if s.play != nil {
 		pub.frame.Overlay = s.play.Overlay(current, s.camera, false)
 	}
@@ -267,7 +268,7 @@ func (s *battleSource) run() {
 			if s.play != nil {
 				current, previous := s.sess.Snapshot.PinLatest()
 				if current != nil {
-					pub := s.buildPublication(previous, current, camera, s.latest.Load())
+					pub := s.buildPublication(previous, current, camera, s.latest.Load(), nil)
 					pub.frame.Overlay = s.play.Overlay(current, camera, paused)
 					pub.blendStart = time.Now().Add(-battlePeriod)
 					s.latest.Store(pub)
@@ -302,7 +303,7 @@ func (s *battleSource) run() {
 			return
 		}
 		old := s.latest.Load()
-		pub := s.buildPublication(previous, current, camera, old)
+		pub := s.buildPublication(previous, current, camera, old, nil)
 		if s.play != nil {
 			pub.frame.Overlay = s.play.Overlay(current, camera, false)
 		}

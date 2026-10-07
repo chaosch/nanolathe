@@ -15,10 +15,12 @@ import (
 type RetainedBattle struct {
 	source   *battleSource
 	previous *battlePublication
+	spare    *battlePublication
 	// Timings splits the last Frame build in milliseconds: maps, units,
 	// features, projectiles, sprites, debris, fog, census, materials (diagnostic).
 	Timings              [9]float64
 	UnitPose, UnitVisual float64
+	SpriteSplits         [6]float64
 }
 
 // sectionTiming is a diagnostic split timer for publication builds.
@@ -80,11 +82,18 @@ func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32
 		copyOld.byID = nil
 		old = &copyOld
 	}
-	pub := r.source.buildPublication(previous, current, camera, old)
+	// The production host replaces its LiveFrame with each result, so the
+	// publication before r.previous has no reader left: recycle its storage.
+	recycle := r.spare
+	r.spare = r.previous
+	pub := r.source.buildPublication(previous, current, camera, old, recycle)
 	r.source.applyStandaloneMaterials(pub, current)
 	r.source.timing.split(8)
 	r.Timings = r.source.timing.ms
 	r.UnitPose, r.UnitVisual = float64(r.source.timing.pose)/1e6, float64(r.source.timing.visual)/1e6
+	if b, ok := r.source.sprites.(*BattleSprites); ok {
+		r.SpriteSplits = b.Splits
+	}
 	r.previous = pub
 	return pub.frame
 }
