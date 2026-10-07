@@ -93,6 +93,9 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if len(f.Distortions) > 192 || f.Fog.Width < 0 || f.Fog.Height < 0 || uint64(f.Fog.Width)*uint64(f.Fog.Height)*4 != uint64(len(f.Fog.RGBA)) {
 		return u, r, fmt.Errorf("metalproto: invalid visual payload")
 	}
+	if len(f.Fog.RGBA) > 0 && (scene.FogAtlas.Width != 896 || scene.FogAtlas.Height != 513) {
+		return u, r, fmt.Errorf("metalproto: fog cell grid requires retained authored masks")
+	}
 	for _, q := range f.Overlay {
 		for _, lane := range [4][4]float32{q.Rect, q.UV, q.Color, q.Params} {
 			for _, value := range lane {

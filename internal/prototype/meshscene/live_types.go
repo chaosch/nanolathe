@@ -71,7 +71,7 @@ type Material struct{ FirstFrame, FrameCount, Kind, Reserved uint32 }
 
 // ModelVisual is 64 bytes copied with each instance. State is team frame,
 // opacity, build remaining, shadow enabled. Bounds is world min Y, max Y,
-// ground Y, reserved. Outline is RGBA; Emission is RGB plus strength.
+// ground Y, model origin Y. Outline is RGBA; Emission is RGB plus strength.
 // The all-zero value means a plain opaque instance with no extra passes.
 type ModelVisual struct{ State, Bounds, Outline, Emission [4]float32 }
 

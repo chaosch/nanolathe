@@ -2,15 +2,15 @@
 using namespace metal;
 // Replay uses deliberately synthetic lights and shock rings. Live uses only
 // submitted sources; neither path claims retail composition or light arithmetic.
-// Scalar reserved lanes keep the Go/Metal ABI exactly 64 bytes.
-struct Vertex { packed_float3 p; packed_float3 n; float2 uv; packed_float3 color; uint piece; uint material; uint reserved0,reserved1,reserved2; };
+// Packed vector lanes keep the Go/Metal ABI exactly 64 bytes.
+struct Vertex { packed_float3 p; packed_float3 n; float2 uv; packed_float3 color; uint piece; uint material; packed_float3 shadeNormal; };
 struct Uniforms { float4 camera; float4 rect; float4 viewport; float4 timing; float4 mode; float4 heightRect; float4 fogRect; float4 visual; };
 struct Light { float4 positionRadius; float4 colorStrength; };
 struct Material { uint firstFrame,frameCount,kind,reserved; };
 struct ModelVisual { float4 state,bounds,outline,emission; };
 struct Distortion { float4 previous,current,shape,params; };
 struct Sprite { float4 previous,current,rect,uv,color,params; };
-struct Out { float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; };
+struct Out { float4 position [[position]]; float2 uv; float3 color; float3 normal; float3 world; float heightKey; float keyOrigin [[flat]]; float shadeRow; float4 state [[flat]]; float4 bounds [[flat]]; float4 outline [[flat]]; float4 emission [[flat]]; };
 float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
  if(u.visual.y<0.5)return 0;
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
@@ -18,6 +18,7 @@ float terrainHeight(float2 xz, texture2d<float> heights, constant Uniforms& u) {
  return heights.sample(s,uv,level(0)).r;
 }
 struct MRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; };
+struct ModelMRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; float depth [[depth(any)]]; };
 float4 project(float3 p, constant Uniforms& u) {
  // Live world art uses half-height shear; replay retains its measured basis.
  float heightScale=u.mode.x>0.5?0.5:1.0;float depthHeight=u.mode.x>0.5?2.0:1.0;
@@ -38,14 +39,20 @@ vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device c
  Out o={}; o.position=project(w,u);o.uv=v.uv;
  if(v.material!=0){Material material=materials[v.material];uint frame=material.kind==1?min(uint(max(visual.state.x,0.0)),max(material.frameCount,1u)-1):0;float4 rect=frames[material.firstFrame+frame];o.uv=mix(rect.xy,rect.zw,v.uv);}
  if(u.visual.x>0.5){o.state=visual.state;o.bounds=visual.bounds;o.outline=visual.outline;o.emission=visual.emission;}
- o.color=float3(v.color);o.normal=normalize((m*float4(float3(v.n),0)).xyz);o.world=w;return o;
+ o.heightKey=floor(w.y-visual.bounds.w);o.keyOrigin=visual.bounds.w;
+ // Production SHD uses the model-space light before final world-Z reflection.
+ float3 shadeNormal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);
+ uint shadeRow=uint(int(dot(shadeNormal,float3(-0.8,1,0.25))*5.0))&31;
+ if(b[0].w>1.5)shadeRow=15;
+ o.shadeRow=b[0].w>0.5&&b[0].w<1.5?-1.0:float(shadeRow);o.color=float3(v.color);o.normal=normalize((m*float4(float3(v.n),0)).xyz);o.world=w;return o;
 }
-fragment MRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]]) {
+fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
  float4 tex=atlas.sample(s,in.uv);if(tex.a<0.02)discard_fragment();
  if(in.state.z>0 && in.world.y>mix(in.bounds.y,in.bounds.x,clamp(in.state.z,0.0,1.0)))discard_fragment();
  float opacity=all(in.state==float4(0))?1:clamp(in.state.y,0.0,1.0);
- float3 light=float3(0.32)+float3(0.68)*max(dot(in.normal,normalize(float3(-0.5,1,-0.3))),0.0);
+ // Interpolate SHD rows before truncation and the true-colour scale clamp.
+ float3 light=float3(in.shadeRow<0?1.0:min(0.06875*floor(in.shadeRow),2.0));
  if(u.timing.w>0.5&&u.mode.x<0.5)for(uint i=0;i<8;i++){
   float a=float(i)*0.785398+u.timing.y*0.18;
   float3 p=float3(u.camera.x+cos(a)*260,60+sin(a*2)*30,u.camera.y+sin(a)*230);
@@ -60,7 +67,14 @@ fragment MRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture
  // Modern display approximation: screen-blended cooling tint plus HDR bloom.
  float3 emission=in.emission.rgb*max(in.emission.w,0.0);
  color=1-(1-color)*(1-clamp(emission,0.0,1.0));
- MRT out;float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
+ // Retain integer corner-height ties, then the production reverse piece
+ // order decides ownership (opened Solar rim, DESIGN_GPU_RENDERER §22.1).
+ // Inter-subject ordering and triangle lane interpolation remain approximate.
+ ModelMRT out;float modelY=in.keyOrigin+floor(in.heightKey);
+ float projectedY=(in.position.y-u.viewport.y*0.5)/u.camera.z;
+ float depthHeight=u.mode.x>0.5?2.5:2.0;
+ out.depth=clamp(0.5-(projectedY+modelY*depthHeight)*0.00001,0.001,0.999);
+ float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
 }
 vertex Out terrain_vertex(uint v [[vertex_id]],constant Uniforms& u [[buffer(3)]]) {
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
@@ -69,10 +83,9 @@ vertex Out terrain_vertex(uint v [[vertex_id]],constant Uniforms& u [[buffer(3)]
 struct TerrainMRT { float4 color [[color(0)]]; float4 glow [[color(1)]]; float depth [[depth(any)]]; };
 fragment TerrainMRT terrain_fragment(Out in [[stage_in]],texture2d<float> terrain [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> heights [[texture(1)]],texture2d<float> shadows [[texture(2)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
- TerrainMRT out;float3 receiver=in.world;
- // Keep the TNT photograph flat; inverse half-height shear supplies only depth.
- if(u.visual.x>0.5 && u.visual.y>0.5){for(uint i=0;i<4;i++){receiver.y=terrainHeight(receiver.xz,heights,u);receiver.z=in.world.z+receiver.y*0.5;}}
- out.depth=u.visual.x>0.5&&u.visual.y>0.5?project(receiver,u).z:0.9999;
+ // TNT is painted background, not a reconstructed depth surface. A depth
+ // plane would cut flat GAF art at its anchor [DESIGN_GPU_RENDERER C-G5].
+ TerrainMRT out;out.depth=0.9999;
  out.color=terrain.sample(s,in.uv);out.glow=0;
  if(u.timing.w>0.5&&u.mode.x<0.5)for(uint i=0;i<8;i++){
   float a=float(i)*0.785398+u.timing.y*0.18;float2 p=float2(u.camera.x+cos(a)*260,u.camera.y+sin(a)*230);
@@ -135,9 +148,42 @@ fragment float4 world_fragment(Screen in [[stage_in]],texture2d<float> color [[t
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float3 c=color.sample(s,in.uv).rgb;
  if(u.timing.w>0.5)c+=glow.sample(s,in.uv).rgb*0.65;return float4(c,1);
 }
-fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> fog [[texture(1)]],constant Uniforms& u [[buffer(3)]]) {
- constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float3 c=color.sample(s,in.uv).rgb;
- if(u.visual.z>0.5){float2 projected=(in.uv*u.viewport.xy-u.viewport.xy*0.5)/u.camera.z+u.camera.xy;float2 uv=(projected-u.fogRect.xy)/max(u.fogRect.zw-u.fogRect.xy,float2(1));c*=fog.sample(s,uv).rgb;}
+// Same cell op encoding and ordered 2x2 mask walk as the production fog pass
+// (DESIGN_GPU_RENDERER C-G7). Authored masks use integer texel reads: no blur.
+float3 fogGray(float3 c) {
+ return float3(floor(dot(floor(c*255.0+0.5),float3(1))/3.0)/255.0);
+}
+float3 applyFog(float3 col,float2 projected,float checker,texture2d<float> grid,texture2d<float> atlas,constant Uniforms& u) {
+ float2 p=floor(projected);int2 cell=int2(floor((p-u.fogRect.xy)/32.0));
+ float3 dark=atlas.read(uint2(0,512)).rgb;
+ for(int j=-1;j<=0;j++)for(int i=-1;i<=0;i++){
+  int2 c=cell+int2(i,j);if(any(c<0)||c.x>=int(grid.get_width())||c.y>=int(grid.get_height()))continue;
+  uint2 codes=uint2(round(grid.read(uint2(c)).rg*255.0));if(all(codes==uint2(0)))continue;
+  int2 d=int2(p-u.fogRect.xy-float2(c)*32.0);bool inCell=all(d>=0)&&all(d<32),inTile=all(d>=0)&&all(d<64);
+  uint code1=codes.x,code0=codes.y;
+  if(code1==1&&inCell)col=fogGray(col);
+  else if(code1==2&&inCell&&checker<0.5)col=dark;
+  else if(code1>=3&&inTile){
+   uint slot=code1-3;bool dither=slot>=56;if(dither)slot-=56;
+   uint2 at=uint2((slot%14)*64,(slot/14)*64)+uint2(d);
+   if(atlas.read(at).a>=0.5){if(!dither)col=fogGray(col);else if(checker<0.5)col=dark;}
+  }
+  if(code0==1&&inCell)col=dark;
+  else if(code0>=2&&inTile){
+   uint slot=code0-2;uint2 at=uint2((slot%14)*64,(4+slot/14)*64)+uint2(d);float4 tex=atlas.read(at);
+   if(tex.a>=0.5)col=tex.rgb;
+  }
+ }
+ return col;
+}
+fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> fog [[texture(1)]],texture2d<float> masks [[texture(2)]],constant Uniforms& u [[buffer(3)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float3 c=color.sample(s,in.uv).rgb;
+ if(u.visual.z>0.5){
+  float2 projected=(in.p.xy-u.viewport.xy*0.5)/u.camera.z+u.camera.xy;
+  float2 cameraOrigin=floor(u.camera.xy-u.viewport.xy/(2*u.camera.z));
+  float checker=float(int(floor(in.p.x)+floor(in.p.y)+cameraOrigin.x+cameraOrigin.y)&1);
+  c=applyFog(c,projected,checker,fog,masks,u);
+ }
  return float4(c,1);
 }
 struct DistortionOut { float4 position [[position]]; float2 local; float4 shape [[flat]]; float4 params [[flat]]; };

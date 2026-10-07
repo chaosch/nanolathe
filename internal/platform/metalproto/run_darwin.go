@@ -184,6 +184,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		runtime.KeepAlive(t)
 	}
+	if t := scene.FogAtlas; len(t.RGBA) > 0 {
+		if b.texture(handle, 4, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+			return nil, fmt.Errorf("metalproto: upload retained fog masks")
+		}
+		runtime.KeepAlive(t)
+	}
 	poseCount := 0
 	if scene.Live == nil {
 		poseCount = len(scene.Frames[0].Transforms)
@@ -358,7 +364,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["model_triangles_drawn"] = drawnIndices / 3
 	report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA)
 	if scene.Live != nil {
-		report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA) + len(scene.SpriteAtlas.RGBA) + len(scene.OverlayAtlas.RGBA)
+		report["texture_uploaded_bytes"] = len(scene.Atlas.RGBA) + len(scene.Terrain.RGBA) + len(scene.SpriteAtlas.RGBA) + len(scene.OverlayAtlas.RGBA) + len(scene.FogAtlas.RGBA)
 		addLiveReport(report, liveRows[skipWarmup:])
 		if err := writeLiveRows(opts.OutputDir, liveRows, opts.Warmup, firstFrame); err != nil {
 			return nil, err
@@ -439,6 +445,12 @@ func validate(s *meshscene.Scene) error {
 		if len(s.OverlayAtlas.RGBA) > 0 {
 			textures = append(textures, s.OverlayAtlas)
 		}
+	}
+	if len(s.FogAtlas.RGBA) > 0 {
+		if s.FogAtlas.Width != 896 || s.FogAtlas.Height != 513 {
+			return fmt.Errorf("metalproto: invalid authored fog atlas dimensions")
+		}
+		textures = append(textures, s.FogAtlas)
 	}
 	for _, t := range textures {
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || int64(t.Width)*int64(t.Height)*4 != int64(len(t.RGBA)) {

@@ -85,8 +85,19 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	scene.Live = host
 	scene.Metadata["logical_surface"] = []int{logicalW, logicalH}
 	scene.Metadata["prototype_limits"] = "one battle per launch; fixed drawable; native world effects and annotation depth remain prototype approximations"
-	report, runErr := metalproto.Run(scene, metalproto.Options{Width: width, Height: height, Frames: opts.MetalFrames, Warmup: 120, FPS: 120, VSync: true, Effects: true, VisualPasses: true, OutputDir: opts.MetalPrototype, LibraryPath: opts.MetalLibrary})
-	summary := host.Close()
+	renderOptions := metalproto.Options{Width: width, Height: height, Frames: opts.MetalFrames, Warmup: 120, FPS: 120, VSync: true, Effects: true, VisualPasses: true, OutputDir: opts.MetalPrototype, LibraryPath: opts.MetalLibrary}
+	if opts.MetalModelCapture != "" {
+		scene.Live, err = newMetalModelCapture(scene, retained, sess, opts.MetalModelCapture, width, height, cs.fs)
+		if err != nil {
+			return err
+		}
+		renderOptions.Offscreen, renderOptions.FPS = true, 0
+		if renderOptions.Frames == 0 {
+			renderOptions.Frames = 120
+		}
+	}
+	report, runErr := metalproto.Run(scene, renderOptions)
+	summary := scene.Live.Close()
 	if report == nil {
 		report = map[string]any{}
 	}
@@ -122,7 +133,10 @@ type metalBattleHost struct {
 	cachedTick                    uint32
 	cachedFrame, cachedPrevious   *frame.Frame
 	cached                        bool
+	ditheredFog                   bool
 	steps, inputs                 uint64
+	cursorX, cursorY              int
+	cursorObserved                bool
 }
 
 func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.LiveFrame, error) {
@@ -132,6 +146,13 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.due = now
 	}
 	h.events = append(h.events, in.Events...)
+	for _, event := range in.Events {
+		if event.Kind == 1 || event.Kind == 2 || event.Kind == 3 || event.Kind == 9 {
+			h.cursorX = int(event.X / 2)
+			h.cursorY = int(event.Y / 2)
+			h.cursorObserved = true
+		}
+	}
 	h.inputs += uint64(len(in.Events))
 	if !now.Before(h.due) {
 		h.cl.BumpPresentationEpoch()
@@ -161,6 +182,11 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	view := h.cl.CameraViewFor(h.cl.PresentationDigest())
 	camera := [3]float32{float32(view.X + float64(h.width)/(2*view.Factor)), float32(view.Z + float64(h.height)/(2*view.Factor)), float32(view.Factor * 2)}
 	previous, cur := h.cl.PresentedFramePair()
+	if dithered := h.cl.DitheredFog(); dithered != h.ditheredFog {
+		h.world.SetDitheredFog(dithered)
+		h.ditheredFog = dithered
+		h.cached = false
+	}
 	if cur != nil && (!h.cached || h.cachedTick != cur.Tick || h.cachedFrame != cur || h.cachedPrevious != previous || h.frame.Camera != camera) {
 		sourcePrevious := previous
 		_, _, blend := h.cl.PresentedTicks()
@@ -187,7 +213,11 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.atlasEpoch += h.atlasLocalVersion + 1
 		h.atlasLocalVersion = 0
 	}
-	quads, texture, version, err := h.hud.Prepare(h.cl.RecordRetainedForeground())
+	list := h.cl.RecordRetainedForeground()
+	if h.cursorObserved {
+		h.cl.PositionPresentationCursor(list, h.cursorX, h.cursorY)
+	}
+	quads, texture, version, err := h.hud.Prepare(list)
 	if err != nil {
 		return meshscene.LiveFrame{}, err
 	}

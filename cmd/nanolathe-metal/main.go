@@ -55,7 +55,7 @@ func run() error {
 	flag.BoolVar(&render.Offscreen, "offscreen", false, "render without display presentation")
 	flag.BoolVar(&render.VSync, "vsync", true, "synchronize visible presentation with display")
 	flag.BoolVar(&render.Effects, "effects", true, "enable prototype lighting, bloom and distortion")
-	flag.BoolVar(&render.VisualPasses, "visual-passes", true, "enable reveal, shadows, terrain depth, distortion and fog passes")
+	flag.BoolVar(&render.VisualPasses, "visual-passes", true, "enable reveal, shadows, distortion and fog passes")
 	flag.StringVar(&render.OutputDir, "out", "", "new output directory outside the repository (required)")
 	flag.StringVar(&render.LibraryPath, "library", os.Getenv("NANOLATHE_METAL_LIBRARY"), "native Metal bridge dylib")
 	flag.BoolVar(&prepareOnly, "prepare-only", false, "write scene census and texture previews without rendering")

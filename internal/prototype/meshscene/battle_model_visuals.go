@@ -43,7 +43,7 @@ func (s *battleSource) applyUnitVisual(pub *battlePublication, u frame.UnitView,
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
 	matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
 	lo, hi := battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
-	instance.Visual.Bounds = [4]float32{lo, hi, battleGroundHeight(s.scene.HeightField, u.X, u.Z), 0}
+	instance.Visual.Bounds = [4]float32{lo, hi, battleGroundHeight(s.scene.HeightField, u.X, u.Z), float32(u.Y) / 65536}
 	// The backend clamps logo entry frame ranges. Unknown colours deliberately
 	// retain frame zero in this prototype; retail omits that texture [03 R-RAST-01 §3].
 	if u.OwnerColorKnown {
@@ -71,6 +71,7 @@ func (s *battleSource) applyFeatureVisual(pub *battlePublication, feature frame.
 	if f.Players[0].Present {
 		instance.Visual.State[0] = float32(f.Players[0].Logo)
 	}
+	instance.Visual.Bounds[3] = float32(feature.Y) / 65536
 	instance.Visual.Bounds[2] = battleGroundHeight(s.scene.HeightField, feature.X, feature.Z)
 	if feature.Y >= f.Visibility.SeaLevel {
 		instance.Visual.State[3] = 1

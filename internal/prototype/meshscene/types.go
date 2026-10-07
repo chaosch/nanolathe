@@ -5,13 +5,13 @@ package meshscene
 // Vertex is 64 bytes. Position and normal are model-local, UV is normalized in
 // the shared model atlas, and Piece selects the instance's rigid transform.
 type Vertex struct {
-	Position [3]float32
-	Normal   [3]float32
-	UV       [2]float32
-	Color    [3]float32
-	Piece    uint32
-	Material uint32 // zero uses direct atlas UV; otherwise index into Scene.Materials
-	Reserved [3]uint32
+	Position    [3]float32
+	Normal      [3]float32
+	UV          [2]float32
+	Color       [3]float32
+	Piece       uint32
+	Material    uint32     // zero uses direct atlas UV; otherwise index into Scene.Materials
+	ShadeNormal [3]float32 // unnormalized average of authored retail face normals
 }
 type Mesh struct {
 	Name        string

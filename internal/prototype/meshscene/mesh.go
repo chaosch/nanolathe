@@ -27,7 +27,11 @@ type meshCensus struct {
 func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multiplier int, census *meshCensus) Mesh {
 	mesh := Mesh{Name: m.Name, Pieces: len(m.Pieces)}
 	census.Model, census.Pieces = m.Name, len(m.Pieces)
-	for pi, piece := range m.Pieces {
+	// Equal subject heights keep the later face, including the opened Solar rim.
+	// Match the production reverse piece walk [03 R-REN-03A §3].
+	for pi := len(m.Pieces) - 1; pi >= 0; pi-- {
+		piece := m.Pieces[pi]
+		shadeNormals := retainedShadeNormals(piece)
 		for pri, primitive := range piece.Primitives {
 			if piece.Selection && pri == 0 {
 				census.SelectionFacesSkipped++
@@ -87,7 +91,7 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 			uvCorners := [4][2]float32{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
 			for vi, index := range primitive.VertexIndices {
 				p := piece.Vertices[index]
-				vertices[vi] = Vertex{Position: [3]float32{float32(p[0]) / 65536, float32(p[1]) / 65536, float32(p[2]) / 65536}, Color: color, Piece: uint32(pi)}
+				vertices[vi] = Vertex{Position: [3]float32{float32(p[0]) / 65536, float32(p[1]) / 65536, float32(p[2]) / 65536}, Color: color, Piece: uint32(pi), ShadeNormal: shadeNormals[index]}
 				uv := [2]float32{0.5, 0.5}
 				if textured && n == 4 {
 					uv = uvCorners[vi]
@@ -138,6 +142,9 @@ func lerpVertex(a, b Vertex, t float32) Vertex {
 	for i := range out.Position {
 		out.Position[i] = a.Position[i] + (b.Position[i]-a.Position[i])*t
 	}
+	for i := range out.ShadeNormal {
+		out.ShadeNormal[i] = a.ShadeNormal[i] + (b.ShadeNormal[i]-a.ShadeNormal[i])*t
+	}
 	for i := range out.UV {
 		out.UV[i] = a.UV[i] + (b.UV[i]-a.UV[i])*t
 	}
@@ -160,4 +167,53 @@ func faceNormal(a, b, c [3]float32) [3]float32 {
 		n[i] /= length
 	}
 	return n
+}
+
+// Match the production model lane: average normalized authored face normals at
+// each shared corner without renormalizing the average [03 §2.4.1]. The GPU
+// rotates this retained lane with the piece and evaluates the existing SHD row.
+func retainedShadeNormals(piece model.Piece) [][3]float32 {
+	sums := make([][3]float64, len(piece.Vertices))
+	counts := make([]int, len(piece.Vertices))
+	for pi, primitive := range piece.Primitives {
+		if piece.Selection && pi == 0 || len(primitive.VertexIndices) < 3 {
+			continue
+		}
+		a, b, c := primitive.VertexIndices[0], primitive.VertexIndices[1], primitive.VertexIndices[2]
+		if int(a) >= len(sums) || int(b) >= len(sums) || int(c) >= len(sums) {
+			continue
+		}
+		var u, v [3]float64
+		for j := range u {
+			u[j] = float64(piece.Vertices[b][j]) - float64(piece.Vertices[a][j])
+			v[j] = float64(piece.Vertices[b][j]) - float64(piece.Vertices[c][j])
+		}
+		n := [3]float64{u[1]*v[2] - u[2]*v[1], u[2]*v[0] - u[0]*v[2], u[0]*v[1] - u[1]*v[0]}
+		length := math.Sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
+		if length == 0 {
+			n = [3]float64{0, 1, 0}
+		} else {
+			for j := range n {
+				n[j] /= length
+			}
+		}
+		for _, index := range primitive.VertexIndices {
+			if int(index) >= len(sums) {
+				continue
+			}
+			for j := range n {
+				sums[index][j] += n[j]
+			}
+			counts[index]++
+		}
+	}
+	out := make([][3]float32, len(sums))
+	for i := range out {
+		if counts[i] != 0 {
+			for j := range out[i] {
+				out[i][j] = float32(sums[i][j] / float64(counts[i]))
+			}
+		}
+	}
+	return out
 }

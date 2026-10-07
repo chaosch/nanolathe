@@ -30,6 +30,7 @@ import (
 // configuration. Developer probes and capture modes are separate tools.
 type Options struct {
 	MetalPrototype, MetalLibrary, MetalSize string
+	MetalModelCapture                       string
 	MetalFrames, MetalQuads, MetalTextures  int
 
 	// excludedMapRoot belongs only to a prepared map-removal mount; never saved.
@@ -229,6 +230,7 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 	set.BoolVar(&opts.CheckInstall, "check-install", false, "validate selected content roots without opening a game window")
 	set.StringVar(&opts.MetalPrototype, "metal-prototype", "", "prototype: play the ordinary battle with a retained Metal world; write timing/capture artifacts to this new directory")
 	set.StringVar(&opts.MetalLibrary, "metal-library", "", "prototype native bridge library (default beside executable)")
+	set.StringVar(&opts.MetalModelCapture, "metal-model-capture", "", "prototype: capture a fixed production armcom or activated armsolar pose offscreen")
 	set.StringVar(&opts.MetalSize, "metal-size", "2880x1800", "prototype drawable pixels, with a 2x logical HUD")
 	set.IntVar(&opts.MetalFrames, "metal-frames", 0, "prototype frame limit; zero plays until close")
 	set.IntVar(&opts.MetalQuads, "metal-quads", 5, "prototype mesh subdivisions: 1, 2 or 5")

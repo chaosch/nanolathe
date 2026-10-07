@@ -597,6 +597,10 @@ branch and has not passed production landing gates.
 
 ### Re-measured visual-pass results
 
+These are historical measurements from before the visual corrections below.
+The old captures contain clipped sprites, blurred fog and incorrect Solar
+ownership; performance results do not establish visual correctness.
+
 These sequential runs use the same M3 Pro, Go/purego/Metal setup, Town & Country,
 Modern three-army fixture, seed 7, tick 1200 lead-in, `GOMAXPROCS=2`, 240 warmup
 frames and 3,600 measured frames. Every row uses 5× face subdivision and doubled
@@ -648,7 +652,7 @@ missed worker deadline. No display is involved, and this Mac's panel is limited
 to 120 Hz. This supports 144 Hz as a next optimization target, not a steady
 144 Hz claim.
 
-Fog currently uploads the complete 1092×1092 RGBA image, 4.55 MiB, every display
+That build uploaded the complete 1092×1092 RGBA image, 4.55 MiB, every display
 frame. Total dynamic copies rise from 1.408 MiB/frame in the spectator run to
 5.429 MiB/frame with fog (about 652 MiB/s at 120 Hz). Native encode p99 rises
 from 0.243 to 0.738 ms. On the worker, pose/sprite/fog preparation averages
@@ -693,3 +697,200 @@ comparison, `--view-player=1` for ordinary visibility/fog and `--effects=false`
 to disable lighting, bloom and distortion. Team atlas lookup stays enabled in
 the pass comparison. The prebuilt launcher accepts the same options and starts
 an interactive spectator session by default.
+
+
+## Playable match through the production HUD
+
+The playable entry now uses `cmd/nanolathe`'s ordinary `newDirectBattleView`,
+`gameShell.step`, client input, camera, battle HUD, audio and asynchronous session.
+The native host feeds mouse, keyboard, wheel, pinch, text and focus events into
+those existing services. It does not implement another order controller or HUD.
+The earlier `nanolathe-metal --play` route now directs callers to `tools/metal-play`.
+
+The existing foreground draw list supplies the interface art, build products,
+resource bars, minimap, labels, selection, placement and cursor. A Metal executor
+caches its GAF/PCX/FNT and dynamic surfaces in a 4096-square RGBA atlas, emits
+ordered alpha/multiply batches and stages only changed atlas rectangles. World
+meshes, shared model atlas, vertex/fragment shaders and visual passes continue
+through the retained native pipeline. World and interface use the same pinned
+production frame pair and camera; the native host has no separate simulation
+clock. The existing late cursor positioning also runs at the presentation rate.
+
+Run from the prototype worktree:
+
+```sh
+tools/metal-play --seed 7
+```
+
+This compiles the cgo-disabled Go host and native bridge, then starts The Pass
+against the existing Modern computer player. Existing gameplay preferences still
+select the battle's rules. Usual command-line options can override the map and
+AI. `--metal-size 2880x1800` is the default physical drawable (1440x900 logical),
+with 5× surface subdivision, doubled model textures and a 120 Hz cap.
+`--metal-frames N` makes a bounded measurement; zero runs until the window closes.
+Closing the window or Command-Q writes the capture, timings and report into the
+new output directory printed by the launcher. Retail assets are loaded from the
+normal external install.
+
+A prebuilt `Play Metal Match.command`, host, bridge, hashes and measured
+runs are saved outside the repository under
+`/Users/daniel/.codex/visualizations/2026/10/07/01a113ae-9262-76f0-a2ca-d4dbd037c497/metal-match/`.
+The launcher can be opened directly and accepts the same command-line options.
+
+### Initial playable measurements and inspection
+
+These runs predate the visual corrections below and retain those defects.
+Both runs use this Mac's M3 Pro and 120 Hz panel, The Pass, seed 7, the ordinary
+human-versus-Modern-computer opening, 2880x1800 drawable, 5× geometry, 2× model
+textures and 120 warmup frames. The host used 12 Go processors for these runs;
+`tools/metal-play` defaults to two, as the earlier stress launcher does. These are
+interactive opening checks, not matched performance comparisons or completed
+matches: camera/input and host activity differ. They do not replace the large
+battle measurements above.
+
+| Run | Measured frames / seconds | Presented Hz | p99 presentation interval | p99 GPU span | p99 host preparation | Peak Metal allocation |
+|---|---:|---:|---:|---:|---:|---:|
+| production-02 | 12,000 / 100.22 | 119.74 | 8.339 ms | 3.970 ms | 1.834 ms | 590 MiB |
+| production-03 | 18,000 / 150.57 | 119.54 | 8.340 ms | 6.735 ms | 1.939 ms | 590 MiB |
+
+The latter run includes the reviewed native pointer capture, dynamic HUD palette
+and Cocoa run-loop servicing. All measured presentation timestamps were returned,
+with no native error or input queue overflow. 99.68% of its intervals fit 105% of
+the 120 Hz budget; the longest was 58.34 ms. This is near-steady 120 Hz with
+occasional stalls. GPU, host preparation and presentation interval are distinct
+measurements and must not be added as if they ran sequentially. The HUD atlas is
+64 MiB, and its staged upload buffers retained about 66 MiB; 72 uploads copied
+80.91 MiB in total, including the initial full atlas. End-of-run Go heap was
+509 MiB, separate from Metal allocations. Median submit-to-present remained
+about 32 ms; input-to-photon latency is still unmeasured.
+
+Root inspected the native production HUD and exercised commander selection,
+movement and the existing Solar build button. Its down/up input arms `armsolar`
+and displays the production placement preview. The production-03 final capture
+also shows a completed Solar Collector beside the commander; the final census
+has two human-owned units and eleven computer-owned units. The check does not
+establish every command, modal, save/load flow or a complete match. The native
+run loop now services Cocoa sources while rendering, so accessibility inspection
+no longer waits until the game exits.
+
+The raw production-02/03 scene metadata inherited zero seed fields and a stale
+"no GUI/audio" limitation from the earlier fixture helper. Those fields are a
+reporting defect, not the actual command-line seed or host: both runs were
+launched with `--seed 7` through the production battle shell. The packaged source
+now records the session's actual two seeds, gameplay mode, unit limit, production
+camera and foreground ownership. The immutable raw reports are preserved, with
+this correction called out in the artifact manifest.
+
+### Remaining scope and recommendation
+
+The corrected build is available for another manual match attempt with the
+normal HUD and controls; a complete match has not yet been validated.
+It still supports one battle per launch and a fixed window surface. A menu action
+that replaces or leaves the battle ends this host; restart/load-to-another-battle
+and full front-end navigation are not integrated. The foreground executor does
+not support embedded model commands in GUI previews, and world labels/selections
+are drawn after world depth/fog rather than inside their original painter slot.
+The later correction section supersedes the earlier fog, terrain-depth and
+base-shading descriptions. HUD, ordinary order input and audio are reused from
+production; the other visual limits still apply. Palette changes rebuild the HUD
+atlas; this needs a cheaper path if continuous fades prove costly. Audio is wired
+through the existing engine but was not separately auditioned in this check.
+
+Keep the production shell/HUD/controller and iterate on the renderer underneath
+it. Next useful work is a complete manual match, command/modal coverage, rigid
+pose interpolation, transparent-subject depth, remaining water/effect families,
+and resource lifetime/memory reduction. The previous offscreen result still does
+not establish steady 144 Hz. No tests were added or run, per the prototype request;
+Go/native compilation, shader compilation on-device, visual inspection, source
+review and the recorded live runs are the validation. The work remains committed
+on the isolated prototype branch, without production landing gates or a main merge.
+
+
+## Corrections after the first manual match
+
+The first match exposed three separate renderer defects. Root reproduced them
+with the opening battle and fixed model captures, then reviewed the native
+results against the existing production renderer:
+
+- **Clipped feature and effect sprites:** the reconstructed terrain depth plane
+  rejected billboard pixels below their world anchor. TNT now draws as the
+  painted background without writing scene depth, as the existing world
+  composition requires (DESIGN_GPU_RENDERER C-G5). The height field remains for
+  shadow receivers. Complete metal patches and tree bottoms are visible again.
+- **Solar base and commander shading:** source pieces now draw last-to-first,
+  and interpolated integer model-height ties preserve later-face ownership.
+  Both changes were necessary for the opened Solar's continuous base rim.
+  Retained averaged normals feed the existing SHD row arithmetic and mobile /
+  piece shading admission; rows interpolate before fragment flooring and the
+  true-colour scale clamp. This replaces the unrelated base Lambert light that
+  darkened the commander and structures. Dynamic lights still add separately.
+- **Blurred unexplored/fog boundaries:** the CPU no longer reduces the masks to
+  eight-world-pixel samples for a linearly filtered coverage texture. A retained
+  896×513 atlas contains the original Gray/Black masks and palette colours. The
+  fragment pass reads integer mask texels and executes the production cell
+  operations in order, including the authored overhang and gray desaturation
+  (DESIGN_GPU_RENDERER C-G7). The existing dither display preference is forwarded.
+
+The fixed Solar capture uses the production COB `Create`/`Activate` pose; the
+commander capture copies the actual opening publication. Both submit an identical
+previous/current pair, without changing the authoritative session. Reproduce with
+`tools/metal-play --metal-model-capture armsolar --metal-size 1280x960 --seed 7`
+(or `armcom`). These are offscreen inspection fixtures, not performance runs.
+
+This is still a triangle renderer with approximate shared scene depth. It does
+not reproduce wrapped byte-height keys, quad scanline interpolation, Digger
+clipping or carrier subject composition. At subdivisions above one, generated
+corners are quantized separately and can change shading/ownership. Float normal
+transforms differ from fixed-point normals; matrix interpolation can still shrink
+large rotations. Debug changes to the model light are not forwarded. The fog
+checker uses native drawable parity; exact doubled logical-pixel checker parity
+needs a separate comparison. Stock fog masks work; unsupported composite or
+out-of-tile mask art fails preparation explicitly. These are presentation limits,
+not changes to gameplay or published visibility.
+
+
+### Final corrected-build measurement
+
+Sequential final-build runs used `GOMAXPROCS=2`, seed 7, 5× subdivision, doubled
+model-atlas dimensions, all native visual passes, and 3,600 measured frames.
+The large scene repeats Town & Country, three 500-unit armies, tick 1200 lead-in,
+ordinary player 1 visibility, zoom 1.35 and 240 warmup frames. The opening uses
+The Pass with the production HUD, Modern computer, default camera and 120 warmup
+frames. These are single local runs, not confidence intervals or a complete match.
+
+| Case | Presented Hz | p99 presentation interval | GPU mean / p99 | Peak Metal allocation |
+|---|---:|---:|---:|---:|
+| Corrected large battle, 3456×2234 | 120.00 | 8.339 ms | 6.34 / 6.98 ms | 851 MiB |
+| Corrected production-HUD opening, 2880×1800 | 119.53 | 8.338 ms | 3.85 / 5.45 ms | 589 MiB |
+
+All measured presentation timestamps were returned, with no native errors,
+failed GPU command rows or input overflows. Every large-battle interval fit 105%
+of the 120 Hz budget; the opening fit 99.75%, with a longest interval of 29.16 ms.
+There were no missed worker deadlines within the large run's measured tick range
+1262–2162; one occurred at tick 1203 during warmup. The measured census reached
+1,502 live units, 1,123 moving units, 45 nanoframes, 139 projectiles, 631 effects
+and 25 burning features (separate maxima). Native submission reached 843 model
+instances, 557,305 body triangles, 1,771 sprites and 35 distortion quads. The final
+combat capture visibly retains complete explosion discs and feature sprites.
+The opening capture shows the crisp authored fog fringe and full metal patch.
+Root inspected these and the activated Solar / opening commander captures.
+
+The large map now copies a 273×273 operation grid, **0.284 MiB per frame**, instead
+of the previous 4.55 MiB sampled fog image: exactly 16× fewer fog bytes. The mask
+atlas is a one-time 1.75 MiB upload. Total dynamic copies averaged 1.165 MiB/frame,
+and native encoding p99 was 0.291 ms, versus the earlier 5.429 MiB and 0.738 ms.
+Those total-work timing comparisons span live runs and renderer changes, so they
+are observations rather than an isolated fog speedup. End-of-run Go heap was
+921 MiB for the battle and 585 MiB for the opening, separate from Metal memory.
+The 32 MiB shared unit atlas and 225 MiB stress-scene sprite atlas are unchanged.
+
+Artifacts `battle-1500-fog-02`, `opening-03`, `solar-04` and `commander-02` are in
+the `metal-match` directory above, with binary hashes and command manifests.
+The corrected benchmark executable is included alongside the playable host.
+The earlier production-02/03 artifacts are retained as historical results.
+
+Keep this backend for the next manual match. It now has credible 120 Hz headroom
+with corrected stock fog and model appearance, but do not replace the shipping
+renderer yet: subject overlap, rigid interpolation, remaining effects/water,
+resource lifetime and a complete match remain the useful next checks. Steady
+144 Hz has not been re-established. No tests were added or run.

@@ -20,6 +20,7 @@ func RetainBattle(opts BattleOptions, fs *vfs.FS, sess *session.Session) (*Scene
 		return nil, nil, err
 	}
 	opts.Playable = false
+	opts.Seed = sess.RNGSimSeed
 	opts.ViewPlayer = int(sess.LocalOwner)
 	if opts.QuadMultiplier == 0 {
 		opts.QuadMultiplier = 1
@@ -38,6 +39,11 @@ func RetainBattle(opts BattleOptions, fs *vfs.FS, sess *session.Session) (*Scene
 	scene.Name = "Metal world with production battle HUD and controls"
 	scene.Metadata["scene_kind"] = "ordinary production battle host with retained Metal world"
 	scene.Metadata["hud_policy"] = "production foreground draw list; production mouse and keyboard service"
+	scene.Metadata["gameplay"] = sess.Gameplay
+	scene.Metadata["crt_seed"] = sess.RNGCrtSeed
+	scene.Metadata["configured_unit_limit"] = sess.Units.UnitLimit()
+	scene.Metadata["camera_policy"] = "production camera and pointer service; fixed drawable at two physical pixels per logical pixel"
+	scene.Metadata["pose_source"] = "production client's pinned completed frame pair; no independent simulation or presentation clock"
 	scene.Metadata["terrain_policy"] = "whole map, native TNT pixels up to 8192 per axis; larger maps nearest downsampled"
 	return scene, &RetainedBattle{source: source}, nil
 }
@@ -63,4 +69,8 @@ func (r *RetainedBattle) Report() map[string]any {
 		report["final_census"] = r.previous.census
 	}
 	return report
+}
+
+func (r *RetainedBattle) SetDitheredFog(enabled bool) {
+	r.source.scene.DitheredFog = enabled
 }

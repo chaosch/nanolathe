@@ -329,7 +329,7 @@ func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitVie
 		if index < 0 || index >= len(s.states) {
 			continue
 		}
-		s.states[index] = model.PieceState{RotX: p.RotX, RotY: p.RotY, RotZ: p.RotZ, Trans: [3]numeric.Fixed{p.Tx, p.Ty, p.Tz}, Hidden: p.Hidden}
+		s.states[index] = model.PieceState{RotX: p.RotX, RotY: p.RotY, RotZ: p.RotZ, Trans: [3]numeric.Fixed{p.Tx, p.Ty, p.Tz}, Hidden: p.Hidden, DontShade: p.DontShade, DontCache: p.DontCache}
 	}
 	model.FoldRootAngles(s.states, m.Root, u.Heading, u.Pitch, u.Bank)
 	for piece := range m.Pieces {
@@ -346,6 +346,13 @@ func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitVie
 		}
 		s.transforms[piece] = model.ComposeInto(m, s.states, piece, s.transforms[piece], &s.compose)
 		dst[piece] = battleAffine(s.transforms[piece], u.X, u.Y, u.Z)
+		// The unused homogeneous row carries presentation-only base-shade
+		// admission; XYZ transforms never read it [03 R-REN-03A §4].
+		if u.BMCode || (s.states[piece].DontCache && u.BuildRemaining <= 0) {
+			dst[piece][3] = 1
+		} else if s.states[piece].DontShade {
+			dst[piece][3] = 2 // production identity SHD row 15
+		}
 	}
 }
 
