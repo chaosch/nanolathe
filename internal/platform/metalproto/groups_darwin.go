@@ -30,6 +30,8 @@ type nativeGroupUpload struct {
 
 // GroupPacking owns borrowed upload storage until its next Prepare. It remaps
 // only identities; source/final slots and ordered key deltas remain unchanged.
+// Counts.z admits keyed unit staging. Instance policy is parent=0, child=1,
+// or keyless painter member=2; policy 2 never forces a plane or carrier clip.
 type GroupPacking struct {
 	groups    []nativeGroup
 	members   []nativeGroupMember
@@ -88,7 +90,9 @@ func (p *GroupPacking) Prepare(c meshscene.ModelComposition, sourcePacked []uint
 				return fail("unique packed group members")
 			}
 			child := int32(0)
-			if m.Instance != g.ParentInstance {
+			if !g.Keyed {
+				child = 2
+			} else if m.Instance != g.ParentInstance {
 				child = 1
 			}
 			p.instances[at] = [4]int32{int32(gi + 1), child, m.KeyDelta, int32(parent)}
@@ -97,11 +101,15 @@ func (p *GroupPacking) Prepare(c meshscene.ModelComposition, sourcePacked []uint
 		if len(p.members) > math.MaxInt32 {
 			return fail("bounded member count")
 		}
+		keyed := uint32(0)
+		if g.Keyed {
+			keyed = 1
+		}
 		holes := uint32(0)
 		if g.PreserveHoles {
 			holes = 1
 		}
-		p.groups = append(p.groups, nativeGroup{Info: [4]uint32{parent, g.ParentSlot, g.FinalSlot, uint32(start)}, Counts: [4]uint32{uint32(len(g.Members)), holes}})
+		p.groups = append(p.groups, nativeGroup{Info: [4]uint32{parent, g.ParentSlot, g.FinalSlot, uint32(start)}, Counts: [4]uint32{uint32(len(g.Members)), holes, keyed}})
 	}
 	for i, gi := range c.MemberGroup {
 		if gi > uint32(len(c.Groups)) || (gi != 0 && p.instances[sourcePacked[i]][0] != int32(gi)) {
