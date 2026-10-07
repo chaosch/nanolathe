@@ -18,12 +18,20 @@ typedef struct {
  float alpha;
  uint32_t pose_count,instance_count,sprite_count,light_count,distortion_count,fog_width,fog_height,overlay_count;
  double seconds;
+ const void *overlay_texture;
+ uint64_t overlay_version;
+ uint32_t overlay_width,overlay_height,overlay_dirty[4];
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
-// are documented by meshscene.NativeEvent.
+// extend meshscene.NativeEvent as documented in native/README.md. Wheel move
+// records carry signed integer zoom notches in button; text/focus/pinch kinds
+// are 7/8/9. Key events carry the Cocoa virtual keycode in button.
 typedef struct { uint32_t kind,key,button,modifiers; float x,y,wheel_x,wheel_y; } NMEvent;
 void nm_playable(void* renderer,int playable);
+// Capture delivers cumulative virtual drawable coordinates; release restores
+// the pre-capture content-view position. Returns zero on a CoreGraphics error.
+int nm_pointer_capture(void* renderer,int captured);
 int nm_events(void* renderer,NMEvent* events,int capacity);
 void nm_input(void* renderer,NMInput* input);
 int nm_live_frame(void* renderer,const NMLiveUpload* upload);

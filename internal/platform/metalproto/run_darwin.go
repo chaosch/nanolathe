@@ -21,21 +21,22 @@ import (
 var shaderSource string
 
 type bridge struct {
-	create    func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
-	mesh      func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr) int32
-	assets    func(uintptr, uintptr) int32
-	texture   func(uintptr, int32, int32, int32, uintptr) int32
-	configure func(uintptr, uintptr, uintptr, int32) int32
-	frame     func(uintptr, uintptr, uintptr, float32, float64) int32
-	liveFrame func(uintptr, uintptr) int32
-	input     func(uintptr, uintptr)
-	events    func(uintptr, uintptr, int32) int32
-	playable  func(uintptr, int32)
-	drain     func(uintptr)
-	rows      func(uintptr, uintptr, int32) int32
-	capture   func(uintptr, uintptr) int32
-	info      func(uintptr, uintptr, int32)
-	destroy   func(uintptr)
+	pointerCapture func(uintptr, int32) int32
+	create         func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
+	mesh           func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr) int32
+	assets         func(uintptr, uintptr) int32
+	texture        func(uintptr, int32, int32, int32, uintptr) int32
+	configure      func(uintptr, uintptr, uintptr, int32) int32
+	frame          func(uintptr, uintptr, uintptr, float32, float64) int32
+	liveFrame      func(uintptr, uintptr) int32
+	input          func(uintptr, uintptr)
+	events         func(uintptr, uintptr, int32) int32
+	playable       func(uintptr, int32)
+	drain          func(uintptr)
+	rows           func(uintptr, uintptr, int32) int32
+	capture        func(uintptr, uintptr) int32
+	info           func(uintptr, uintptr, int32)
+	destroy        func(uintptr)
 }
 
 func pointer[T any](s []T) uintptr {
@@ -105,6 +106,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	// the last command buffer has completed. Unmapping its callback code is unsafe.
 	var b bridge
 	purego.RegisterLibFunc(&b.create, lib, "nm_create")
+	purego.RegisterLibFunc(&b.pointerCapture, lib, "nm_pointer_capture")
 	purego.RegisterLibFunc(&b.mesh, lib, "nm_mesh")
 	purego.RegisterLibFunc(&b.assets, lib, "nm_assets")
 	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
@@ -242,6 +244,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if err != nil {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
 			}
+			if live.Exit {
+				break
+			}
+			if b.pointerCapture(handle, boolInt(live.PointerCaptured)) == 0 {
+				return nil, fmt.Errorf("metalproto: native pointer capture unavailable")
+			}
 			prepStart := time.Now()
 			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses, opts.Effects)
 			if err != nil {
@@ -322,7 +330,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["retained_frames"] = n
 	report["first_retained_frame"] = firstFrame
 	report["timing_capacity_frames"] = capacity
-	report["retained_overlay_atlas_bytes"] = len(scene.OverlayAtlas.RGBA)
+	report["retained_overlay_atlas_bytes"] = device["retained_overlay_atlas_bytes"]
 	report["submission_elapsed_seconds"] = submittedAt.Sub(measuredStart).Seconds()
 	report["go_allocations"] = after.Mallocs - before.Mallocs
 	report["go_allocated_bytes"] = after.TotalAlloc - before.TotalAlloc

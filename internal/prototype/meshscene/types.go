@@ -37,6 +37,8 @@ type PoseFrame struct{ Transforms []Mat4 }
 type Scene struct {
 	Playable      bool
 	OverlayAtlas  Texture
+	FogAtlas      Texture // authored fog masks, followed by the 256-entry palette row
+	DitheredFog   bool    // production display option; independent of committed LOS
 	Name          string
 	Meshes        []Mesh
 	Atlas         Texture
