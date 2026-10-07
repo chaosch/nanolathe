@@ -35,7 +35,7 @@ func (b *BattleSprites) appendProjectiles(dst []Sprite, lights []Light, current 
 	options := render.ProjectileDispatchOptions{
 		FrameCount: func(v frame.ProjectileView) (int, bool) {
 			name := spriteProjectileName(v.RenderType, v.Selector, false)
-			seq := b.sequences[spriteSequenceKey(content.DefaultEffectBank, name)]
+			seq := b.sequence(content.DefaultEffectBank, name)
 			if seq == nil {
 				return 0, false
 			}
