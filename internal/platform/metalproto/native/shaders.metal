@@ -355,6 +355,30 @@ fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[tex
  }
  return float4(c,1);
 }
+// One pass on the drawable replaces world resolve, full-frame snapshot copy,
+// distortion target and fog: the resolved world is never stored. bands>0
+// softens slab silhouettes; bloom adds the half-size blur.
+struct NMFinal { float bands,bloom,pad0,pad1; };
+float3 nmFinalFog(float3 c,float2 pixel,texture2d<float> fog,texture2d<float> masks,constant Uniforms& u) {
+ if(u.visual.z<0.5)return c;
+ float2 projected=(pixel-u.viewport.xy*0.5)/u.camera.z+u.camera.xy;
+ float2 cameraOrigin=floor(u.camera.xy-u.viewport.xy/(2*u.camera.z));
+ float checker=float(int(floor(pixel.x)+floor(pixel.y)+cameraOrigin.x+cameraOrigin.y)&1);
+ return applyFog(c,projected,checker,fog,masks,u);
+}
+fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],depth2d<float> depth [[texture(4)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float3 c=color.sample(s,in.uv).rgb;
+ if(f.bands>0){
+  int2 p=int2(in.p.xy),size=int2(color.get_width(),color.get_height());float d=depth.read(uint2(p));
+  float band=d<1?floor((1-d)*f.bands)+1:0;float3 acc=0;float k=0;
+  const int2 o[4]={int2(1,0),int2(-1,0),int2(0,1),int2(0,-1)};
+  for(int i=0;i<4;i++){int2 q=p+o[i];if(any(q<0)||any(q>=size))continue;float dq=depth.read(uint2(q));if(min(d,dq)>=1)continue;
+   if((dq<1?floor((1-dq)*f.bands)+1:0)==band)continue;acc+=color.read(uint2(q)).rgb;k++;}
+  if(k>0)c=mix(c,acc/k,k>1?.4:.25);
+ }
+ if(f.bloom>0.5)c+=glow.sample(s,in.uv).rgb*0.65;
+ return float4(nmFinalFog(c,in.p.xy,fog,masks,u),1);
+}
 struct DistortionOut { float4 position [[position]]; float2 local; float4 shape [[flat]]; float4 params [[flat]]; };
 vertex DistortionOut distortion_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const Distortion* sources [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
  const float2 c[6]={float2(-1,-1),float2(1,-1),float2(-1,1),float2(-1,1),float2(1,-1),float2(1,1)};
@@ -364,8 +388,9 @@ vertex DistortionOut distortion_vertex(uint v [[vertex_id]],uint iid [[instance_
  if(d.shape.w>=0.5)pixels.y+=(d.params.z-d.shape.y)*u.camera.z;
  o.position.xy+=float2(pixels.x/u.viewport.x*2,-pixels.y/u.viewport.y*2);return o;
 }
-fragment float4 distortion_fragment(DistortionOut in [[stage_in]],texture2d<float> source [[texture(0)]],constant Uniforms& u [[buffer(3)]]) {
- constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float2 shift=0;float clock=in.params.x+u.timing.x-1;
+// Displacement of one distortion source fragment, in world pixels.
+inline float2 nmDistortionShift(DistortionOut in,constant Uniforms& u) {
+ float2 shift=0;float clock=in.params.x+u.timing.x-1;
  if(in.shape.w<0.5){
   if(clock<0||clock>=15)discard_fragment();float radius=mix(12.0,in.shape.x,clock/15.0);float2 d=in.local*(in.shape.x+in.shape.y);float r=length(d);float band=(r-radius)/max(in.shape.y,0.001);if(abs(band)>=1)discard_fragment();
   float strength=min(clock,1.0)*pow(1-clock/15.0,2.0)*in.shape.z;
@@ -382,6 +407,10 @@ fragment float4 distortion_fragment(DistortionOut in [[stage_in]],texture2d<floa
   if(in.params.w>0){float age=max(in.params.w+u.timing.x-1,0.0);strength=0.55*pow(max(1-age/300,0.0),2.0);}
   shift=float2(wave,0.24*sin(rise*22.0-t*2.0+across*3.0))*envelope*1.8*strength;
  }
+ return shift;
+}
+fragment float4 distortion_fragment(DistortionOut in [[stage_in]],texture2d<float> source [[texture(0)]],constant Uniforms& u [[buffer(3)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float2 shift=nmDistortionShift(in,u);
  float2 uv=(in.position.xy+shift*u.camera.z)/u.viewport.xy;return float4(source.sample(s,clamp(uv,float2(0),float2(1))).rgb,1);
 }
 
@@ -426,4 +455,13 @@ fragment float4 ground_light_fragment(GroundLightOut in [[stage_in]],device cons
 
 kernel void select_subject_lights(device const ModelSlot* slots [[buffer(13)]],device const nm_light_source* lights [[buffer(16)]],device nm_light_subject* subjects [[buffer(17)]],constant Uniforms& u [[buffer(3)]],uint at [[thread_position_in_grid]]) {
  if(at>=uint(u.composition.w))return;ModelSlot s=slots[at];subjects[at]=nm_light_select(lights,uint(u.lightControl.x),s.screen.xy+s.screen.zw*.5,(s.screen.z+s.screen.w)*.5);
+}
+// Later sources replace earlier ones from the same unresolved world, as the
+// immutable snapshot did; fog keeps the pixel's own undistorted position.
+fragment float4 distortion_final_fragment(DistortionOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
+ float2 shift=nmDistortionShift(in,u);
+ float2 uv=clamp((in.position.xy+shift*u.camera.z)/u.viewport.xy,float2(0),float2(1));
+ float3 c=color.sample(s,uv).rgb;if(f.bloom>0.5)c+=glow.sample(s,uv).rgb*0.65;
+ return float4(nmFinalFog(c,in.position.xy,fog,masks,u),1);
 }

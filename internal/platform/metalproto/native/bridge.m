@@ -99,7 +99,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property NMFaceReflectionState* faceReflections;
 @property id<MTLDevice> device;
 @property id<MTLCommandQueue> queue;
-@property id<MTLRenderPipelineState> directModel;
+@property id<MTLRenderPipelineState> directModel,finalPass,distortionFinal;
 @property id<MTLRenderPipelineState> model,subjectModel,subjectResolve,atlasModel,atlasModelMetadata,atlasOutline,shadowOutline,atlasCommit,groundLight,clearDepth,terrain,composite,sprite,shadow,outline,world,distortion,fog,overlay,overlayMultiply;
 @property id<MTLComputePipelineState> blur,interpolatePoses,selectLights;
 @property id<MTLDepthStencilState> depth,spriteDepth,alwaysDepth;
@@ -168,7 +168,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.shadowOutline=pipeline(r,lib,@"model_vertex",@"shadow_outline",YES,&e);r.atlasModelMetadata=pipeline(r,lib,@"model_vertex",@"model_atlas_fragment",YES,&e);r.directModel=pipeline(r,lib,@"model_vertex",@"model_direct_fragment",YES,&e);r.atlasOutline=pipeline(r,lib,@"model_vertex",@"outline_atlas_fragment",YES,&e);
  r.atlasModel=pipeline(r,lib,@"model_vertex",@"atlas_model",YES,&e);r.atlasCommit=pipeline(r,lib,@"model_commit_vertex",@"model_commit_fragment",YES,&e);
  r.model=pipeline(r,lib,@"model_vertex",@"model_fragment",YES,&e);r.subjectModel=pipeline(r,lib,@"model_vertex",@"subject_model",YES,&e);r.subjectResolve=pipeline(r,lib,@"screen_vertex",@"subject_resolve_fragment",YES,&e);r.clearDepth=pipeline(r,lib,@"screen_vertex",@"clear_depth_fragment",YES,&e);r.terrain=pipeline(r,lib,@"terrain_vertex",@"terrain_fragment",YES,&e);r.composite=pipeline(r,lib,@"screen_vertex",@"composite_fragment",NO,&e);
- r.shadow=pipeline(r,lib,@"shadow_vertex",@"shadow_fragment",NO,&e);r.outline=pipeline(r,lib,@"model_vertex",@"outline_fragment",YES,&e);r.world=pipeline(r,lib,@"screen_vertex",@"world_fragment",NO,&e);r.distortion=pipeline(r,lib,@"distortion_vertex",@"distortion_fragment",NO,&e);r.fog=pipeline(r,lib,@"screen_vertex",@"fog_fragment",NO,&e);r.overlay=pipeline(r,lib,@"overlay_vertex",@"overlay_fragment",NO,&e);r.overlayMultiply=pipeline(r,lib,@"overlay_vertex",@"overlay_multiply_fragment",NO,&e);
+ r.shadow=pipeline(r,lib,@"shadow_vertex",@"shadow_fragment",NO,&e);r.outline=pipeline(r,lib,@"model_vertex",@"outline_fragment",YES,&e);r.world=pipeline(r,lib,@"screen_vertex",@"world_fragment",NO,&e);r.distortion=pipeline(r,lib,@"distortion_vertex",@"distortion_fragment",NO,&e);r.fog=pipeline(r,lib,@"screen_vertex",@"fog_fragment",NO,&e);r.finalPass=pipeline(r,lib,@"screen_vertex",@"final_fragment",NO,&e);r.distortionFinal=pipeline(r,lib,@"distortion_vertex",@"distortion_final_fragment",NO,&e);r.overlay=pipeline(r,lib,@"overlay_vertex",@"overlay_fragment",NO,&e);r.overlayMultiply=pipeline(r,lib,@"overlay_vertex",@"overlay_multiply_fragment",NO,&e);
  r.materials=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];r.textureFrames=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];
  MTLTextureDescriptor* hd=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR32Float width:1 height:1 mipmapped:NO];hd.storageMode=MTLStorageModeShared;hd.usage=MTLTextureUsageShaderRead;r.heights=[r.device newTextureWithDescriptor:hd];float zero=0;[r.heights replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&zero bytesPerRow:4];
  hd.pixelFormat=MTLPixelFormatRGBA8Unorm;r.emptyFog=[r.device newTextureWithDescriptor:hd];uint32_t white=0xffffffff;[r.emptyFog replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];
@@ -176,7 +176,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.blur=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"blur"] error:&e];
  r.selectLights=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"select_subject_lights"] error:&e];
  r.interpolatePoses=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"interpolate_poses"] error:&e];
- if(!r.shadowOutline||!r.atlasModelMetadata||!r.directModel||!r.atlasOutline||!r.selectLights||!r.groundLight||!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ if(!r.shadowOutline||!r.atlasModelMetadata||!r.directModel||!r.finalPass||!r.distortionFinal||!r.atlasOutline||!r.selectLights||!r.groundLight||!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
  MTLDepthStencilDescriptor* depth=[MTLDepthStencilDescriptor new];depth.depthCompareFunction=MTLCompareFunctionLessEqual;depth.depthWriteEnabled=YES;r.depth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=NO;r.spriteDepth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=YES;depth.depthCompareFunction=MTLCompareFunctionAlways;r.alwaysDepth=[r.device newDepthStencilStateWithDescriptor:depth];
  r.groundField=target(r,(width+1)/2,(height+1)/2,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  r.color=target(r,width,height,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
@@ -509,6 +509,21 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
  if(r->effects&&!ring.glowEnabled){
  id<MTLComputeCommandEncoder> compute=nmComputeEncoder(cb,"bloom.blurX");[compute setComputePipelineState:r.blur];vector_float2 d={1,0};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.emission atIndex:0];[compute setTexture:r.blurA atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurA.width,r.blurA.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
  compute=nmComputeEncoder(cb,"bloom.blurY");[compute setComputePipelineState:r.blur];d=(vector_float2){0,1};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.blurA atIndex:0];[compute setTexture:r.blurB atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurB.width,r.blurB.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
+ }
+ // Resolve, slab silhouettes, distortion and fog in the one pass that owns the
+// drawable; the HUD follows in the same encoder (NANOLATHE_METAL_LEGACY_POST=1
+// restores the stored resolve, snapshot copy and separate fog pass).
+ if(u.visual.x>0.5&&!getenv("NANOLATHE_METAL_LEGACY_POST")){
+  struct {float bands,bloom,pad0,pad1;} f={ring.directSlotCount?(float)ring.compositionPaintCount+1:0,(u.timing.w>0.5&&!ring.glowEnabled)?1.f:0.f,0,0};
+  MTLRenderPassDescriptor* last=[MTLRenderPassDescriptor renderPassDescriptor];last.colorAttachments[0].texture=destination;last.colorAttachments[0].loadAction=MTLLoadActionDontCare;last.colorAttachments[0].storeAction=MTLStoreActionStore;
+  enc=nmRenderEncoder(cb,last,"post.final");
+  [enc setRenderPipelineState:r.finalPass];
+  [enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:2];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:3];[enc setFragmentTexture:r.depthImage atIndex:4];
+  [enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&f length:sizeof(f) atIndex:4];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+  if(r->effects&&ring.distortionCount>0){[enc setRenderPipelineState:r.distortionFinal];[enc setVertexBuffer:ring.distortions offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.distortionCount];}
+  encodeOverlayInto(r,enc,u,ring);[enc endEncoding];
+  return r.lastError==nil;
  }
  if(u.visual.x>0.5){
  if(ring.glowEnabled)u.timing.w=0;
