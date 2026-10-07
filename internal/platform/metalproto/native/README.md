@@ -90,7 +90,7 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 168-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 208-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
 owns pose, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
@@ -223,31 +223,62 @@ real-device runs and visual inspection are performed by the coordinating agent.
 
 `Scene.Playable` selects the native playable input mode through `nm_playable`.
 `nm_input` pumps Cocoa events and samples camera arrows, accumulated wheel zoom
-and space pause. Spectators also retain WASD pan; playable WASD keys are command
+and spectator space pause. Spectators also retain WASD pan; playable WASD keys are command
 keys. Held keys clear when the window loses focus, and unfinished pointer drags
 receive synthetic button releases on that transition. Ordinary received drag
 releases outside the content bounds are retained.
 
 `nm_events` drains ordered 32-byte `NMEvent` records without another event pump.
-Left/right/middle buttons are 0/1/2; kind move/down/up/key-down is 1/2/3/4.
-ASCII keys are uppercase with Escape 27, Enter 13 and Backspace 8; modifiers are
-Shift 1, Control 2, Alt 4 and Command 8. Pointer coordinates convert from Cocoa
-window coordinates through the content view, flip Y for an unflipped view and
-scale its bounds into the physical drawable dimensions. The native queue holds
-8,192 events. Only consecutive wheel-free moves coalesce. If exhausted, newest
-events are dropped and `input_queue_overflow` reports every drop explicitly.
-Wheel events retain their ordered position and also feed `Input.Zoom`; a caller
-must choose which wheel representation to act upon. Right clicks are captured
-as gameplay events before Cocoa can interpret them as contextual-menu input.
+Pointer buttons are left/right/middle 0/1/2. Kinds are move 1, down 2,
+up 3, key-down 4, key-up 5, modifiers 6, text 7, focus 8 and pinch 9.
+Modifiers are Shift 1, Control 2, Alt 4 and Command 8. Key records carry the
+first `charactersIgnoringModifiers` scalar in Key and the Cocoa virtual keycode
+in Button; text records carry the translated Unicode scalar and preserve case.
+The production adapter translates editing/Control/Alt tokens from key records,
+and accepts ordinary text only from text records, preventing duplicate commands.
+Focus Key is 0 for loss and 1 for gain. Pointer-down Key retains Cocoa's click
+count; even counts at least two identify an OS double-click. Wheel records are
+move records: Key has precise 1, momentum 2 and wheel-present 4, Button carries the signed 32-bit
+integer zoom notch count, and WheelX/Y retain raw scrolling point deltas. Precise
+GUI wheel distances scale by 0.1; pan keeps raw logical-point distances; zoom
+uses only ordinary nonmomentum integer notches. Pinch WheelY is magnification,
+with Key phase bits began 1, ended 2 and cancelled 4.
 
-The synchronous live upload is now 168 bytes. It includes a 64-byte-per-quad
-HUD stream copied into the reusable three-slot native resource ring. The
-immutable overlay atlas uploads once at texture slot 3; model/terrain/sprite
-remain slots 0/1/2. HUD params select overlay atlas 0, terrain 1 or current fog
-2. This batch runs after the final world/fog composition, including when visual
-passes are disabled, with premultiplied alpha into BGRA8 and no depth attachment.
-Final capture executes the same HUD pass. Reports include quad counts, exact
-upload bytes, retained atlas bytes and actual native ring capacities.
+Pointer coordinates convert from Cocoa window coordinates through the content
+view, flip Y for an unflipped view and scale its bounds into physical drawable
+pixels. The production adapter divides by the supplied device scale. The native
+queue holds 8,192 events. Only consecutive wheel-free moves coalesce. If
+exhausted, newest events are dropped and `input_queue_overflow` reports every
+drop explicitly. Wheel events retain their ordered position and also feed
+`Input.Zoom`; production uses only the ordered records. Right clicks are
+captured before Cocoa can interpret them as contextual-menu input. Playable
+mode hides the system cursor while the production HUD draws its own cursor.
+Command-Q closes the window so the run can drain and write its report.
+
+The synchronous live upload is 208 bytes. It includes a 64-byte-per-quad HUD
+stream copied into the reusable three-slot native resource ring. The initial
+overlay atlas uploads once at texture slot 3; model/terrain/sprite remain slots
+0/1/2. A nonzero changed `LiveFrame.OverlayVersion` uploads `OverlayTexture`;
+version zero or an unchanged version leaves it alone. `OverlayDirty` is x/y/w/h
+within the full strided RGBA image; an empty rectangle means full upload. First
+version and dimension changes also upload the whole image. Each free ring slot
+owns an aligned upload buffer. The CPU copies only the dirty rows into it, and
+a GPU blit writes the retained atlas before HUD drawing on the same serial
+command buffer. Earlier readers finish before that write; no in-use atlas is
+CPU-written. Resizing replaces the texture, and earlier command buffers retain
+the old one. Reports count exact copied pixel bytes separately from staging
+buffer capacity.
+
+HUD params select overlay atlas 0, terrain 1 or current fog 2. Params.y selects
+normal alpha 0 or destination-RGB multiplication 1. Consecutive blend runs are
+split without reordering commands. Atlas sampling uses nearest filtering.
+Normal colors and atlas pixels are straight RGBA, premultiplied exactly once
+by the fragment shader; multiply factors stay unpremultiplied with alpha one.
+The HUD runs after final world/fog composition, including when visual passes
+are disabled, into BGRA8 with no depth attachment. Final capture executes the
+same HUD pass. Reports include quad counts, exact upload bytes, retained atlas
+bytes and actual native ring capacities. `LiveFrame.Exit` ends the loop before
+packing or submitting the returned frame, then drains and writes its report.
 
 `Options.Frames == 0` is interactive until window close (visible output only).
 Go and native timing histories retain the same chronological last 8,192 submitted

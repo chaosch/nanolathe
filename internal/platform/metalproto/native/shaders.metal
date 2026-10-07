@@ -176,9 +176,17 @@ vertex OverlayOut overlay_vertex(uint v [[vertex_id]],uint iid [[instance_id]],d
  OverlayQuad q=quads[iid];float2 pixels=q.rect.xy+corners[v]*q.rect.zw;OverlayOut out;out.position=float4(pixels.x/u.viewport.x*2-1,1-pixels.y/u.viewport.y*2,0,1);out.uv=mix(q.uv.xy,q.uv.zw,corners[v]);out.color=q.color;out.textureKind=uint(q.params.x);return out;
 }
 fragment float4 overlay_fragment(OverlayOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],texture2d<float> terrain [[texture(1)]],texture2d<float> fog [[texture(2)]]) {
- constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);
  // Fog stores grayscale world modulation with opaque alpha. Blend black by
  // inverse coverage over minimap terrain to reproduce that RGB modulation.
  if(in.textureKind==2){float alpha=(1-fog.sample(s,in.uv).r)*in.color.a;return float4(0,0,0,alpha);}
  float4 tex=in.textureKind==1?terrain.sample(s,in.uv):atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;return float4(tex.rgb*in.color.rgb*alpha,alpha);
+}
+
+fragment float4 overlay_multiply_fragment(OverlayOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],texture2d<float> terrain [[texture(1)]],texture2d<float> fog [[texture(2)]]) {
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);
+ float3 color=in.textureKind==1?terrain.sample(s,in.uv).rgb:in.textureKind==2?fog.sample(s,in.uv).rgb:atlas.sample(s,in.uv).rgb;
+ // The factor is unpremultiplied. Fixed-function blending multiplies the
+ // existing destination RGB while preserving its alpha (§13.3).
+ return float4(color*in.color.rgb,1);
 }

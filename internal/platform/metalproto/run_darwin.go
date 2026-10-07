@@ -242,6 +242,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if err != nil {
 				return nil, fmt.Errorf("metalproto: live frame %d: %w", i, err)
 			}
+			if live.Exit {
+				break
+			}
 			prepStart := time.Now()
 			upload, metrics, err := packing.prepare(scene, live, seconds, opts.VisualPasses, opts.Effects)
 			if err != nil {
@@ -322,7 +325,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["retained_frames"] = n
 	report["first_retained_frame"] = firstFrame
 	report["timing_capacity_frames"] = capacity
-	report["retained_overlay_atlas_bytes"] = len(scene.OverlayAtlas.RGBA)
+	report["retained_overlay_atlas_bytes"] = device["retained_overlay_atlas_bytes"]
 	report["submission_elapsed_seconds"] = submittedAt.Sub(measuredStart).Seconds()
 	report["go_allocations"] = after.Mallocs - before.Mallocs
 	report["go_allocated_bytes"] = after.TotalAlloc - before.TotalAlloc
