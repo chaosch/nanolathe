@@ -22,6 +22,9 @@ type Mesh struct {
 	SourceFaces      int
 	PrimitiveCenters [][4]float32 // retained authored face centroids, indexed by MaterialSlots
 	MaterialSlots    []ModelMaterialSlot
+	Faces            []MeshFace // original body primitives, independent of stress tessellation
+	FaceCorners      []Vertex   // immutable authored rings; Vertex's 64-byte ABI is unchanged
+	FaceIndices      []uint32   // unsplit fans indexing FaceCorners, for source-face reflections
 }
 type Texture struct {
 	Width, Height int
@@ -59,7 +62,8 @@ type Scene struct {
 	Atlas                    Texture
 	ModelPalette             Texture
 	Terrain                  Texture
-	WaterMask                Texture // production projected wet/dry/shore mask; zero disables the layer
+	TerrainTiles             *TerrainTiles // live full-resolution TNT; Terrain is the standalone/minimap fallback
+	WaterMask                Texture       // production projected wet/dry/shore mask; zero disables the layer
 	WaterMaskStep            int
 	WaterLava, WaterDamaging bool
 	SpriteAtlas              Texture

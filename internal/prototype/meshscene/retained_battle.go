@@ -45,7 +45,7 @@ func RetainBattle(opts BattleOptions, fs *vfs.FS, sess *session.Session) (*Scene
 	scene.Metadata["configured_unit_limit"] = sess.Units.UnitLimit()
 	scene.Metadata["camera_policy"] = "production camera and pointer service; fixed drawable at two physical pixels per logical pixel"
 	scene.Metadata["pose_source"] = "production client's pinned completed frame pair; no independent simulation or presentation clock"
-	scene.Metadata["terrain_policy"] = "whole map, native TNT pixels up to 8192 per axis; larger maps nearest downsampled"
+	scene.Metadata["terrain_policy"] = "full-resolution native TNT unique-tile atlas and lookup; optional production detail tiles; reduced whole-map fallback retained for minimap"
 	return scene, &RetainedBattle{source: source}, nil
 }
 func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32) LiveFrame {

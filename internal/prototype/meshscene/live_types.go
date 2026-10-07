@@ -34,12 +34,15 @@ type Light struct {
 }
 
 type LiveFrame struct {
+	ModelProjections  ModelProjectionFrame
+	TerrainFlags      uint32 // production fractional filtering (1), detail record step (2)
 	StockEffects      *StockFrame
 	Lighting          RetainedLightingFrame
 	LightControls     uint32 // production lighting present, finish, glint, supersample
 	Composition       ModelComposition
 	Shadows           ShadowComposition
 	WaterObjects      []WaterObject
+	WaterSources      []WaterSource
 	WaterObjectScales [3]float32
 	Composed          bool
 

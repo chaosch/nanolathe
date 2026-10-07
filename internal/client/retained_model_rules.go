@@ -17,6 +17,7 @@ type RetainedModelRules struct {
 	Reveal                 *drawlist.ModelReveal
 	Below, Band, Above     [3]float32
 	Outline                [4]float32
+	OutlineIndex           uint8 // physical palette index before BLUE
 	CastsShadow, Structure bool
 	GroundY, OriginY       numeric.Fixed
 }
@@ -54,6 +55,7 @@ func (c *Client) RetainedUnitRules(v frame.UnitView, tick uint32) RetainedModelR
 		r.Below, r.Band, r.Above = c.retainedVerdictColor(reveal.Below), c.retainedVerdictColor(reveal.Band), c.retainedVerdictColor(reveal.Above)
 		colour := c.retainedVerdictColor(int16(outline))
 		r.Outline = [4]float32{colour[0], colour[1], colour[2], 1}
+		r.OutlineIndex = outline
 	}
 	return r
 }

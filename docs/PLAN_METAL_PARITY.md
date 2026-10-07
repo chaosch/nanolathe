@@ -46,3 +46,38 @@ Classic/Modern/Metal comparisons plus 2×/5× mesh and 2× texture stress, inspe
 captures/state/census, fix measured issues, save report and playable launcher.
 Native triangle/quad pixel coverage and historical cached/live group staging are
 explicit parity gaps; do not claim exact renderer parity from a scene census.
+
+
+## Reviewed integration checkpoint: full-resolution terrain and source faces
+
+Isolated keyed/keyless groups, authored face rings, source-local two-chain
+UV/key/SHD mapping, ordered GPU reflection admission, group reflection ownership,
+reflection edge expansion, underwater outline BLUE, and unique full-resolution
+TNT tile storage are wired. The reviewer caught atlas-global coordinate gates and
+outline palette loss; both are corrected. Reflection empty-tile bypass produced
+an identical diagnostic PNG and reduced the short sample's GPU time; this is not
+a long-run performance conclusion. Supersample/local projection metadata is the
+last active bounded integration before the frozen comparison build.
+
+Runtime checks completed without native errors: six measured coastal frames
+with matching Classic/Modern/Metal state/RNG/census (different build revisions,
+so diagnostic only), plus the 1,500-unit field scene at 5x geometry/2x textures.
+The field retained all 1,500 units in simulation, 1,121 moving, 30 construction
+records and 171 units in view at tick1266. Benchmarks must distinguish full battle
+size from visible model count. No tests have been added or run.
+
+Remaining exactness gaps are source-stated: fixed-point transform rounding,
+cached/direct and cached/live chronology, row-extreme outline coverage, and
+edge-only shadow admission. Do not label full pixel parity achieved. Measure
+real end-to-end cadence separately from GPU command time and report 120/144Hz
+as targets, never inferred achievements.
+
+
+Projection metadata is now integrated: keyed units and 3DO features use the
+production blended/arrival origin, native/doubled anchors and record-space
+rounding, including Supersample off. Keyless cached/direct mode is explicitly
+unknown and falls back rather than guessing a cache decision. Reflection
+far-side source expansion follows the production original-face centroid.
+The frozen comparison runner pins the reflection diagnostic override to off,
+and its full-simulation frame wall metric is not total CPU consumption:
+production Modern overlaps background recording with pacing.

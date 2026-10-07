@@ -5,7 +5,7 @@ package meshscene
 // are physical RGB plus verdict (-2 erase, -1 keep, nonnegative palette index).
 // Clip is waterline kind/key, Digger admission and the key base. Shadow is
 // structure quarter projection (1), mobile/Digger silhouette (2), or disabled
-// (0), then ground Y and model origin Y. Outline is RGBA.
+// (0), then ground Y, model origin Y and physical outline index. Outline is RGBA.
 // This packet carries decisions; cached/live/cargo staging, the shadow punch
 // and the aircraft soft-shadow filter remain executor responsibilities.
 type ModelRules struct {

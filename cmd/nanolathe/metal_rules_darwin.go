@@ -46,7 +46,7 @@ func metalModelRules(r client.RetainedModelRules) meshscene.ModelRules {
 		Band:    [4]float32{r.Band[0], r.Band[1], r.Band[2], render.NanoframeKeep},
 		Above:   [4]float32{r.Above[0], r.Above[1], r.Above[2], render.NanoframeKeep},
 		Clip:    [4]float32{float32(r.Waterline), float32(r.WaterlineKey), 0, float32(r.KeyBias)},
-		Shadow:  [4]float32{0, float32(r.GroundY) / 65536, float32(r.OriginY) / 65536, 0},
+		Shadow:  [4]float32{0, float32(r.GroundY) / 65536, float32(r.OriginY) / 65536, float32(r.OutlineIndex)},
 		Outline: r.Outline,
 	}
 	if r.KeyPlane {

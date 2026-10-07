@@ -96,6 +96,13 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 		}
 	}
 	live.WaterObjectScales = [3]float32{step, step * k, scale}
+	live.TerrainFlags = 0
+	if k != 1 || world.OffsetX != 0 || world.OffsetY != 0 {
+		live.TerrainFlags |= 1
+	}
+	if world.Step == camera.ViewScaleDetail {
+		live.TerrainFlags |= 2
+	}
 	k *= scale
 	v.lights = v.lights[:0]
 	for _, source := range v.lighting.GatherSources() {
@@ -121,6 +128,11 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	v.frame.Glow.Parameters = meshscene.RetainedGlowParameters(parameters)
 	v.frame.Glow.Parameters.Blur[0] *= scale
 	v.frame.Glow.Parameters.Blur[1] = min(v.frame.Glow.Parameters.Blur[1]*scale, float32(24.0/2.5))
+	waterSources, _, err := metalWaterSources(cl, v.adapter, v.layers[:])
+	if err != nil {
+		return err
+	}
+	live.WaterSources = waterSources
 	live.StockEffects = &v.frame
 	return nil
 }

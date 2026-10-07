@@ -40,7 +40,7 @@ static BOOL nmGroupsPrepare(NMRenderer* r,NMRing* ring,const NMGroupUpload* uplo
    if(member.instance>=upload->instance_count||!member.slot||member.slot>ring.compositionSlotCount||member.slot==final||selectors[member.instance]!=member.slot)return nmGroupsFail(r,@"Invalid isolated group member");
    const int32_t* identity=&identities[member.instance*4];
    int32_t policy=group.counts[2]?(member.instance!=parent):2;
-   if(identity[0]!=i+1||identity[1]!=policy||identity[2]!=member.key_delta||identity[3]!=parent)return nmGroupsFail(r,@"Group identity sidecar mismatch");
+   if(identity[0]!=(int32_t)(i+1)||identity[1]!=policy||identity[2]!=member.key_delta||identity[3]!=(int32_t)parent)return nmGroupsFail(r,@"Group identity sidecar mismatch");
   }
   // Every final slot is write-only. It must never alias any group's source.
   for(NSUInteger j=0;j<upload->member_count;j++)if(members[j].slot==final)return nmGroupsFail(r,@"Group final slot aliases immutable source");
