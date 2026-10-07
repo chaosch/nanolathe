@@ -45,6 +45,8 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @property id<MTLBuffer> poses,interpolatedPoses,instances,sprites,lights,visuals,distortions,selectors,overlay,overlayUpload,rules,materialOffsets,materialOverrides,retainedLights,subjectLights;
 @property NSMutableData *spans,*cloaks,*compositionDraws;
 @property id<MTLBuffer> compositionSlots,compositionSelectors,compositionPaint;
+@property NSMutableData* slotRanks; // per slot: paint index, or UINT32_MAX
+@property NSUInteger directSlotCount;
 @property NSUInteger compositionSlotCount,compositionDrawCount,compositionPaintCount;
 @property BOOL composed;
 @property uint32_t terrainFlags;
@@ -97,6 +99,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property NMFaceReflectionState* faceReflections;
 @property id<MTLDevice> device;
 @property id<MTLCommandQueue> queue;
+@property id<MTLRenderPipelineState> directModel;
 @property id<MTLRenderPipelineState> model,subjectModel,subjectResolve,atlasModel,atlasModelMetadata,atlasOutline,shadowOutline,atlasCommit,groundLight,clearDepth,terrain,composite,sprite,shadow,outline,world,distortion,fog,overlay,overlayMultiply;
 @property id<MTLComputePipelineState> blur,interpolatePoses,selectLights;
 @property id<MTLDepthStencilState> depth,spriteDepth,alwaysDepth;
@@ -122,11 +125,11 @@ static id<MTLTexture> target(NMRenderer* r,NSUInteger w,NSUInteger h,MTLPixelFor
  MTLTextureDescriptor* d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:w height:h mipmapped:NO];d.storageMode=MTLStorageModePrivate;d.usage=usage;return [r.device newTextureWithDescriptor:d];
 }
 static id<MTLRenderPipelineState> pipeline(NMRenderer* r,id<MTLLibrary> l,NSString* vertex,NSString* fragment,BOOL mrt,NSError** error) {
- MTLRenderPipelineDescriptor* d=[MTLRenderPipelineDescriptor new];d.vertexFunction=[l newFunctionWithName:vertex];d.fragmentFunction=[l newFunctionWithName:[fragment isEqualToString:@"shadow_outline"]?@"outline_fragment":([fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"atlas_model"])?@"model_fragment":fragment];d.colorAttachments[0].pixelFormat=(mrt||[fragment isEqualToString:@"world_fragment"]||[fragment isEqualToString:@"distortion_fragment"]||[fragment isEqualToString:@"shadow_fragment"])?MTLPixelFormatRGBA16Float:MTLPixelFormatBGRA8Unorm;
+ MTLRenderPipelineDescriptor* d=[MTLRenderPipelineDescriptor new];if([vertex isEqualToString:@"model_vertex"]){MTLFunctionConstantValues* values=[MTLFunctionConstantValues new];bool on=[fragment isEqualToString:@"model_direct_fragment"];[values setConstantValue:&on type:MTLDataTypeBool atIndex:0];d.vertexFunction=[l newFunctionWithName:vertex constantValues:values error:error];if(!d.vertexFunction)return nil;}else d.vertexFunction=[l newFunctionWithName:vertex];d.fragmentFunction=[l newFunctionWithName:[fragment isEqualToString:@"shadow_outline"]?@"outline_fragment":([fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"atlas_model"])?@"model_fragment":fragment];d.colorAttachments[0].pixelFormat=(mrt||[fragment isEqualToString:@"world_fragment"]||[fragment isEqualToString:@"distortion_fragment"]||[fragment isEqualToString:@"shadow_fragment"])?MTLPixelFormatRGBA16Float:MTLPixelFormatBGRA8Unorm;
  if([vertex isEqualToString:@"overlay_vertex"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceAlpha;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  if([fragment isEqualToString:@"overlay_multiply_fragment"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.sourceRGBBlendFactor=MTLBlendFactorZero;a.destinationRGBBlendFactor=MTLBlendFactorSourceColor;a.sourceAlphaBlendFactor=MTLBlendFactorZero;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
- if([vertex isEqualToString:@"sprite_vertex"]||[fragment isEqualToString:@"model_fragment"]||[fragment isEqualToString:@"outline_fragment"]||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"subject_resolve_fragment"]||[fragment isEqualToString:@"model_commit_fragment"]){
- for(int i=0;i<2;i++){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[i];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=(i==0||[fragment isEqualToString:@"subject_model"])?MTLBlendFactorOneMinusSourceAlpha:MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
+ if([vertex isEqualToString:@"sprite_vertex"]||[fragment isEqualToString:@"model_fragment"]||[fragment isEqualToString:@"outline_fragment"]||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"subject_resolve_fragment"]||[fragment isEqualToString:@"model_commit_fragment"]||[fragment isEqualToString:@"model_direct_fragment"]){
+ for(int i=0;i<2;i++){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[i];a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=(i==0||[fragment isEqualToString:@"subject_model"]||[fragment isEqualToString:@"model_direct_fragment"])?MTLBlendFactorOneMinusSourceAlpha:MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;}
  }
  if([fragment isEqualToString:@"shadow_fragment"]){d.colorAttachments[0].pixelFormat=MTLPixelFormatR8Unorm;MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.blendingEnabled=YES;a.rgbBlendOperation=MTLBlendOperationMax;a.alphaBlendOperation=MTLBlendOperationMax;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOne;a.sourceAlphaBlendFactor=MTLBlendFactorOne;a.destinationAlphaBlendFactor=MTLBlendFactorOne;}
  if([fragment isEqualToString:@"ground_light_fragment"]){MTLRenderPipelineColorAttachmentDescriptor* a=d.colorAttachments[0];a.pixelFormat=MTLPixelFormatRGBA8Unorm;a.blendingEnabled=YES;a.sourceRGBBlendFactor=MTLBlendFactorOne;a.destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceColor;}
@@ -162,7 +165,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.shadows=nmShadowsCreate(r,lib,&e);if(!r.shadows){copyError(error,errorSize,e.localizedDescription);return NULL;}
  nmEffectsSetRetainedDrawer(r,nmRetainedProjectile);r.productionGlow=nmGlowInitialize(r.device,lib,MTLPixelFormatRGBA16Float,&e);if(!r.productionGlow){copyError(error,errorSize,e.localizedDescription);return NULL;}
  r.groundLight=pipeline(r,lib,@"ground_light_vertex",@"ground_light_fragment",NO,&e);
- r.shadowOutline=pipeline(r,lib,@"model_vertex",@"shadow_outline",YES,&e);r.atlasModelMetadata=pipeline(r,lib,@"model_vertex",@"model_atlas_fragment",YES,&e);r.atlasOutline=pipeline(r,lib,@"model_vertex",@"outline_atlas_fragment",YES,&e);
+ r.shadowOutline=pipeline(r,lib,@"model_vertex",@"shadow_outline",YES,&e);r.atlasModelMetadata=pipeline(r,lib,@"model_vertex",@"model_atlas_fragment",YES,&e);r.directModel=pipeline(r,lib,@"model_vertex",@"model_direct_fragment",YES,&e);r.atlasOutline=pipeline(r,lib,@"model_vertex",@"outline_atlas_fragment",YES,&e);
  r.atlasModel=pipeline(r,lib,@"model_vertex",@"atlas_model",YES,&e);r.atlasCommit=pipeline(r,lib,@"model_commit_vertex",@"model_commit_fragment",YES,&e);
  r.model=pipeline(r,lib,@"model_vertex",@"model_fragment",YES,&e);r.subjectModel=pipeline(r,lib,@"model_vertex",@"subject_model",YES,&e);r.subjectResolve=pipeline(r,lib,@"screen_vertex",@"subject_resolve_fragment",YES,&e);r.clearDepth=pipeline(r,lib,@"screen_vertex",@"clear_depth_fragment",YES,&e);r.terrain=pipeline(r,lib,@"terrain_vertex",@"terrain_fragment",YES,&e);r.composite=pipeline(r,lib,@"screen_vertex",@"composite_fragment",NO,&e);
  r.shadow=pipeline(r,lib,@"shadow_vertex",@"shadow_fragment",NO,&e);r.outline=pipeline(r,lib,@"model_vertex",@"outline_fragment",YES,&e);r.world=pipeline(r,lib,@"screen_vertex",@"world_fragment",NO,&e);r.distortion=pipeline(r,lib,@"distortion_vertex",@"distortion_fragment",NO,&e);r.fog=pipeline(r,lib,@"screen_vertex",@"fog_fragment",NO,&e);r.overlay=pipeline(r,lib,@"overlay_vertex",@"overlay_fragment",NO,&e);r.overlayMultiply=pipeline(r,lib,@"overlay_vertex",@"overlay_multiply_fragment",NO,&e);
@@ -173,7 +176,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.blur=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"blur"] error:&e];
  r.selectLights=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"select_subject_lights"] error:&e];
  r.interpolatePoses=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"interpolate_poses"] error:&e];
- if(!r.shadowOutline||!r.atlasModelMetadata||!r.atlasOutline||!r.selectLights||!r.groundLight||!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
+ if(!r.shadowOutline||!r.atlasModelMetadata||!r.directModel||!r.atlasOutline||!r.selectLights||!r.groundLight||!r.atlasModel||!r.atlasCommit||!r.model||!r.clearDepth||!r.subjectModel||!r.subjectResolve||!r.terrain||!r.composite||!r.sprite||!r.blur||!r.interpolatePoses||!r.shadow||!r.outline||!r.world||!r.distortion||!r.fog||!r.overlay||!r.overlayMultiply){copyError(error,errorSize,e.localizedDescription);return NULL;}
  MTLDepthStencilDescriptor* depth=[MTLDepthStencilDescriptor new];depth.depthCompareFunction=MTLCompareFunctionLessEqual;depth.depthWriteEnabled=YES;r.depth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=NO;r.spriteDepth=[r.device newDepthStencilStateWithDescriptor:depth];depth.depthWriteEnabled=YES;depth.depthCompareFunction=MTLCompareFunctionAlways;r.alwaysDepth=[r.device newDepthStencilStateWithDescriptor:depth];
  r.groundField=target(r,(width+1)/2,(height+1)/2,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
  r.color=target(r,width,height,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);
@@ -413,6 +416,7 @@ static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRi
 #include "faces.inc"
 #include "face_reflections.inc"
 #include "outline_rows.inc"
+static BOOL nmSlabCommitActive; // shadow commits test the slab depth while set
 #include "shadows.inc"
 #include "composition.inc"
 #include "effects.inc"
@@ -481,11 +485,11 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   modelBindings(r,enc,poses,nil,u);[enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];drawMeshes(r,enc,nil,0);[enc endEncoding];
  }else if(ring.composed){
   nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;nmEffectsDraw(r,ring,cb,0,u);
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitShortFeatures");nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];nmEffectsDraw(r,ring,cb,1,u);
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitGround");nmCompositionCommit(r,ring,enc,u,1);
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitShortFeatures");nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];nmEffectsDraw(r,ring,cb,1,u);
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitGround");nmDirectPhase(r,ring,enc,poses,u,1);nmCompositionCommit(r,ring,enc,u,1);
   if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:nil];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
   if(!ring.effectRing.layerCount)nmCompositionCommit(r,ring,enc,u,2);[enc endEncoding];nmEffectsDraw(r,ring,cb,2,u);
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitAir");nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];nmEffectsDraw(r,ring,cb,3,u);nmEffectsDraw(r,ring,cb,4,u);
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitAir");nmDirectPhase(r,ring,enc,poses,u,3);nmCompositionCommit(r,ring,enc,u,3);[enc endEncoding];nmEffectsDraw(r,ring,cb,3,u);nmEffectsDraw(r,ring,cb,4,u);
  }else if(!ring.cloakCount){
   // Keep opaque phases in one tile render pass. A depth-only fullscreen draw
   // resets pass B's ownership without storing/reloading both HDR attachments.

@@ -5,6 +5,13 @@ using namespace metal;
 // Packed vector lanes keep the Go/Metal ABI exactly 64 bytes.
 struct Vertex { packed_float3 p; packed_float3 n; float2 uv; packed_float3 color; uint piece; uint material; packed_float3 shadeNormal; };
 struct Uniforms { float4 camera; float4 rect; float4 viewport; float4 timing; float4 mode; float4 heightRect; float4 fogRect; float4 visual; float4 composition; float4 lightControl; };
+// Depth-slab experiment: the staged subject mapping is evaluated as usual, then
+// emitted at physical screen pixels instead of the subject's atlas slot.
+constant bool nmDirect [[function_constant(0)]];
+constant bool nmDirectOn=is_function_constant_defined(nmDirect)&&nmDirect;
+// slab: paint entries plus one, this subject's paint rank. screen/atlas: the
+// slot's physical rectangle and its raster-scaled atlas rectangle.
+struct NMDirect { float4 slab; float4 screen; float4 atlas; };
 struct Light { float4 positionRadius; float4 colorStrength; };
 struct Material { uint firstFrame,frameCount,kind,reserved; };
 struct ModelRules { float4 reveal,below,band,above,clip,shadow,outline; };
@@ -117,7 +124,9 @@ vertex Out model_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device c
   float3 physical=float3((face.x-u.camera.x)*u.camera.z+u.viewport.x*.5,(face.z-u.camera.y)*u.camera.z+u.viewport.y*.5,face.y*u.camera.z);
   o.battleLight=nm_light_irradiance(retainedLights,local,physical,o.faceNormal,false);
  }
- if(u.mode.w>1.5){uint slot=slotSelectors[iid];if(slot==0){o.position=float4(2,2,2,1);return o;}ModelSlot placement=slots[slot-1];o.atlasRect=placement.atlas;float2 screen=float2((o.position.x+1)*0.5,(1-o.position.y)*0.5)*u.viewport.xy;if(u.mode.w==2)screen=nm_projection_screen(w,projection[iid],projectionFlags[at],projectionView,screen);float2 pixel=(screen-placement.screen.xy)*(placement.atlas.zw/placement.screen.zw)+placement.atlas.xy;if(u.mode.w==2&&v.material!=0&&faceBases[iid]>0){o.faceIndex=faceBases[iid]-1+materials[v.material].reserved;nm_face_Prepared face=faces[o.faceIndex];if(!nm_face_admitted(face)){o.position=float4(2,2,2,1);return o;}pixel=placement.atlas.xy+nm_face_pixel(screen,face);}o.position=float4(pixel.x/u.composition.x*2-1,1-pixel.y/u.composition.y*2,0.5,1);}
+ if(u.mode.w>1.5){uint slot=slotSelectors[iid];if(slot==0){o.position=float4(2,2,2,1);return o;}ModelSlot placement=slots[slot-1];o.atlasRect=placement.atlas;float2 screen=float2((o.position.x+1)*0.5,(1-o.position.y)*0.5)*u.viewport.xy;if(u.mode.w==2)screen=nm_projection_screen(w,projection[iid],projectionFlags[at],projectionView,screen);float2 pixel=(screen-placement.screen.xy)*(placement.atlas.zw/placement.screen.zw)+placement.atlas.xy;if(u.mode.w==2&&v.material!=0&&faceBases[iid]>0){o.faceIndex=faceBases[iid]-1+materials[v.material].reserved;nm_face_Prepared face=faces[o.faceIndex];if(!nm_face_admitted(face)){o.position=float4(2,2,2,1);return o;}pixel=placement.atlas.xy+nm_face_pixel(screen,face);}
+  if(nmDirectOn){float2 at=(pixel-placement.atlas.xy)*(placement.screen.zw/placement.atlas.zw)+placement.screen.xy;o.position=float4(at.x/u.viewport.x*2-1,1-at.y/u.viewport.y*2,0.5,1);}
+  else o.position=float4(pixel.x/u.composition.x*2-1,1-pixel.y/u.composition.y*2,0.5,1);}
  return o;
 }
 float4 modelTexel(texture2d<float> atlas,texture2d<float> palette,float2 uv,bool blue) {
@@ -174,6 +183,15 @@ ModelResult shadeModel(Out in,texture2d<float> atlas,constant Uniforms& u,device
  float alpha=tex.a*opacity;out.color=float4(color*alpha,alpha);out.glow=u.mode.x>0.5?float4(emission*alpha*u.timing.w,u.mode.w>0.5?alpha:0):float4(max(color-0.7,0.0)*u.timing.w,1);return out;
 }
 fragment ModelMRT model_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]]) {ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);ModelMRT o;o.color=a.color;o.glow=a.glow;o.depth=a.depth;return o;}
+// One staged subject drawn straight into the world. The fragment returns to
+// the subject's atlas-local raster position so face lanes, keys and verdicts
+// match the staged image; the band keeps later paint ranks in front.
+fragment ModelMRT model_direct_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]],constant NMDirect& direct [[buffer(30)]]) {
+ in.position.xy=(in.position.xy-direct.screen.xy)*(direct.atlas.zw/direct.screen.zw)+direct.atlas.xy;
+ ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);
+ if(a.color.a<0.001)discard_fragment();
+ ModelMRT o;o.color=a.color;o.glow=a.glow;o.depth=(direct.slab.x-direct.slab.y-1+a.depth)/direct.slab.x;return o;
+}
 fragment AtlasModelMRT model_atlas_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]]) {ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);AtlasModelMRT o;o.color=a.color;o.glow=a.glow;o.metadata=a.metadata;o.depth=a.depth;return o;}
 fragment AtlasModelMRT outline_atlas_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],texture2d<float> palette [[texture(4)]],device const ModelRules* groupRules [[buffer(24)]]) {
  if(in.state.z<=0||in.outline.a<=0)discard_fragment();float key=modelKey(in);bool blue=u.visual.w>.5&&(in.groupMember.x>0?nm_group_blue(key,in.groupMember,groupRules):(in.clip.x>1.5&&key<=in.clip.y));

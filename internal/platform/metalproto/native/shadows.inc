@@ -99,7 +99,7 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
 static void nmShadowsCommitSlot(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,id<MTLRenderCommandEncoder> enc,NMUniforms u,uint32_t slot) {
  if(!f.subjectCount)return;
  const NMShadowSubject* subjects=f.subjects.contents;
- [enc setRenderPipelineState:s.commit];[enc setDepthStencilState:nil];[enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:f.subjects offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBuffer:f.subjects offset:0 atIndex:0];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
+ [enc setRenderPipelineState:s.commit];[enc setDepthStencilState:nmSlabCommitActive?r.spriteDepth:nil];[enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:f.subjects offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBuffer:f.subjects offset:0 atIndex:0];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  vector_float4 tint=f.tint,water=f.water;[enc setFragmentBytes:&tint length:16 atIndex:5];[enc setFragmentBytes:&water length:16 atIndex:6];[enc setFragmentTexture:s.body atIndex:0];[enc setFragmentTexture:s.depth atIndex:1];[enc setFragmentTexture:s.mask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];
  for(uint32_t i=0;i<f.subjectCount;i++)if(subjects[i].order.x==slot){[enc setVertexBytes:&i length:4 atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];}
 }

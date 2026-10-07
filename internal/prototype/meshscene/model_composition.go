@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"math"
+	"os"
 	"slices"
 
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
@@ -13,6 +14,8 @@ import (
 // physical pixels and describe the same image at one texel per screen pixel.
 // Params contains opacity, production body phase, and two reserved zero lanes.
 type ModelSlot struct {
+	// Params[2] is 1 for a depth-slab subject: drawn directly into the world
+	// with depth banded by paint rank, never rasterized into the atlas.
 	Screen [4]float32
 	Atlas  [4]float32
 	Params [4]float32
@@ -105,10 +108,15 @@ type ModelComposer struct {
 	composition    ModelComposition
 	featureSources map[uint32]featureSpriteSources
 	groupWork      []modelCompositionGroupWork
+	// slabs selects the depth-slab experiment (NANOLATHE_METAL_DEPTH_SLABS=1):
+	// ordinary opaque single-member subjects bypass the isolated atlas.
+	slabs  bool
+	direct []bool
 }
 
 func NewModelComposer(scene *Scene) *ModelComposer {
-	c := &ModelComposer{groups: make(map[modelGroupKey]int), instances: make(map[modelInstanceKey]int), featureSources: make(map[uint32]featureSpriteSources)}
+	c := &ModelComposer{groups: make(map[modelGroupKey]int), instances: make(map[modelInstanceKey]int), featureSources: make(map[uint32]featureSpriteSources),
+		slabs: os.Getenv("NANOLATHE_METAL_DEPTH_SLABS") == "1"}
 	if scene == nil {
 		return c
 	}
@@ -290,10 +298,21 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		}
 	}
 	c.prepareGroups(live)
+	c.direct = resizeComposition(c.direct, len(c.work))
+	clear(c.direct)
+	if c.slabs {
+		for i := range c.groupWork {
+			c.direct[i] = c.directEligible(live, i)
+		}
+	}
 	for i, w := range c.work {
 		slot := uint32(i + 1)
 		pixels := uint64(w.x1-w.x0) * uint64(w.y1-w.y0)
-		out.Slots = append(out.Slots, ModelSlot{Screen: [4]float32{float32(w.x0), float32(w.y0), float32(w.x1 - w.x0), float32(w.y1 - w.y0)}, Params: [4]float32{w.opacity, float32(w.paint.Phase)}})
+		direct := float32(0)
+		if c.direct[i] {
+			direct = 1
+		}
+		out.Slots = append(out.Slots, ModelSlot{Screen: [4]float32{float32(w.x0), float32(w.y0), float32(w.x1 - w.x0), float32(w.y1 - w.y0)}, Params: [4]float32{w.opacity, float32(w.paint.Phase), direct}})
 		w.paint.Slot = slot
 		if i < len(c.groupWork) {
 			out.Paint = append(out.Paint, w.paint)
@@ -312,6 +331,36 @@ func (c *ModelComposer) Prepare(retained *RetainedBattle, live *LiveFrame, curre
 		}
 	}
 	return *out, nil
+}
+
+// directEligible keeps every subject whose composition needs its isolated image
+// on the atlas path: groups, partial opacity, the effects phase, construction
+// reveal/outlines, and water reflection or refraction sources.
+func (c *ModelComposer) directEligible(live *LiveFrame, group int) bool {
+	g := &c.groupWork[group]
+	if len(g.members) != 1 || g.members[0].instance != g.parent {
+		return false
+	}
+	w := &c.work[group]
+	if w.opacity != 1 || w.paint.Phase == ModelPhaseEffects {
+		return false
+	}
+	i := g.parent
+	v := live.Instances[i].Visual
+	if v.State[2] > 0 || v.Outline[3] > 0 {
+		return false
+	}
+	if i < len(live.ModelRules) {
+		if r := live.ModelRules[i]; r.Outline[3] > 0 || r.Reveal[2] > 0.5 {
+			return false
+		}
+	}
+	if i < len(live.WaterObjects) {
+		if p := live.WaterObjects[i].Params; p[0] > 0 || p[2] > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *ModelComposer) screenBounds(instance Instance, live *LiveFrame, width, height int) ([4]int, bool, error) {
@@ -363,10 +412,16 @@ func (c *ModelComposer) pack() error {
 	if len(c.work) == 0 {
 		return nil
 	}
-	c.packing = resizeComposition(c.packing, len(c.work))
+	c.packing = c.packing[:0]
 	minWidth := 1
 	for i, w := range c.work {
-		c.packing[i] = i
+		if i < len(c.direct) && c.direct[i] {
+			// A slab subject keeps its screen size as a zero-origin atlas
+			// rectangle: native face mapping needs only the raster scale.
+			out.Slots[i].Atlas = [4]float32{0, 0, float32(w.x1 - w.x0), float32(w.y1 - w.y0)}
+			continue
+		}
+		c.packing = append(c.packing, i)
 		minWidth = max(minWidth, w.x1-w.x0)
 		if w.x1-w.x0 > limit || w.y1-w.y0 > limit {
 			return fmt.Errorf("subject rectangles within the 8192-pixel atlas bound")
@@ -382,6 +437,10 @@ func (c *ModelComposer) pack() error {
 	// Keep the page aspect stable across frames. Choosing a new aspect every
 	// frame made the native grow-only textures retain max(width)*max(height),
 	// far larger than any one requested page. Rows need no power-of-two size.
+	if len(c.packing) == 0 {
+		out.AtlasWidth, out.AtlasHeight = 64, 64
+		return nil
+	}
 	bestWidth := max(c.pageWidth, 2048, compositionPowerOfTwo(minWidth))
 	bestHeight := c.shelves(bestWidth, false)
 	for bestHeight > limit && bestWidth < limit {
