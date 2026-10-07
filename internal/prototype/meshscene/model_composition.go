@@ -108,15 +108,16 @@ type ModelComposer struct {
 	composition    ModelComposition
 	featureSources map[uint32]featureSpriteSources
 	groupWork      []modelCompositionGroupWork
-	// slabs selects the depth-slab experiment (NANOLATHE_METAL_DEPTH_SLABS=1):
-	// ordinary opaque single-member subjects bypass the isolated atlas.
+	// slabs selects depth slabs, the default (NANOLATHE_METAL_DEPTH_SLABS=0
+	// restores the atlas for every subject): ordinary opaque single-member
+	// subjects bypass the isolated atlas.
 	slabs  bool
 	direct []bool
 }
 
 func NewModelComposer(scene *Scene) *ModelComposer {
 	c := &ModelComposer{groups: make(map[modelGroupKey]int), instances: make(map[modelInstanceKey]int), featureSources: make(map[uint32]featureSpriteSources),
-		slabs: os.Getenv("NANOLATHE_METAL_DEPTH_SLABS") == "1"}
+		slabs: os.Getenv("NANOLATHE_METAL_DEPTH_SLABS") != "0"}
 	if scene == nil {
 		return c
 	}
