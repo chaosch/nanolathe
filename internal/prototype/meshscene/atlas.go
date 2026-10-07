@@ -25,6 +25,10 @@ type atlasResult struct {
 	white             atlasRegion
 	uvWidth, uvHeight int
 	metadata          map[string]any
+	materials         []Material
+	frames            [][4]float32
+	materialByName    map[string]uint32
+	useMaterials      bool
 }
 type textureRef struct {
 	source                *formats.GAFSource
@@ -50,7 +54,7 @@ type textureCensus struct {
 func canonicalTexture(s string) string { return strings.ToLower(s) }
 
 // The prototype retains one immutable RGBA atlas, with a one-texel replicated
-// border around every cell. Pixel-identical first frames share storage even
+// border around every cell. Pixel-identical frames share storage even
 // when several 3DO faces or unit types use them (DESIGN_GPU_RENDERER §22).
 func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale int) (*atlasResult, error) {
 	wanted := map[string]bool{}
@@ -98,6 +102,8 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 	cells := []atlasCell{{key: "white", rgba: []byte{255, 255, 255, 255}, region: atlasRegion{w: 1, h: 1}}}
 	byDigest := map[[32]byte]int{}
 	textureRows := []textureCensus{}
+	frameCells := map[string][]int{}
+	teamNames := map[string]bool{}
 	missing := []string{}
 	for _, name := range names {
 		ref, ok := logos[name]
@@ -108,39 +114,48 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 			missing = append(missing, name)
 			continue
 		}
-		frame, err := ref.source.Frame(ref.entry, 0, 16<<20)
-		if err != nil {
-			return nil, err
+		count := 1
+		if strings.EqualFold(ref.path, "textures/logos.gaf") {
+			count = ref.frameCount
+			teamNames[name] = true
 		}
-		w, h := int(frame.Width), int(frame.Height)
-		if w == 0 || h == 0 {
-			missing = append(missing, name)
-			continue
-		}
-		rgba := make([]byte, w*h*4)
-		for i, index := range frame.Pixels {
-			if i >= w*h {
-				break
+		for fi := 0; fi < count; fi++ {
+			frame, err := ref.source.Frame(ref.entry, fi, 16<<20)
+			if err != nil {
+				return nil, err
 			}
-			c := pal.Base[index]
-			copy(rgba[4*i:4*i+3], c[:3])
-			if i >= len(frame.Transparent) || !frame.Transparent[i] {
-				rgba[4*i+3] = 255
+			w, h := int(frame.Width), int(frame.Height)
+			if w == 0 || h == 0 {
+				return nil, fmt.Errorf("nanolathe: prototype texture frame empty: logical path %s/%s, providers searched [%s], expected nonempty frame %d", ref.path, ref.entry, ref.provider, fi)
+			}
+			rgba := make([]byte, w*h*4)
+			for i, index := range frame.Pixels {
+				if i >= w*h {
+					break
+				}
+				c := pal.Base[index]
+				copy(rgba[4*i:4*i+3], c[:3])
+				if i >= len(frame.Transparent) || !frame.Transparent[i] {
+					rgba[4*i+3] = 255
+				}
+			}
+			digestBytes := make([]byte, 8+len(rgba))
+			binary.LittleEndian.PutUint32(digestBytes, uint32(w))
+			binary.LittleEndian.PutUint32(digestBytes[4:], uint32(h))
+			copy(digestBytes[8:], rgba)
+			hash := sha256.Sum256(digestBytes)
+			cell, found := byDigest[hash]
+			if !found {
+				cell = len(cells)
+				byDigest[hash] = cell
+				cells = append(cells, atlasCell{key: fmt.Sprintf("%s/%d", name, fi), rgba: rgba, region: atlasRegion{w: w, h: h}})
+			}
+			frameCells[name] = append(frameCells[name], cell)
+			if fi == 0 {
+				cells[cell].names = append(cells[cell].names, name)
+				textureRows = append(textureRows, textureCensus{Name: name, Bank: ref.path, Provider: ref.provider, Width: w, Height: h, SourceFrames: ref.frameCount, Cell: cell})
 			}
 		}
-		digestBytes := make([]byte, 8+len(rgba))
-		binary.LittleEndian.PutUint32(digestBytes, uint32(w))
-		binary.LittleEndian.PutUint32(digestBytes[4:], uint32(h))
-		copy(digestBytes[8:], rgba)
-		hash := sha256.Sum256(digestBytes)
-		cell, found := byDigest[hash]
-		if !found {
-			cell = len(cells)
-			byDigest[hash] = cell
-			cells = append(cells, atlasCell{key: name, rgba: rgba, region: atlasRegion{w: w, h: h}})
-		}
-		cells[cell].names = append(cells[cell].names, name)
-		textureRows = append(textureRows, textureCensus{Name: name, Bank: ref.path, Provider: ref.provider, Width: w, Height: h, SourceFrames: ref.frameCount, Cell: cell})
 	}
 	order := make([]int, len(cells))
 	for i := range order {
@@ -185,10 +200,10 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 	}
 	height = hPower
 	if width > 8192 || height > 8192 {
-		return nil, fmt.Errorf("nanolathe: prototype atlas too large: logical path texture atlas, providers searched [GAF first frames], expected at most 8192x8192")
+		return nil, fmt.Errorf("nanolathe: prototype atlas too large: logical path texture atlas, providers searched [GAF ordinary first and team frames], expected at most 8192x8192")
 	}
 	texture := Texture{Width: width, Height: height, RGBA: make([]byte, width*height*4)}
-	result := &atlasResult{byName: map[string]atlasRegion{}, uvWidth: width, uvHeight: height}
+	result := &atlasResult{byName: map[string]atlasRegion{}, uvWidth: width, uvHeight: height, materialByName: map[string]uint32{}, materials: []Material{{}}}
 	for ci, c := range cells {
 		r := c.region
 		for y := -1; y <= r.h; y++ {
@@ -204,6 +219,23 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 			result.byName[name] = r
 		}
 	}
+	for _, name := range names {
+		bindings := frameCells[name]
+		if len(bindings) == 0 {
+			continue
+		}
+		kind := uint32(0)
+		if teamNames[name] {
+			kind = 1
+		}
+		result.materialByName[name] = uint32(len(result.materials))
+		result.materials = append(result.materials, Material{FirstFrame: uint32(len(result.frames)), FrameCount: uint32(len(bindings)), Kind: kind})
+		for _, ci := range bindings {
+			r := cells[ci].region
+			a, b := r.uv([2]float32{}, width, height), r.uv([2]float32{1, 1}, width, height)
+			result.frames = append(result.frames, [4]float32{a[0], a[1], b[0], b[1]})
+		}
+	}
 	if scale == 2 {
 		larger := Texture{Width: width * 2, Height: height * 2, RGBA: make([]byte, width*height*16)}
 		for y := 0; y < larger.Height; y++ {
@@ -217,6 +249,6 @@ func buildAtlas(fs *vfs.FS, models []*model.Model, pal *palette.Tables, scale in
 
 	}
 	result.texture = texture
-	result.metadata = map[string]any{"width": texture.Width, "height": texture.Height, "rgba_bytes": len(texture.RGBA), "referenced_texture_names": len(names), "resolved_texture_names": len(textureRows), "unique_rgba_cells": len(cells) - 1, "missing_textures": missing, "textures": textureRows, "dimension_multiplier": scale, "policy": "deduplicated first GAF frames; logos precede default textures; one replicated border; 2x is nearest-neighbour enlargement, no authored extra detail"}
+	result.metadata = map[string]any{"width": texture.Width, "height": texture.Height, "rgba_bytes": len(texture.RGBA), "referenced_texture_names": len(names), "resolved_texture_names": len(textureRows), "unique_rgba_cells": len(cells) - 1, "missing_textures": missing, "textures": textureRows, "dimension_multiplier": scale, "policy": "deduplicated ordinary first GAF frames and all logo frames; logos precede default textures; one replicated border; 2x is nearest-neighbour enlargement, no authored extra detail"}
 	return result, nil
 }

@@ -52,8 +52,8 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	if opts.TextureScale == 0 {
 		opts.TextureScale = 1
 	}
-	if opts.ArmySize < 250 || opts.ArmySize > 1000 || opts.Preticks < 0 || opts.Preticks > 36000 || opts.Width < 1 || opts.Height < 1 || opts.Zoom < 0.1 || opts.Zoom > 4 || (opts.QuadMultiplier != 1 && opts.QuadMultiplier != 2 && opts.QuadMultiplier != 5) || (opts.TextureScale != 1 && opts.TextureScale != 2) {
-		return nil, fmt.Errorf("nanolathe: live prototype options invalid: logical path battle, providers searched [options], expected army 250..1000, preticks 0..36000, positive viewport, zoom 0.1..4, geometry 1/2/5 and textures 1/2")
+	if opts.ViewPlayer < -1 || opts.ViewPlayer > 9 || opts.ArmySize < 250 || opts.ArmySize > 1000 || opts.Preticks < 0 || opts.Preticks > 36000 || opts.Width < 1 || opts.Height < 1 || opts.Zoom < 0.1 || opts.Zoom > 4 || (opts.QuadMultiplier != 1 && opts.QuadMultiplier != 2 && opts.QuadMultiplier != 5) || (opts.TextureScale != 1 && opts.TextureScale != 2) {
+		return nil, fmt.Errorf("nanolathe: live prototype options invalid: logical path battle, providers searched [options], expected view -1..9, army 250..1000, preticks 0..36000, positive viewport, zoom 0.1..4, geometry 1/2/5 and textures 1/2")
 	}
 	fs := vfs.New()
 	defer func() {
@@ -78,10 +78,16 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		return nil, err
 	}
 	sess := composed.Session
-	// Match the production field spectator's ordinary +nowisee command. Drawing
-	// all published participants is a prototype camera policy, never a sim gate.
-	if err := sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ClearMask: visibility.ModeHistoryEnabled | visibility.ModeCurrentEnabled}}); err != nil {
-		return nil, err
+	// The camera policy selects an existing session view; the default spectator
+	// uses the production field host's ordinary +nowisee command [I6].
+	if opts.ViewPlayer < 0 {
+		if err := sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ClearMask: visibility.ModeHistoryEnabled | visibility.ModeCurrentEnabled}}); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanView, View: session.HumanViewCommand{Player: uint8(opts.ViewPlayer)}}); err != nil {
+			return nil, err
+		}
 	}
 	warmStart := time.Now()
 	var drained []frame.EventView
@@ -92,6 +98,9 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		drained = sess.Snapshot.DrainCommittedEvents(drained)
 	}
 	warmDuration := time.Since(warmStart)
+	if opts.ViewPlayer >= 0 && sess.Snapshot.Current().ViewingPlayer != uint8(opts.ViewPlayer) {
+		return nil, fmt.Errorf("nanolathe: live prototype view unavailable: logical path player %d, providers searched [session player records], expected present active participant", opts.ViewPlayer)
+	}
 	cx, cz := float32(fixture.CentreX), float32(fixture.CentreZ)
 	originY := float32(0) // Live geometry retains published world height; screen Y uses z-y/2.
 
@@ -126,14 +135,16 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	if err != nil {
 		return nil, err
 	}
-	scene := &Scene{Name: "live ordinary three-army battle", Atlas: atlas.texture, Camera: [3]float32{cx, cz, opts.Zoom}, Metadata: map[string]any{}}
+	atlas.useMaterials = true
+	scene := &Scene{Name: "live ordinary three-army battle", Atlas: atlas.texture, Materials: atlas.materials, TextureFrames: atlas.frames, Camera: [3]float32{cx, cz, opts.Zoom}, Metadata: map[string]any{}}
 	census := make([]meshCensus, len(models))
-	vertices, indices := 0, 0
+	vertices, indices, edges := 0, 0, 0
 	for i, m := range models {
 		mesh := compileMesh(m, atlas, pal, opts.QuadMultiplier, &census[i])
 		scene.Meshes = append(scene.Meshes, mesh)
 		vertices += len(mesh.Vertices)
 		indices += len(mesh.Indices)
+		edges += len(mesh.EdgeIndices)
 	}
 	tntPath := "maps/" + mapName + ".tnt"
 	terrain, err := formats.LoadTNTFile(fs, tntPath)
@@ -141,7 +152,12 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 		return nil, err
 	}
 	scene.Terrain, scene.TerrainRect = bakeTerrain(terrain, pal, cx, cz, 4096, 4096)
+	scene.HeightField = battleHeightField(sess.World)
 	source := newBattleSource(scene, sess, fs, models, modelIndices, originY, [2]int{opts.Width, opts.Height})
+	source.spectator, source.palette = opts.ViewPlayer < 0, pal
+	if err := source.prepareFog(); err != nil {
+		return nil, err
+	}
 	if err := source.prepareSprites(pal, cat); err != nil {
 		return nil, err
 	}
@@ -156,6 +172,10 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Metadata["scene_kind"] = "live ordinary authoritative simbench session; no replicated or replayed units"
 	scene.Metadata["fixture"] = fixture
 	scene.Metadata["gameplay"] = "modern"
+	scene.Metadata["view_player"] = opts.ViewPlayer
+	scene.Metadata["spectator"] = source.spectator
+	scene.Metadata["fog"] = map[string]any{"policy": "committed two-channel fog cache, authored Gray/Black masks at 8-world-pixel samples; current gray multiplies RGB by 0.5 rather than destination palette remapping; no simulation-mask smoothing", "initial_dimensions": [2]int{initial.frame.Fog.Width, initial.frame.Fog.Height}, "initial_rgba_bytes": len(initial.frame.Fog.RGBA), "publication_policy": "reuse immutable RGBA when fog source/version are unchanged; replacement publishes a detached full-cache image"}
+	scene.Metadata["height_field"] = map[string]any{"dimensions": [2]int{scene.HeightField.Width, scene.HeightField.Height}, "bytes": len(scene.HeightField.Values) * 4, "sample_centre_rect": scene.HeightField.Rect, "policy": "immutable map-load height samples, quantized integer receiver query; GPU interpolation is display-only"}
 	scene.Metadata["simulation_seed"] = opts.Seed
 	scene.Metadata["crt_seed"] = opts.Seed
 	scene.Metadata["requested_preticks"] = opts.Preticks
@@ -169,17 +189,18 @@ func LoadBattle(opts BattleOptions) (_ *Scene, resultErr error) {
 	scene.Metadata["models"] = census
 	scene.Metadata["retained_vertices"] = vertices
 	scene.Metadata["retained_triangles"] = indices / 3
-	scene.Metadata["retained_mesh_bytes"] = vertices*48 + indices*4
+	scene.Metadata["retained_authored_edges"] = edges / 2
+	scene.Metadata["retained_mesh_bytes"] = vertices*64 + indices*4 + edges*4
 	scene.Metadata["geometry_multiplier"] = opts.QuadMultiplier
 	scene.Metadata["texture_multiplier"] = opts.TextureScale
 	scene.Metadata["atlas"] = atlas.metadata
-	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT crop, no mesh terrain or elevation occlusion"}
+	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT crop, immutable height field supplies native terrain depth and shadow receivers"}
 	scene.Metadata["pose_source"] = "worker reads pinned completed frame pairs; InstanceID matching snaps births, suppresses deaths and prevents slot-reuse blending"
 	scene.Metadata["presentation_buffer_ticks"] = 1
 	scene.Metadata["presentation_buffer_seconds"] = battlePeriod.Seconds()
 	scene.Metadata["viewport"] = [2]int{opts.Width, opts.Height}
 	scene.Metadata["camera_policy"] = "native pixels per world unit; pan clamped to crop, zoom 0.1..4; views wider than crop expose limited terrain; renderer input only"
-	scene.Metadata["render_limitations"] = []string{"spectator draws published participants without retail visibility/cloak filtering", "fixed first GAF model texture frame, owner-zero logos", "conventional depth and Lambert shading; matrix interpolation can shrink rotating pieces", "construction models shown complete, without nanoframe reveal", "cargo hierarchy/composition and piece-less cargo suppression unsupported", "flat terrain, no fog, unit shadows, GUI, audio or animated model texture cursors", "projectile secondary-model replacement and detached mesh debris omitted"}
+	scene.Metadata["render_limitations"] = []string{"conventional depth and Lambert shading; matrix interpolation can shrink rotating pieces", "ordinary perspective applies published LOS and cloak admission; fog uses 8-pixel authored mask samples and scalar gray modulation rather than destination palette lookup", "unknown or out-of-range logo colour uses frame zero/clamping rather than retail texture omission", "construction height cutoff and authored ring lines approximate the five-stage height-key reveal and raster row extremes", "cargo uses committed world poses and shared native depth; carrier staged height-key composition and one final parent ALP commit omitted", "cloak is straight opacity 0.5 rather than source-major destination-palette ALP", "unit shadows use authored gates and immutable ground receiver; native projection/depth differs from retail silhouette clipping and structure cache", "flat terrain crop with height occlusion, no GUI, audio or ordinary animated model texture cursors", "projectile secondary-model replacement and paired triangle fragments omitted", "wreck shimmer uses neutral-pose model bounds rather than changing heading/pose bounds", "feature visibility reuses the current stock tall-feature admission approximation"}
 	scene.Metadata["sprites"] = source.spriteReport()
 	return scene, nil
 }

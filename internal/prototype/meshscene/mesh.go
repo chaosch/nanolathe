@@ -21,6 +21,7 @@ type meshCensus struct {
 	ResultQuads           int    `json:"result_quads"`
 	ResultTriangles       int    `json:"result_triangles"`
 	ResultVertices        int    `json:"result_vertices"`
+	AuthoredEdges         int    `json:"authored_edges"`
 }
 
 func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multiplier int, census *meshCensus) Mesh {
@@ -33,10 +34,6 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				continue
 			}
 			n := len(primitive.VertexIndices)
-			if n < 3 {
-				census.LinesSkipped++
-				continue
-			}
 			valid := true
 			for _, index := range primitive.VertexIndices {
 				if int(index) >= len(piece.Vertices) {
@@ -45,6 +42,22 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				}
 			}
 			if !valid {
+				continue
+			}
+			// Retain the authored rings once, including two-corner primitives.
+			// The native line pass approximates retail row extrema [03 R-COMP-01 §3].
+			if n >= 2 {
+				base := uint32(len(mesh.Vertices))
+				for _, index := range primitive.VertexIndices {
+					p := piece.Vertices[index]
+					mesh.Vertices = append(mesh.Vertices, Vertex{Position: [3]float32{float32(p[0]) / 65536, float32(p[1]) / 65536, float32(p[2]) / 65536}, Piece: uint32(pi)})
+				}
+				for vi := 0; vi < n; vi++ {
+					mesh.EdgeIndices = append(mesh.EdgeIndices, base+uint32(vi), base+uint32((vi+1)%n))
+				}
+			}
+			if n < 3 {
+				census.LinesSkipped++
 				continue
 			}
 			census.SourceFaces++
@@ -79,7 +92,12 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				if textured && n == 4 {
 					uv = uvCorners[vi]
 				}
-				vertices[vi].UV = region.uv(uv, atlas.uvWidth, atlas.uvHeight)
+				if atlas.useMaterials && textured && atlas.materialByName[canonicalTexture(primitive.TextureName)] != 0 {
+					vertices[vi].Material = atlas.materialByName[canonicalTexture(primitive.TextureName)]
+					vertices[vi].UV = uv
+				} else {
+					vertices[vi].UV = region.uv(uv, atlas.uvWidth, atlas.uvHeight)
+				}
 			}
 			normal := faceNormal(vertices[0].Position, vertices[1].Position, vertices[2].Position)
 			for i := range vertices {
@@ -111,6 +129,7 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 	mesh.SourceFaces = census.SourceFaces
 	census.ResultTriangles = len(mesh.Indices) / 3
 	census.ResultVertices = len(mesh.Vertices)
+	census.AuthoredEdges = len(mesh.EdgeIndices) / 2
 	return mesh
 }
 
