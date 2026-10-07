@@ -28,6 +28,8 @@ static BOOL nmGlowPrepare(NMGlow *g,NSUInteger w,NSUInteger h) {
 static void nmGlowDispatch(id<MTLComputeCommandEncoder> e,id<MTLTexture> destination) {
     [e dispatchThreads:MTLSizeMake(destination.width,destination.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[e endEncoding];
 }
+// Set when the final drawable pass screens the octaves itself.
+static BOOL nmGlowDeferResolve;
 static BOOL nmGlowEncode(NMGlow *g,id<MTLCommandBuffer> cb,id<MTLTexture> emission,id<MTLTexture> completed,id<MTLTexture> atlas,id<MTLTexture> destination,id<MTLBuffer> vertices,NSUInteger n,NMGlowParameters u) {
     if(!n)return YES;
     if(!g||!cb||!emission||!completed||!atlas||!destination||!vertices||n%6||n>vertices.length/sizeof(NMGlowVertex)||emission.pixelFormat!=MTLPixelFormatRGBA16Float||destination.pixelFormat!=g.destinationFormat||completed.width!=emission.width||completed.height!=emission.height||destination.width!=emission.width||destination.height!=emission.height)return NO;
@@ -38,6 +40,7 @@ static BOOL nmGlowEncode(NMGlow *g,id<MTLCommandBuffer> cb,id<MTLTexture> emissi
     id<MTLComputeCommandEncoder> e=nmComputeEncoder(cb,"glow.nmGlowEncode#2");[e setComputePipelineState:g.shrink];[e setTexture:emission atIndex:0];[e setTexture:g.quarter atIndex:1];nmGlowDispatch(e,g.quarter);
     e=nmComputeEncoder(cb,"glow.nmGlowEncode#3");[e setComputePipelineState:g.across];[e setTexture:g.quarter atIndex:0];[e setTexture:g.horizontal atIndex:1];[e setBytes:&u length:sizeof(u) atIndex:0];nmGlowDispatch(e,g.horizontal);
     e=nmComputeEncoder(cb,"glow.nmGlowEncode#4");[e setComputePipelineState:g.down];[e setTexture:g.horizontal atIndex:0];[e setTexture:g.octaves atIndex:1];[e setBytes:&u length:sizeof(u) atIndex:0];[e setBytes:&sizes length:sizeof(sizes) atIndex:1];nmGlowDispatch(e,g.octaves);
+    if(nmGlowDeferResolve)return YES;
     p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=destination;p.colorAttachments[0].loadAction=MTLLoadActionLoad;p.colorAttachments[0].storeAction=MTLStoreActionStore;
     r=nmRenderEncoder(cb,p,"glow.nmGlowEncode#5");[r setRenderPipelineState:g.resolve];[r setFragmentTexture:g.octaves atIndex:0];[r setFragmentBytes:&u length:sizeof(u) atIndex:0];[r setFragmentBytes:&sizes length:sizeof(sizes) atIndex:1];[r drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[r endEncoding];return YES;
 }

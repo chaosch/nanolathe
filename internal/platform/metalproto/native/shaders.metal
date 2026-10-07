@@ -359,6 +359,18 @@ fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[tex
 // distortion target and fog: the resolved world is never stored. bands>0
 // softens slab silhouettes; bloom adds the half-size blur.
 struct NMFinal { float bands,bloom,pad0,pad1; };
+// Production glow octaves, screened at the final pass instead of a separate
+// full-screen composite into the world colour (same arithmetic as the glow
+// resolve fragment). flags.x enables it for this frame.
+struct NMGlowFinal { float4 blur; uint4 sizes; float4 flags; };
+float3 nmFinalGlow(float3 c,float2 pixel,texture2d<float> octaves,constant NMGlowFinal& g) {
+ if(g.flags.x<0.5)return c;
+ constexpr sampler linear(coord::pixel,address::clamp_to_edge,filter::linear);
+ float2 p=pixel/4;
+ float3 n=clamp(octaves.sample(linear,p+1).rgb*g.blur.z,0.0,1.0);
+ float3 f=clamp(octaves.sample(linear,p/2+float2(g.sizes.x+2,1)).rgb*g.blur.w,0.0,1.0);
+ float3 glow=n+f-n*f;return glow+c*(1-glow);
+}
 float3 nmFinalFog(float3 c,float2 pixel,texture2d<float> fog,texture2d<float> masks,constant Uniforms& u) {
  if(u.visual.z<0.5)return c;
  float2 projected=(pixel-u.viewport.xy*0.5)/u.camera.z+u.camera.xy;
@@ -366,7 +378,7 @@ float3 nmFinalFog(float3 c,float2 pixel,texture2d<float> fog,texture2d<float> ma
  float checker=float(int(floor(pixel.x)+floor(pixel.y)+cameraOrigin.x+cameraOrigin.y)&1);
  return applyFog(c,projected,checker,fog,masks,u);
 }
-fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],depth2d<float> depth [[texture(4)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]]) {
+fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],depth2d<float> depth [[texture(4)]],texture2d<float> octaves [[texture(5)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]],constant NMGlowFinal& g [[buffer(5)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);float3 c=color.sample(s,in.uv).rgb;
  if(f.bands>0){
   int2 p=int2(in.p.xy),size=int2(color.get_width(),color.get_height());float d=depth.read(uint2(p));
@@ -376,6 +388,7 @@ fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[t
    if((dq<1?floor((1-dq)*f.bands)+1:0)==band)continue;acc+=color.read(uint2(q)).rgb;k++;}
   if(k>0)c=mix(c,acc/k,k>1?.4:.25);
  }
+ c=nmFinalGlow(c,in.p.xy,octaves,g);
  if(f.bloom>0.5)c+=glow.sample(s,in.uv).rgb*0.65;
  return float4(nmFinalFog(c,in.p.xy,fog,masks,u),1);
 }
@@ -458,10 +471,10 @@ kernel void select_subject_lights(device const ModelSlot* slots [[buffer(13)]],d
 }
 // Later sources replace earlier ones from the same unresolved world, as the
 // immutable snapshot did; fog keeps the pixel's own undistorted position.
-fragment float4 distortion_final_fragment(DistortionOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]]) {
+fragment float4 distortion_final_fragment(DistortionOut in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> glow [[texture(1)]],texture2d<float> fog [[texture(2)]],texture2d<float> masks [[texture(3)]],texture2d<float> octaves [[texture(5)]],constant Uniforms& u [[buffer(3)]],constant NMFinal& f [[buffer(4)]],constant NMGlowFinal& g [[buffer(5)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::linear);
  float2 shift=nmDistortionShift(in,u);
  float2 uv=clamp((in.position.xy+shift*u.camera.z)/u.viewport.xy,float2(0),float2(1));
- float3 c=color.sample(s,uv).rgb;if(f.bloom>0.5)c+=glow.sample(s,uv).rgb*0.65;
+ float3 c=nmFinalGlow(color.sample(s,uv).rgb,uv*u.viewport.xy,octaves,g);if(f.bloom>0.5)c+=glow.sample(s,uv).rgb*0.65;
  return float4(nmFinalFog(c,in.position.xy,fog,masks,u),1);
 }

@@ -135,7 +135,12 @@ static void nmEffectsBegin(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb) {
 // ground marks draw into the open encoder instead of splitting the layer.
 // Emission is write-masked and depth is never tested here.
 static id<MTLRenderCommandEncoder> nmFxShared;
+// Set when the caller owns one world encoder for every effect layer and commit
+// phase of the frame (no lens snapshots); layers draw into it and never end it.
+static id<MTLRenderCommandEncoder> nmFxExternal;
+static void nmEffectsRestore(id<MTLRenderCommandEncoder> enc,NMUniforms u);
 static id<MTLRenderCommandEncoder> nmEffectsEncoder(NMRenderer* r,id<MTLCommandBuffer> cb,NMUniforms u) {
+ if(nmFxExternal){nmEffectsRestore(nmFxExternal,u);return nmFxExternal;}
  id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,worldPass(r,NO),"effects.nmEffectsEncoder#1");
  [enc setCullMode:MTLCullModeNone];[enc setVertexBytes:&u.viewport length:sizeof(u.viewport) atIndex:3];
  return enc;
@@ -157,7 +162,7 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
    continue;
   }
   if(op.kind==1){
-   if(enc){[enc endEncoding];enc=nil;}
+   if(enc&&enc!=nmFxExternal){[enc endEncoding];enc=nil;}
    for(NSUInteger j=op.first;j<(NSUInteger)op.first+op.count;j++){
     NMEffectsLens l=lenses[j];
     NSInteger x=MAX(0,(NSInteger)floorf(l.read[0])),y=MAX(0,(NSInteger)floorf(l.read[1]));
@@ -180,7 +185,7 @@ static void nmEffectsDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,NSU
    [enc setRenderPipelineState:mode==1?s.multiply:mode==2?s.additive:s.color];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:end-j baseInstance:j];j=end;
   }
  }
- if(enc)[enc endEncoding];
+ if(enc&&enc!=nmFxExternal)[enc endEncoding];
 }
 
 // The bridge may merge this dictionary into nm_info's ordinary renderer report.

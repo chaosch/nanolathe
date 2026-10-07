@@ -484,6 +484,23 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
  if(ring.groundSpriteCount&&!ring.composed){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.groundSpriteCount];}
  if(!ring){
   modelBindings(r,enc,poses,nil,u);[enc setRenderPipelineState:r.model];[enc setDepthStencilState:r.depth];drawMeshes(r,enc,nil,0);[enc endEncoding];
+ }else if(ring.composed&&!getenv("NANOLATHE_METAL_SPLIT_WORLD")&&!ring.effectRing.lenses.length){
+  // One world encoder from the first effect layer to the last: effect layers
+  // and commit phases alternate in painter order without storing and
+  // reloading the world between them. Lens snapshots need the split path.
+  nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(!nmAblate("water")){if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;}
+  BOOL fx=!nmAblate("effects");
+  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.merged");nmFxExternal=enc;
+  if(fx)nmEffectsDraw(r,ring,cb,0,u);
+  nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);
+  if(fx)nmEffectsDraw(r,ring,cb,1,u);
+  nmDirectPhase(r,ring,enc,poses,u,1);nmCompositionCommit(r,ring,enc,u,1);
+  if(ring.spriteCount>ring.groundSpriteCount){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:nil];[enc setVertexBuffer:ring.sprites offset:ring.groundSpriteCount*96 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.spriteCount-ring.groundSpriteCount];}
+  if(!ring.effectRing.layerCount)nmCompositionCommit(r,ring,enc,u,2);
+  if(fx)nmEffectsDraw(r,ring,cb,2,u);
+  nmDirectPhase(r,ring,enc,poses,u,3);nmCompositionCommit(r,ring,enc,u,3);
+  if(fx){nmEffectsDraw(r,ring,cb,3,u);nmEffectsDraw(r,ring,cb,4,u);}
+  nmFxExternal=nil;[enc endEncoding];
  }else if(ring.composed){
   nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(!nmAblate("water")){if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;}if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,0,u);
   enc=nmRenderEncoder(cb,worldPass(r,NO),"world.commitShortFeatures");nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);[enc endEncoding];if(!nmAblate("effects"))nmEffectsDraw(r,ring,cb,1,u);
@@ -505,7 +522,7 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   [enc endEncoding];encodeCloaks(r,cb,poses,ring,u,1);
   if(ring.airCount){enc=nmRenderEncoder(cb,worldPass(r,YES),"world.depthPhaseAir");drawPhase(r,enc,poses,ring,u,2);[enc endEncoding];encodeCloaks(r,cb,poses,ring,u,2);}
  }
- if(ring.glowEnabled&&!nmAblate("glow")){if(!nmGlowEncode(r.productionGlow,cb,r.emission,r.color,ring.effectRing.atlas,r.color,ring.glowVertices,ring.glowCount,ring.glowParams))r.lastError=@"Production glow submission failed";}
+ nmGlowDeferResolve=u.visual.x>0.5&&!getenv("NANOLATHE_METAL_LEGACY_POST");if(ring.glowEnabled&&!nmAblate("glow")){if(!nmGlowEncode(r.productionGlow,cb,r.emission,r.color,ring.effectRing.atlas,r.color,ring.glowVertices,ring.glowCount,ring.glowParams))r.lastError=@"Production glow submission failed";}
  if(r->effects&&!ring.glowEnabled){
  id<MTLComputeCommandEncoder> compute=nmComputeEncoder(cb,"bloom.blurX");[compute setComputePipelineState:r.blur];vector_float2 d={1,0};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.emission atIndex:0];[compute setTexture:r.blurA atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurA.width,r.blurA.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
  compute=nmComputeEncoder(cb,"bloom.blurY");[compute setComputePipelineState:r.blur];d=(vector_float2){0,1};[compute setBytes:&d length:sizeof(d) atIndex:0];[compute setTexture:r.blurA atIndex:0];[compute setTexture:r.blurB atIndex:1];[compute dispatchThreads:MTLSizeMake(r.blurB.width,r.blurB.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];[compute endEncoding];
@@ -520,6 +537,9 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   [enc setRenderPipelineState:r.finalPass];
   [enc setFragmentTexture:r.color atIndex:0];[enc setFragmentTexture:r.blurB atIndex:1];[enc setFragmentTexture:ring.fog?:r.emptyFog atIndex:2];[enc setFragmentTexture:r.fogAtlas?:r.emptyFog atIndex:3];[enc setFragmentTexture:r.depthImage atIndex:4];
   [enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&f length:sizeof(f) atIndex:4];
+  {NMGlow* glow=r.productionGlow;BOOL on=ring.glowEnabled&&ring.glowCount>0&&glow.octaves&&!nmAblate("glow");
+   struct {vector_float4 blur;vector_uint4 sizes;vector_float4 flags;} gf={ring.glowParams.blur,{(uint32_t)(glow.width+3)/4,(uint32_t)(glow.height+3)/4,(uint32_t)(glow.width+7)/8,(uint32_t)(glow.height+7)/8},{on?1.f:0.f,0,0,0}};
+   [enc setFragmentTexture:on?glow.octaves:r.emptyFog atIndex:5];[enc setFragmentBytes:&gf length:sizeof(gf) atIndex:5];}
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
   if(r->effects&&ring.distortionCount>0){[enc setRenderPipelineState:r.distortionFinal];[enc setVertexBuffer:ring.distortions offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.distortionCount];}
   encodeOverlayInto(r,enc,u,ring);[enc endEncoding];
