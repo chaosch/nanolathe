@@ -74,17 +74,23 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
  if(!f.subjectCount)return;
  // The target can grow after another ring was prepared. Use actual texture
  // dimensions for clip-space, retaining this frame's own slot coordinates.
- u.composition.x=s.body.width;u.composition.y=s.body.height;u.composition.z=f.tint.w;u.lightControl.y=0;u.mode.z=0;u.mode.w=3;
+ // The atlas only grows; clear, raster and store just this frame's page.
+ NSUInteger pageW=MIN((NSUInteger)f.width,s.body.width),pageH=MIN((NSUInteger)f.height,s.body.height);if(!pageW||!pageH){pageW=s.body.width;pageH=s.body.height;}
+ u.composition.x=pageW;u.composition.y=pageH;u.composition.z=f.tint.w;u.lightControl.y=0;u.mode.z=0;u.mode.w=3;
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.body;p.colorAttachments[1].texture=s.emission;
  for(int i=0;i<2;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
+ // The commit reads body alpha and depth only; emission stays in tile memory.
+ p.colorAttachments[1].loadAction=MTLLoadActionDontCare;p.colorAttachments[1].storeAction=MTLStoreActionDontCare;
  p.depthAttachment.texture=s.depth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;
- id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"shadows.nmShadowsRaster#1");modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:ring.subjectLights offset:0 atIndex:17];[enc setRenderPipelineState:r.atlasModel];[enc setDepthStencilState:r.depth];
+ p.renderTargetWidth=pageW;p.renderTargetHeight=pageH;
+ id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"shadows.nmShadowsRaster#1");modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:ring.subjectLights offset:0 atIndex:17];[enc setRenderPipelineState:r.shadowBody];[enc setDepthStencilState:r.depth];
  const NMShadowDraw* draws=f.bodyDraws.bytes;const float* visuals=ring.visuals.contents;
  for(NSUInteger i=0;i<f.bodyCount;i++)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,NO);
  // Outline coverage is part of the finished silhouette, before the shadow.
  if(u.visual.x>0.5){[enc setRenderPipelineState:r.shadowOutline];[enc setDepthStencilState:r.depth];for(NSUInteger i=0;i<f.bodyCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,YES);}
  [enc endEncoding];
  p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.mask;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
+ p.renderTargetWidth=pageW;p.renderTargetHeight=pageH;
  enc=nmRenderEncoder(cb,p,"shadows.nmShadowsRaster#2");[enc setRenderPipelineState:s.projected];[enc setDepthStencilState:nil];[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:poses offset:0 atIndex:2];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:f.pieceFlags offset:0 atIndex:17];vector_float4 tint=f.tint;[enc setVertexBytes:&tint length:16 atIndex:18];
  draws=f.projectedDraws.bytes;
  for(NSUInteger i=0;i<f.projectedCount;i++){
@@ -97,7 +103,7 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
 // Root calls this immediately before a model-slot body commit, after earlier
 // sprite/model writes. A staged child's solo shadow precedes the parent's.
 static void nmShadowsCommitSlot(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,id<MTLRenderCommandEncoder> enc,NMUniforms u,uint32_t slot) {
- if(!f.subjectCount)return;
+ if(!f.subjectCount||nmAblate("shadows")||nmAblate("shadowcommit"))return;
  const NMShadowSubject* subjects=f.subjects.contents;
  [enc setRenderPipelineState:s.commit];[enc setDepthStencilState:nmSlabCommitActive?r.spriteDepth:nil];[enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:f.subjects offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBuffer:f.subjects offset:0 atIndex:0];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  vector_float4 tint=f.tint,water=f.water;[enc setFragmentBytes:&tint length:16 atIndex:5];[enc setFragmentBytes:&water length:16 atIndex:6];[enc setFragmentTexture:s.body atIndex:0];[enc setFragmentTexture:s.depth atIndex:1];[enc setFragmentTexture:s.mask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];

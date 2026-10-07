@@ -206,6 +206,13 @@ fragment ModelMRT model_direct_fragment(Out in [[stage_in]],texture2d<float> atl
  if(a.color.a<0.001)discard_fragment();
  ModelMRT o;o.color=a.color;o.glow=a.glow;o.depth=(direct.slab.x-direct.slab.y-1+a.depth)/direct.slab.x;return o;
 }
+// Shadow silhouettes need only coverage alpha and the staged key depth: the
+// commit never reads body colour or emission, so the compiler drops lighting
+// and palette colour work for this pass.
+struct ShadowBodyMRT {float4 color [[color(0)]];float4 glow [[color(1)]];float depth [[depth(any)]];};
+fragment ShadowBodyMRT shadow_body_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]]) {
+ ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);ShadowBodyMRT o;o.color=float4(0,0,0,a.color.a);o.glow=0;o.depth=a.depth;return o;
+}
 fragment AtlasModelMRT model_atlas_fragment(Out in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]],device const Light* lights [[buffer(4)]],texture2d<float> palette [[texture(4)]],device const nm_face_Prepared* faces [[buffer(21)]],device const ModelRules* groupRules [[buffer(24)]]) {ModelResult a=shadeModel(in,atlas,u,lights,palette,faces,groupRules);AtlasModelMRT o;o.color=a.color;o.glow=a.glow;o.metadata=a.metadata;o.depth=a.depth;return o;}
 fragment AtlasModelMRT outline_atlas_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],texture2d<float> palette [[texture(4)]],device const ModelRules* groupRules [[buffer(24)]]) {
  if(in.state.z<=0||in.outline.a<=0)discard_fragment();float key=modelKey(in);bool blue=u.visual.w>.5&&(in.groupMember.x>0?nm_group_blue(key,in.groupMember,groupRules):(in.clip.x>1.5&&key<=in.clip.y));

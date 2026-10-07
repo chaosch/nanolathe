@@ -25,6 +25,7 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  // Production always rasterizes the body at 2x; Supersample chooses the resolve
  // sample pattern, and underwater refraction keeps its weighted gather.
  float rasterScale=2;float* slots=ring.compositionSlots.contents;for(NSUInteger i=0;i<u->composition_slot_count;i++)for(int j=4;j<8;j++)slots[i*12+j]*=rasterScale;
+ ring.compositionPageWidth=u->composition_width*rasterScale;ring.compositionPageHeight=u->composition_height*rasterScale;
  NSUInteger w=MAX(r.modelAtlasColor.width,u->composition_width*rasterScale),h=MAX(r.modelAtlasColor.height,u->composition_height*rasterScale);
  if(w&&h&&(w!=r.modelAtlasColor.width||h!=r.modelAtlasColor.height)){
   r.modelMetadata=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite);
@@ -74,6 +75,9 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=r.modelAtlasColor;p.colorAttachments[1].texture=r.modelAtlasEmission;p.colorAttachments[2].texture=r.modelMetadata;
  for(int i=0;i<3;i++){p.colorAttachments[i].loadAction=MTLLoadActionClear;p.colorAttachments[i].storeAction=MTLStoreActionStore;p.colorAttachments[i].clearColor=MTLClearColorMake(0,0,0,0);}
  p.depthAttachment.texture=r.modelAtlasDepth;p.depthAttachment.loadAction=MTLLoadActionClear;p.depthAttachment.storeAction=MTLStoreActionDontCare;p.depthAttachment.clearDepth=1;
+ // The textures only grow; clear, raster and store just this frame's page.
+ NSUInteger pageW=MIN(ring.compositionPageWidth,r.modelAtlasColor.width),pageH=MIN(ring.compositionPageHeight,r.modelAtlasColor.height);
+ if(pageW&&pageH){p.renderTargetWidth=pageW;p.renderTargetHeight=pageH;u.composition.x=pageW;u.composition.y=pageH;}
  id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"composition.nmCompositionRaster#1");u.mode.z=0;u.mode.w=2;
  modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
  const NMCloakDraw* draws=ring.compositionDraws.bytes;
