@@ -33,12 +33,13 @@ type metalBenchmarkRow struct {
 // executors. Only translation, submission and the platform window differ.
 func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *client.Client, step func(), census func() any, options ebitenapp.BenchmarkOptions) error {
 	scene, world, err := meshscene.RetainBattle(meshscene.BattleOptions{
-		LoadOptions: meshscene.LoadOptions{Map: opts.Map, QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures},
+		LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(c), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures},
 		Width:       options.Width, Height: options.Height, Zoom: float32(viewZoomOf(b).Float()),
 	}, cs.unmappedMount, b.sess)
 	if err != nil {
 		return err
 	}
+	prepareMetalScene(scene, b.sess.World)
 	scene.Playable = false
 	metadata := maps.Clone(options.Metadata)
 	metadata["benchmark_version"] = 2
@@ -170,6 +171,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	for i, value := range h.hud.DirtyRect() {
 		h.frame.OverlayDirty[i] = uint32(value)
 	}
+	prepareMetalFrame(h.c, h.world, h.scene, &h.frame, current, h.options.Width, h.options.Height)
 	h.row.Record = benchmarkElapsed(start)
 	if h.draw >= h.options.TPS*2 {
 		start := time.Now()

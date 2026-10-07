@@ -65,7 +65,7 @@ func battleFeatureVisible(f *frame.Frame, v frame.FeatureView, spectator bool) b
 	if !v.NoDrawUnderGray {
 		return true
 	}
-	if v.OwnerKnown && v.Owner == world.MapOwnedFeaturePlacer {
+	if v.Height >= 10 && v.OwnerKnown && v.Owner == world.MapOwnedFeaturePlacer {
 		return true
 	}
 	if f.ViewingPlayer >= 10 {
