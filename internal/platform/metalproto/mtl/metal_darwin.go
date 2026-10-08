@@ -292,34 +292,166 @@ func (a PassAttachment) Clear(r, g, b, alpha float64) {
 // Viewport is MTLViewport.
 type Viewport struct{ X, Y, W, H, Near, Far float64 }
 
-// RenderEncoder is an MTLRenderCommandEncoder.
+// RenderEncoder is an MTLRenderCommandEncoder. Its setters skip a binding
+// the open encoder already holds: one encoder is recorded at a time, and a
+// new encoder starts with every binding unknown, so only true repeats are
+// dropped. A buffer rebound at a new offset sends only the offset.
 type RenderEncoder ID
 
-func (e RenderEncoder) Pipeline(p ID)   { send1(ID(e), selSetRenderPipelineState, uintptr(p)) }
-func (e RenderEncoder) DepthState(s ID) { send1(ID(e), selSetDepthStencilState, uintptr(s)) }
-func (e RenderEncoder) Cull(mode uint)  { send1(ID(e), selSetCullMode, uintptr(mode)) }
-func (e RenderEncoder) Winding(w uint)  { send1(ID(e), selSetFrontFacingWinding, uintptr(w)) }
-func (e RenderEncoder) End()            { send0(ID(e), selEndEncoding) }
+const cacheSlots = 32
+const cacheBytes = 256
+
+type binding struct {
+	kind   uint8 // 0 unknown, 1 buffer, 2 bytes
+	buffer ID
+	offset int
+	n      int
+	data   [cacheBytes]byte
+}
+
+type renderCache struct {
+	enc                                  RenderEncoder
+	pipeline, depth                      ID
+	pipelineSet, depthSet                bool
+	cull, winding                        int
+	viewport                             Viewport
+	viewportSet                          bool
+	vertex, fragment                     [cacheSlots]binding
+	vertexTexture, fragmentTexture       [cacheSlots]ID
+	vertexTextureSet, fragmentTextureSet [cacheSlots]bool
+}
+
+var rc renderCache
+
+// RenderCalls and RenderSkips count encoder setters sent and skipped.
+var RenderCalls, RenderSkips uint64
+
+func (e RenderEncoder) cache() *renderCache {
+	if rc.enc != e {
+		rc.enc = e
+		rc.pipelineSet, rc.depthSet, rc.viewportSet = false, false, false
+		rc.cull, rc.winding = -1, -1
+		for i := range rc.vertex {
+			rc.vertex[i].kind, rc.fragment[i].kind = 0, 0
+		}
+		rc.vertexTextureSet, rc.fragmentTextureSet = [cacheSlots]bool{}, [cacheSlots]bool{}
+	}
+	return &rc
+}
+
+func (e RenderEncoder) Pipeline(p ID) {
+	c := e.cache()
+	if c.pipelineSet && c.pipeline == p {
+		RenderSkips++
+		return
+	}
+	c.pipeline, c.pipelineSet = p, true
+	send1(ID(e), selSetRenderPipelineState, uintptr(p))
+}
+func (e RenderEncoder) DepthState(s ID) {
+	c := e.cache()
+	if c.depthSet && c.depth == s {
+		RenderSkips++
+		return
+	}
+	c.depth, c.depthSet = s, true
+	send1(ID(e), selSetDepthStencilState, uintptr(s))
+}
+func (e RenderEncoder) Cull(mode uint) {
+	c := e.cache()
+	if c.cull == int(mode) {
+		RenderSkips++
+		return
+	}
+	c.cull = int(mode)
+	send1(ID(e), selSetCullMode, uintptr(mode))
+}
+func (e RenderEncoder) Winding(w uint) {
+	c := e.cache()
+	if c.winding == int(w) {
+		RenderSkips++
+		return
+	}
+	c.winding = int(w)
+	send1(ID(e), selSetFrontFacingWinding, uintptr(w))
+}
+func (e RenderEncoder) End() {
+	send0(ID(e), selEndEncoding)
+	rc.enc = 0
+}
 func (e RenderEncoder) Viewport(v Viewport) {
+	c := e.cache()
+	if c.viewportSet && c.viewport == v {
+		RenderSkips++
+		return
+	}
+	c.viewport, c.viewportSet = v, true
 	send1(ID(e), selSetViewport, uintptr(unsafe.Pointer(&v)))
 }
+
+func (e RenderEncoder) buffer(slot *binding, b *Buffer, offset, index int, set, setOffset SEL) {
+	id := bufferID(b)
+	if slot.kind == 1 && slot.buffer == id {
+		if slot.offset == offset {
+			RenderSkips++
+			return
+		}
+		slot.offset = offset
+		send2(ID(e), setOffset, uintptr(offset), uintptr(index))
+		return
+	}
+	slot.kind, slot.buffer, slot.offset = 1, id, offset
+	send3(ID(e), set, uintptr(id), uintptr(offset), uintptr(index))
+}
+func (e RenderEncoder) bytes(slot *binding, p unsafe.Pointer, n, index int, set SEL) {
+	if n <= cacheBytes {
+		data := unsafe.Slice((*byte)(p), n)
+		if slot.kind == 2 && slot.n == n && string(slot.data[:n]) == string(data) {
+			RenderSkips++
+			return
+		}
+		slot.kind, slot.n = 2, n
+		copy(slot.data[:n], data)
+	} else {
+		slot.kind = 0
+	}
+	send3(ID(e), set, uintptr(p), uintptr(n), uintptr(index))
+}
 func (e RenderEncoder) VertexBuffer(b *Buffer, offset, index int) {
-	send3(ID(e), selSetVertexBuffer, uintptr(bufferID(b)), uintptr(offset), uintptr(index))
+	RenderCalls++
+	e.buffer(&e.cache().vertex[index], b, offset, index, selSetVertexBuffer, selSetVertexBufferOffset)
 }
 func (e RenderEncoder) FragmentBuffer(b *Buffer, offset, index int) {
-	send3(ID(e), selSetFragmentBuffer, uintptr(bufferID(b)), uintptr(offset), uintptr(index))
+	RenderCalls++
+	e.buffer(&e.cache().fragment[index], b, offset, index, selSetFragmentBuffer, selSetFragmentBufferOffset)
 }
 func (e RenderEncoder) VertexBytes(p unsafe.Pointer, n, index int) {
-	send3(ID(e), selSetVertexBytes, uintptr(p), uintptr(n), uintptr(index))
+	RenderCalls++
+	e.bytes(&e.cache().vertex[index], p, n, index, selSetVertexBytes)
 }
 func (e RenderEncoder) FragmentBytes(p unsafe.Pointer, n, index int) {
-	send3(ID(e), selSetFragmentBytes, uintptr(p), uintptr(n), uintptr(index))
+	RenderCalls++
+	e.bytes(&e.cache().fragment[index], p, n, index, selSetFragmentBytes)
 }
 func (e RenderEncoder) VertexTexture(t *Texture, index int) {
-	send2(ID(e), selSetVertexTexture, uintptr(textureID(t)), uintptr(index))
+	c := e.cache()
+	id := textureID(t)
+	if c.vertexTextureSet[index] && c.vertexTexture[index] == id {
+		RenderSkips++
+		return
+	}
+	c.vertexTexture[index], c.vertexTextureSet[index] = id, true
+	send2(ID(e), selSetVertexTexture, uintptr(id), uintptr(index))
 }
 func (e RenderEncoder) FragmentTexture(t *Texture, index int) {
-	send2(ID(e), selSetFragmentTexture, uintptr(textureID(t)), uintptr(index))
+	c := e.cache()
+	id := textureID(t)
+	if c.fragmentTextureSet[index] && c.fragmentTexture[index] == id {
+		RenderSkips++
+		return
+	}
+	c.fragmentTexture[index], c.fragmentTextureSet[index] = id, true
+	send2(ID(e), selSetFragmentTexture, uintptr(id), uintptr(index))
 }
 func (e RenderEncoder) Draw(primitive uint, start, count int) {
 	Send(ID(e), selDrawPrimitives, uintptr(primitive), uintptr(start), uintptr(count))

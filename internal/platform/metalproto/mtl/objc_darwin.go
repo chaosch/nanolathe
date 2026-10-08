@@ -190,3 +190,6 @@ func (id ID) Get(sel SEL) uintptr                   { return send0(id, sel) }
 func (id ID) Bool(sel SEL) bool                     { return send0(id, sel)&0xff != 0 }
 func (id ID) Index(i int) ID                        { return ID(send1(id, selObjectAtIndexedSubscript, uintptr(i))) }
 func (id ID) Count() int                            { return int(send0(id, selCount)) }
+
+// SelectorName returns a registered selector's name (diagnostic).
+func SelectorName(s SEL) string { return selNames[s] }

@@ -46,6 +46,9 @@ type Call struct {
 
 // Do runs c. The scheduler sees it as a system call, so it may block.
 func (c *Call) Do() {
+	if CountCalls && c.Fn == msgSend {
+		CallCounts[SEL(c.X[1])]++
+	}
 	runtime_cgocall(floatTrampolineABI0, unsafe.Pointer(c))
 }
 
@@ -125,6 +128,7 @@ type SEL uintptr
 // Send calls objc_msgSend with integer and pointer arguments only. It does
 // not tell the scheduler: use it for calls that return promptly.
 func Send(id ID, sel SEL, args ...uintptr) uintptr {
+	count(sel)
 	var a [7]uintptr
 	copy(a[:], args)
 	r, _, _ := rawSyscall9(msgSend, uintptr(id), uintptr(sel), a[0], a[1], a[2], a[3], a[4], a[5], a[6])
@@ -141,19 +145,33 @@ func SendBlocking(id ID, sel SEL, args ...uintptr) uintptr {
 }
 
 // Fixed-arity forms keep hot paths free of slice copies.
+// CallCounts counts sends per selector when CountCalls is set (diagnostic).
+var CountCalls bool
+var CallCounts = map[SEL]int{}
+
+func count(sel SEL) {
+	if CountCalls {
+		CallCounts[sel]++
+	}
+}
+
 func send0(id ID, sel SEL) uintptr {
+	count(sel)
 	r, _, _ := rawSyscall9(msgSend, uintptr(id), uintptr(sel), 0, 0, 0, 0, 0, 0, 0)
 	return r
 }
 func send1(id ID, sel SEL, a uintptr) uintptr {
+	count(sel)
 	r, _, _ := rawSyscall9(msgSend, uintptr(id), uintptr(sel), a, 0, 0, 0, 0, 0, 0)
 	return r
 }
 func send2(id ID, sel SEL, a, b uintptr) uintptr {
+	count(sel)
 	r, _, _ := rawSyscall9(msgSend, uintptr(id), uintptr(sel), a, b, 0, 0, 0, 0, 0)
 	return r
 }
 func send3(id ID, sel SEL, a, b, c uintptr) uintptr {
+	count(sel)
 	r, _, _ := rawSyscall9(msgSend, uintptr(id), uintptr(sel), a, b, c, 0, 0, 0, 0)
 	return r
 }
@@ -198,11 +216,14 @@ func GetClass(name string) ID {
 	return ID(r)
 }
 
+var selNames = map[SEL]string{}
+
 // Sel registers a selector by name.
 func Sel(name string) SEL {
 	b := append([]byte(name), 0)
 	r, _, _ := rawSyscall9(registerName, uintptr(unsafe.Pointer(&b[0])), 0, 0, 0, 0, 0, 0, 0, 0)
 	keep(b)
+	selNames[SEL(r)] = name
 	return SEL(r)
 }
 

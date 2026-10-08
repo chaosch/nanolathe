@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/png"
 	"os"
+	"slices"
 	"strings"
 	"time"
 	"unsafe"
@@ -374,6 +375,7 @@ func newGoRenderer(width, height int, offscreen, vsync, effects, visualPasses bo
 	r.splitWorld = os.Getenv("NANOLATHE_METAL_SPLIT_WORLD") != ""
 	r.legacyPost = os.Getenv("NANOLATHE_METAL_LEGACY_POST") != ""
 	r.timing = newGBTiming(r.device)
+	mtl.CountCalls = os.Getenv("NANOLATHE_METAL_CALL_COUNT") != ""
 	r.queue = mtl.Queue(r.device.NewCommandQueue())
 	for i := range r.rings {
 		r.rings[i] = &gbRing{}
@@ -1133,6 +1135,23 @@ func (r *gbRenderer) info() string {
 func (r *gbRenderer) destroy() {
 	pool := mtl.PoolPush()
 	defer mtl.PoolPop(pool)
+	if mtl.CountCalls && r.frameNumber > 0 {
+		type entry struct {
+			name  string
+			count int
+		}
+		var entries []entry
+		total := 0
+		for sel, n := range mtl.CallCounts {
+			entries = append(entries, entry{mtl.SelectorName(sel), n})
+			total += n
+		}
+		slices.SortFunc(entries, func(a, b entry) int { return b.count - a.count })
+		fmt.Fprintf(os.Stderr, "metal calls per frame: %.0f over %d frames\n", float64(total)/float64(r.frameNumber), r.frameNumber)
+		for _, e := range entries[:min(len(entries), 30)] {
+			fmt.Fprintf(os.Stderr, "  %8.1f %s\n", float64(e.count)/float64(r.frameNumber), e.name)
+		}
+	}
 	r.drain()
 	r.restorePointer()
 	if r.cursorHidden {
