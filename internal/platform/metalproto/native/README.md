@@ -214,8 +214,16 @@ Enabled live pass order is:
 
 1. Eligible mesh instances draw into a full-size R8 shadow mask under maximum
    blending. Models with no shadow flag are absent from its sparse instance list.
+   Composed (retained) frames draw shadows as commits instead; they bind a 1×1
+   empty mask and run no mask pass.
 2. Flat painted TNT renders with that mask and no scene-depth writes. Short
    sprite features follow in source order, then grounded model bodies/outlines.
+   When water lies within one 128-pixel block of the view (production's
+   `visibleWater`), the painted terrain is copied for the deferred water
+   surface, which then applies the ground-light field and shadows. Otherwise
+   the terrain is lit directly and the world continues in the terrain's
+   encoder, with no colour or depth store and reload between them. While
+   production glow is on, world passes neither load nor store emission.
 3. Projectile/debris models and the remaining sprite batch follow. Airborne
    units (committed MoverMode other than 1) render last on a fresh depth plane.
    Opaque frames keep all three phases in one render encoder: a fullscreen

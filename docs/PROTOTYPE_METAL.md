@@ -1667,3 +1667,81 @@ them in world space with both endpoints and interpolating on the GPU, and the
 effect recorder is shared with the production renderers. Large-view GPU time
 is the other open item. Results and scripts:
 `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round6/`.
+
+### Seventh round: GPU time in the large view (2026-10-07)
+
+**Attribution.** Per-pass timestamps from the windowed benchmark with the
+simulation running, summed as busy time: each pass is charged the part of its
+interval no earlier-ending pass covers, so idle gaps between command buffers
+are excluded and the charges add up to the frame's GPU time. Samples a stage did
+not write keep an older frame's value and are dropped. In the large field view
+the GPU was busy 9.67 ms per draw: terrain 1.98, world 1.94, final pass 1.42,
+water surface 1.06, glow 0.71, face preparation 0.70, shadow raster 0.50,
+construction outlines 0.46 and composition 0.22. That view has no water on
+screen.
+
+**Changes.**
+
+- *Water only near water.* Every draw copied the whole RGBA16F colour target
+  and ran a full-screen water surface pass, which in the deferred path is also
+  where the ground-light field and shadows reach the terrain. Production runs
+  the surface, seabed treatment and reflections only when a water block lies
+  within one block of the view (`visibleWater`, GPU design §26.1); the host now
+  applies that test to production's exported block index, and without water the
+  terrain is lit directly.
+- *One world encoder.* With no water pass between them, the world continues in
+  the terrain's encoder, so colour, emission and depth are no longer stored and
+  reloaded between the two.
+- *Dead targets.* Production glow clears and redraws the emission target, so
+  world passes neither load nor store it. Composed frames never draw into the
+  shadow mask; they bind an empty one instead of clearing and storing a
+  full-size mask.
+- *Overlapping dispatches.* Face preparation (one dispatch per mesh) and
+  construction outlines (per subject) ran in serial compute encoders, so each
+  small dispatch waited for the last. Their outputs are disjoint, so the
+  encoders are now concurrent, with a texture barrier before an outline subject
+  that reuses an earlier subject's slot. Face preparation fell from 0.32 to
+  0.04 ms.
+- *Lighting fix.* The deferred terrain pass switched the ground-light field off
+  so the surface pass could apply it, which also enabled the fallback per-pixel
+  point lights: on maps with water, explosion light reached the terrain twice.
+
+**Fidelity.** The concurrency changes are byte-identical. In the field view
+0.1% of pixels differ by at most 3 levels, all under explosion ground light:
+that is the double lighting, since forcing the deferred path with the fix
+matches the direct path except for 326 pixels of half-float rounding. On the
+coastal map, which has water on screen, the fix changes 0.4% of pixels by at
+most 6 levels under two explosions.
+
+**Results** (windowed, simulation stepped synchronously every fourth draw as in
+earlier rounds; before is `25ecec26c`; one-minute load 3.5–4.7):
+
+| Case | Draws/s, before | Draws/s, after | GPU busy p50, before | GPU busy p50, after |
+|---|---:|---:|---:|---:|
+| Field 3456×2160 | 103.7, 103.3 | 109.0, 107.8, 110.3 | 9.67 | 5.72 |
+| Field 3456×2160, moving camera | 106.4 | 110.9 | | |
+| Field 3456×2160, frozen | 119.8 | 119.2 | 7.90 | 5.34 |
+| Coastal 1080p | 119.6 | 119.4 | | |
+
+Busy times come from separate pass-timing runs; the benchmark's own GPU span
+p50 fell from 9.8 to 6.8 ms. The third large-view run is the final build with
+the concurrent dispatches.
+
+**What limits now.** In the large view the GPU has 2.6 ms to spare. A draw that
+steps the simulation needs about 15 ms of worker time: 7.3 ms for the
+synchronous step and 7.8 ms of preparation (world build 3.7, of which unit poses
+1.07, unit visuals 0.49 and the feature sprite walk 1.06; effects, glow and
+lights 1.7; HUD, composer, shadows and projection about 1.8). The render thread
+waits about 7 ms for one draw in four. In a match the simulation runs on its own
+goroutine. The remaining GPU work is the world pass (2.35 ms, of which about
+1.3 ms is storing colour and depth, terrain 0.34, shadow commits 0.40),
+the final pass (1.39 ms, mostly memory traffic), glow (0.69 ms; its shrink
+reads a full-size RGBA16F target that a tile shader could reduce in tile
+memory) and construction outlines (0.3 ms; each pixel walks every ring
+twice).
+
+Since the second round, `go vet ./internal/platform/gpurender` fails with a
+test import cycle: `client` imports `gpurender` for wreck light sources, and a
+`gpurender` test imports `client`. This must be resolved before any merge.
+Results, ablations and scripts:
+`~/nanolathe-bench/metal-depth-slabs-2026-10-07/round7/`.
