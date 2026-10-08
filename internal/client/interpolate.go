@@ -167,7 +167,10 @@ func (c *Client) presentationFrame() *frame.Frame {
 	}
 	fraction := c.sampleTickFraction()
 	key := pausedBlendInputs{prev, cur, prev.Tick, cur.Tick, fraction}
-	if c.presentationPaused && c.interp.pausedValid && c.interp.pausedInputs == key {
+	// The blend is a function of this key, and nothing writes the view, so
+	// every repeat reuses it: while paused, and when several recorders read
+	// one presented frame (effects, light sources, foreground, projections).
+	if c.interp.pausedValid && c.interp.pausedInputs == key {
 		return &c.interp.view
 	}
 	// The modern recorder blends the units over its §13.9 pool. The pool
@@ -178,7 +181,7 @@ func (c *Client) presentationFrame() *frame.Frame {
 	}
 	blended := c.interp.blend(prev, cur, fraction)
 	c.interp.each = nil
-	c.interp.pausedInputs, c.interp.pausedValid = key, c.presentationPaused
+	c.interp.pausedInputs, c.interp.pausedValid = key, true
 	// The effect strip buckets are keyed by frame pointer and committed tick,
 	// and they hold copies of the views. The blended frame keeps both across the
 	// several presented frames of one tick, so the classification has to be
@@ -334,7 +337,8 @@ func (c *Client) endCameraBlend(applied bool) {
 	c.camBlending = false
 }
 
-// pausedBlendInputs identifies the frozen committed pose blend.
+// pausedBlendInputs identifies a committed pose blend: the frozen one while
+// paused, or the presented frame's.
 type pausedBlendInputs struct {
 	previous, current         *frame.Frame
 	previousTick, currentTick uint32

@@ -75,7 +75,8 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 	layers := f.effectLayers[:len(groups)]
 	for i, batches := range groups {
 		start := len(f.quads)
-		s := effectSink{Foreground: f, layer: &layers[i], base: start}
+		f.sink = effectSink{Foreground: f, layer: &layers[i], base: start}
+		s := &f.sink
 		for _, batch := range batches {
 			if batch.List == nil {
 				continue
@@ -100,7 +101,7 @@ func (f *Foreground) PrepareEffectLayers(groups [][]EffectBatch) ([]meshscene.Ef
 					}
 				})
 			} else {
-				batch.List.Replay(&s)
+				batch.List.Replay(s)
 				if batch.ProjectileModels && s.projectileAt != len(batch.ProjectileOrder) {
 					s.fail("projectile identity count differs from recorded model commands")
 				}

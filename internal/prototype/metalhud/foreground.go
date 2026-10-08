@@ -40,6 +40,10 @@ type Foreground struct {
 	surfaces      map[surfaceKey]*surfaceEntry
 	surfaceUses   map[uint64]int
 	effectArt     map[effectArtKey]region
+
+	// sink is PrepareEffectLayers' replay receiver, kept here because a
+	// local one escapes through the replay interface each layer.
+	sink effectSink
 }
 
 var _ drawlist.Sink = (*Foreground)(nil)
