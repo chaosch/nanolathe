@@ -1,8 +1,6 @@
 package gpurender
 
 import (
-	"image"
-
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 )
@@ -57,17 +55,10 @@ type RetainedLighting struct {
 	wrecks  []drawlist.ModelGeometry
 }
 
-// RetainedWreckSource is the minimal production model metadata the existing
-// wreck gather reads. Bounds must be the production composition rectangle in
-// projected record pixels (modelWorldBounds), not an approximate native mesh
-// box. Emission is the already-resolved cooling/arrival RGB; this adapter adds
-// no cooling curve, visibility decision or lifetime of its own (§28, §31).
-type RetainedWreckSource struct {
-	Bounds             image.Rectangle
-	Emission           [3]float32
-	WorldHeight, Scale float32
-	ShadowOnly         bool
-}
+// RetainedWreckSource is the wreck gather's input, drawlist.WreckSource; this
+// adapter adds no cooling curve, visibility decision or lifetime of its own
+// (§28, §31).
+type RetainedWreckSource = drawlist.WreckSource
 
 // BeginSources assembles a source-only production record from retained batches.
 // It is an alternative to Gather(fullList), never a second presentation record.

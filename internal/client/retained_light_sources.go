@@ -5,7 +5,6 @@ import (
 
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
-	"github.com/nanolathe-gg/nanolathe/internal/platform/gpurender"
 	presentationrender "github.com/nanolathe-gg/nanolathe/internal/render"
 )
 
@@ -18,7 +17,7 @@ import (
 type RetainedLightSources struct {
 	World         drawlist.WorldSpace
 	Art, Leaves   []drawlist.Sprite
-	Wrecks        []gpurender.RetainedWreckSource
+	Wrecks        []drawlist.WreckSource
 	Short, Ground drawlist.List
 }
 
@@ -104,19 +103,19 @@ func (c *Client) recordRetainedLightSources(storage *RetainedEffectStorage) Reta
 	return out
 }
 
-func (c *Client) retainedWreckSource(f frame.FeatureView) (gpurender.RetainedWreckSource, bool) {
+func (c *Client) retainedWreckSource(f frame.FeatureView) (drawlist.WreckSource, bool) {
 	var g drawlist.ModelGeometry
 	c.applyWreckHeat(&g, f)
 	if g.WreckEmission == [3]float32{} {
-		return gpurender.RetainedWreckSource{}, false
+		return drawlist.WreckSource{}, false
 	}
 	m := c.modelForFeature(f)
 	if m == nil || m.compiled == nil {
-		return gpurender.RetainedWreckSource{}, false
+		return drawlist.WreckSource{}, false
 	}
 	draw := presentationrender.BuildUnitDrawInto(m.compiled, nil, f.Heading, f.Pitch, f.Bank, frame.UnitView{X: f.X, Y: f.Y, Z: f.Z}, nil, c.borrowDrawScratch())
 	if draw == nil {
-		return gpurender.RetainedWreckSource{}, false
+		return drawlist.WreckSource{}, false
 	}
 	// Use the same pseudo-unit and packet admission as drawFeatureModel. Merely
 	// measuring vertices could lend light to a model whose material walk emits
@@ -124,8 +123,8 @@ func (c *Client) retainedWreckSource(f frame.FeatureView) (gpurender.RetainedWre
 	draw.Structure, draw.KeyPlane = true, true
 	packet := c.prepareModelGeometry(draw, 0, c.featureTeamColor(), featurePresentationID(f), modelCursorFeature, nil, 0)
 	if packet == nil {
-		return gpurender.RetainedWreckSource{}, false
+		return drawlist.WreckSource{}, false
 	}
 	x, y := int(packet.AnchorX-packet.OriginX), int(packet.AnchorY-packet.OriginY)
-	return gpurender.RetainedWreckSource{Bounds: image.Rect(x, y, x+int(packet.Width), y+int(packet.Height)), Emission: g.WreckEmission, WorldHeight: packet.WorldHeight, Scale: g.WreckHeatScale}, true
+	return drawlist.WreckSource{Bounds: image.Rect(x, y, x+int(packet.Width), y+int(packet.Height)), Emission: g.WreckEmission, WorldHeight: packet.WorldHeight, Scale: g.WreckHeatScale}, true
 }

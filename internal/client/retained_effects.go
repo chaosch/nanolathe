@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
-	"github.com/nanolathe-gg/nanolathe/internal/platform/gpurender"
 )
 
 // RetainedEffectBatch owns its commands and mutable geometry. ProjectileModels
@@ -50,7 +49,7 @@ type RetainedEffectStorage struct {
 	batches       [7]RetainedEffectBatch
 	short, ground drawlist.List
 	art, leaves   []drawlist.Sprite
-	wrecks        []gpurender.RetainedWreckSource
+	wrecks        []drawlist.WreckSource
 	// Milliseconds per batch, then light sources, of the last recording (diagnostic).
 	Timings [8]float64
 }
