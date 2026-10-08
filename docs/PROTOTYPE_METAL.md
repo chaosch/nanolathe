@@ -1497,3 +1497,73 @@ benchmark host composes the same way and honours `NANOLATHE_METAL_OFFSCREEN`.
 
 Still open: GPU time in large full-simulation views (needs an idle host to
 measure), group digits seen in a live match, and a complete match.
+
+### Fifth round: preparation without allocation churn or camera rebuilds (2026-10-07)
+
+**Allocation.** In the large field view the Metal source allocated about 2 MB
+in 2,600 objects per draw, so the collector ran every four or five seconds.
+The sources: a new material array per model on every build, made even when
+the walk then hit the material cache; projection metadata rebuilt from empty
+each draw with a new lookup map; a throwaway bucket buffer ordering tall
+features for light sources; per-build lookup maps for rules and water; a new
+fog texture whenever the line of sight changed; unit views copied to the heap
+because the material request took their address; and the material resolver
+and its cache key boxed per subject. Each now reuses storage: uncached
+material walks take it from the publication, which recycling reuses;
+projections, rules and water follow the publication's instance-ordered
+subject keys into reused buffers; the client keeps the light buckets and
+records projection metadata into reused storage; a changed fog texture takes
+the recycled publication's buffer; views are borrowed by pointer; one resolver
+is reused and its keys interned; and native packing grows with headroom.
+
+The CPU profile that found these charged about 60% of preparation to
+allocation. That was wrong: macOS's profiler attributes page-fault time to the
+memory-clearing routines (noted in an earlier production round as well), and
+the in-process timers below show the real saving is about 0.7 ms on a draw
+that follows a tick and 0.2 ms on others. What the change also removes is the
+collector's work: six or seven collections in a 30-second run before, none
+after.
+
+**Camera.** The match host rebuilt the whole world, every unit's pose and
+material included, whenever the camera changed, so a scrolling camera paid for
+a build on every draw instead of once per tick. A camera at rest still culls
+models exactly. A build whose camera moved since the previous one culls models
+with an extra slack of a twelfth of the view width; while that region covers
+the view, a camera-only change keeps the build and reselects only sprites,
+lights and distortions at the new camera (`RetainedBattle.Covers` and
+`Recull`). Those cannot share the widened region because their counts are
+capped after culling, so off-screen candidates would displace visible ones.
+Extra off-screen models cost nothing on screen: the composer paints only the
+production order's subjects and only where their bounds are visible. A camera
+that leaves the region rebuilds. `NANOLATHE_METAL_CAMERA_REUSE=0` restores a
+build on every camera change, and the benchmark's `NANOLATHE_METAL_TEST_PAN`
+moves the Metal camera alone (world units per draw, a triangle wave in
+position with a ±5% zoom), leaving the production camera, order and HUD
+still; it exercises preparation, not a realistic frame.
+
+**Results** (M3 Pro, GOMAXPROCS=2, windowed, 3,600 draws, simulation stepped
+every fourth draw, one-minute load 4–6; before is 225ba060b. Preparation is
+the source's median record time in ms, which includes packing):
+
+| Case | Draws/s | Prep, tick draw | Prep, other draws | Draws over 12.5 ms | MB/draw | Collections |
+|---|---:|---:|---:|---:|---:|---:|
+| Field 3456×2160, before (two runs) | 103.0, 102.2 | 8.62, 8.77 | 3.84, 3.89 | 381, 398 | 1.98 | 7, 6 |
+| Field 3456×2160, after | 104.4, 104.0 | 7.96, 8.00 | 3.68, 3.70 | 336, 332 | 0.08 | 0, 0 |
+| Field 3456×2160, moving camera, build per change | 100.9 | 7.31 | 7.56 | 517 | 0.19 | 0 |
+| Field 3456×2160, moving camera, reuse | 107.7 | 7.88 | 4.86 | 175 | 0.08 | 0 |
+| Coastal 1080p, before | 119.6 | 5.02 | 2.26 | 9 | 0.78 | 4 |
+| Coastal 1080p, after | 119.8 | 4.77 | 2.18 | 3 | 0.06 | 0 |
+
+The moving-camera pair drifts toward fewer units than the still runs, so
+compare it only with itself: reuse cuts preparation on draws between ticks
+from 7.6 to 4.9 ms, of which 1.2 ms is the recull, and late draws by two
+thirds. Ticks cost about 0.6 ms more there because the widened region builds
+more models. Offscreen final frames are byte-identical to 225ba060b in the
+coastal and field scenes at 1080p, and a reculled moving-camera frame matches
+the build-per-change path while carrying 32 more off-screen instances.
+
+Still open: GPU time in large views (unchanged, about 9.7 ms), the recull's
+sprite selection (1.2 ms per draw while the camera moves; it walks every
+feature), and the rest of per-draw preparation in the large view (about
+3.7 ms: visual sources 1.6, composer 0.6, shadows 0.5, HUD 0.3, projection
+0.3). Results and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round5/`.
