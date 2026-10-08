@@ -11,7 +11,10 @@ struct nm_face_Visual {float4 state,bounds,outline,emission;};
 struct nm_face_Rules {float4 reveal,below,band,above,clip,shadow,outline;};
 struct nm_face_Slot {float4 screen,atlas,params;};
 struct nm_face_Control {uint4 span;float4 texture;};
-struct nm_face_Prepared {int4 x,y,key,shade,step;float4 uv,pixel;uint4 control;float4 centroid;};
+struct nm_face_Prepared {int4 x,y,key,shade,step;float4 u,v,pixel;uint4 control;float4 centroid;};
+// u/v: selected-frame texel coordinates of each rotated mapped corner. A corner's
+// authored UV picks any region of its frame; retail's default corners are
+// (0,0) (1,0) (1,1) (0,1) and reproduce the frame's endpoint lanes exactly.
 // control: bottom's rotated index, original top index, flags, corner count.
 // flags: admitted=1, quad mapping=2, shaded=4, unsupported coordinate=8, above-water corner=16.
 // x/y use the production +8192 bias, making signed division the arithmetic
@@ -43,16 +46,17 @@ kernel void nm_face_prepare(device const nm_face_Corner* corners [[buffer(0)]],d
  // unknown keyless/cache staging explicitly retains the previous projection.
  // UV lanes are original selected-frame texel endpoints, not normalized
  // interpolation between triangles. Sampling floors(lanes+1/65536) (§11.2).
- p.uv=round(uv*c.texture.xyxy-.5);
+ // Authored corner UVs interpolate between those endpoints.
+ uv=round(uv*c.texture.xyxy-.5);
  float keyOrigin=m[2].w>.5?m[1].w:visual.bounds.w;
  int bias=u[7].w>.5?int(rules[iid].clip.w):0;
  bool shaded=!(m[0].w>.5&&m[0].w<1.5);uint2 area=uint2(0);int2 first=0,last=0;bool fits=true,high=false;float2 sum=0;uint top=0,bottom=0;int minY=0,maxY=0,minX=0,maxX=0;
- int4 xx=0,yy=0,keys=0,shade=0;
+ int4 xx=0,yy=0,keys=0,shade=0;float4 tu=0,tv=0;
  for(uint i=0;i<f.cornerCount;i++){
   nm_face_Corner v=corners[f.cornerStart+i];float3 w=(m*float4(float3(v.p),1)).xyz;if(c.texture.z>.5&&w.y>waterObjects[iid].y)high=true;float2 pixel=floor(nm_projection_screen(w,projection[iid],projectionFlags[offsets[iid]+f.piece],projectionView,nm_face_screen(w,u))*p.pixel.xy+p.pixel.zw)+8192;
   if(!all(isfinite(pixel))||any(pixel<0)||any(pixel>65535)){fits=false;continue;}
   sum+=pixel-8192;int2 xy=int2(pixel);if(i==0){first=xy;minY=maxY=xy.y;minX=maxX=xy.x;}else{area=nm_face_area_add(area,uint(last.x)*uint(xy.y),uint(last.y)*uint(xy.x));if(xy.y<minY){minY=xy.y;top=i;}if(xy.y>maxY){maxY=xy.y;bottom=i;}minX=min(minX,xy.x);maxX=max(maxX,xy.x);}last=xy;
-  if(f.cornerCount==4){xx[i]=xy.x;yy[i]=xy.y;keys[i]=int(floor(w.y-keyOrigin))+bias;float3 normal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);shade[i]=m[0].w>1.5?15:int(dot(normal,float3(-.8,1,.25))*5)&31;}
+  if(f.cornerCount==4){float2 t=mix(uv.xy,uv.zw,v.uv);tu[i]=t.x;tv[i]=t.y;xx[i]=xy.x;yy[i]=xy.y;keys[i]=int(floor(w.y-keyOrigin))+bias;float3 normal=(m*float4(float3(v.shadeNormal),0)).xyz*float3(1,1,-1);shade[i]=m[0].w>1.5?15:int(dot(normal,float3(-.8,1,.25))*5)&31;}
  }
  p.centroid.xy=f.cornerCount?sum/float(f.cornerCount):float2(0);
  area=nm_face_area_add(area,uint(last.x)*uint(first.y),uint(last.y)*uint(first.x));
@@ -61,7 +65,7 @@ kernel void nm_face_prepare(device const nm_face_Corner* corners [[buffer(0)]],d
  // faces. Never substitute triangle winding or a transformed-normal test.
  if(f.cornerCount==4&&fits&&minY<maxY&&maxX<=32767&&maxX-minX<32768&&minY<16384&&all(keys>=-32768)&&all(keys<=32767)){
   uint mm=(bottom-top)&3;p.control.x=mm;
-  for(uint j=0;j<4;j++){uint i=(top+j)&3;p.x[j]=xx[i];p.y[j]=yy[i];p.key[j]=keys[i];p.shade[j]=shade[i];}
+  for(uint j=0;j<4;j++){uint i=(top+j)&3;p.x[j]=xx[i];p.y[j]=yy[i];p.key[j]=keys[i];p.shade[j]=shade[i];p.u[j]=tu[i];p.v[j]=tv[i];}
   for(uint e=0;e<4;e++){uint from=e<mm?e:((e+1)&3),to=e<mm?((e+1)&3):e;int dy=p.y[to]-p.y[from];p.step[e]=dy>0?((p.x[to]-p.x[from])*65536)/dy:0;}
   p.control.z|=2;
  }
@@ -72,8 +76,8 @@ kernel void nm_face_prepare(device const nm_face_Corner* corners [[buffer(0)]],d
 // overriding earlier edges on folded chains. This is not inverse bilinear UV.
 inline float4 nm_face_lanes(nm_face_Prepared p,float2 pixel) {
  float row=floor(pixel.y)+8192,col=floor(pixel.x)+8192;int mm=int(p.control.x);float lx=p.x.x,rx=lx;
- float4 lanes[4];const float2 uv[4]={float2(0,0),float2(1,0),float2(1,1),float2(0,1)};
- for(uint j=0;j<4;j++){float2 t=mix(p.uv.xy,p.uv.zw,uv[(p.control.y+j)&3]);lanes[j]=float4(t,float(p.key[j]),float(p.shade[j]));}
+ float4 lanes[4];
+ for(uint j=0;j<4;j++)lanes[j]=float4(p.u[j],p.v[j],float(p.key[j]),float(p.shade[j]));
  float4 ll=lanes[0],rl=ll;
  for(int k=0;k<3;k++){
   int ls=k==0?0:4-k,le=3-k;

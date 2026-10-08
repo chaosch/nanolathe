@@ -178,7 +178,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	census := make([]meshCensus, len(models))
 	vertices, indices, edges := 0, 0, 0
 	for i, m := range models {
-		mesh := compileMesh(m, atlas, pal, opts.QuadMultiplier, &census[i])
+		mesh := compileMesh(m, atlas, pal, opts.QuadMultiplier, quadSplit(), &census[i])
 		scene.Meshes = append(scene.Meshes, mesh)
 		vertices += len(mesh.Vertices)
 		indices += len(mesh.Indices)
@@ -249,6 +249,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	scene.Metadata["retained_authored_edges"] = edges / 2
 	scene.Metadata["retained_mesh_bytes"] = vertices*64 + indices*4 + edges*4
 	scene.Metadata["geometry_multiplier"] = opts.QuadMultiplier
+	scene.Metadata["quad_split"] = quadSplit()
 	scene.Metadata["texture_multiplier"] = opts.TextureScale
 	scene.Metadata["atlas"] = atlas.metadata
 	scene.Metadata["terrain"] = map[string]any{"logical_path": tntPath, "provider": info.Source.ProviderID(), "crop_rect": scene.TerrainRect, "width": scene.Terrain.Width, "height": scene.Terrain.Height, "rgba_bytes": len(scene.Terrain.RGBA), "fixed_world_y_offset": originY, "policy": "flat native TNT background without depth writes; immutable height field supplies shadow receivers"}

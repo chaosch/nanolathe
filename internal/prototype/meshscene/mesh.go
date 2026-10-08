@@ -2,6 +2,8 @@ package meshscene
 
 import (
 	"math"
+	"os"
+	"strconv"
 
 	"github.com/nanolathe-gg/nanolathe/internal/model"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -22,9 +24,10 @@ type meshCensus struct {
 	ResultTriangles       int    `json:"result_triangles"`
 	ResultVertices        int    `json:"result_vertices"`
 	AuthoredEdges         int    `json:"authored_edges"`
+	SplitFaces            int    `json:"split_faces,omitempty"`
 }
 
-func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multiplier int, census *meshCensus) Mesh {
+func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multiplier, split int, census *meshCensus) Mesh {
 	mesh := Mesh{Name: m.Name, Pieces: len(m.Pieces)}
 	census.Model, census.Pieces = m.Name, len(m.Pieces)
 	// Equal subject heights keep the later face, including the opened Solar rim.
@@ -92,70 +95,37 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				c := pal.Base[byte(primitive.ColorIndex)]
 				color = [3]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255}
 			}
-			materialID := uint32(0)
-			if atlas.useMaterials {
-				material := Material{FirstFrame: atlas.whiteFrame, FrameCount: 1}
-				if id := atlas.materialByName[canonicalTexture(primitive.TextureName)]; textured && id != 0 {
-					material = atlas.materials[id]
-				}
-				material.Reserved = uint32(len(mesh.MaterialSlots))
-				materialID = uint32(len(atlas.materials))
-				atlas.materials = append(atlas.materials, material)
-				mesh.MaterialSlots = append(mesh.MaterialSlots, ModelMaterialSlot{Piece: pi, Primitive: pri, Material: materialID})
-			}
-			vertices := make([]Vertex, n)
+			corners := make([]Vertex, n)
 			uvCorners := [4][2]float32{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
 			for vi, index := range primitive.VertexIndices {
 				p := piece.Vertices[index]
-				vertices[vi] = Vertex{Position: [3]float32{float32(p[0]) / 65536, float32(p[1]) / 65536, float32(p[2]) / 65536}, Color: color, Piece: uint32(pi), ShadeNormal: shadeNormals[index]}
-				uv := [2]float32{0.5, 0.5}
+				corners[vi] = Vertex{Position: [3]float32{float32(p[0]) / 65536, float32(p[1]) / 65536, float32(p[2]) / 65536}, Color: color, Piece: uint32(pi), ShadeNormal: shadeNormals[index]}
+				corners[vi].UV = [2]float32{0.5, 0.5}
 				if textured && n == 4 {
-					uv = uvCorners[vi]
-				}
-				if atlas.useMaterials {
-					vertices[vi].Material = materialID
-					vertices[vi].UV = uv
-				} else {
-					vertices[vi].UV = region.uv(uv, atlas.uvWidth, atlas.uvHeight)
+					corners[vi].UV = uvCorners[vi]
 				}
 			}
-			if atlas.useMaterials {
-				var center [4]float32
-				for _, v := range vertices {
-					for j := 0; j < 3; j++ {
-						center[j] += v.Position[j] / float32(n)
-					}
-				}
-				mesh.PrimitiveCenters = append(mesh.PrimitiveCenters, center)
+			// A split stands in for a remastered model: each strip is its own
+			// authored face, selector and material over its region of the
+			// texture, chosen by per-corner UVs.
+			faces := 1
+			if n == 4 && split > 1 {
+				faces = split
+				census.SplitFaces += split
 			}
-			normal := faceNormal(vertices[0].Position, vertices[1].Position, vertices[2].Position)
-			for i := range vertices {
-				vertices[i].Normal = normal
-			}
-			// Retain the source ring before any benchmark subdivision. GPU face
-			// preparation uses these corners for admission and two-chain mapping;
-			// reflections use the unsplit fan [03 R-RAST-01 §1].
-			mesh.appendAuthoredFace(vertices, pi, pri, materialID)
-			if n == 4 {
-				// A strip creates actual smaller spatial quads. It changes tessellation,
-				// not the authored outline or the first/last texture corners.
-				for strip := 0; strip < multiplier; strip++ {
-					a, b := float32(strip)/float32(multiplier), float32(strip+1)/float32(multiplier)
-					q := [4]Vertex{lerpVertex(vertices[0], vertices[1], a), lerpVertex(vertices[0], vertices[1], b), lerpVertex(vertices[3], vertices[2], b), lerpVertex(vertices[3], vertices[2], a)}
-					base := uint32(len(mesh.Vertices))
-					mesh.Vertices = append(mesh.Vertices, q[:]...)
-					mesh.Indices = append(mesh.Indices, base, base+1, base+2, base, base+2, base+3)
-				}
-			} else {
-				for j := 1; j < n-1; j++ {
-					for strip := 0; strip < multiplier; strip++ {
-						a, b := float32(strip)/float32(multiplier), float32(strip+1)/float32(multiplier)
-						tri := [3]Vertex{vertices[0], lerpVertex(vertices[j], vertices[j+1], a), lerpVertex(vertices[j], vertices[j+1], b)}
+			for sub := 0; sub < faces; sub++ {
+				vertices := corners
+				if faces > 1 {
+					a, b := float32(sub)/float32(faces), float32(sub+1)/float32(faces)
+					vertices = []Vertex{lerpVertex(corners[0], corners[1], a), lerpVertex(corners[0], corners[1], b), lerpVertex(corners[3], corners[2], b), lerpVertex(corners[3], corners[2], a)}
+					if sub > 0 {
 						base := uint32(len(mesh.Vertices))
-						mesh.Vertices = append(mesh.Vertices, tri[:]...)
-						mesh.Indices = append(mesh.Indices, base, base+1, base+2)
+						mesh.Vertices = append(mesh.Vertices, vertices[0], vertices[3])
+						// The split line is an authored two-corner ring.
+						mesh.EdgeIndices = append(mesh.EdgeIndices, base, base+1, base+1, base)
 					}
 				}
+				compileFace(&mesh, atlas, vertices, region, primitive.TextureName, textured, pi, pri, multiplier)
 			}
 		}
 	}
@@ -164,6 +134,71 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 	census.ResultVertices = len(mesh.Vertices)
 	census.AuthoredEdges = len(mesh.EdgeIndices) / 2
 	return mesh
+}
+
+// compileFace retains one authored face: its selector and material, its ring
+// for GPU preparation and its raster triangles. Corners carry the face's UVs
+// within its texture.
+func compileFace(mesh *Mesh, atlas *atlasResult, corners []Vertex, region atlasRegion, texture string, textured bool, pi, pri, multiplier int) {
+	n := len(corners)
+	vertices := make([]Vertex, n)
+	copy(vertices, corners)
+	materialID := uint32(0)
+	if atlas.useMaterials {
+		material := Material{FirstFrame: atlas.whiteFrame, FrameCount: 1}
+		if id := atlas.materialByName[canonicalTexture(texture)]; textured && id != 0 {
+			material = atlas.materials[id]
+		}
+		material.Reserved = uint32(len(mesh.MaterialSlots))
+		materialID = uint32(len(atlas.materials))
+		atlas.materials = append(atlas.materials, material)
+		mesh.MaterialSlots = append(mesh.MaterialSlots, ModelMaterialSlot{Piece: pi, Primitive: pri, Material: materialID})
+	}
+	for vi := range vertices {
+		if atlas.useMaterials {
+			vertices[vi].Material = materialID
+		} else {
+			vertices[vi].UV = region.uv(vertices[vi].UV, atlas.uvWidth, atlas.uvHeight)
+		}
+	}
+	if atlas.useMaterials {
+		var center [4]float32
+		for _, v := range vertices {
+			for j := 0; j < 3; j++ {
+				center[j] += v.Position[j] / float32(n)
+			}
+		}
+		mesh.PrimitiveCenters = append(mesh.PrimitiveCenters, center)
+	}
+	normal := faceNormal(vertices[0].Position, vertices[1].Position, vertices[2].Position)
+	for i := range vertices {
+		vertices[i].Normal = normal
+	}
+	// Retain the source ring before any benchmark subdivision. GPU face
+	// preparation uses these corners for admission and two-chain mapping;
+	// reflections use the unsplit fan [03 R-RAST-01 §1].
+	mesh.appendAuthoredFace(vertices, pi, pri, materialID)
+	if n == 4 {
+		// A strip creates actual smaller spatial quads. It changes tessellation,
+		// not the authored outline or the first/last texture corners.
+		for strip := 0; strip < multiplier; strip++ {
+			a, b := float32(strip)/float32(multiplier), float32(strip+1)/float32(multiplier)
+			q := [4]Vertex{lerpVertex(vertices[0], vertices[1], a), lerpVertex(vertices[0], vertices[1], b), lerpVertex(vertices[3], vertices[2], b), lerpVertex(vertices[3], vertices[2], a)}
+			base := uint32(len(mesh.Vertices))
+			mesh.Vertices = append(mesh.Vertices, q[:]...)
+			mesh.Indices = append(mesh.Indices, base, base+1, base+2, base, base+2, base+3)
+		}
+		return
+	}
+	for j := 1; j < n-1; j++ {
+		for strip := 0; strip < multiplier; strip++ {
+			a, b := float32(strip)/float32(multiplier), float32(strip+1)/float32(multiplier)
+			tri := [3]Vertex{vertices[0], lerpVertex(vertices[j], vertices[j+1], a), lerpVertex(vertices[j], vertices[j+1], b)}
+			base := uint32(len(mesh.Vertices))
+			mesh.Vertices = append(mesh.Vertices, tri[:]...)
+			mesh.Indices = append(mesh.Indices, base, base+1, base+2)
+		}
+	}
 }
 
 func lerpVertex(a, b Vertex, t float32) Vertex {
@@ -245,4 +280,15 @@ func retainedShadeNormals(piece model.Piece) [][3]float32 {
 		}
 	}
 	return out
+}
+
+// quadSplit reads NANOLATHE_METAL_QUAD_SPLIT: 2..8 replaces every four-corner
+// face with that many authored strip faces, each mapping its part of the
+// texture. It stands in for remastered models of 100-250 quads.
+func quadSplit() int {
+	n, err := strconv.Atoi(os.Getenv("NANOLATHE_METAL_QUAD_SPLIT"))
+	if err != nil || n < 2 {
+		return 1
+	}
+	return min(n, 8)
 }

@@ -84,7 +84,7 @@ func Load(opts LoadOptions) (*Scene, error) {
 	scene := &Scene{Name: "retail committed-pose replay", Atlas: art.texture, ModelPalette: art.palette, Metadata: map[string]any{}}
 	census := make([]meshCensus, len(models))
 	for i, m := range models {
-		scene.Meshes = append(scene.Meshes, compileMesh(m, art, pal, opts.QuadMultiplier, &census[i]))
+		scene.Meshes = append(scene.Meshes, compileMesh(m, art, pal, opts.QuadMultiplier, quadSplit(), &census[i]))
 		census[i].Unit = roster[i]
 	}
 	rows := int(math.Ceil(math.Sqrt(float64(opts.Units) / (16.0 / 9.0))))
@@ -115,6 +115,7 @@ func Load(opts LoadOptions) (*Scene, error) {
 	scene.Metadata["instances_per_mesh"] = instancesPerMesh
 	scene.Metadata["models"] = census
 	scene.Metadata["geometry_multiplier"] = opts.QuadMultiplier
+	scene.Metadata["quad_split"] = quadSplit()
 	scene.Metadata["geometry_policy"] = "spatial strip subdivision of authored quads; edge subdivision of triangle fans; unchanged artistic silhouette"
 	scene.Metadata["retained_vertices"] = meshVertices
 	scene.Metadata["retained_triangles"] = meshIndices / 3
