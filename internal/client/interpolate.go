@@ -2,6 +2,7 @@ package client
 
 import (
 	"math"
+	"slices"
 
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
@@ -468,7 +469,10 @@ func (in *interpolator) blendUnits(prev, cur *frame.Frame, f16 int64) []frame.Un
 func (in *interpolator) blendUnitRange(lo, hi int) {
 	prev, cur, f16 := in.blendPrev, in.blendCur, in.blendF16
 	for i := lo; i < hi; i++ {
-		u := cur.Units[i]
+		// Blend in place: a unit view is a few hundred bytes, and a frame
+		// blends every unit.
+		u := &in.units[i]
+		*u = cur.Units[i]
 		p := in.previousUnit(prev, u)
 		if p != nil {
 			u.X = lerpFixed(p.X, u.X, f16)
@@ -477,9 +481,12 @@ func (in *interpolator) blendUnitRange(lo, hi int) {
 			u.Heading = lerpAngle(p.Heading, u.Heading, f16)
 			u.Pitch = lerpAngle(p.Pitch, u.Pitch, f16)
 			u.Bank = lerpAngle(p.Bank, u.Bank, f16)
-			u.Pieces = in.blendPieces(i, p.Pieces, u.Pieces, f16)
+			// Equal lanes blend to themselves, so a unit whose script held
+			// still keeps the current tick's pieces without a copy.
+			if !slices.Equal(p.Pieces, u.Pieces) {
+				u.Pieces = in.blendPieces(i, p.Pieces, u.Pieces, f16)
+			}
 		}
-		in.units[i] = u
 	}
 }
 
@@ -488,7 +495,7 @@ func (in *interpolator) blendUnitRange(lo, hi int) {
 // the fixture exception. Every matching identity still requires the same slot,
 // definition, owner, carrier, mode mirror, piece count, and a horizontal step
 // within the snap bound. Pool slots carry no generation [01 §6.1].
-func (in *interpolator) previousUnit(prev *frame.Frame, u frame.UnitView) *frame.UnitView {
+func (in *interpolator) previousUnit(prev *frame.Frame, u *frame.UnitView) *frame.UnitView {
 	slot := int(u.Slot)
 	if slot >= len(in.unitAt) || in.unitAt[slot] == 0 {
 		return nil
