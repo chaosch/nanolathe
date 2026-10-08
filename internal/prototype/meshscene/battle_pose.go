@@ -33,8 +33,18 @@ type battlePublication struct {
 }
 type battlePoseScratch struct {
 	states     []model.PieceState
-	transforms []model.Transform
-	compose    model.ComposeScratch
+	affine     []battlePieceAffine // unitInto's per-piece composition, valid at generation
+	stack      []int
+	generation uint32
+}
+
+// battlePieceAffine is one piece's composed model-space transform: v maps to
+// linear·v + origin, with origin in world units.
+type battlePieceAffine struct {
+	linear     [9]float32 // row-major
+	origin     [3]float32
+	hidden     bool // this piece or an ancestor is hidden
+	generation uint32
 }
 
 type battleCensus struct {
@@ -376,19 +386,18 @@ func (s *battlePoseScratch) reserve(count int) {
 		s.states = s.states[:count]
 		clear(s.states)
 	}
-	if cap(s.transforms) < count {
-		s.transforms = make([]model.Transform, count)
-	} else {
-		s.transforms = s.transforms[:count]
-	}
-	s.compose.BeginModel(count)
 }
 
-// This is committedMatrices with reused state/composition scratch. It retains
-// the canonical authored hierarchy, script link and final model-Z reflection
-// [03 §2.4]; no per-vertex geometry is rebuilt on this path.
+// This is committedMatrices with reused state scratch. It retains the
+// canonical authored hierarchy, script link, rotation order and final model-Z
+// reflection [03 §2.4], but composes in float32: each piece multiplies its
+// parent's affine once, where model.Compose replays the whole chain per piece
+// and rounds every rotation to a 16.16 word. The matrices differ from that
+// path by float32 rounding, so a face whose depth key ties can order the other
+// way; this is presentation only and nothing in the simulation reads it.
 func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitView) {
 	s.reserve(len(m.Pieces))
+	s.reserveAffine(len(m.Pieces))
 	for _, p := range u.Pieces {
 		index := p.Index
 		if p.Name != "" {
@@ -407,19 +416,12 @@ func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitVie
 	}
 	model.FoldRootAngles(s.states, m.Root, u.Heading, u.Pitch, u.Bank)
 	for piece := range m.Pieces {
-		hidden := false
-		for parent := piece; parent >= 0 && parent < len(s.states); parent = m.Pieces[parent].Parent {
-			if s.states[parent].Hidden {
-				hidden = true
-				break
-			}
-		}
-		if hidden {
+		a := s.composeAffine(m, piece)
+		if a.hidden {
 			dst[piece] = Mat4{}
 			continue
 		}
-		s.transforms[piece] = model.ComposeInto(m, s.states, piece, s.transforms[piece], &s.compose)
-		dst[piece] = battleAffine(s.transforms[piece], u.X, u.Y, u.Z)
+		dst[piece] = a.matrix(u.X, u.Y, u.Z)
 		// Carry the origin with the pose endpoint selected by copyPriorOrSnap.
 		// Otherwise sinking changes integer face keys even at an equal display
 		// pose. These homogeneous-row lanes never participate in XYZ products.
@@ -431,6 +433,111 @@ func (s *battlePoseScratch) unitInto(dst []Mat4, m *model.Model, u frame.UnitVie
 		} else if s.states[piece].DontShade {
 			dst[piece][3] = 2 // production identity SHD row 15
 		}
+	}
+}
+
+func (s *battlePoseScratch) reserveAffine(count int) {
+	if cap(s.affine) < count {
+		s.affine = make([]battlePieceAffine, count)
+	} else {
+		s.affine = s.affine[:count]
+	}
+	// Entries carry the call that composed them, so a new call clears nothing.
+	s.generation++
+	if s.generation == 0 {
+		clear(s.affine)
+		s.generation = 1
+	}
+}
+
+// composeAffine returns piece's transform, composing any ancestors this call
+// has not yet reached, root first. Each node rotates Z, then X, then Y about
+// its own origin and then adds its authored and script translation, applied
+// leaf to root [03 §2.4] C21.
+func (s *battlePoseScratch) composeAffine(m *model.Model, piece int) *battlePieceAffine {
+	stack := s.stack[:0]
+	for p := piece; p >= 0 && p < len(s.affine) && s.affine[p].generation != s.generation; p = m.Pieces[p].Parent {
+		if len(stack) > len(s.affine) {
+			break // cycle guard — retail files are trees [fmt 3do]
+		}
+		stack = append(stack, p)
+	}
+	for i := len(stack) - 1; i >= 0; i-- {
+		p := stack[i]
+		state := &s.states[p]
+		a := &s.affine[p]
+		var t [3]float32
+		for axis, v := range m.Pieces[p].Translate {
+			t[axis] = float32(v.Add(state.Trans[axis]).Raw()) / 65536
+		}
+		local, rotates := battleRotation(state.RotX, state.RotY, state.RotZ)
+		parent := m.Pieces[p].Parent
+		if parent < 0 || parent >= len(s.affine) || s.affine[parent].generation != s.generation {
+			a.linear, a.origin, a.hidden = local, t, state.Hidden
+		} else {
+			up := &s.affine[parent]
+			l := &up.linear
+			a.origin = [3]float32{
+				up.origin[0] + l[0]*t[0] + l[1]*t[1] + l[2]*t[2],
+				up.origin[1] + l[3]*t[0] + l[4]*t[1] + l[5]*t[2],
+				up.origin[2] + l[6]*t[0] + l[7]*t[1] + l[8]*t[2],
+			}
+			if rotates {
+				for row := 0; row < 3; row++ {
+					for col := 0; col < 3; col++ {
+						a.linear[row*3+col] = l[row*3]*local[col] + l[row*3+1]*local[3+col] + l[row*3+2]*local[6+col]
+					}
+				}
+			} else {
+				a.linear = *l
+			}
+			a.hidden = state.Hidden || up.hidden
+		}
+		a.generation = s.generation
+	}
+	s.stack = stack
+	if piece < 0 || piece >= len(s.affine) {
+		return &battlePieceAffine{}
+	}
+	return &s.affine[piece]
+}
+
+// battleRotation is Ry·Rx·Rz for the three angle words, the order a node
+// applies them [03 §2.4] C21, with the trig from the shared angle table.
+func battleRotation(ax, ay, az uint16) ([9]float32, bool) {
+	if ax == 0 && ay == 0 && az == 0 {
+		return [9]float32{0: 1, 4: 1, 8: 1}, false
+	}
+	sx, cx, sy, cy, sz, cz := float32(0), float32(1), float32(0), float32(1), float32(0), float32(1)
+	if ax != 0 {
+		s, c := numeric.AngleSinCos(numeric.Angle(ax))
+		sx, cx = float32(s), float32(c)
+	}
+	if ay != 0 {
+		s, c := numeric.AngleSinCos(numeric.Angle(ay))
+		sy, cy = float32(s), float32(c)
+	}
+	if az != 0 {
+		s, c := numeric.AngleSinCos(numeric.Angle(az))
+		sz, cz = float32(s), float32(c)
+	}
+	return [9]float32{
+		cy*cz - sy*sx*sz, -cy*sz - sy*sx*cz, -sy * cx,
+		cx * sz, cx * cz, -sx,
+		sy*cz + cy*sx*sz, -sy*sz + cy*sx*cz, cy * cx,
+	}, true
+}
+
+// matrix places the transform at a world position. Model space is mirrored in
+// Z against world space, so the Z row is negated after composition
+// [03 R-RAST-01 §2].
+func (a *battlePieceAffine) matrix(x, y, z numeric.Fixed) Mat4 {
+	l := &a.linear
+	return Mat4{
+		l[0], l[3], -l[6], 0,
+		l[1], l[4], -l[7], 0,
+		l[2], l[5], -l[8], 0,
+		a.origin[0] + float32(x)/65536, a.origin[1] + float32(y)/65536, float32(z)/65536 - a.origin[2], 1,
 	}
 }
 
@@ -447,11 +554,6 @@ func (s *battlePoseScratch) projectileInto(dst []Mat4, m *model.Model, p frame.P
 		pitch = p.MeteorPitch
 	}
 	fill := func(piece int, roll uint16, propeller bool) {
-		singlePiece := m.Pieces[piece]
-		singlePiece.Parent = -1
-		singlePiece.Children = nil
-		singlePiece.Translate = [3]numeric.Fixed{}
-		one := model.Model{Name: m.Name, Root: 0, Pieces: []model.Piece{singlePiece}}
 		s.reserve(1)
 		s.states[0].RotZ = roll
 		if p.RenderType != render.RenderTypeRecordOrientation {
@@ -463,8 +565,7 @@ func (s *battlePoseScratch) projectileInto(dst []Mat4, m *model.Model, p frame.P
 		if propeller {
 			render.FoldPublishedPropellerSpin(s.states, 0, p, tick)
 		}
-		s.transforms[0] = model.ComposeInto(&one, s.states, 0, s.transforms[0], &s.compose)
-		dst[piece] = battleAffine(s.transforms[0], p.X, p.Y, p.Z)
+		dst[piece] = battleRotationMatrix(s.states[0], p.X, p.Y, p.Z)
 		// Standalone effect pieces bypass SHD [03 R-COMP-02 §6].
 		dst[piece][3] = 1
 	}
@@ -480,24 +581,13 @@ func (s *battlePoseScratch) projectileInto(dst []Mat4, m *model.Model, p frame.P
 		}
 	}
 }
-func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
-	// Composition already applied the chain to the zero vector.
-	origin := transform.Position()
-	matrix := Mat4{15: 1}
-	const basisSize = 1024
-	for axis := 0; axis < 3; axis++ {
-		basis := [3]numeric.Fixed{}
-		basis[axis] = numeric.FixedFromInt(basisSize)
-		tip := transform.Apply(basis)
-		for row := 0; row < 3; row++ {
-			matrix[axis*4+row] = float32(tip[row]-origin[row]) / (65536 * basisSize)
-		}
-		matrix[axis*4+2] = -matrix[axis*4+2]
-	}
-	matrix[12] = float32(origin[0]+x) / 65536
-	matrix[13] = float32(origin[1]+y) / 65536
-	matrix[14] = float32(z-origin[2]) / 65536
-	return matrix
+
+// battleRotationMatrix places one piece that rotates about its own origin
+// and carries no translation, as standalone projectile and debris pieces do.
+func battleRotationMatrix(state model.PieceState, x, y, z numeric.Fixed) Mat4 {
+	a := battlePieceAffine{}
+	a.linear, _ = battleRotation(state.RotX, state.RotY, state.RotZ)
+	return a.matrix(x, y, z)
 }
 
 type battleSpriteAdapter interface {

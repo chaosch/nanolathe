@@ -3,7 +3,6 @@ package meshscene
 import (
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/model"
-	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 )
 
 // Whole-piece debris keeps the authored vertex buffer but detaches its former
@@ -29,16 +28,7 @@ func (s *battleSource) appendDetachedDebris(pub *battlePublication, current *fra
 		pub.frame.Instances[len(pub.frame.Instances)-1].Phase = PhaseEffects
 		now := pub.frame.Current[span.offset : span.offset+span.count]
 		clear(now)
-		piece := m.Pieces[v.PieceIndex]
-		piece.Parent = -1
-		piece.Children = nil
-		piece.Translate = [3]numeric.Fixed{}
-		single := model.Model{Name: m.Name, Root: 0, Pieces: []model.Piece{piece}}
-		scratch := &s.poseScratch
-		scratch.reserve(1)
-		scratch.states[0] = model.PieceState{RotX: v.Angles[0], RotY: v.Angles[1], RotZ: v.Angles[2]}
-		scratch.transforms[0] = model.ComposeInto(&single, scratch.states, 0, scratch.transforms[0], &scratch.compose)
-		now[v.PieceIndex] = battleAffine(scratch.transforms[0], v.X, v.Y, v.Z)
+		now[v.PieceIndex] = battleRotationMatrix(model.PieceState{RotX: v.Angles[0], RotY: v.Angles[1], RotZ: v.Angles[2]}, v.X, v.Y, v.Z)
 		copy(pub.frame.Previous[span.offset:span.offset+span.count], now)
 		visual := &pub.frame.Instances[len(pub.frame.Instances)-1].Visual
 		visual.State[1] = 1
