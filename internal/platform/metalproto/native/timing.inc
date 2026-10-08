@@ -60,14 +60,17 @@ static id<MTLRenderCommandEncoder> nmRenderEncoder(id<MTLCommandBuffer> cb,MTLRe
  enc.label=@(label);
  return enc;
 }
-static id<MTLComputeCommandEncoder> nmComputeEncoder(id<MTLCommandBuffer> cb,const char* label) {
+// Concurrent encoders let dispatches with disjoint outputs overlap; ordering
+// between them needs an explicit memory barrier.
+static id<MTLComputeCommandEncoder> nmComputeEncoderOf(id<MTLCommandBuffer> cb,const char* label,MTLDispatchType type) {
  int i=nmTimingClaim(2,label);id<MTLComputeCommandEncoder> enc;
- if(i>=0){MTLComputePassDescriptor* p=[MTLComputePassDescriptor computePassDescriptor];MTLComputePassSampleBufferAttachmentDescriptor* a=p.sampleBufferAttachments[0];
+ if(i>=0){MTLComputePassDescriptor* p=[MTLComputePassDescriptor computePassDescriptor];p.dispatchType=type;MTLComputePassSampleBufferAttachmentDescriptor* a=p.sampleBufferAttachments[0];
   a.sampleBuffer=nmTimingBuffers[nmTimingSlot];a.startOfEncoderSampleIndex=i*4;a.endOfEncoderSampleIndex=i*4+1;enc=[cb computeCommandEncoderWithDescriptor:p];}
- else enc=[cb computeCommandEncoder];
+ else enc=[cb computeCommandEncoderWithDispatchType:type];
  enc.label=@(label);
  return enc;
 }
+static id<MTLComputeCommandEncoder> nmComputeEncoder(id<MTLCommandBuffer> cb,const char* label) {return nmComputeEncoderOf(cb,label,MTLDispatchTypeSerial);}
 static id<MTLBlitCommandEncoder> nmBlitEncoder(id<MTLCommandBuffer> cb,const char* label) {
  int i=nmTimingClaim(3,label);id<MTLBlitCommandEncoder> enc;
  if(i>=0){MTLBlitPassDescriptor* p=[MTLBlitPassDescriptor blitPassDescriptor];MTLBlitPassSampleBufferAttachmentDescriptor* a=p.sampleBufferAttachments[0];

@@ -45,13 +45,19 @@ static BOOL nmOutlineRowsPrepare(NMRenderer* r,NMRing* ring){
 static BOOL nmOutlineRowsEncode(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMUniforms u){
  NMOutlineRowsRing* f=ring.outlineRowsRing;if(u.visual.x<=.5||!f||!f.subjects.length)return YES;if(!r.outlineRowsState)return nmOutlineRowsFail(r,@"Outline compute pipeline is not initialized");
  if(r.device.readWriteTextureSupport<MTLReadWriteTextureTier2)return nmOutlineRowsFail(r,@"Outline resolve requires tier-two read/write textures");
- const NMOutlineRowsSubject* subjects=f.subjects.bytes;NSUInteger count=f.subjects.length/sizeof(*subjects);id<MTLComputeCommandEncoder> enc=nmComputeEncoder(cb,"outline_rows.nmOutlineRowsEncode#1");if(!enc)return nmOutlineRowsFail(r,@"Outline compute encoder failed");
+ const NMOutlineRowsSubject* subjects=f.subjects.bytes;NSUInteger count=f.subjects.length/sizeof(*subjects);// Subjects write disjoint prepared rows and, through distinct composition
+ // slots, disjoint atlas boxes, so their dispatches overlap. A subject that
+ // reuses an earlier subject's slot waits for the textures written so far.
+ id<MTLComputeCommandEncoder> enc=nmComputeEncoderOf(cb,"outline_rows.nmOutlineRowsEncode#1",MTLDispatchTypeConcurrent);if(!enc)return nmOutlineRowsFail(r,@"Outline compute encoder failed");
  [enc setBuffer:ring.instances offset:0 atIndex:1];[enc setBuffer:poses offset:0 atIndex:2];[enc setBytes:&u length:sizeof(u) atIndex:3];[enc setBuffer:ring.rules offset:0 atIndex:10];[enc setBuffer:ring.compositionSlots offset:0 atIndex:13];[enc setBuffer:ring.compositionSelectors offset:0 atIndex:14];[enc setBuffer:ring.groups.instanceGroups offset:0 atIndex:20];[enc setBuffer:f.corners offset:0 atIndex:21];[enc setBuffer:f.prepared offset:0 atIndex:22];[enc setBuffer:f.diagnostics offset:0 atIndex:24];[enc setBuffer:ring.projections offset:0 atIndex:27];vector_float4 view=ring.projectionView;[enc setBytes:&view length:16 atIndex:29];
  [enc setComputePipelineState:r.outlineRowsState.prepare];
  for(NSUInteger i=0;i<count;i++){NMOutlineRowsSubject s=subjects[i];NMMesh* m=r.meshes[s.mesh];[enc setBuffer:m.vertices offset:0 atIndex:0];[enc setBuffer:m.outlineRowsMesh.rings offset:0 atIndex:4];[enc setBytes:&s.control length:sizeof(s.control) atIndex:23];[enc dispatchThreads:MTLSizeMake(s.control.span[1],1,1) threadsPerThreadgroup:MTLSizeMake(MIN((NSUInteger)32,r.outlineRowsState.prepare.maxTotalThreadsPerThreadgroup),1,1)];}
  [enc memoryBarrierWithScope:MTLBarrierScopeBuffers];[enc setComputePipelineState:r.outlineRowsState.resolve];[enc setTexture:r.modelAtlasColor atIndex:0];[enc setTexture:r.modelAtlasEmission atIndex:1];[enc setTexture:r.modelMetadata atIndex:2];[enc setTexture:r.modelPalette atIndex:4];
  NSUInteger maxThreads=r.outlineRowsState.resolve.maxTotalThreadsPerThreadgroup;NSUInteger tx=MIN((NSUInteger)8,maxThreads),ty=MIN((NSUInteger)8,maxThreads/tx);
- for(NSUInteger i=0;i<count;i++){NMOutlineRowsSubject s=subjects[i];NSUInteger width=(NSUInteger)((int64_t)s.control.domain[2]-s.control.domain[0]),height=(NSUInteger)((int64_t)s.control.domain[3]-s.control.domain[1]);if(!width||!height)continue;[enc setBuffer:r.meshes[s.mesh].outlineRowsMesh.rings offset:0 atIndex:4];[enc setBytes:&s.control length:sizeof(s.control) atIndex:23];[enc dispatchThreads:MTLSizeMake(width,height,1) threadsPerThreadgroup:MTLSizeMake(tx,ty,1)];}
+ const uint32_t* selectors=ring.compositionSelectors.contents;
+ for(NSUInteger i=0;i<count;i++){NMOutlineRowsSubject s=subjects[i];NSUInteger width=(NSUInteger)((int64_t)s.control.domain[2]-s.control.domain[0]),height=(NSUInteger)((int64_t)s.control.domain[3]-s.control.domain[1]);if(!width||!height)continue;
+  for(NSUInteger j=0;j<i;j++)if(selectors[subjects[j].control.span[0]]==selectors[s.control.span[0]]){[enc memoryBarrierWithScope:MTLBarrierScopeTextures];break;}
+  [enc setBuffer:r.meshes[s.mesh].outlineRowsMesh.rings offset:0 atIndex:4];[enc setBytes:&s.control length:sizeof(s.control) atIndex:23];[enc dispatchThreads:MTLSizeMake(width,height,1) threadsPerThreadgroup:MTLSizeMake(tx,ty,1)];}
  [enc endEncoding];return YES;
 }
 // Completion owns the diagnostic sample before Prepare can reset this ring.
