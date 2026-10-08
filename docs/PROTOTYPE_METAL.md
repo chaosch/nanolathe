@@ -1745,3 +1745,86 @@ test import cycle: `client` imports `gpurender` for wreck light sources, and a
 `gpurender` test imports `client`. This must be resolved before any merge.
 Results, ablations and scripts:
 `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round7/`.
+
+### Eighth round: preparation and encoding time (2026-10-07)
+
+**Attribution.** With the GPU no longer the limit, the large view's draws were
+bound by CPU work on two threads. On the worker, each tick's world build took
+3.7 ms: unit poses 1.07, unit visuals 0.49 and the feature sprite walk 1.06,
+which resolved art for all 6,204 map features although about 400 are in view.
+Every draw then spent 1.6 ms on effects, glow and lights and about 1.8 ms on
+the HUD, composer, shadows and projection. On the render thread, native
+encoding took 2.7 ms per draw. Sampling it with macOS `sample` showed about a
+fifth of that time in one loop: each model slot's shadow commit scanned every
+shadow subject for its slot, reading an Objective-C property per subject.
+
+**Changes to the world build (per tick).**
+
+- *Distant features.* The sprite walk skips a feature anchored outside the view
+  by more than any prepared frame reaches (286 world units on this map) plus
+  the build's camera slack, before resolving its art. The replay for covered
+  camera moves needs only what the walk kept, and a fallback walk made at
+  another camera is never replayed. Burning features are always walked, since
+  their light is not bounded by the reach. The walk fell from 1.07 to 0.26 ms
+  offscreen.
+- *Unchanged poses.* A unit whose pose inputs equal the previous tick's copies
+  that tick's pose and vertical bounds. Only about 15% of units in view qualify
+  (105 of 723 in one census; most change their pieces or angles every tick), so
+  the saving is small. The affine conversion also reuses the origin that
+  composition already computed, which saves one of four chain applications per
+  piece.
+- *Material lanes.* Marking a unit's live pieces compared every lane with every
+  piece; it is now one pass over the lanes. Unit visuals fell from 0.46 to
+  0.40 ms.
+
+**Changes to each draw.**
+
+- *One blend per presented frame.* The effect, light-source, foreground and
+  projection recorders each asked the client for the presented frame, and each
+  call blended every unit again for the same pair and fraction. The client now
+  reuses the blend whenever its key repeats, as it already did while paused.
+  The HUD fell from 0.35 to 0.14 ms and projection from 0.32 to 0.15 ms.
+- *Smaller per-draw lookups.* The shadow composer indexes units once per
+  committed frame and features by position, and the effect layer adapter keeps
+  its replay receiver instead of allocating one per layer.
+- *Native encoding.* Shadow subjects are indexed by slot when they are
+  uploaded. Ablation checks return at once when nothing is ablated; before,
+  each check built a string. The direct-slot test reads the ring once per loop,
+  and projectile bodies are indexed by paint position at upload instead of
+  being found by a scan per projectile.
+
+**Fidelity.** Offscreen captures are byte-identical to the seventh round's in
+the field view (camera still and moving) and on the coastal map.
+
+**Results** (windowed, simulation stepped synchronously every fourth draw;
+before is `a556efac7`; runs alternate; one-minute load 3.7–4.8):
+
+| Case | Draws/s | Draws over 12.5 ms | Prep, tick draw (ms) | Prep, other draws (ms) | Native encode p50 (ms) |
+|---|---:|---:|---:|---:|---:|
+| Field 3456×2160, before | 110.8, 111.6 | 105, 82 | 7.77, 7.65 | 3.53, 3.43 | 2.69, 2.65 |
+| Field 3456×2160, after | 118.1, 118.5 | 13, 9 | 6.24, 6.02 | 2.98, 2.91 | 1.56, 1.52 |
+| Field, moving camera, before | 113.3 | 58 | 7.61 | 3.77 | 2.25 |
+| Field, moving camera, after | 118.6 | 10 | 6.06 | 3.07 | 1.38 |
+| Coastal 1080p, before | 119.7 | 8 | 4.82 | 2.16 | 1.29 |
+| Coastal 1080p, after | 119.9 | 3 | 4.19 | 1.92 | 1.11 |
+
+The world build fell from 3.71 to 2.54–2.66 ms per tick. GPU time is
+unchanged, and so are allocations: about 530 per draw (61 KB), nearly all of
+them from the simulation.
+
+**What limits now.** A draw that steps the simulation still needs about 13 ms
+of worker time in the benchmark: 7.0 ms for the synchronous step and 6.1 ms of
+preparation. In a match, where the simulation runs on its own goroutine, both
+kinds of draw fit the 8.3 ms budget. The remaining per-tick cost is unit poses
+(0.85 ms). Each piece's matrix is probed through the fixed-point chain three
+times, so composing float matrices directly would be several times faster, but
+not byte-identical. Per draw, the remaining costs are the production effect
+recorder (about 1.0 ms), the composer (0.55 ms), shadows (0.45 ms) and the
+effect layer adapter (0.3 ms). Native encoding (1.5 ms) is now mostly Metal
+draw and binding calls, about 700 direct models and 700 slot commits per draw;
+Objective-C property reads and retain/release account for about a third of it.
+
+The `gpurender` test import cycle is fixed. `client` used the renderer only
+for the wreck light source type, which now lives in `drawlist` as
+`WreckSource`; the renderer keeps `RetainedWreckSource` as an alias. Results,
+samples and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round8/`.
