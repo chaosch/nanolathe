@@ -48,7 +48,7 @@ type nativeRenderer interface {
 }
 
 type dylibBridge struct {
-	handle          uintptr
+	handle           uintptr
 	meshOutlineRows_ func(uintptr, uint32, unsafe.Pointer) int32
 	terrainTiles_    func(uintptr, unsafe.Pointer) int32
 	meshFaces_       func(uintptr, uint32, unsafe.Pointer) int32
@@ -152,7 +152,9 @@ func newDylibRenderer(libPath string, width, height int32, offscreen, vsync, eff
 func (b *dylibBridge) terrainTiles(u *nativeTerrainTilesUpload) int32 {
 	return b.terrainTiles_(b.handle, unsafe.Pointer(u))
 }
-func (b *dylibBridge) pointerCapture(captured int32) int32 { return b.pointerCapture_(b.handle, captured) }
+func (b *dylibBridge) pointerCapture(captured int32) int32 {
+	return b.pointerCapture_(b.handle, captured)
+}
 func (b *dylibBridge) mesh(vertices unsafe.Pointer, vertexCount int32, indices unsafe.Pointer, indexCount int32, offsets unsafe.Pointer, instances int32, edges unsafe.Pointer, edgeCount int32, visuals, centers unsafe.Pointer, primitiveCount int32) int32 {
 	return b.mesh_(b.handle, vertices, vertexCount, indices, indexCount, offsets, instances, edges, edgeCount, visuals, centers, primitiveCount)
 }
@@ -172,15 +174,19 @@ func (b *dylibBridge) configure(camera, rect unsafe.Pointer, poseCount int32) in
 func (b *dylibBridge) frame(previous, next unsafe.Pointer, alpha float32, seconds float64) int32 {
 	return b.frame_(b.handle, previous, next, alpha, seconds)
 }
-func (b *dylibBridge) liveUpload(u *liveUpload) int32 { return b.liveUpload_(b.handle, unsafe.Pointer(u)) }
-func (b *dylibBridge) livePresent() int32             { return b.livePresent_(b.handle) }
-func (b *dylibBridge) input(in *nativeInput)          { b.input_(b.handle, unsafe.Pointer(in)) }
+func (b *dylibBridge) liveUpload(u *liveUpload) int32 {
+	return b.liveUpload_(b.handle, unsafe.Pointer(u))
+}
+func (b *dylibBridge) livePresent() int32    { return b.livePresent_(b.handle) }
+func (b *dylibBridge) input(in *nativeInput) { b.input_(b.handle, unsafe.Pointer(in)) }
 func (b *dylibBridge) events(out []meshscene.NativeEvent) int32 {
 	return b.events_(b.handle, pointer(out), int32(len(out)))
 }
-func (b *dylibBridge) playable(on int32)            { b.playable_(b.handle, on) }
-func (b *dylibBridge) drain()                       { b.drain_(b.handle) }
-func (b *dylibBridge) rows(out []nativeRow) int32   { return b.rows_(b.handle, pointer(out), int32(len(out))) }
+func (b *dylibBridge) playable(on int32) { b.playable_(b.handle, on) }
+func (b *dylibBridge) drain()            { b.drain_(b.handle) }
+func (b *dylibBridge) rows(out []nativeRow) int32 {
+	return b.rows_(b.handle, pointer(out), int32(len(out)))
+}
 func (b *dylibBridge) capture(path string) int32 {
 	p := cstring(path)
 	r := b.capture_(b.handle, pointer(p))
