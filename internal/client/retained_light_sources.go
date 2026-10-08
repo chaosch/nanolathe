@@ -54,20 +54,25 @@ func (c *Client) recordRetainedLightSources(storage *RetainedEffectStorage) Reta
 	if len(spaces) > 0 {
 		out.World = spaces[0]
 	}
-	visit := func(f frame.FeatureView) {
+	visit := func(f *frame.FeatureView) {
 		is3DO := f.Model != "" && f.Filename == "" || f.Filename == "" && f.SeqName == ""
 		if is3DO {
-			if source, ok := c.retainedWreckSource(f); ok {
+			if source, ok := c.retainedWreckSource(*f); ok {
 				out.Wrecks = append(out.Wrecks, source)
 			}
 		} else if f.IsBurning {
 			// Ordinary feature art is neither a classified emitter nor a heat
 			// source; leave its body/shadow to the retained world producer.
-			c.drawFeature(&f)
+			// drawFeature receives a copy, as it did before.
+			view := *f
+			c.drawFeature(&view)
 		}
 	}
-	for _, f := range cur.Features {
-		if f.Height < 10 && win.admitsCell(f.CX, f.CZ) && featureVisibleForFrame(cur, f) {
+	// Index rather than range: the window rejects most of the map's features
+	// before any of their views is copied.
+	for i := range cur.Features {
+		f := &cur.Features[i]
+		if f.Height < 10 && win.admitsCell(f.CX, f.CZ) && featureVisibleForFrame(cur, *f) {
 			visit(f)
 		}
 	}
@@ -87,7 +92,7 @@ func (c *Client) recordRetainedLightSources(storage *RetainedEffectStorage) Reta
 	}
 	for _, d := range buckets.ordered() {
 		if win.admitsPassARow(d.row) {
-			visit(*d.feature)
+			visit(d.feature)
 		}
 	}
 	c.emitWorldEnd()

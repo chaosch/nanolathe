@@ -94,11 +94,12 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 	}
 	b.counts["blast_rings"] = len(dst) - start
 	wrecks := 0
-	for _, v := range current.Features {
+	for fi := range current.Features {
+		v := &current.Features[fi]
 		if !b.effects.WreckShimmer || wrecks >= 32 {
 			break
 		}
-		if v.Model == "" || !v.WreckHeatKnown || v.Y < current.Visibility.SeaLevel || !battleFeatureVisible(current, v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
+		if v.Model == "" || !v.WreckHeatKnown || v.Y < current.Visibility.SeaLevel || !battleFeatureVisible(current, *v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) {
 			continue
 		}
 		age := float32(current.Tick - v.WreckBornTick)
@@ -126,11 +127,12 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 	}
 	b.counts["wreck_heat_plumes"] = wrecks
 	trees := 0
-	for _, v := range current.Features {
+	for fi := range current.Features {
+		v := &current.Features[fi]
 		if !b.effects.FireShimmer || trees >= 128 {
 			break
 		}
-		if !v.IsBurning || v.Model != "" && v.Filename == "" || !battleFeatureVisible(current, v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) || v.RuntimeLive && v.EventSeqName == "" {
+		if !v.IsBurning || v.Model != "" && v.Filename == "" || !battleFeatureVisible(current, *v, b.spectator) || !battlePointVisible(current, v.X, v.Y, v.Z, b.spectator) || v.RuntimeLive && v.EventSeqName == "" {
 			continue
 		}
 		var a spriteArt
@@ -143,7 +145,7 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 		if !ok || a.identity == nil {
 			continue
 		}
-		p := b.featurePosition(v)
+		p := b.featurePosition(*v)
 		p[0] += -float32(a.identity.XOffset) + float32(a.identity.Width)*0.5
 		width, height := min(max(float32(a.identity.Width)*0.55, 14), 38), min(max(float32(a.identity.Height)*1.25, 56), 112)
 		d := Distortion{Previous: p, Current: p, Shape: [4]float32{width, height * 0.5, 1, 1}, Params: [4]float32{float32(current.Tick % 3600), float32((v.CX*13 + v.CZ*7) & 255), -float32(a.identity.YOffset) + float32(a.identity.Height)*0.45}}

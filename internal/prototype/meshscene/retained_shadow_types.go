@@ -157,7 +157,8 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		}
 	}
 	// Script lane aliases use the same model-index/name mapping as pose composition.
-	for _, u := range current.Units {
+	for ui := range current.Units {
+		u := &current.Units[ui]
 		span, ok := r.previous.byID[battleEntityKey{1, u.InstanceID}]
 		if !ok {
 			continue

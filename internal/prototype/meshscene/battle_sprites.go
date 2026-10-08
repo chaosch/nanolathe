@@ -1,6 +1,7 @@
 package meshscene
 
 import (
+	"maps"
 	"time"
 
 	"fmt"
@@ -48,12 +49,50 @@ type BattleSprites struct {
 	featureScopeFiltered                                 bool
 	rawSpritePixels, croppedSpritePixels                 int64
 	fullyTransparentFrames                               int
+	// emitted counts what culling decides (accepted kinds, culled lights,
+	// ground sprites); Append merges it into counts.
+	emitted map[string]int
+	walk    spriteWalk
+}
+
+// spriteWalk keeps the last full walk's feature, effect and strip candidates,
+// resolved but not yet culled, with the census that culling does not affect,
+// so Reselect can cull them for another camera without resolving them again.
+type spriteWalk struct {
+	previous, current *frame.Frame
+	valid, recording  bool
+	features, effects []spriteWalkOp
+	at                *[]spriteWalkOp
+	counts            map[string]int
+	hot               [hotSpriteCounters]int
+}
+
+// spriteWalkOp is one appendSprite or appendLight call of a walk. A feature
+// sprite also names its source and whether it is a short, ground sprite.
+type spriteWalkOp struct {
+	sprite           Sprite
+	kind             string
+	source           SpriteSource
+	light            bool
+	feature, ground  bool
+	p                [4]float32
+	radius, strength float32
+	hue              [3]float32
 }
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
 
-func (b *BattleSprites) SetSpectator(on bool)                { b.spectator = on }
-func (b *BattleSprites) SetSourceEffects(e drawlist.Effects) { b.effects = e }
+// Both settings shape the recorded walk, so a change discards it.
+func (b *BattleSprites) SetSpectator(on bool) {
+	if b.spectator != on {
+		b.spectator, b.walk.valid = on, false
+	}
+}
+func (b *BattleSprites) SetSourceEffects(e drawlist.Effects) {
+	if b.effects != e {
+		b.effects, b.walk.valid = e, false
+	}
+}
 
 // SetFeatureModelBounds copies prepared projected model bounds, relative to the
 // world anchor, before the session worker starts (GPU design §28).
@@ -183,11 +222,18 @@ func (b *BattleSprites) appendSprite(dst []Sprite, a spriteArt, previous, curren
 	r := b.regions[a.cell]
 	u0, u1 := r.uv([2]float32{}, b.texture.Width, b.texture.Height), r.uv([2]float32{1, 1}, b.texture.Width, b.texture.Height)
 	s := Sprite{Previous: previous, Current: current, Rect: [4]float32{-float32(a.xoff), -float32(a.yoff), float32(a.width), float32(a.height)}, UV: [4]float32{u0[0], u0[1], u1[0], u1[1]}, Color: color, Params: [4]float32{emission, 0, 0, 0}}
+	if b.walk.recording {
+		*b.walk.at = append(*b.walk.at, spriteWalkOp{sprite: s, kind: kind})
+	}
+	return b.cullSprite(dst, s, camera, viewport, kind)
+}
+
+func (b *BattleSprites) cullSprite(dst []Sprite, s Sprite, camera [3]float32, viewport [2]int, kind string) []Sprite {
 	if !spriteVisible(s, camera, viewport) {
 		b.hot[hotCulledSprites]++
 		return dst
 	}
-	b.counts[kind]++
+	b.emitted[kind]++
 	return append(dst, s)
 }
 
@@ -195,10 +241,13 @@ func (b *BattleSprites) appendLight(dst []Light, p [4]float32, radius, strength 
 	if radius <= 0 || strength <= 0 {
 		return dst
 	}
-	b.counts["light_sources"]++
+	if b.walk.recording {
+		*b.walk.at = append(*b.walk.at, spriteWalkOp{light: true, p: p, radius: radius, strength: strength, hue: hue})
+	}
+	b.emitted["light_sources"]++
 	probe := Sprite{Previous: p, Current: p, Rect: [4]float32{-radius, -radius, radius * 2, radius * 2}}
 	if !spriteVisible(probe, camera, viewport) {
-		b.counts["culled_lights"]++
+		b.emitted["culled_lights"]++
 		return dst
 	}
 
@@ -209,7 +258,7 @@ func (b *BattleSprites) appendLight(dst []Light, p [4]float32, radius, strength 
 	if len(dst) < 32 {
 		return append(dst, light)
 	}
-	b.counts["lights_over_limit"]++
+	b.emitted["lights_over_limit"]++
 	// Prototype's 32 slots retain the strongest, with source-order ties (§23).
 	at := 0
 	for i := 1; i < len(dst); i++ {
@@ -233,16 +282,26 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	split := func(i int) { now := time.Now(); b.Splits[i] = float64(now.Sub(splitMark)) / 1e6; splitMark = now }
 	defer split(5)
 	clear(b.counts)
+	if b.emitted == nil {
+		b.emitted = make(map[string]int)
+	}
+	clear(b.emitted)
 	b.hot = [hotSpriteCounters]int{}
 	// Metadata follows the original output indices, including a caller's
 	// unclassified prefix. Exact uint64 identities stay outside the GPU ABI.
 	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
 	clear(b.spriteSources)
 	b.spriteSourceTick = 0
+	b.walk.valid = false
 	if current == nil {
 		return dst, lights
 	}
 	b.spriteSourceTick = current.Tick
+	// Record the feature, effect and strip candidates for Reselect.
+	w := &b.walk
+	w.previous, w.current, w.recording = previous, current, true
+	w.features, w.effects = w.features[:0], w.effects[:0]
+	w.at = &w.features
 	clear(b.previousFeatures)
 	clear(b.previousEffects)
 	clear(b.previousProjectiles)
@@ -344,23 +403,20 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			}
 			start := len(dst)
 			dst = b.appendSprite(dst, a, p, p, color, emission, camera, viewport, kind)
-			for i := start; i < len(dst); i++ {
-				sourceKind := SpriteSourceFeatureBody
-				if shadow {
-					sourceKind = SpriteSourceFeatureShadow
-				}
-				b.spriteSources = append(b.spriteSources, SpriteSource{Kind: sourceKind, FeatureID: v.InstanceID, FeatureIndex: uint32(fi), Transparent: trans && !v.RuntimeLive})
+			sourceKind := SpriteSourceFeatureBody
+			if shadow {
+				sourceKind = SpriteSourceFeatureShadow
 			}
-			if v.Height < 10 {
-				// Short features precede all subjects [03 R-RAST-01 §6].
-				for i := start; i < len(dst); i++ {
-					dst[i].Current[3] = 1
-					b.counts["ground_feature_sprites"]++
-				}
+			source := SpriteSource{Kind: sourceKind, FeatureID: v.InstanceID, FeatureIndex: uint32(fi), Transparent: trans && !v.RuntimeLive}
+			if w.recording {
+				op := &w.features[len(w.features)-1]
+				op.feature, op.source, op.ground = true, source, v.Height < 10
 			}
+			b.featureSprite(dst, start, source, v.Height < 10)
 		}
 	}
 	featureEnd := len(dst)
+	w.at = &w.effects
 	split(1)
 	for _, v := range current.Effects {
 		b.counts["effects_seen"]++
@@ -449,7 +505,76 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			b.counts["unsupported_strip_family"]++
 		}
 	}
+	// The census so far is the walk's own; culling's goes to emitted.
+	if w.counts == nil {
+		w.counts = make(map[string]int)
+	}
+	clear(w.counts)
+	maps.Copy(w.counts, b.counts)
+	w.hot, w.recording, w.valid = b.hot, false, true
 	split(2)
+	return b.finishAppend(dst, lights, current, camera, viewport, featureEnd, split)
+}
+
+// featureSprite records the source of a feature sprite that survived
+// culling at dst[start:]; short features precede all subjects
+// [03 R-RAST-01 §6].
+func (b *BattleSprites) featureSprite(dst []Sprite, start int, source SpriteSource, ground bool) {
+	for i := start; i < len(dst); i++ {
+		b.spriteSources = append(b.spriteSources, source)
+		if ground {
+			dst[i].Current[3] = 1
+			b.emitted["ground_feature_sprites"]++
+		}
+	}
+}
+
+// Reselect is Append at another camera for the frames of the last full walk.
+// It culls that walk's resolved feature, effect and strip candidates again,
+// in their order, instead of resolving every one; projectiles and wreck
+// lights are walked as Append walks them. Any other frames take Append.
+func (b *BattleSprites) Reselect(dst []Sprite, lights []Light, previous, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
+	w := &b.walk
+	if !w.valid || current == nil || w.previous != previous || w.current != current {
+		return b.Append(dst, lights, previous, current, camera, viewport)
+	}
+	b.Splits = [6]float64{}
+	splitMark := time.Now()
+	split := func(i int) { now := time.Now(); b.Splits[i] = float64(now.Sub(splitMark)) / 1e6; splitMark = now }
+	defer split(5)
+	clear(b.counts)
+	maps.Copy(b.counts, w.counts)
+	clear(b.emitted)
+	b.hot = w.hot
+	b.hot[hotCulledSprites] = 0
+	b.spriteSources = resizeComposition(b.spriteSources, len(dst))
+	clear(b.spriteSources)
+	b.spriteSourceTick = current.Tick
+	for i := range w.features {
+		dst, lights = b.replaySpriteOp(dst, lights, &w.features[i], camera, viewport)
+	}
+	featureEnd := len(dst)
+	split(1)
+	for i := range w.effects {
+		dst, lights = b.replaySpriteOp(dst, lights, &w.effects[i], camera, viewport)
+	}
+	split(2)
+	return b.finishAppend(dst, lights, current, camera, viewport, featureEnd, split)
+}
+
+func (b *BattleSprites) replaySpriteOp(dst []Sprite, lights []Light, op *spriteWalkOp, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
+	if op.light {
+		return dst, b.appendLight(lights, op.p, op.radius, op.strength, op.hue, camera, viewport)
+	}
+	start := len(dst)
+	dst = b.cullSprite(dst, op.sprite, camera, viewport, op.kind)
+	if op.feature {
+		b.featureSprite(dst, start, op.source, op.ground)
+	}
+	return dst, lights
+}
+
+func (b *BattleSprites) finishAppend(dst []Sprite, lights []Light, current *frame.Frame, camera [3]float32, viewport [2]int, featureEnd int, split func(int)) ([]Sprite, []Light) {
 	dst, lights = b.appendProjectiles(dst, lights, current, camera, viewport)
 	split(3)
 	// Includes fills, strips and specialized beam/projectile appenders. The
@@ -464,6 +589,9 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	// in that order before models, then sorts other sprites at displayed alpha.
 	if b.totals == nil {
 		b.totals = make(map[string]int)
+	}
+	for k, n := range b.emitted {
+		b.counts[k] += n
 	}
 	for i, n := range b.hot {
 		if n > 0 {

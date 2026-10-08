@@ -475,6 +475,8 @@ func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
 type battleSpriteAdapter interface {
 	SetSourceEffects(drawlist.Effects)
 	Append([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
+	// Reselect is Append at another camera for the last Append's frames.
+	Reselect([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
 	Distortions([]Distortion, *frame.Frame, *frame.Frame, [3]float32, [2]int) []Distortion
 	Report() map[string]any
 }

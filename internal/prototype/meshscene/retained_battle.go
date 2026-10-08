@@ -159,7 +159,7 @@ func (r *RetainedBattle) Recull(live *LiveFrame, camera [3]float32) {
 	}
 	pub, s := r.previous, r.source
 	if s.sprites != nil {
-		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(pub.frame.Sprites[:0], pub.frame.Lights[:0], r.pair[0], r.pair[1], camera, s.viewport)
+		pub.frame.Sprites, pub.frame.Lights = s.sprites.Reselect(pub.frame.Sprites[:0], pub.frame.Lights[:0], r.pair[0], r.pair[1], camera, s.viewport)
 		pub.frame.Distortions = s.sprites.Distortions(pub.frame.Distortions[:0], r.pair[0], r.pair[1], camera, s.viewport)
 	}
 	pub.frame.Camera = camera

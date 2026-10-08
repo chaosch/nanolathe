@@ -200,11 +200,12 @@ func (b *BattleSprites) appendWreckLights(dst []Light, f *frame.Frame, camera [3
 	if !b.effects.WreckGlow {
 		return dst
 	}
-	for _, v := range f.Features {
-		if !v.WreckHeatKnown || v.Model == "" || v.Y < f.Visibility.SeaLevel || !battleFeatureVisible(f, v, b.spectator) || !battlePointVisible(f, v.X, v.Y, v.Z, b.spectator) {
+	for fi := range f.Features {
+		v := &f.Features[fi]
+		if !v.WreckHeatKnown || v.Model == "" || v.Y < f.Visibility.SeaLevel || !battleFeatureVisible(f, *v, b.spectator) || !battlePointVisible(f, v.X, v.Y, v.Z, b.spectator) {
 			continue
 		}
-		color := wreckCooling(v, f.Tick)
+		color := wreckCooling(*v, f.Tick)
 		for j := range color {
 			color[j] *= 0.6
 		}
