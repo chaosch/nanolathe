@@ -1,5 +1,7 @@
 #!/bin/sh
 # Isolated macOS prototype. No tests; native shader compilation happens at startup.
+# Pure Go by default; NANOLATHE_METAL_DYLIB=1 builds and runs the Objective-C
+# reference bridge instead (needs clang and the macOS SDK).
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 if [ "$(uname -s)" != Darwin ]; then
@@ -13,8 +15,12 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-tools/host-run xcrun clang -dynamiclib -fobjc-arc -O3 -Wall -Wextra \
-    -framework Cocoa -framework Metal -framework QuartzCore \
-    internal/platform/metalproto/native/bridge.m -o "$work/libnanometal.dylib"
+library=go
+if [ "${NANOLATHE_METAL_DYLIB:-0}" = 1 ]; then
+    tools/host-run xcrun clang -dynamiclib -fobjc-arc -O3 -Wall -Wextra \
+        -framework Cocoa -framework Metal -framework QuartzCore \
+        internal/platform/metalproto/native/bridge.m -o "$work/libnanometal.dylib"
+    library="$work/libnanometal.dylib"
+fi
 tools/host-run go build -o "$work/nanolathe-metal" ./cmd/nanolathe-metal
-"$work/nanolathe-metal" --library "$work/libnanometal.dylib" "$@"
+"$work/nanolathe-metal" --library "$library" "$@"

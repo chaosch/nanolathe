@@ -232,7 +232,7 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 	set.BoolVar(&opts.ListInstalls, "list-installs", false, "print selected or discovered content roots, one per line, without mounting")
 	set.BoolVar(&opts.CheckInstall, "check-install", false, "validate selected content roots without opening a game window")
 	set.StringVar(&opts.MetalPrototype, "metal-prototype", "", "prototype: play the ordinary battle with a retained Metal world; write timing/capture artifacts to this new directory")
-	set.StringVar(&opts.MetalLibrary, "metal-library", "", "prototype native bridge library (default beside executable)")
+	set.StringVar(&opts.MetalLibrary, "metal-library", "", "prototype native bridge: \"go\" (default, pure Go) or an Objective-C dylib path")
 	set.StringVar(&opts.MetalModelCapture, "metal-model-capture", "", "prototype: capture armsolar, armcom, armcom-ground/tree/air, armcom-cloaked/underlay or armflash-wreck[-sink] offscreen")
 	set.StringVar(&opts.MetalSize, "metal-size", "2880x1800", "prototype drawable pixels, with a 2x logical HUD")
 	set.IntVar(&opts.MetalFrames, "metal-frames", 0, "prototype frame limit; zero plays until close")

@@ -57,7 +57,7 @@ func run() error {
 	flag.BoolVar(&render.Effects, "effects", true, "enable prototype lighting, bloom and distortion")
 	flag.BoolVar(&render.VisualPasses, "visual-passes", true, "enable reveal, shadows, distortion and fog passes")
 	flag.StringVar(&render.OutputDir, "out", "", "new output directory outside the repository (required)")
-	flag.StringVar(&render.LibraryPath, "library", os.Getenv("NANOLATHE_METAL_LIBRARY"), "native Metal bridge dylib")
+	flag.StringVar(&render.LibraryPath, "library", os.Getenv("NANOLATHE_METAL_LIBRARY"), "native Metal bridge: \"go\" (default) or an Objective-C dylib path")
 	flag.BoolVar(&prepareOnly, "prepare-only", false, "write scene census and texture previews without rendering")
 	flag.BoolVar(&battle, "battle", false, "run the ordinary three-army battle instead of the retained-pose replay")
 	flag.IntVar(&armySize, "army-size", 250, "units per computer army in live battle (250..1000)")
