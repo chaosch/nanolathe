@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build darwin
 
 package metalproto
 
@@ -63,15 +63,7 @@ func (r *gbRenderer) openWindow(width, height int, vsync bool) error {
 	a.app.Send(s("finishLaunching"))
 	screen := mtl.ID(mtl.GetClass("NSScreen").Get(s("mainScreen")))
 	scale := mtl.SendDouble(screen, s("backingScaleFactor"))
-	window := mtl.ID(mtl.GetClass("NSWindow").Get(s("alloc")))
-	c := mtl.SendCall(window, s("initWithContentRect:styleMask:backing:defer:"))
-	c.SetDouble(0, 0)
-	c.SetDouble(1, 0)
-	c.SetDouble(2, float64(width)/scale)
-	c.SetDouble(3, float64(height)/scale)
-	c.X[2], c.X[3], c.X[4] = 1|2, 2, 0
-	c.Do()
-	r.window = mtl.ID(c.R[0])
+	r.window = mtl.NewWindow(0, 0, float64(width)/scale, float64(height)/scale, 1|2, 2, false)
 	if r.window == 0 {
 		return fmt.Errorf("window creation failed")
 	}

@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build darwin
 
 package mtl
 
@@ -107,7 +107,7 @@ type Region struct{ X, Y, Z, W, H, D uintptr }
 // Replace copies bytes into a shared texture region.
 func (t *Texture) Replace(x, y, w, h int, bytes unsafe.Pointer, rowBytes int) {
 	r := Region{uintptr(x), uintptr(y), 0, uintptr(w), uintptr(h), 1}
-	Send(t.ID, selReplaceRegion, uintptr(unsafe.Pointer(&r)), 0, uintptr(bytes), uintptr(rowBytes))
+	replaceRegion(t.ID, &r, bytes, rowBytes)
 }
 
 // NewLibrary compiles Metal source at run time.
@@ -281,12 +281,8 @@ func (a PassAttachment) set(texture *Texture, load, store uint) {
 
 // Clear sets the clear colour.
 func (a PassAttachment) Clear(r, g, b, alpha float64) {
-	c := SendCall(ID(a), selSetClearColor)
-	c.SetDouble(0, r)
-	c.SetDouble(1, g)
-	c.SetDouble(2, b)
-	c.SetDouble(3, alpha)
-	c.Do()
+	c := [4]float64{r, g, b, alpha}
+	setClearColor(ID(a), &c)
 }
 
 // Viewport is MTLViewport.
@@ -386,7 +382,7 @@ func (e RenderEncoder) Viewport(v Viewport) {
 		return
 	}
 	c.viewport, c.viewportSet = v, true
-	send1(ID(e), selSetViewport, uintptr(unsafe.Pointer(&v)))
+	setViewport(ID(e), &v)
 }
 
 func (e RenderEncoder) buffer(slot *binding, b *Buffer, offset, index int, set, setOffset SEL) {
@@ -485,12 +481,12 @@ func (e ComputeEncoder) Texture(t *Texture, index int) {
 func (e ComputeEncoder) DispatchThreads(w, h, d, tw, th, td int) {
 	threads := [3]uintptr{uintptr(w), uintptr(h), uintptr(d)}
 	group := [3]uintptr{uintptr(tw), uintptr(th), uintptr(td)}
-	send2(ID(e), selDispatchThreads, uintptr(unsafe.Pointer(&threads)), uintptr(unsafe.Pointer(&group)))
+	dispatch(ID(e), selDispatchThreads, &threads, &group)
 }
 func (e ComputeEncoder) DispatchGroups(w, h, d, tw, th, td int) {
 	groups := [3]uintptr{uintptr(w), uintptr(h), uintptr(d)}
 	threads := [3]uintptr{uintptr(tw), uintptr(th), uintptr(td)}
-	send2(ID(e), selDispatchThreadgroups, uintptr(unsafe.Pointer(&groups)), uintptr(unsafe.Pointer(&threads)))
+	dispatch(ID(e), selDispatchThreadgroups, &groups, &threads)
 }
 func (e ComputeEncoder) Barrier(scope uint) { send1(ID(e), selMemoryBarrierWithScope, uintptr(scope)) }
 func (e ComputeEncoder) End()               { send0(ID(e), selEndEncoding) }
@@ -507,47 +503,24 @@ func (e BlitEncoder) Fill(b *Buffer, offset, n int, value uint8) {
 
 // CopyBufferToTexture copies rows from a staging buffer into a texture region.
 func (e BlitEncoder) CopyBufferToTexture(src *Buffer, offset, rowBytes, imageBytes, w, h int, dst *Texture, x, y int) {
-	var a struct {
-		c            Call
-		size, origin [3]uintptr
-	}
-	a.size = [3]uintptr{uintptr(w), uintptr(h), 1}
-	a.origin = [3]uintptr{uintptr(x), uintptr(y), 0}
-	a.c = SendCall(ID(e), selCopyBufferToTexture)
-	a.c.X[2], a.c.X[3], a.c.X[4], a.c.X[5] = uintptr(bufferID(src)), uintptr(offset), uintptr(rowBytes), uintptr(imageBytes)
-	a.c.X[6], a.c.X[7] = uintptr(unsafe.Pointer(&a.size)), uintptr(textureID(dst))
-	a.c.Stack[0], a.c.Stack[1], a.c.Stack[2] = 0, 0, uintptr(unsafe.Pointer(&a.origin))
-	a.c.Do()
+	size := [3]uintptr{uintptr(w), uintptr(h), 1}
+	origin := [3]uintptr{uintptr(x), uintptr(y), 0}
+	copyBufferToTexture(ID(e), bufferID(src), offset, rowBytes, imageBytes, &size, textureID(dst), &origin)
 }
 
 // CopyTexture copies a region between textures at the same origin offsets.
 func (e BlitEncoder) CopyTexture(src *Texture, sx, sy, w, h int, dst *Texture, dx, dy int) {
-	var a struct {
-		c            Call
-		so, size, do [3]uintptr
-	}
-	a.so = [3]uintptr{uintptr(sx), uintptr(sy), 0}
-	a.size = [3]uintptr{uintptr(w), uintptr(h), 1}
-	a.do = [3]uintptr{uintptr(dx), uintptr(dy), 0}
-	a.c = SendCall(ID(e), selCopyTextureToTexture)
-	a.c.X[2], a.c.X[3], a.c.X[4], a.c.X[5] = uintptr(textureID(src)), 0, 0, uintptr(unsafe.Pointer(&a.so))
-	a.c.X[6], a.c.X[7] = uintptr(unsafe.Pointer(&a.size)), uintptr(textureID(dst))
-	a.c.Stack[0], a.c.Stack[1], a.c.Stack[2] = 0, 0, uintptr(unsafe.Pointer(&a.do))
-	a.c.Do()
+	so := [3]uintptr{uintptr(sx), uintptr(sy), 0}
+	size := [3]uintptr{uintptr(w), uintptr(h), 1}
+	do := [3]uintptr{uintptr(dx), uintptr(dy), 0}
+	copyTexture(ID(e), textureID(src), &so, &size, textureID(dst), &do)
 }
 
 // CopyTextureToBuffer reads a texture region back into a buffer.
 func (e BlitEncoder) CopyTextureToBuffer(src *Texture, w, h int, dst *Buffer, offset, rowBytes, imageBytes int) {
-	var a struct {
-		c            Call
-		origin, size [3]uintptr
-	}
-	a.size = [3]uintptr{uintptr(w), uintptr(h), 1}
-	a.c = SendCall(ID(e), selCopyTextureToBuffer)
-	a.c.X[2], a.c.X[3], a.c.X[4], a.c.X[5] = uintptr(textureID(src)), 0, 0, uintptr(unsafe.Pointer(&a.origin))
-	a.c.X[6], a.c.X[7] = uintptr(unsafe.Pointer(&a.size)), uintptr(bufferID(dst))
-	a.c.Stack[0], a.c.Stack[1], a.c.Stack[2] = uintptr(offset), uintptr(rowBytes), uintptr(imageBytes)
-	a.c.Do()
+	var origin [3]uintptr
+	size := [3]uintptr{uintptr(w), uintptr(h), 1}
+	copyTextureToBuffer(ID(e), textureID(src), &origin, &size, bufferID(dst), offset, rowBytes, imageBytes)
 }
 
 func bufferID(b *Buffer) ID {

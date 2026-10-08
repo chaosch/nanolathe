@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build darwin
 
 // Package mtl calls the Objective-C runtime, Metal, AppKit and Core Graphics
 // from Go without cgo or another compiler. Integer-only calls go through the
@@ -27,22 +27,6 @@ func syscall9(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9 uintptr) (r1, r2 uintptr, e
 //go:linkname runtime_cgocall runtime.cgocall
 //go:noescape
 func runtime_cgocall(fn uintptr, arg unsafe.Pointer) int32
-
-var floatTrampolineABI0 uintptr
-
-// Call is one C call's register file under AAPCS64: integer and pointer
-// arguments in X, floating-point arguments (as their bit patterns, a float32
-// in the low half) in D, further integer arguments in Stack, and X8 for an
-// indirect result. R and F return x0, x1 and d0..d3.
-type Call struct {
-	Fn    uintptr
-	X     [8]uintptr
-	D     [8]uint64
-	Stack [4]uintptr
-	X8    uintptr
-	R     [2]uintptr
-	F     [4]uint64
-}
 
 // Do runs c. The scheduler sees it as a system call, so it may block.
 func (c *Call) Do() {
@@ -113,6 +97,7 @@ func Load() error {
 	defaultRunLoopMode = symbol(appkit, "NSDefaultRunLoopMode")
 	cfDefaultMode = symbol(corefoundation, "kCFRunLoopDefaultMode")
 	commonCounterSetTimestamp = symbol(metal, "MTLCommonCounterSetTimestamp")
+	loadArch()
 	if loadErr != nil {
 		msgSend = 0
 		return loadErr
@@ -176,9 +161,12 @@ func send3(id ID, sel SEL, a, b, c uintptr) uintptr {
 	return r
 }
 
-// SendCall prepares a Call for objc_msgSend with self and sel in x0 and x1.
+// SendCall prepares a Call for objc_msgSend with self and sel in the first
+// two integer argument registers.
 func SendCall(id ID, sel SEL) Call {
-	return Call{Fn: msgSend, X: [8]uintptr{uintptr(id), uintptr(sel)}}
+	c := Call{Fn: msgSend}
+	c.X[0], c.X[1] = uintptr(id), uintptr(sel)
+	return c
 }
 
 // Double returns d0 of a completed call as a float64.
@@ -194,18 +182,13 @@ func SendDouble(id ID, sel SEL) float64 {
 	return c.Double(0)
 }
 
-// SendPoint and SendRect call methods returning NSPoint/CGSize and NSRect,
-// which AAPCS64 returns in d0..d1 and d0..d3.
+// SendPoint calls a method returning NSPoint or CGSize: two doubles, returned
+// in the first two floating-point registers on both ABIs.
 func SendPoint(id ID, sel SEL, args ...uintptr) (float64, float64) {
 	c := SendCall(id, sel)
 	copy(c.X[2:], args)
 	c.Do()
 	return c.Double(0), c.Double(1)
-}
-func SendRect(id ID, sel SEL) [4]float64 {
-	c := SendCall(id, sel)
-	c.Do()
-	return [4]float64{c.Double(0), c.Double(1), c.Double(2), c.Double(3)}
 }
 
 // GetClass looks up a class by name.
@@ -272,7 +255,8 @@ func EventIntegerField(event uintptr, field uint32) int64 {
 
 // RunLoopRunDefault is CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true).
 func RunLoopRunDefault() int32 {
-	c := Call{Fn: cfRunLoopRunInMode, X: [8]uintptr{*(*uintptr)(CPtr(cfDefaultMode)), 1}}
+	c := Call{Fn: cfRunLoopRunInMode}
+	c.X[0], c.X[1] = *(*uintptr)(CPtr(cfDefaultMode)), 1
 	c.Do()
 	return int32(c.R[0])
 }

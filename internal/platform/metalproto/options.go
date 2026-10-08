@@ -13,5 +13,5 @@ type Options struct {
 	// PrepareAhead reports whether a live frame may be prepared on a worker
 	// while the render thread paces and submits the frame before it. Nil
 	// prepares every frame on the render thread after pacing.
-	PrepareAhead func(frame int) bool
+	PrepareAhead func(frame int) bool `json:"-"`
 }
