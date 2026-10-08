@@ -37,7 +37,8 @@ type ShadowComposition struct {
 	Slots                     []ModelSlot
 	Subjects                  []ShadowSubject
 	BodyDraws, ProjectedDraws []ShadowDraw
-	BodyRules                 []ModelRules // aligned to BodyDraws, including solo child key planes
+	BodyRules                 []ModelRules // rules differing from the instance's ModelRules: solo child key planes
+	BodyRuleSlots             []uint32     // aligned to BodyDraws: 0 is the instance's ModelRules, n is BodyRules[n-1]
 	PieceFlags                []uint32     // aligned to poses; bit zero excludes DontCache structure pieces
 	AtlasWidth, AtlasHeight   int
 	Tint                      [4]float32 // physical palette index zero RGB, sample-block size (1 or 2)
@@ -128,6 +129,7 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 	out.BodyDraws = out.BodyDraws[:0]
 	out.ProjectedDraws = out.ProjectedDraws[:0]
 	out.BodyRules = out.BodyRules[:0]
+	out.BodyRuleSlots = out.BodyRuleSlots[:0]
 	out.SubjectPixels = out.SubjectPixels[:0]
 	out.TotalPixels = 0
 	out.AtlasPixels = 0
@@ -321,10 +323,12 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		for _, member := range members {
 			in := live.Instances[member]
 			rules := p.Rules
-			if member < len(live.ModelRules) {
+			own := member < len(live.ModelRules)
+			if own {
 				rules = live.ModelRules[member]
 			}
-			if e.GroupID != 0 && e.ID != e.GroupID {
+			child := e.GroupID != 0 && e.ID != e.GroupID
+			if child {
 				rules.Reveal[3] = 1
 				// Production child's shadow-only source precedes carrier
 				// water/Digger final passes (model_staging.deferChildFinalPasses).
@@ -334,7 +338,14 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 			// cache/direct and signed wrapped child-key approximations. The
 			// production staged solo/group lane would settle full parity.
 			out.BodyDraws = append(out.BodyDraws, ShadowDraw{uint32(in.Mesh), uint32(member), bodySlot, subject})
-			out.BodyRules = append(out.BodyRules, rules)
+			// The native host already holds every instance's ModelRules; only
+			// rules that differ travel with the shadows.
+			slot := uint32(0)
+			if child || !own {
+				out.BodyRules = append(out.BodyRules, rules)
+				slot = uint32(len(out.BodyRules))
+			}
+			out.BodyRuleSlots = append(out.BodyRuleSlots, slot)
 		}
 	}
 	c.packer.composition.Slots = out.Slots

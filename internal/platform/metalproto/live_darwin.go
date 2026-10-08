@@ -74,6 +74,7 @@ type liveUpload struct {
 	WorldGain                                                                                                        float32
 	Reserved                                                                                                         uint32
 	WorldGeneration, FogGeneration                                                                                   uint64
+	SpriteGeneration, ShadowFlagGeneration, ProjectionFlagGeneration, GroundGeneration                               uint64
 }
 type livePacking struct {
 	projectionPacking                                ProjectionPacking
@@ -101,6 +102,8 @@ type livePacking struct {
 	materials                                        []meshscene.NativeModelMaterial
 	materialBlocks                                   map[*meshscene.NativeModelMaterial]uint32
 	frameGeneration, packGeneration                  uint64
+	spriteTrack, shadowFlagTrack                     residentTracker
+	projectionFlagTrack, groundTrack                 residentTracker
 	rulesLen                                         int
 	phases                                           []uint32
 	cloaks                                           []cloakDraw
@@ -126,7 +129,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 704 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 752 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -242,6 +245,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	u = liveUpload{Rules: pointer(p.rules), MaterialOffsets: pointer(p.materialOffsets), Materials: pointer(p.materials), RulesCount: uint32(len(f.ModelRules)), MaterialCount: uint32(len(p.materials)), Water: f.Water, GroundSpriteCount: uint32(groundSprites), Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(p.sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(p.sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
 	u.WorldGain = f.WorldGain
 	u.WorldGeneration, u.FogGeneration = p.packGeneration, f.Fog.Generation
+	u.SpriteGeneration = p.spriteTrack.observe(residentBytes(p.sprites))
 	if f.OverlayVersion != 0 && f.OverlayVersion != p.overlayVersion {
 		t := f.OverlayTexture
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || uint64(t.Width)*uint64(t.Height)*4 != uint64(len(t.RGBA)) {
@@ -290,11 +294,12 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		if err != nil {
 			return u, r, err
 		}
-		p.groundUpload, err = p.groundPacking.Prepare(stock.Layers, stock.Scale)
+		p.groundUpload, err = p.groundPacking.Prepare(stock.Layers, stock.Scale, f.Alpha)
 		if err != nil {
 			return u, r, err
 		}
 		u.GroundEffects = uintptr(unsafe.Pointer(&p.groundUpload))
+		u.GroundGeneration = p.groundTrack.observe(residentBytes(p.groundPacking.marks))
 		u.Effects = uintptr(unsafe.Pointer(&p.stockUpload))
 		u.GlowVertices = pointer(stock.Glow.Vertices)
 		u.GlowCount = uint32(len(stock.Glow.Vertices))
@@ -337,6 +342,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 				return u, r, err
 			}
 			u.Projections = uintptr(unsafe.Pointer(&p.projectionUpload))
+			u.ProjectionFlagGeneration = p.projectionFlagTrack.observe(residentBytes(p.projectionPacking.flags))
 		}
 		u.TerrainFlags = f.TerrainFlags
 		p.waterSourcesUpload, err = p.waterPacking.PrepareSources(f.WaterSources, f.WaterObjectScales[2])
@@ -350,6 +356,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if shadowErr != nil {
 		return u, r, shadowErr
 	}
+	u.ShadowFlagGeneration = p.shadowFlagTrack.observe(residentBytes(f.Shadows.PieceFlags))
 	if f.LightControls&1 != 0 {
 		r.Lights = len(f.Lighting.Lights)
 		r.DroppedLights = 0

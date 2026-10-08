@@ -37,7 +37,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 #include "outline_rows.h"
 @interface NMRing : NSObject {
 @public
- NSUInteger resident[2]; // resident slot this ring's frame reads, per kind
+ NSUInteger resident[6]; // resident slot this ring's frame reads, per kind
 }
 @property NMGroupFrame* groups;
 @property NMFaceRing* faceRing;
@@ -69,7 +69,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==704,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==752,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -99,8 +99,10 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
  uint64_t overlayVersion,overlayTextureUploads,overlayTextureBytes,runLoopPumps,runLoopSources;
  BOOL offscreen,effects,visualPasses,held[128],pressed[128],pauseToggle;
  float wheel;
- // Resident world tables and fog: three copies each, keyed by generation.
- uint64_t residentGenerations[2][3];
+ // Resident world tables, fog, sprites and piece flags: three copies each,
+ // keyed by generation.
+ uint64_t residentGenerations[6][3];
+ id<MTLBuffer> residentBuffers[6][3];NSUInteger residentLengths[6][3];
  uint32_t worldCounts[3][4]; // pose, instance, material and rule counts per copy
  id<MTLBuffer> worldPoses[3],worldInstances[3],worldMaterialOffsets[3],worldMaterials[3],worldRules[3];
  id<MTLTexture> fogTextures[3];
@@ -446,6 +448,8 @@ static void modelBindings(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBu
 static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes);
 static void drawSubjectMember(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMRing* ring,NMCloakDraw d,BOOL outline);
 #include "groups.inc"
+enum{NMResidentWorld,NMResidentFog,NMResidentSprites,NMResidentShadowFlags,NMResidentProjectionFlags,NMResidentGround};
+static id<MTLBuffer> nmResidentBuffer(NMRenderer*,NMRing*,NSUInteger,uint64_t,const void*,NSUInteger,int);
 #include "projection.inc"
 #include "faces.inc"
 #include "face_reflections.inc"
@@ -607,7 +611,6 @@ static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
 static id<MTLBuffer> growPoseOutput(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
  if(old.length>=MAX(bytes,64))return old;NSUInteger capacity=MAX(old.length,4096);while(capacity<bytes)capacity*=2;return [r.device newBufferWithLength:capacity options:MTLResourceStorageModePrivate];
 }
-enum{NMResidentWorld,NMResidentFog};
 // nmResidentSlot returns the copy holding a nonzero generation, or else a copy
 // no in-flight frame reads, with *fresh set; the caller records the generation
 // once its copy succeeds. Frames complete in commit order, so only the other
@@ -619,6 +622,15 @@ static NSUInteger nmResidentSlot(NMRenderer* r,NSUInteger kind,uint64_t generati
  for(NSUInteger i=0;i<3;i++)if(i!=a->resident[kind]&&i!=b->resident[kind]){g[i]=0;*fresh=YES;return i;}
  return 0;
 }
+// nmResidentBuffer returns kind's copy of length bytes for generation, filling
+// a free copy for a new one (zeros when bytes is NULL).
+static id<MTLBuffer> nmResidentBuffer(NMRenderer* r,NMRing* ring,NSUInteger kind,uint64_t generation,const void* bytes,NSUInteger length,int census){
+ BOOL fresh=NO;NSUInteger slot=nmResidentSlot(r,kind,generation,&fresh);ring->resident[kind]=slot;
+ if(!fresh){if(r->residentLengths[kind][slot]!=length){r.lastError=@"Resident generation reused with a different length";return nil;}return r->residentBuffers[kind][slot];}
+ id<MTLBuffer> b=r->residentBuffers[kind][slot]=grow(r,r->residentBuffers[kind][slot],MAX(length,(NSUInteger)16));if(!b)return nil;
+ if(bytes&&length)NMCOPY(census,b.contents,bytes,length);else memset(b.contents,0,MAX(length,(NSUInteger)16));
+ r->residentLengths[kind][slot]=length;r->residentGenerations[kind][slot]=generation;return b;
+}
 // nm_live_upload copies one live frame into the next free ring slot and
 // nm_live_present acquires a drawable, encodes and commits it. Every read of
 // caller memory happens in the upload, so the caller may reuse its buffers
@@ -628,8 +640,9 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
  NMRenderer* r=(__bridge NMRenderer*)handle;if((!r->interactive&&r->rowCount>=r->rowCapacity)||upload->light_count>32||upload->overlay_count>INT32_MAX||upload->ground_sprite_count>upload->sprite_count||upload->cloak_count>upload->instance_count||upload->air_count>upload->instance_count)return 0;if(r->livePending)return 0;pump(r);if(!r->offscreen&&!r.window.visible)return -1;
  double start=CACurrentMediaTime();dispatch_semaphore_wait(r->available,DISPATCH_TIME_FOREVER);double acquired=CACurrentMediaTime();
  double copyStart=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];ring.worldGain=upload->world_gain;
- if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects)){dispatch_semaphore_signal(r->available);return 0;}
+ if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects,upload->ground_generation)){dispatch_semaphore_signal(r->available);return 0;}
  if(!ring.shadows)ring.shadows=[NMShadowFrame new];if(!nmShadowsPrepare(r,r.shadows,ring.shadows,&upload->shadows)){r.lastError=@"Shadow preparation failed";dispatch_semaphore_signal(r->available);return 0;}
+ ring.shadows.pieceFlags=nmResidentBuffer(r,ring,NMResidentShadowFlags,upload->shadow_flag_generation,(const void*)upload->shadows.piece_flags,(NSUInteger)upload->shadows.piece_count*4,NMUpShadows);if(!ring.shadows.pieceFlags){dispatch_semaphore_signal(r->available);return 0;}
  ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)NMCOPY(NMUpGlow,ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;NMCOPY(NMUpGlow,&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;
  if(!nmCompositionPrepare(r,ring,upload)){dispatch_semaphore_signal(r->available);return 0;}
  BOOL uploadOverlay=upload->overlay_version&&upload->overlay_version!=r->overlayVersion;
@@ -658,7 +671,7 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
  if(freshWorld){r->worldPoses[ws]=grow(r,r->worldPoses[ws],(NSUInteger)upload->pose_count*128);r->worldInstances[ws]=grow(r,r->worldInstances[ws],(NSUInteger)upload->instance_count*4);r->worldMaterialOffsets[ws]=grow(r,r->worldMaterialOffsets[ws],MAX((NSUInteger)upload->instance_count*4,4));r->worldMaterials[ws]=grow(r,r->worldMaterials[ws],MAX((NSUInteger)upload->material_count*48,48));r->worldRules[ws]=grow(r,r->worldRules[ws],MAX((NSUInteger)upload->instance_count*112,112));}
  else if(r->worldCounts[ws][0]!=upload->pose_count||r->worldCounts[ws][1]!=upload->instance_count||r->worldCounts[ws][2]!=upload->material_count||r->worldCounts[ws][3]!=upload->rules_count){r.lastError=@"Resident world generation reused with different counts";dispatch_semaphore_signal(r->available);return 0;}
  ring.poses=r->worldPoses[ws];ring.instances=r->worldInstances[ws];ring.materialOffsets=r->worldMaterialOffsets[ws];ring.materialOverrides=r->worldMaterials[ws];ring.rules=r->worldRules[ws];
- ring.sprites=grow(r,ring.sprites,(NSUInteger)upload->sprite_count*96);ring.lights=grow(r,ring.lights,(NSUInteger)upload->light_count*32);ring.visuals=grow(r,ring.visuals,(NSUInteger)upload->instance_count*64);ring.distortions=grow(r,ring.distortions,(NSUInteger)upload->distortion_count*64);ring.selectors=grow(r,ring.selectors,(NSUInteger)upload->instance_count*12);ring.overlay=grow(r,ring.overlay,(NSUInteger)upload->overlay_count*64);
+ ring.sprites=nmResidentBuffer(r,ring,NMResidentSprites,upload->sprite_generation,upload->sprites,(NSUInteger)upload->sprite_count*96,NMUpSprites);ring.lights=grow(r,ring.lights,(NSUInteger)upload->light_count*32);ring.visuals=grow(r,ring.visuals,(NSUInteger)upload->instance_count*64);ring.distortions=grow(r,ring.distortions,(NSUInteger)upload->distortion_count*64);ring.selectors=grow(r,ring.selectors,(NSUInteger)upload->instance_count*12);ring.overlay=grow(r,ring.overlay,(NSUInteger)upload->overlay_count*64);
  ring.retainedLights=grow(r,ring.retainedLights,MAX((NSUInteger)upload->retained_light_count*64,64));if(!ring.retainedLights){dispatch_semaphore_signal(r->available);return 0;}if(upload->retained_light_count)NMCOPY(NMUpLights,ring.retainedLights.contents,upload->retained_lights,upload->retained_light_count*64);
  
  ring.interpolatedPoses=growPoseOutput(r,ring.interpolatedPoses,(NSUInteger)upload->pose_count*64);
@@ -678,11 +691,10 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
   ring.fog=fog;
  }else{ring.fog=nil;ring->resident[NMResidentFog]=3;}
  if(upload->overlay_count)NMCOPY(NMUpOverlay,ring.overlay.contents,upload->overlay,upload->overlay_count*64);ring.overlayCount=upload->overlay_count;
- if(upload->sprite_count)NMCOPY(NMUpSprites,ring.sprites.contents,upload->sprites,upload->sprite_count*96);
  if(upload->light_count)NMCOPY(NMUpLights,ring.lights.contents,upload->lights,upload->light_count*32);
  if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*NM_SPAN_PASSES*8];if(r.meshes.count)NMCOPY(NMUpCPU,ring.spans.mutableBytes,upload->spans,r.meshes.count*NM_SPAN_PASSES*8);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*NM_SPAN_PASSES;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)NMCOPY(NMUpSelectors,ring.selectors.contents,upload->selectors,selectorCount*4);
  ring.terrainFlags=upload->terrain_flags;
- if(!nmProjectionPrepare(r,ring,upload->projections,upload->instance_count,upload->pose_count)){dispatch_semaphore_signal(r->available);return 0;}
+ if(!nmProjectionPrepare(r,ring,upload->projections,upload->instance_count,upload->pose_count,upload->projection_flag_generation)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmGroupsPrepare(r,ring,upload->groups)||!nmFacesPrepare(r,ring,upload->instance_count)||!nmFaceReflectionsPrepare(r,ring)||!nmOutlineRowsPrepare(r,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmWaterObjectsPrepare(r,ring,upload->water_objects)||!nmWaterObjectsPrepareSources(r,ring,upload->water_sources)){dispatch_semaphore_signal(r->available);return 0;}
  NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.lightControl=(vector_float4){upload->retained_light_count,(upload->light_controls&1)?1:0,(upload->light_controls&2)?1:0,(upload->light_controls&4)?1:0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,(upload->light_controls&8)?2:1,upload->composition_slot_count};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;

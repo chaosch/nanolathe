@@ -52,6 +52,9 @@ typedef struct {
  // instance offsets, material offsets and overrides) and the fog texels. A
  // resident copy with the same generation is reused instead of copied.
  uint64_t world_generation,fog_generation;
+ // The same for the packed sprites, the shadow and projection piece flags and
+ // the ground marks.
+ uint64_t sprite_generation,shadow_flag_generation,projection_flag_generation,ground_generation;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings

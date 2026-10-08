@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
@@ -135,12 +136,20 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	live.Lighting.Lights = v.lights
 	live.LightControls |= 1
 	vertices, parameters := v.glow.Frame()
+	// The production recorder lists each quad as two triangles, corners
+	// 0,1,2 and 1,2,3; native draws them indexed, so only corners 0,1,2,3
+	// (vertices 0, 1, 2 and 5) travel.
+	if len(vertices)%6 != 0 {
+		return fmt.Errorf("nanolathe: glow upload failed: logical path retained glow, providers searched [production glow recorder], expected six vertices per quad")
+	}
 	v.vertices = v.vertices[:0]
-	for _, vertex := range vertices {
-		a := meshscene.RetainedGlowVertex(vertex)
-		a.PositionUV[0] *= scale
-		a.PositionUV[1] *= scale
-		v.vertices = append(v.vertices, a)
+	for i := 0; i < len(vertices); i += 6 {
+		for _, corner := range [4]int{0, 1, 2, 5} {
+			a := meshscene.RetainedGlowVertex(vertices[i+corner])
+			a.PositionUV[0] *= scale
+			a.PositionUV[1] *= scale
+			v.vertices = append(v.vertices, a)
+		}
 	}
 	v.frame.Glow.Vertices = v.vertices
 	v.frame.Glow.Parameters = meshscene.RetainedGlowParameters(parameters)

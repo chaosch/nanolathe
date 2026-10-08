@@ -30,13 +30,22 @@ static void nmGlowDispatch(id<MTLComputeCommandEncoder> e,id<MTLTexture> destina
 }
 // Set when the final drawable pass screens the octaves itself.
 static BOOL nmGlowDeferResolve;
+// Glow sources arrive as four vertices per quad. The shared index buffer is
+// replaced, never rewritten, so earlier command buffers keep their own.
+static BOOL nmGlowQuadIndices(NMGlow *g,NSUInteger quads){
+    if(g.quadCapacity>=quads&&g.quadIndices)return YES;
+    NSUInteger capacity=MAX(g.quadCapacity,(NSUInteger)1024);while(capacity<quads)capacity*=2;
+    id<MTLBuffer> b=[g.device newBufferWithLength:capacity*24 options:MTLResourceStorageModeShared];if(!b)return NO;
+    uint32_t* at=b.contents;for(uint32_t q=0;q<capacity;q++){uint32_t v=q*4;at[q*6]=v;at[q*6+1]=v+1;at[q*6+2]=v+2;at[q*6+3]=v+1;at[q*6+4]=v+2;at[q*6+5]=v+3;}
+    g.quadIndices=b;g.quadCapacity=capacity;return YES;
+}
 static BOOL nmGlowEncode(NMGlow *g,id<MTLCommandBuffer> cb,id<MTLTexture> emission,id<MTLTexture> completed,id<MTLTexture> atlas,id<MTLTexture> destination,id<MTLBuffer> vertices,NSUInteger n,NMGlowParameters u) {
     if(!n)return YES;
-    if(!g||!cb||!emission||!completed||!atlas||!destination||!vertices||n%6||n>vertices.length/sizeof(NMGlowVertex)||emission.pixelFormat!=MTLPixelFormatRGBA16Float||destination.pixelFormat!=g.destinationFormat||completed.width!=emission.width||completed.height!=emission.height||destination.width!=emission.width||destination.height!=emission.height)return NO;
-    if(!nmGlowPrepare(g,emission.width,emission.height))return NO;
+    if(!g||!cb||!emission||!completed||!atlas||!destination||!vertices||n%4||n>vertices.length/sizeof(NMGlowVertex)||emission.pixelFormat!=MTLPixelFormatRGBA16Float||destination.pixelFormat!=g.destinationFormat||completed.width!=emission.width||completed.height!=emission.height||destination.width!=emission.width||destination.height!=emission.height)return NO;
+    if(!nmGlowPrepare(g,emission.width,emission.height)||!nmGlowQuadIndices(g,n/4))return NO;
     vector_float2 size={g.width,g.height};vector_uint4 sizes={(g.width+3)/4,(g.height+3)/4,(g.width+7)/8,(g.height+7)/8};
     MTLRenderPassDescriptor *p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=emission;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;
-    id<MTLRenderCommandEncoder> r=nmRenderEncoder(cb,p,"glow.nmGlowEncode#1");[r setRenderPipelineState:g.source];[r setVertexBuffer:vertices offset:0 atIndex:0];[r setVertexBytes:&size length:sizeof(size) atIndex:1];[r setFragmentTexture:atlas atIndex:0];[r setFragmentTexture:completed atIndex:1];[r drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:n];[r endEncoding];
+    id<MTLRenderCommandEncoder> r=nmRenderEncoder(cb,p,"glow.nmGlowEncode#1");[r setRenderPipelineState:g.source];[r setVertexBuffer:vertices offset:0 atIndex:0];[r setVertexBytes:&size length:sizeof(size) atIndex:1];[r setFragmentTexture:atlas atIndex:0];[r setFragmentTexture:completed atIndex:1];[r drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:n/4*6 indexType:MTLIndexTypeUInt32 indexBuffer:g.quadIndices indexBufferOffset:0];[r endEncoding];
     id<MTLComputeCommandEncoder> e=nmComputeEncoder(cb,"glow.nmGlowEncode#2");[e setComputePipelineState:g.shrink];[e setTexture:emission atIndex:0];[e setTexture:g.quarter atIndex:1];nmGlowDispatch(e,g.quarter);
     e=nmComputeEncoder(cb,"glow.nmGlowEncode#3");[e setComputePipelineState:g.across];[e setTexture:g.quarter atIndex:0];[e setTexture:g.horizontal atIndex:1];[e setBytes:&u length:sizeof(u) atIndex:0];nmGlowDispatch(e,g.horizontal);
     e=nmComputeEncoder(cb,"glow.nmGlowEncode#4");[e setComputePipelineState:g.down];[e setTexture:g.horizontal atIndex:0];[e setTexture:g.octaves atIndex:1];[e setBytes:&u length:sizeof(u) atIndex:0];[e setBytes:&sizes length:sizeof(sizes) atIndex:1];nmGlowDispatch(e,g.octaves);

@@ -6,7 +6,7 @@
 @end
 @implementation NMShadowFrame
 @end
-_Static_assert(sizeof(NMShadowUpload)==120,"shadow upload ABI");
+_Static_assert(sizeof(NMShadowUpload)==136,"shadow upload ABI");
 _Static_assert(sizeof(NMShadowMeshUpload)==24,"shadow topology ABI");
 typedef struct {vector_float4 screen,body,mask,params,placement;vector_uint4 order;} NMShadowSubject;
 typedef struct {uint32_t mesh,instance,slot,subject;} NMShadowDraw;
@@ -31,7 +31,7 @@ static NMShadowState* nmShadowsCreate(NMRenderer* r,id<MTLLibrary> lib,NSError**
 static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,const NMShadowUpload* u) {
  if(!s||!f||u->width>8192||u->height>8192)return NO;
  if(!u->topology_count&&!u->subject_count){f.subjectCount=0;f.bodyCount=0;f.projectedCount=0;return YES;}
- if((u->subject_count&&(!u->subjects||!u->slots||!u->width||!u->height))||(u->body_count&&(!u->body_draws||!u->body_rules))||(u->projected_count&&!u->projected_draws)||(u->piece_count&&!u->piece_flags))return NO;
+ if((u->subject_count&&(!u->subjects||!u->slots||!u->width||!u->height))||(u->body_count&&(!u->body_draws||!u->body_rule_slots))||(u->body_rule_count&&!u->body_rules)||(u->projected_count&&!u->projected_draws)||(u->piece_count&&!u->piece_flags))return NO;
  if(s.meshes.count==0&&u->topology_count){
   if(!u->topology)return NO;const NMShadowMeshUpload* meshes=(const NMShadowMeshUpload*)u->topology;
   for(uint32_t i=0;i<u->topology_count;i++){
@@ -46,12 +46,14 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
  }
  if(s.meshes.count!=u->topology_count)return NO;
  f.subjectCount=u->subject_count;f.bodyCount=u->body_count;f.projectedCount=u->projected_count;f.width=u->width;f.height=u->height;vector_float4 tint,water;memcpy(&tint,u->tint,16);memcpy(&water,u->water,16);f.tint=tint;f.water=water;
- f.slots=grow(r,f.slots,(NSUInteger)u->slot_count*48);f.subjects=grow(r,f.subjects,(NSUInteger)u->subject_count*96);f.bodyRules=grow(r,f.bodyRules,(NSUInteger)u->body_count*112);f.pieceFlags=grow(r,f.pieceFlags,(NSUInteger)u->piece_count*4);
- if(!f.slots||!f.subjects||!f.bodyRules||!f.pieceFlags)return NO;
+ f.slots=grow(r,f.slots,(NSUInteger)u->slot_count*48);f.subjects=grow(r,f.subjects,(NSUInteger)u->subject_count*96);f.bodyRules=grow(r,f.bodyRules,MAX((NSUInteger)u->body_rule_count*112,112));
+ if(!f.slots||!f.subjects||!f.bodyRules)return NO;
  if(u->slot_count)NMCOPY(NMUpShadows,f.slots.contents,(const void*)u->slots,u->slot_count*48);
  if(u->subject_count)NMCOPY(NMUpShadows,f.subjects.contents,(const void*)u->subjects,u->subject_count*96);
- if(u->body_count)NMCOPY(NMUpShadows,f.bodyRules.contents,(const void*)u->body_rules,u->body_count*112);
- if(u->piece_count)NMCOPY(NMUpShadows,f.pieceFlags.contents,(const void*)u->piece_flags,u->piece_count*4);
+ if(u->body_rule_count)NMCOPY(NMUpShadows,f.bodyRules.contents,(const void*)u->body_rules,u->body_rule_count*112);
+ if(!f.bodyRuleSlots)f.bodyRuleSlots=[NSMutableData new];f.bodyRuleSlots.length=u->body_count*4;
+ if(u->body_count){NMCOPY(NMUpCPU,f.bodyRuleSlots.mutableBytes,(const void*)u->body_rule_slots,u->body_count*4);const uint32_t* slots=f.bodyRuleSlots.bytes;for(NSUInteger i=0;i<u->body_count;i++)if(slots[i]>u->body_rule_count)return NO;}
+ // The caller sets pieceFlags from its resident copy.
  if(!f.bodyDraws)f.bodyDraws=[NSMutableData new];if(!f.projectedDraws)f.projectedDraws=[NSMutableData new];
  f.bodyDraws.length=u->body_count*16;f.projectedDraws.length=u->projected_count*16;
  if(u->body_count)NMCOPY(NMUpCPU,f.bodyDraws.mutableBytes,(const void*)u->body_draws,f.bodyDraws.length);
@@ -64,9 +66,9 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
  }
  return YES;
 }
-static void nmShadowBodyDraw(NMRenderer* r,NMShadowFrame* f,NMRing* ring,id<MTLRenderCommandEncoder> enc,NMShadowDraw d,NSUInteger ruleIndex,BOOL outline) {
+static void nmShadowBodyDraw(NMRenderer* r,NMShadowFrame* f,NMRing* ring,id<MTLRenderCommandEncoder> enc,NMShadowDraw d,uint32_t ruleSlot,BOOL outline) {
  NMMesh* mesh=r.meshes[d.mesh];NSUInteger count=outline?mesh.edgeCount:mesh.indexCount;if(!count)return;
- [enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];[enc setVertexBuffer:f.bodyRules offset:ruleIndex*112 atIndex:10];[enc setVertexBuffer:ring.materialOffsets offset:d.instance*4 atIndex:12];
+ [enc setVertexBuffer:mesh.vertices offset:0 atIndex:0];[enc setVertexBuffer:ring.instances offset:d.instance*4 atIndex:1];[enc setVertexBuffer:ring.visuals offset:d.instance*64 atIndex:5];if(ruleSlot)[enc setVertexBuffer:f.bodyRules offset:(NSUInteger)(ruleSlot-1)*112 atIndex:10];else [enc setVertexBuffer:ring.rules offset:(NSUInteger)d.instance*112 atIndex:10];[enc setVertexBuffer:ring.materialOffsets offset:d.instance*4 atIndex:12];
  [enc setVertexBuffer:f.slots offset:0 atIndex:13];[enc setVertexBytes:&d.slot length:4 atIndex:14];[enc setVertexBuffer:mesh.primitiveCenters offset:0 atIndex:15];
  [enc drawIndexedPrimitives:outline?MTLPrimitiveTypeLine:MTLPrimitiveTypeTriangle indexCount:count indexType:MTLIndexTypeUInt32 indexBuffer:outline?mesh.edges:mesh.indices indexBufferOffset:0 instanceCount:1];
 }
@@ -85,9 +87,10 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
  p.renderTargetWidth=pageW;p.renderTargetHeight=pageH;
  id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"shadows.nmShadowsRaster#1");modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeBack];[enc setVertexBuffer:ring.subjectLights offset:0 atIndex:17];[enc setRenderPipelineState:r.shadowBody];[enc setDepthStencilState:r.depth];
  const NMShadowDraw* draws=f.bodyDraws.bytes;const float* visuals=ring.visuals.contents;
- for(NSUInteger i=0;i<f.bodyCount;i++)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,NO);
+ const uint32_t* ruleSlots=f.bodyRuleSlots.bytes;
+ for(NSUInteger i=0;i<f.bodyCount;i++)nmShadowBodyDraw(r,f,ring,enc,draws[i],ruleSlots[i],NO);
  // Outline coverage is part of the finished silhouette, before the shadow.
- if(u.visual.x>0.5){[enc setRenderPipelineState:r.shadowOutline];[enc setDepthStencilState:r.depth];for(NSUInteger i=0;i<f.bodyCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)nmShadowBodyDraw(r,f,ring,enc,draws[i],i,YES);}
+ if(u.visual.x>0.5){[enc setRenderPipelineState:r.shadowOutline];[enc setDepthStencilState:r.depth];for(NSUInteger i=0;i<f.bodyCount;i++)if(visuals[draws[i].instance*16+2]>0&&visuals[draws[i].instance*16+11]>0)nmShadowBodyDraw(r,f,ring,enc,draws[i],ruleSlots[i],YES);}
  [enc endEncoding];
  p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=s.mask;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
  p.renderTargetWidth=pageW;p.renderTargetHeight=pageH;

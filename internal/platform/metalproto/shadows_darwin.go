@@ -14,12 +14,14 @@ import (
 //go:embed native/shadows.metal
 var shadowShaderSource string
 
-// nativeShadowUpload is 120 bytes on 64-bit hosts, matching NMShadowUpload.
+// nativeShadowUpload is 136 bytes on 64-bit hosts, matching NMShadowUpload.
 // Root embeds it in the live upload; acquired ring slots copy every operand.
 type nativeShadowUpload struct {
 	Topology, Slots, Subjects, BodyDraws, ProjectedDraws, BodyRules, PieceFlags                  uintptr
 	TopologyCount, SlotCount, SubjectCount, BodyCount, ProjectedCount, PieceCount, Width, Height uint32
 	Tint, Water                                                                                  [4]float32
+	BodyRuleSlots                                                                                uintptr
+	BodyRuleCount, Reserved                                                                      uint32
 }
 type nativeShadowMesh struct {
 	Vertices, Indices       uintptr
@@ -38,8 +40,13 @@ func (p *ShadowPacking) Prepare(c meshscene.ShadowComposition, sourcePacked []ui
 	if c.AtlasWidth > 8192 || c.AtlasHeight > 8192 {
 		return nativeShadowUpload{}, shadowUploadError("shadow atlas within 8192 pixels")
 	}
-	if len(c.BodyRules) != len(c.BodyDraws) {
-		return nativeShadowUpload{}, shadowUploadError("one body rule per source draw")
+	if len(c.BodyRuleSlots) != len(c.BodyDraws) {
+		return nativeShadowUpload{}, shadowUploadError("one body rule slot per source draw")
+	}
+	for _, slot := range c.BodyRuleSlots {
+		if int(slot) > len(c.BodyRules) {
+			return nativeShadowUpload{}, shadowUploadError("body rule slots within the uploaded rules")
+		}
 	}
 	p.topology = p.topology[:0]
 	for _, mesh := range c.Topology {
@@ -65,7 +72,7 @@ func (p *ShadowPacking) Prepare(c meshscene.ShadowComposition, sourcePacked []ui
 	if err != nil {
 		return nativeShadowUpload{}, err
 	}
-	return nativeShadowUpload{Topology: pointer(p.topology), Slots: pointer(c.Slots), Subjects: pointer(c.Subjects), BodyDraws: pointer(p.body), ProjectedDraws: pointer(p.projected), BodyRules: pointer(c.BodyRules), PieceFlags: pointer(c.PieceFlags), TopologyCount: uint32(len(p.topology)), SlotCount: uint32(len(c.Slots)), SubjectCount: uint32(len(c.Subjects)), BodyCount: uint32(len(p.body)), ProjectedCount: uint32(len(p.projected)), PieceCount: uint32(len(c.PieceFlags)), Width: uint32(c.AtlasWidth), Height: uint32(c.AtlasHeight), Tint: c.Tint, Water: c.Water}, nil
+	return nativeShadowUpload{Topology: pointer(p.topology), Slots: pointer(c.Slots), Subjects: pointer(c.Subjects), BodyDraws: pointer(p.body), ProjectedDraws: pointer(p.projected), BodyRules: pointer(c.BodyRules), PieceFlags: pointer(c.PieceFlags), TopologyCount: uint32(len(p.topology)), SlotCount: uint32(len(c.Slots)), SubjectCount: uint32(len(c.Subjects)), BodyCount: uint32(len(p.body)), ProjectedCount: uint32(len(p.projected)), PieceCount: uint32(len(c.PieceFlags)), Width: uint32(c.AtlasWidth), Height: uint32(c.AtlasHeight), Tint: c.Tint, Water: c.Water, BodyRuleSlots: pointer(c.BodyRuleSlots), BodyRuleCount: uint32(len(c.BodyRules))}, nil
 }
 
 func shadowUploadError(expected string) error {

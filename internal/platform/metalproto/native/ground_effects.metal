@@ -2,12 +2,13 @@
 using namespace metal;
 // Production Enhanced ground shaders (§15, §26, §29). Recorded marks own all
 // histories/ages; the shared projected water mask owns receiving-medium tests.
-struct nm_ground_Mark {float4 centreAxis,crossKind,values,mapping,clip;};
+struct nm_ground_Mark {float4 centreAxis,crossKind,values;};
+struct nm_ground_Frame {float4 mapping,clip;};
 struct nm_ground_Out {float4 position [[position]];float2 local;float4 values [[flat]],mapping [[flat]],clip [[flat]];float kind [[flat]];};
-vertex nm_ground_Out nm_ground_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const nm_ground_Mark* marks [[buffer(0)]],constant float4& viewport [[buffer(3)]]){
+vertex nm_ground_Out nm_ground_vertex(uint vid [[vertex_id]],uint iid [[instance_id]],device const nm_ground_Mark* marks [[buffer(0)]],constant float4& viewport [[buffer(3)]],device const nm_ground_Frame* frames [[buffer(30)]]){
  const float2 c[6]={float2(-1,-1),float2(1,-1),float2(-1,1),float2(-1,1),float2(1,-1),float2(1,1)};
  nm_ground_Mark m=marks[iid];float2 p=m.centreAxis.xy+c[vid].x*m.centreAxis.zw+c[vid].y*m.crossKind.xy;
- nm_ground_Out o;o.position=float4(p.x/viewport.x*2-1,1-p.y/viewport.y*2,0,1);o.local=c[vid];o.values=m.values;o.mapping=m.mapping;o.clip=m.clip;o.kind=m.crossKind.z;return o;
+ nm_ground_Out o;o.position=float4(p.x/viewport.x*2-1,1-p.y/viewport.y*2,0,1);o.local=c[vid];nm_ground_Frame g=frames[uint(m.crossKind.w)];o.values=m.values;o.mapping=g.mapping;o.clip=g.clip;o.kind=m.crossKind.z;return o;
 }
 float4 nm_ground_texel(texture2d<float> mask,int2 p){if(any(p<0)||p.x>=int(mask.get_width())||p.y>=int(mask.get_height()))return float4(0);return mask.read(uint2(p));}
 float3 nm_ground_mask(texture2d<float> mask,float2 p){float2 q=p-.5,f=fract(q);int2 a=int2(floor(q));return mix(mix(nm_ground_texel(mask,a).rgb,nm_ground_texel(mask,a+int2(1,0)).rgb,f.x),mix(nm_ground_texel(mask,a+int2(0,1)).rgb,nm_ground_texel(mask,a+int2(1,1)).rgb,f.x),f.y);}
@@ -20,7 +21,8 @@ fragment float4 nm_ground_color(nm_ground_Out in [[stage_in]],texture2d<float> m
  if(any(in.position.xy<in.clip.xy)||any(in.position.xy>=in.clip.xy+in.clip.zw))discard_fragment();
  if(control.x<=0)return float4(0);
  float3 mask=nm_ground_mask(maskTexture,(in.mapping.xy+in.position.xy*in.mapping.z)/control.x);
- float2 p=in.local;float age=in.values.x;
+ // A flagged scorch carries whole ticks; control.w is the frame's fraction.
+ float2 p=in.local;float age=in.values.x;if(in.kind<1.5&&in.values.w>.5)age+=control.w;
  if(in.kind>1.5){
   bool foam=age>=4.0;float coverage=0;float3 tint=1;
   if(!foam){coverage=smoothstep(.8,1.0,mask.b);}else{

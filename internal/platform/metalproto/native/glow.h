@@ -12,7 +12,8 @@ _Static_assert(sizeof(NMGlowParameters)==48,"glow parameters transfer");
 @property id<MTLRenderPipelineState> source,resolve;
 @property id<MTLComputePipelineState> shrink,across,down;
 @property id<MTLTexture> quarter,horizontal,octaves;
-@property NSUInteger width,height;
+@property id<MTLBuffer> quadIndices; // 0,1,2,1,2,3 per four-vertex quad; only grows
+@property NSUInteger width,height,quadCapacity;
 @property MTLPixelFormat destinationFormat;
 @end
 static NMGlow *nmGlowInitialize(id<MTLDevice> device,id<MTLLibrary> library,MTLPixelFormat destinationFormat,NSError **error);

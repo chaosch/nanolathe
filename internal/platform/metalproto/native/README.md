@@ -92,7 +92,7 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 704-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 720-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
 owns computed pose output, 64-byte visual, sprite, light, selector, distortion and overlay buffers, plus CPU draw spans. A slot
 reads its world tables (pose input, instance offsets, model rules, material
