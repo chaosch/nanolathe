@@ -2028,8 +2028,9 @@ at remaster density is the first to need GPU work: its p95 exceeds the
 8.3 ms slot. With the world split into phases, fragment-stage busy time grows
 only 0.17 ms at split 2 and idle gaps stay near 0.05 ms per frame; the rest
 is vertex and tiling work for the doubled geometry in the model draws
-(atlas raster, direct subjects, shadow bodies). The model vertex shader
-repeats per-face work at every corner, battle-light irradiance among it, so
-moving that into face preparation is the next target. Tick draws still carry
+(atlas raster, direct subjects, shadow bodies). Battle-light irradiance,
+which the model vertex shader repeats at every corner, is not the cause:
+disabling it saved 0.1 ms (p50) at split 2. The likelier lever is the size
+of the vertex output, which the tiler stores for every corner. Tick draws still carry
 the 7 ms simulation step inline in this benchmark; play runs the simulation
 on its own goroutine.
