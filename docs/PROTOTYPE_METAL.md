@@ -1828,3 +1828,95 @@ The `gpurender` test import cycle is fixed. `client` used the renderer only
 for the wreck light source type, which now lives in `drawlist` as
 `WreckSource`; the renderer keeps `RetainedWreckSource` as an alias. Results,
 samples and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round8/`.
+
+### Ninth round: float poses and presentation allocations (2026-10-07)
+
+**Float poses.** The user accepted frames that are close rather than
+byte-identical in exchange for faster unit poses. Each piece's matrix was
+built through `model.Compose`, which replays the leaf-to-root chain for every
+piece and rounds each rotation to a 16.16 word, and the affine conversion then
+applied that chain three more times to recover the basis. The battle source now
+composes in float32 instead: each piece multiplies its parent's affine once,
+in the same order (Z, then X, then Y about the piece origin, then the authored
+and script translation), with the trig from the shared angle table and the
+model-to-world Z mirror applied last. Standalone projectile and debris pieces
+build their rotation directly. The simulation still composes through
+`model.Compose`; only presentation changed.
+
+Across all 278 unit models, posed 20 times each with random script lanes,
+headings, pitches and banks, vertex positions agree with the integer path to
+within 0.00055 world units (p99 0.00027 over 928,200 vertex samples).
+Offscreen captures differ from the eighth round's in 87 of 7,464,960 pixels
+in the field view and 100 of 2,073,600 on the coastal map. Each difference is
+one edge row of one face, where a tied depth key now orders the other way; at
+8× magnification the two frames cannot be told apart. In isolation the
+composition is about five times faster (0.27 against 1.3 µs per unit); in the
+benchmark unit poses fell from 0.82 to 0.42 ms per tick.
+
+**Other per-tick work.**
+
+- *Vertical bounds.* The unit visual walked every vertex of every posed unit
+  for its vertical extent, which only the build erase reads, and only while
+  `BuildRemaining` is positive. Finished units skip the walk.
+- *Material keys.* The material cache key scanned every primitive's texture
+  reference for an animated texture on each lookup. The texture table now
+  records that once when it is built.
+
+Unit visuals fell from 0.37 to 0.23 ms per tick. Both changes leave frames
+byte-identical to the float-pose build.
+
+**Allocations.** Exact allocation profiles (`GODEBUG=memprofilerate=1`,
+offscreen) found about 57 presentation allocations per draw, all small:
+
+- *Values instead of pointers.* Beam strokes and the nanoframe reveal are
+  returned by value.
+- *Keys on the stack.* Feature sequence and fragment texture keys are built
+  on the stack.
+- *Reused storage.* Visible message lines, HUD strip stamps and effect model
+  spans reuse their storage.
+- *HUD text.* The resource, clock and weather readouts keep their text until
+  the value changes, and the command page name is formed only when a selection
+  opens a page.
+- *Native calls.* The five per-draw native calls use direct symbol calls
+  instead of purego's reflection wrappers. A direct call still allocates its
+  argument slice once, because purego keeps pointer arguments alive, so these
+  calls cost half what they did.
+
+The presentation blend now writes each unit in place and keeps the current
+tick's piece slice when both ticks' lanes are equal. Per draw, about 13
+presentation allocations remain, plus 13 from the benchmark's own census;
+the simulation step accounts for the rest.
+
+**Results** (windowed, as before; before is `18ed1bf94`, after `a5c4c1b95`;
+runs alternate). The large-view runs had a one-minute load of 3.8–4.6. A
+process outside the benchmark raised it to 8–18 during the moving-camera and
+coastal runs, so treat those rows as indicative only.
+
+| Case | Draws/s | Draws over 12.5 ms | Prep, tick draw (ms) | Prep, other draws (ms) | World build (ms/tick) | Allocations/draw |
+|---|---:|---:|---:|---:|---:|---:|
+| Field 3456×2160, before | 117.2, 116.7 | 52, 56 | 6.16, 6.09 | 2.92, 2.98 | 2.63, 2.57 | 530 |
+| Field 3456×2160, after | 118.0, 118.5 | 36, 30 | 5.42, 5.29 | 2.88, 2.78 | 1.97, 1.93 | 439 |
+| Field, moving camera, before | 117.7 | 45 | 5.97 | 3.11 | 2.60 | |
+| Field, moving camera, after | 118.1 | 27 | 5.33 | 3.02 | 2.02 | |
+| Coastal 1080p, before | 119.6 | 8 | 3.69 | 2.06 | 1.46 | 379 |
+| Coastal 1080p, after | 119.5 | 11 | 3.49 | 2.11 | 1.22 | 295 |
+
+An earlier, clean run of the float-pose change alone gave a moving-camera
+rate of 117.3 before and 118.7 after, with draws over 12.5 ms falling from 43
+to 20. The same base build measured 117.2–117.7 in this session, against
+118.1–118.5 in the eighth round's, which is a host difference; only rows from
+one session compare.
+
+**What limits now.** The world build is now 1.9 ms per tick, from 3.7 two
+rounds ago. Unit poses take 0.42 ms, unit visuals 0.23 and the feature walk
+0.23. A draw that steps the simulation still needs about 12.4 ms of worker
+time in the benchmark: 7.1 ms for the synchronous step and 5.3 ms of
+preparation. Other draws need 2.8 ms. The largest remaining per-draw costs are:
+
+- the production effect recorder, 0.8 ms, of which the presentation blend of
+  all units is about a quarter;
+- the composer, 0.53 ms, with the client's model orderer about 40% of it;
+- shadows, 0.43 ms;
+- the effect layer adapter, 0.3 ms.
+
+Results and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round9/`.
