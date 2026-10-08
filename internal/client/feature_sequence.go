@@ -48,6 +48,28 @@ func featureSequenceKey(filename, sequence string) string {
 	return strings.ToLower(strings.TrimSpace(filename)) + "|" + strings.ToLower(strings.TrimSpace(sequence))
 }
 
+// appendFeatureSequenceKey appends featureSequenceKey's bytes to dst. It
+// reports false for a name outside ASCII, whose lower case only
+// strings.ToLower defines.
+func appendFeatureSequenceKey(dst []byte, filename, sequence string) ([]byte, bool) {
+	for i, part := range [2]string{strings.TrimSpace(filename), strings.TrimSpace(sequence)} {
+		if i == 1 {
+			dst = append(dst, '|')
+		}
+		for j := 0; j < len(part); j++ {
+			b := part[j]
+			if b >= 0x80 {
+				return dst, false
+			}
+			if 'A' <= b && b <= 'Z' {
+				b += 'a' - 'A'
+			}
+			dst = append(dst, b)
+		}
+	}
+	return dst, true
+}
+
 // FeatureSequence reports the geometry of the frame the cursor is on after
 // `visit` visits, and the whole entry's lifetime in visits; ok is false when
 // the sequence does not resolve, and the caller then has no geometry and no
@@ -152,6 +174,14 @@ func (c *Client) warmFeatureSequences(defs []*content.FeatureDef) {
 func (c *Client) featureSequenceInfo(filename, sequence string) *featureSequenceInfo {
 	if c == nil || filename == "" || sequence == "" {
 		return nil
+	}
+	// Draws look sequences up every frame; an ASCII key built on the stack
+	// finds a memoised entry without allocating the joined string.
+	var buf [128]byte
+	if key, ok := appendFeatureSequenceKey(buf[:0], filename, sequence); ok {
+		if info, seen := c.featureSeqs[string(key)]; seen {
+			return info
+		}
 	}
 	key := featureSequenceKey(filename, sequence)
 	if c.featureSeqs == nil {

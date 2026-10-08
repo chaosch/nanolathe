@@ -46,10 +46,10 @@ func (h *retailBattleHUD) drawResources(c *client.Client, f *frame.Frame, displa
 	h.drawNumberRight(c, hud.AnchorMetalMax, res.MetalCapacity)
 	h.drawTextAt(c, hud.AnchorEnergy0, "0", h.guiColor(15))
 	h.drawTextAt(c, hud.AnchorMetal0, "0", h.guiColor(15))
-	h.drawTextAt(c, hud.AnchorEnergyProduced, hud.FormatEnergyProduced(rates.EnergyProduced), h.guiColor(10))
-	h.drawTextAt(c, hud.AnchorEnergyConsumed, hud.FormatEnergyConsumed(rates.EnergyConsumed), h.guiColor(12))
-	h.drawTextAt(c, hud.AnchorMetalProduced, hud.FormatMetalProduced(rates.MetalProduced), h.guiColor(10))
-	h.drawTextAt(c, hud.AnchorMetalConsumed, hud.FormatMetalConsumed(rates.MetalConsumed), h.guiColor(12))
+	h.drawTextAt(c, hud.AnchorEnergyProduced, h.anchorNumber(hud.AnchorEnergyProduced, rates.EnergyProduced, hud.FormatEnergyProduced), h.guiColor(10))
+	h.drawTextAt(c, hud.AnchorEnergyConsumed, h.anchorNumber(hud.AnchorEnergyConsumed, rates.EnergyConsumed, hud.FormatEnergyConsumed), h.guiColor(12))
+	h.drawTextAt(c, hud.AnchorMetalProduced, h.anchorNumber(hud.AnchorMetalProduced, rates.MetalProduced, hud.FormatMetalProduced), h.guiColor(10))
+	h.drawTextAt(c, hud.AnchorMetalConsumed, h.anchorNumber(hud.AnchorMetalConsumed, rates.MetalConsumed, hud.FormatMetalConsumed), h.guiColor(12))
 }
 
 // drawResourceBar paints one top-strip stock bar [07 R-HUD-03 §4]. With S the
@@ -113,7 +113,7 @@ func (h *retailBattleHUD) drawNumber(c *client.Client, index int, value float32)
 	if !ok {
 		return
 	}
-	h.drawNumberAtPoint(c, r.X1, r.Y1, value)
+	c.UIText(h.console, h.anchorNumber(index, value, formatHUDNumber), int(r.X1), int(r.Y1), h.guiColor(15))
 }
 
 func (h *retailBattleHUD) drawNumberRight(c *client.Client, index int, value float32) {
@@ -121,13 +121,9 @@ func (h *retailBattleHUD) drawNumberRight(c *client.Client, index int, value flo
 	if !ok {
 		return
 	}
-	text := formatHUDNumber(value)
+	text := h.anchorNumber(index, value, formatHUDNumber)
 	x := r.X1 - int32(client.MeasureText(h.console, text))
 	c.UIText(h.console, text, int(x), int(r.Y1), h.guiColor(15))
-}
-
-func (h *retailBattleHUD) drawNumberAtPoint(c *client.Client, x, y int32, value float32) {
-	c.UIText(h.console, formatHUDNumber(value), int(x), int(y), h.guiColor(15))
 }
 
 // formatHUDNumber renders one resource readout. The retail display is an

@@ -222,7 +222,9 @@ func (c *Client) MessageLines() []frame.MessageLine {
 	if c == nil {
 		return nil
 	}
-	lines := c.messages.Visible()
+	// The lines are read before the next draw lists them again.
+	c.messageLines = c.messages.VisibleInto(c.messageLines)
+	lines := c.messageLines
 	if c.screenChat != 0 {
 		return lines
 	}

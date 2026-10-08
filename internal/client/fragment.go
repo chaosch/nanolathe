@@ -1,6 +1,8 @@
 package client
 
 import (
+	"strings"
+
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
@@ -27,7 +29,7 @@ func (c *Client) fragmentTexture(v frame.FragmentView) *formats.GAFFrame {
 		return nil
 	}
 	pr := &p.Primitives[v.PrimitiveIndex]
-	ref, ok := resolveTextureRef(r.primary, r.logos, ckey(pr.TextureName))
+	ref, ok := resolveTextureRefKey(r.primary, r.logos, pr.TextureName)
 	if !ok {
 		return nil
 	}
@@ -112,4 +114,31 @@ func (c *Client) drawFragment(v frame.FragmentView) bool {
 	}
 	c.emitModel(pendingModelCommit{m: composedModel{image: target, raster: target, direct: true}, blit: target, body: true})
 	return true
+}
+
+// resolveTextureRefKey is resolveTextureRef(side, defaults, ckey(name)). An
+// ASCII name is lowered into a stack buffer and looked up directly, so a
+// fragment drawn every frame does not allocate its key.
+func resolveTextureRefKey(side, defaults map[string]texRef, name string) (texRef, bool) {
+	name = strings.TrimSpace(name)
+	var buf [64]byte
+	if len(name) > len(buf) {
+		return resolveTextureRef(side, defaults, ckey(name))
+	}
+	key := buf[:len(name)]
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+		if b >= 0x80 {
+			return resolveTextureRef(side, defaults, ckey(name))
+		}
+		if 'A' <= b && b <= 'Z' {
+			b += 'a' - 'A'
+		}
+		key[i] = b
+	}
+	if ref, ok := side[string(key)]; ok {
+		return ref, true
+	}
+	ref, ok := defaults[string(key)]
+	return ref, ok
 }

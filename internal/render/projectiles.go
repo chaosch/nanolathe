@@ -33,9 +33,17 @@ type BeamStroke struct {
 // offset secondary stroke first. Endpoint sorting and the strict major-axis
 // comparison follow [06 R-WFX-01 §4]; color presence is tested before mapping.
 func BeamStrokes(headScreen, tailScreen [2]int32, color, color2 int32) []BeamStroke {
+	var strokes [2]BeamStroke
+	return BeamStrokesInto(&strokes, headScreen, tailScreen, color, color2)
+}
+
+// BeamStrokesInto is BeamStrokes writing into dst, so a caller that keeps
+// dst on its stack draws a beam without allocating.
+func BeamStrokesInto(dst *[2]BeamStroke, headScreen, tailScreen [2]int32, color, color2 int32) []BeamStroke {
 	primary := BeamStroke{X0: headScreen[0], Y0: headScreen[1], X1: tailScreen[0], Y1: tailScreen[1], Color: color}
 	if color2 == 0 {
-		return []BeamStroke{primary}
+		dst[0] = primary
+		return dst[:1]
 	}
 	dx, dy := int64(primary.X1)-int64(primary.X0), int64(primary.Y1)-int64(primary.Y0)
 	if dx < 0 {
@@ -58,7 +66,8 @@ func BeamStrokes(headScreen, tailScreen [2]int32, color, color2 int32) []BeamStr
 		secondary.X0--
 		secondary.X1++
 	}
-	return []BeamStroke{secondary, primary}
+	dst[0], dst[1] = secondary, primary
+	return dst[:2]
 }
 
 // Trail smoke is not emitted here. The projectile phase owns it: the smoke

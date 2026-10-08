@@ -195,7 +195,8 @@ func (c *Client) drawProjectileBeam(d render.ProjectileDraw, v frame.ProjectileV
 	// projectile.  Tail is explicit in ProjectileView for beam latch state.
 	hx, hy := c.cam.WorldToScreen(v.X, v.Y, v.Z)
 	tx, ty := c.cam.WorldToScreen(v.TailX, v.TailY, v.TailZ)
-	strokes := render.BeamStrokes([2]int32{hx - 128, hy - 32}, [2]int32{tx - 128, ty - 32}, d.Color, d.Color2)
+	var pair [2]render.BeamStroke
+	strokes := render.BeamStrokesInto(&pair, [2]int32{hx - 128, hy - 32}, [2]int32{tx - 128, ty - 32}, d.Color, d.Color2)
 	head := render.ProjectilePoint{X: v.X, Y: v.Y, Z: v.Z}
 	tail := render.ProjectilePoint{X: v.TailX, Y: v.TailY, Z: v.TailZ}
 	primary := strokes[len(strokes)-1]

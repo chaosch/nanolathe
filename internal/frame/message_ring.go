@@ -166,6 +166,31 @@ func (r *MessageRing) Visible() []MessageLine {
 	return out
 }
 
+// VisibleInto is Visible appended to dst[:0], so a caller that keeps dst
+// lists the lines every draw without allocating.
+func (r *MessageRing) VisibleInto(dst []MessageLine) []MessageLine {
+	dst = dst[:0]
+	if r == nil || r.TextLines <= 1 || r.Display == r.Producer {
+		return dst
+	}
+	visibleLimit := min(int(r.TextLines-1), 29)
+	count := 0
+	idx := r.Producer
+	for count < visibleLimit {
+		idx = uint16((uint32(idx) + 29) % 30)
+		count++
+		if idx == r.Display {
+			break
+		}
+	}
+	// idx is now the oldest visible slot; drawing order walks forward from it.
+	for range count {
+		dst = append(dst, r.Entries[idx])
+		idx = uint16((uint32(idx) + 1) % 30)
+	}
+	return dst
+}
+
 // MessageClassSpeed is the ring kind the game-speed announcement is posted
 // under [07 R-CAM-01 §3].
 const MessageClassSpeed uint8 = 2

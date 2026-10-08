@@ -51,6 +51,7 @@ type effectsPacking struct {
 	sources        []meshscene.EffectSources
 	retainedModels []drawlist.Model
 	smoke          []meshscene.EffectSmoke
+	modelSpans     []nativeEffectsOp // one layer's model spans, reused
 }
 
 // Prepare scales the logical client picture exactly once. Native replay reads
@@ -98,7 +99,8 @@ func (p *effectsPacking) Prepare(layers []meshscene.EffectLayer, atlas meshscene
 			}
 			p.quads = append(p.quads, q)
 		}
-		modelSpans := make([]nativeEffectsOp, len(layer.Models))
+		p.modelSpans = append(p.modelSpans[:0], make([]nativeEffectsOp, len(layer.Models))...)
+		modelSpans := p.modelSpans
 		for i, m := range layer.Models {
 			if m.Suppressed != "" {
 				out.ModelSuppressed++

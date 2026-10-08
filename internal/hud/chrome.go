@@ -32,7 +32,12 @@ const ChromeStripHeight = 32
 // A non-positive restW would never advance; retail has no such frame, so the
 // loop stops after the first stamp rather than spin.
 func StripStamps(screenW, firstW, restW int32) []int32 {
-	xs := []int32{ChromeRailX}
+	return AppendStripStamps(nil, screenW, firstW, restW)
+}
+
+// AppendStripStamps appends StripStamps' origins to dst.
+func AppendStripStamps(dst []int32, screenW, firstW, restW int32) []int32 {
+	xs := append(dst, ChromeRailX)
 	x := int32(ChromeRailX) + firstW
 	for x < screenW && restW > 0 {
 		xs = append(xs, x)

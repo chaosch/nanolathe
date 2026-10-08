@@ -160,7 +160,7 @@ func (o *RetainedModelOrderer) unit(c *Client, d worldDrawable, phase uint32) {
 				break
 			}
 			child := o.buckets.units[i]
-			if model := c.modelForUnit(child); model != nil && model.compiled != nil && c.RetainedUnitRules(child, o.tick).Reveal != nil {
+			if model := c.modelForUnit(child); model != nil && model.compiled != nil && c.RetainedUnitRules(child, o.tick).Revealed {
 				groupReveal = true
 				break
 			}

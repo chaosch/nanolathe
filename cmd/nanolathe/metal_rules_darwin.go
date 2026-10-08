@@ -76,7 +76,7 @@ func metalModelRules(r client.RetainedModelRules) meshscene.ModelRules {
 			out.Clip[2] = 1
 		}
 	}
-	if r.Reveal != nil {
+	if r.Revealed {
 		out.Reveal[0], out.Reveal[1], out.Reveal[2] = float32(r.Reveal.Line), float32(r.Reveal.Floor), 1
 		out.Below[3], out.Band[3], out.Above[3] = float32(r.Reveal.Below), float32(r.Reveal.Band), float32(r.Reveal.Above)
 	}

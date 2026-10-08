@@ -14,7 +14,8 @@ type RetainedModelRules struct {
 	KeyPlane, Digger       bool
 	Waterline              drawlist.ModelWaterline
 	WaterlineKey, KeyBias  uint8
-	Reveal                 *drawlist.ModelReveal
+	Reveal                 drawlist.ModelReveal // valid when Revealed
+	Revealed               bool
 	Below, Band, Above     [3]float32
 	Outline                [4]float32
 	OutlineIndex           uint8 // physical palette index before BLUE
@@ -48,10 +49,11 @@ func (c *Client) RetainedUnitRules(v frame.UnitView, tick uint32) RetainedModelR
 	// state before return; no observer or simulation clock is advanced.
 	previousTick := c.frameTick
 	c.frameTick = tick
-	reveal, outline := c.unitNanoframeReveal(v)
+	reveal, outline, revealed := c.unitNanoframeRevealValue(v)
 	c.frameTick = previousTick
-	if reveal != nil {
-		r.Reveal = &drawlist.ModelReveal{Line: reveal.Line, Floor: reveal.Floor, Below: reveal.Below, Band: reveal.Band, Above: reveal.Above}
+	if revealed {
+		r.Reveal = drawlist.ModelReveal{Line: reveal.Line, Floor: reveal.Floor, Below: reveal.Below, Band: reveal.Band, Above: reveal.Above}
+		r.Revealed = true
 		r.Below, r.Band, r.Above = c.retainedVerdictColor(reveal.Below), c.retainedVerdictColor(reveal.Band), c.retainedVerdictColor(reveal.Above)
 		colour := c.retainedVerdictColor(int16(outline))
 		r.Outline = [4]float32{colour[0], colour[1], colour[2], 1}

@@ -38,14 +38,6 @@ func (h *retailBattleHUD) windowForRequired(b *battleSession, f *frame.Frame) (s
 }
 
 func (h *retailBattleHUD) authoredWindowForRequired(b *battleSession, f *frame.Frame) (*gui.Window, *formats.GAF, error) {
-	// Cache resolved GUI/model once instead of reparsing on draw/click [ON-05 1]
-	// Name selection is data-driven with paging: builder's page bits select guis/<unit><page>.gui [R-P0-03][07 §9] C10
-	name := ""
-	if h.side != nil {
-		name = strings.ToLower(h.side.NamePrefix) + "gen"
-	} else {
-		name = "gen"
-	}
 	// [07 §6] "Command-window switch is closed": when the selected-unit count
 	// becomes zero the switch closes the command windows down to the root
 	// <prefix>MAIN2.GUI and opens nothing, so only the root shows through — no
@@ -55,6 +47,14 @@ func (h *retailBattleHUD) authoredWindowForRequired(b *battleSession, f *frame.F
 	// and is the same closed state.
 	if b == nil || f == nil || len(f.Selection.Handles) == 0 {
 		return nil, nil, nil
+	}
+	// Cache resolved GUI/model once instead of reparsing on draw/click [ON-05 1]
+	// Name selection is data-driven with paging: builder's page bits select guis/<unit><page>.gui [R-P0-03][07 §9] C10
+	name := ""
+	if h.side != nil {
+		name = strings.ToLower(h.side.NamePrefix) + "gen"
+	} else {
+		name = "gen"
 	}
 	// A multiple selection names no page owner and opens <prefix>GEN.GUI; a
 	// single selected unit opens the window its own page state names below

@@ -204,6 +204,9 @@ type retailBattleHUD struct {
 	scorePrevKills  [frame.PlayerRowSlots]int
 	scorePrevLosses [frame.PlayerRowSlots]int
 	scoreCountersOK bool
+
+	texts  hudTextMemos
+	stamps []int32 // strip stamp origins, reused per draw
 }
 
 // loadRetailBattleHUD binds the same side-selected resources as the retail
@@ -898,8 +901,8 @@ func (h *retailBattleHUD) draw(c *client.Client, b *battleSession, presented cli
 	h.applyDisplaySize(screenW, screenH)
 	blitBattlePanel(c, h.panelTop, hud.ChromeRailX, 0)
 	if h.panelTop != nil && h.panelBottom != nil {
-		stamps := hud.StripStamps(int32(screenW), int32(h.panelTop.Width), int32(h.panelBottom.Width))
-		for _, x := range stamps[1:] {
+		h.stamps = hud.AppendStripStamps(h.stamps[:0], int32(screenW), int32(h.panelTop.Width), int32(h.panelBottom.Width))
+		for _, x := range h.stamps[1:] {
 			// PANELBOT is 33 rows tall against the top strip's 32, and retail
 			// repaints the strip only when the resource snapshot changes, after
 			// the world: its 33rd row lands on the viewport's first row on those
@@ -912,7 +915,8 @@ func (h *retailBattleHUD) draw(c *client.Client, b *battleSession, presented cli
 	}
 	if h.panelBottom != nil {
 		bottomY := int(hud.BottomStripY(int32(screenH)))
-		for _, x := range hud.StripStamps(int32(screenW), int32(h.panelBottom.Width), int32(h.panelBottom.Width)) {
+		h.stamps = hud.AppendStripStamps(h.stamps[:0], int32(screenW), int32(h.panelBottom.Width), int32(h.panelBottom.Width))
+		for _, x := range h.stamps {
 			blitBattlePanel(c, h.panelBottom, int(x), bottomY)
 		}
 	}

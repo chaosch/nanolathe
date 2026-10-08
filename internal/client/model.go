@@ -190,8 +190,18 @@ func (c *Client) modelStates(m *unitModel, pieces []frame.PieceView) []compiledm
 // the unit is complete. The pulse phase is offset by the unit's own
 // identifier so neighbouring nanoframes do not pulse together [03 §5.2].
 func (c *Client) unitNanoframeReveal(v frame.UnitView) (*presentationrender.NanoframeReveal, uint8) {
-	if v.BuildRemaining <= 0 {
+	reveal, outline, ok := c.unitNanoframeRevealValue(v)
+	if !ok {
 		return nil, 0
+	}
+	return &reveal, outline
+}
+
+// unitNanoframeRevealValue is unitNanoframeReveal without the heap copy, for
+// callers that run once per subject per draw.
+func (c *Client) unitNanoframeRevealValue(v frame.UnitView) (presentationrender.NanoframeReveal, uint8, bool) {
+	if v.BuildRemaining <= 0 {
+		return presentationrender.NanoframeReveal{}, 0, false
 	}
 	// Retail keys the pulse off the unit's own sixteen-bit identifier. The pool
 	// slot index is that number in this build — a stable per-unit value in the
@@ -199,8 +209,7 @@ func (c *Client) unitNanoframeReveal(v frame.UnitView) (*presentationrender.Nano
 	band, outline := presentationrender.NanoframePulse(uint16(v.Slot), c.frameTick)
 	band = c.communityFrameColor(v.OwnerColor, v.OwnerColorKnown, band)
 	outline = c.communityFrameColor(v.OwnerColor, v.OwnerColorKnown, outline)
-	reveal := presentationrender.BuildNanoframeReveal(v.BuildRemaining, band, outline)
-	return &reveal, outline
+	return presentationrender.BuildNanoframeReveal(v.BuildRemaining, band, outline), outline, true
 }
 
 // drawUnitModel uses the concrete hierarchy traversal for every unit kind.

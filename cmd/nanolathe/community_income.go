@@ -174,9 +174,15 @@ func (h *retailBattleHUD) drawCommunityWeather(c *client.Client, b *battleSessio
 		y2 = y1 + 16
 	}
 	width, height := c.Size()
-	wind := fmt.Sprintf("Wind : +%d (%d-%d)", current, lo, hi)
-	tide := fmt.Sprintf("Tidal : +%d", tidal)
-	clock := standaloneClockText("Game Time", f.Tick)
+	wind, ok := h.texts.wind.cached("", [4]int64{int64(current), int64(lo), int64(hi)})
+	if !ok {
+		wind = h.texts.wind.store("", [4]int64{int64(current), int64(lo), int64(hi)}, fmt.Sprintf("Wind : +%d (%d-%d)", current, lo, hi))
+	}
+	tide, ok := h.texts.tide.cached("", [4]int64{int64(tidal)})
+	if !ok {
+		tide = h.texts.tide.store("", [4]int64{int64(tidal)}, fmt.Sprintf("Tidal : +%d", tidal))
+	}
+	clock := h.texts.weatherClock.clock("Game Time", f.Tick)
 	clockWidth := client.MeasureText(h.console, clock)
 	clockX := x + max(117, client.MeasureText(h.console, wind)+8)
 	if clockX+clockWidth > width-4 {

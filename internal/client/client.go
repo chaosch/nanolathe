@@ -542,6 +542,7 @@ type Client struct {
 	// rebuilt only from committed semantic events and never read by simulation
 	// [07 R-HUD-03 §14][I6].
 	messages          frame.MessageRing
+	messageLines      []frame.MessageLine // MessageLines' storage, reused per draw
 	messageEventsTick uint32
 	// captionsDeferred holds the captions the audio queue resolves while a
 	// batch runs on the simulation goroutine; DeferCaptions(false) appends

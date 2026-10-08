@@ -135,7 +135,8 @@ func (b *BattleSprites) appendBeam(dst []Sprite, v frame.ProjectileView, d rende
 	r := b.regions[0]
 	uv := r.uv([2]float32{}, b.texture.Width, b.texture.Height)
 	projectedCentre := [2]float32{(h[0] + t[0]) * 0.5, (h[2] + t[2] - (h[1]+t[1])*0.5) * 0.5}
-	for _, stroke := range render.BeamStrokes(head, tail, d.Color, d.Color2) {
+	var pair [2]render.BeamStroke
+	for _, stroke := range render.BeamStrokesInto(&pair, head, tail, d.Color, d.Color2) {
 		dx, dy := float32(stroke.X1-stroke.X0), float32(stroke.Y1-stroke.Y0)
 		length := float32(math.Hypot(float64(dx), float64(dy)))
 		if length == 0 {

@@ -44,6 +44,40 @@ type bridge struct {
 	destroy         func(uintptr)
 }
 
+// bindPerFrame replaces the calls made on every draw with direct symbol
+// calls: a RegisterLibFunc wrapper goes through reflection and allocates its
+// arguments on each call.
+func (b *bridge) bindPerFrame(lib uintptr) error {
+	var symbols [5]uintptr
+	for i, name := range [...]string{"nm_pointer_capture", "nm_live_upload", "nm_live_present", "nm_input", "nm_events"} {
+		symbol, err := purego.Dlsym(lib, name)
+		if err != nil {
+			return fmt.Errorf("metalproto: bind %s: %w", name, err)
+		}
+		symbols[i] = symbol
+	}
+	b.pointerCapture = func(handle uintptr, captured int32) int32 {
+		r, _, _ := purego.SyscallN(symbols[0], handle, uintptr(captured))
+		return int32(r)
+	}
+	b.liveUpload = func(handle, upload uintptr) int32 {
+		r, _, _ := purego.SyscallN(symbols[1], handle, upload)
+		return int32(r)
+	}
+	b.livePresent = func(handle uintptr) int32 {
+		r, _, _ := purego.SyscallN(symbols[2], handle)
+		return int32(r)
+	}
+	b.input = func(handle, input uintptr) {
+		purego.SyscallN(symbols[3], handle, input)
+	}
+	b.events = func(handle, events uintptr, count int32) int32 {
+		r, _, _ := purego.SyscallN(symbols[4], handle, events, uintptr(count))
+		return int32(r)
+	}
+	return nil
+}
+
 func pointer[T any](s []T) uintptr {
 	if len(s) == 0 {
 		return 0
@@ -134,6 +168,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
 	purego.RegisterLibFunc(&b.censusReset, lib, "nm_upload_census_reset")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
+	if err := b.bindPerFrame(lib); err != nil {
+		return nil, err
+	}
 	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + OutlineRowsShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
 	capacity := opts.Frames + opts.Warmup

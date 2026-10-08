@@ -65,5 +65,5 @@ func (h *retailBattleHUD) drawClock(c *client.Client, b *battleSession, cur *fra
 	}
 	_, height := c.Size()
 	y := height - standaloneClockBottomDY - int(font.Height)
-	c.UIText(font, standaloneClockText(label, cur.Tick), standaloneClockX, y, h.guiColor(15))
+	c.UIText(font, h.texts.clock.clock(label, cur.Tick), standaloneClockX, y, h.guiColor(15))
 }
