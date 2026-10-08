@@ -102,10 +102,17 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	currentPieces := s.materialPieces
 	clear(currentPieces)
 	if q.Unit != nil && q.Unit.BuildRemaining <= 0 {
-		for pi, piece := range m.Pieces {
-			for _, lane := range q.Unit.Pieces {
-				if lane.Index == pi || lane.Name != "" && strings.EqualFold(lane.Name, piece.Name) {
-					currentPieces[pi] = lane.DontCache
+		// A lane poses its index and, when named, every piece of that name;
+		// lanes apply in order, so each piece keeps its last matching lane.
+		for _, lane := range q.Unit.Pieces {
+			if lane.Index >= 0 && lane.Index < len(currentPieces) {
+				currentPieces[lane.Index] = lane.DontCache
+			}
+			if lane.Name != "" {
+				for pi, piece := range m.Pieces {
+					if strings.EqualFold(lane.Name, piece.Name) {
+						currentPieces[pi] = lane.DontCache
+					}
 				}
 			}
 		}

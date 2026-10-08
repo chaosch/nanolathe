@@ -188,6 +188,8 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 				// from the offset so every retained texel keeps its authored point.
 				// The dispatch identity keeps the original authored canvas metadata.
 				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset) - minX, yoff: int(f.YOffset) - minY, hold: max(int32(meta.Frames[i].Value), 1), hue: hue, emission: emission, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
+				a := seq.frames[i]
+				b.artReach = max(b.artReach, float32(max(a.xoff, -a.xoff, a.width-a.xoff, a.xoff-a.width, a.yoff, -a.yoff, a.height-a.yoff, a.yoff-a.height)))
 				b.framesLoaded++
 				census.Frames++
 			}

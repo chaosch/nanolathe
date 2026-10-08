@@ -53,6 +53,11 @@ type BattleSprites struct {
 	// ground sprites); Append merges it into counts.
 	emitted map[string]int
 	walk    spriteWalk
+	// artReach bounds every prepared frame's extent from its anchor, in world
+	// units, and walkSlack is the build's model culling slack; a feature
+	// anchored farther than both outside the view cannot appear in it or in
+	// any camera RetainedBattle.Covers accepts.
+	artReach, walkSlack float32
 }
 
 // spriteWalk keeps the last full walk's feature, effect and strip candidates,
@@ -81,6 +86,9 @@ type spriteWalkOp struct {
 }
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
+
+// SetWalkSlack sets the next Append's culling slack (RetainedBattle.Frame).
+func (b *BattleSprites) SetWalkSlack(slack float32) { b.walkSlack = slack }
 
 // Both settings shape the recorded walk, so a change discards it.
 func (b *BattleSprites) SetSpectator(on bool) {
@@ -213,10 +221,11 @@ const (
 	hotCulledSprites
 	hotFeatureALP
 	hotMissingFeatureFrames
+	hotFeaturesOutsideView
 	hotSpriteCounters
 )
 
-var hotSpriteCounterNames = [hotSpriteCounters]string{"features_seen", "features_visibility_rejected", "culled_sprites", "feature_alp_approximations", "missing_feature_frames"}
+var hotSpriteCounterNames = [hotSpriteCounters]string{"features_seen", "features_visibility_rejected", "culled_sprites", "feature_alp_approximations", "missing_feature_frames", "features_outside_view"}
 
 func (b *BattleSprites) appendSprite(dst []Sprite, a spriteArt, previous, current [4]float32, color [4]float32, emission float32, camera [3]float32, viewport [2]int, kind string) []Sprite {
 	r := b.regions[a.cell]
@@ -326,9 +335,24 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	}
 	split(0)
 	white := spriteArt{cell: 0, width: 2, height: 2}
-	for fi, v := range current.Features {
+	// Features anchored outside the view by more than any frame's reach are
+	// skipped before their art is resolved; the walk then records only
+	// candidates a covered camera can see. Burning features keep their light,
+	// whose radius is not bounded by the reach.
+	zoom := camera[2]
+	reachX := float32(viewport[0])/(2*zoom) + b.walkSlack + b.artReach + 1
+	reachY := float32(viewport[1])/(2*zoom) + b.walkSlack + b.artReach + 1
+	for fi := range current.Features {
+		v := &current.Features[fi]
 		b.hot[hotFeaturesSeen]++
-		if !battleFeatureVisible(current, v, b.spectator) {
+		if !v.IsBurning && zoom > 0 {
+			p := b.featureAnchor(v)
+			if dx, dy := p[0]-camera[0], p[2]-p[1]*0.5-camera[1]; dx < -reachX || dx > reachX || dy < -reachY || dy > reachY {
+				b.hot[hotFeaturesOutsideView]++
+				continue
+			}
+		}
+		if !battleFeatureVisible(current, *v, b.spectator) {
 			b.hot[hotFeaturesRejected]++
 			continue
 		}
@@ -344,16 +368,11 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 			b.counts["feature_no_live_cursor"]++
 			continue
 		}
-		p := spritePosition(v.X, v.Y, v.Z)
-		if v.FootX > 0 && v.FootZ > 0 {
-			x, z := int(v.CX), int(v.CZ)
-			if x >= 0 && z >= 0 && x < b.anchorW && z < b.anchorH && b.anchorHeights[z*b.anchorW+x] >= 0 {
-				p[1] = float32(b.anchorHeights[z*b.anchorW+x])
-			} else {
-				// TODO(question): supply immutable terrain when loading this adapter;
-				// incomplete terrain keeps the production snapshot-only fallback.
-				b.counts["feature_anchor_fallback"]++
-			}
+		p := b.featureAnchor(v)
+		if v.FootX > 0 && v.FootZ > 0 && !b.anchored(v) {
+			// TODO(question): supply immutable terrain when loading this adapter;
+			// incomplete terrain keeps the production snapshot-only fallback.
+			b.counts["feature_anchor_fallback"]++
 		}
 		for _, shadow := range [2]bool{true, false} {
 			if shadow && v.RuntimeLive && !v.ShadowEnabled {
@@ -516,6 +535,21 @@ func (b *BattleSprites) Append(dst []Sprite, lights []Light, previous, current *
 	return b.finishAppend(dst, lights, current, camera, viewport, featureEnd, split)
 }
 
+// featureAnchor is a feature sprite's anchor: a footprinted feature stands on
+// its cell's terrain height when the adapter has it [03 §5.1.4].
+func (b *BattleSprites) featureAnchor(v *frame.FeatureView) [4]float32 {
+	p := spritePosition(v.X, v.Y, v.Z)
+	if v.FootX > 0 && v.FootZ > 0 && b.anchored(v) {
+		p[1] = float32(b.anchorHeights[int(v.CZ)*b.anchorW+int(v.CX)])
+	}
+	return p
+}
+
+func (b *BattleSprites) anchored(v *frame.FeatureView) bool {
+	x, z := int(v.CX), int(v.CZ)
+	return x >= 0 && z >= 0 && x < b.anchorW && z < b.anchorH && b.anchorHeights[z*b.anchorW+x] >= 0
+}
+
 // featureSprite records the source of a feature sprite that survived
 // culling at dst[start:]; short features precede all subjects
 // [03 R-RAST-01 §6].
@@ -536,7 +570,11 @@ func (b *BattleSprites) featureSprite(dst []Sprite, start int, source SpriteSour
 func (b *BattleSprites) Reselect(dst []Sprite, lights []Light, previous, current *frame.Frame, camera [3]float32, viewport [2]int) ([]Sprite, []Light) {
 	w := &b.walk
 	if !w.valid || current == nil || w.previous != previous || w.current != current {
-		return b.Append(dst, lights, previous, current, camera, viewport)
+		// This walk skipped features by its own camera, not the build's, so
+		// no later recull may replay it.
+		dst, lights = b.Append(dst, lights, previous, current, camera, viewport)
+		w.valid = false
+		return dst, lights
 	}
 	b.Splits = [6]float64{}
 	splitMark := time.Now()
@@ -637,5 +675,5 @@ func (b *BattleSprites) Report() map[string]any {
 		"wreck plumes use actual prepared static projected model bounds; orientation-dependent bounds are approximated",
 		"beams use continuous rotated quads and interpolate centres; span/angle snap to current endpoints",
 		"sprite depth uses native world anchor; tall billboard pixel depth and terrain overlap are approximations",
-	}, "terrain_anchor_snapshot": fmt.Sprintf("%dx%d", b.anchorW, b.anchorH)}
+	}, "terrain_anchor_snapshot": fmt.Sprintf("%dx%d", b.anchorW, b.anchorH), "art_reach_world_units": b.artReach}
 }

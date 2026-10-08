@@ -49,10 +49,17 @@ func battleModelBounds(m *model.Model, matrices []Mat4, originY float32) (float3
 }
 
 // u and feature point into f, so the material request borrows them without a copy.
-func (s *battleSource) applyUnitVisual(pub *battlePublication, u *frame.UnitView, f *frame.Frame) {
+// posed, when set, is the previous build's instance whose pose this one copied;
+// its vertical bounds are this pose's.
+func (s *battleSource) applyUnitVisual(pub *battlePublication, u *frame.UnitView, f *frame.Frame, posed *Instance) {
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
-	matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
-	lo, hi := battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
+	var lo, hi float32
+	if posed != nil {
+		lo, hi = posed.Visual.Bounds[0], posed.Visual.Bounds[1]
+	} else {
+		matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
+		lo, hi = battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
+	}
 	instance.Visual.Bounds = [4]float32{lo, hi, battleGroundHeight(s.scene.HeightField, u.X, u.Z), float32(u.Y) / 65536}
 	// Unknown team colours omit the textured primitive [03 R-RAST-01 §3].
 	instance.Visual.State[0] = -1

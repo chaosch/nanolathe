@@ -67,6 +67,7 @@ type battleCensus struct {
 	SubmittedTriangles   int     `json:"submitted_model_triangles"`
 	SubmittedMatrices    int     `json:"submitted_piece_matrices"`
 	CulledModels         int     `json:"culled_models"`
+	PosesReused          int     `json:"unit_poses_reused"`
 	MissingModels        int     `json:"missing_model_instances"`
 	Births               int     `json:"unit_births"`
 	Deaths               int     `json:"unit_deaths"`
@@ -167,9 +168,14 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 		key := battleEntityKey{kind: 1, id: u.InstanceID}
 		t0 := time.Now()
-		s.appendUnit(pub, key, mesh, u, prior, old)
+		reused := s.appendUnit(pub, key, mesh, u, prior, old)
 		t1 := time.Now()
-		s.applyUnitVisual(pub, &current.Units[ui], current)
+		var oldInstance *Instance
+		if reused >= 0 {
+			oldInstance = &old.frame.Instances[reused]
+			census.PosesReused++
+		}
+		s.applyUnitVisual(pub, &current.Units[ui], current, oldInstance)
 		t2 := time.Now()
 		s.applyUnitSubject(pub, u, unitSlots)
 		s.timing.pose += t1.Sub(t0)
@@ -265,6 +271,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	}
 	s.timing.split(3)
 	if s.sprites != nil {
+		s.sprites.SetWalkSlack(s.cullSlack)
 		pub.frame.Sprites, pub.frame.Lights = s.sprites.Append(pub.frame.Sprites, pub.frame.Lights, previous, current, camera, s.viewport)
 		pub.frame.Distortions = s.sprites.Distortions(pub.frame.Distortions, previous, current, camera, s.viewport)
 	}
@@ -305,8 +312,21 @@ func (s *battleSource) beginInstance(pub *battlePublication, key battleEntityKey
 	pub.byID[key] = span
 	return span
 }
-func (s *battleSource) appendUnit(pub *battlePublication, key battleEntityKey, mesh int, current frame.UnitView, previous *frame.UnitView, old *battlePublication) {
+
+// appendUnit returns the index of old's instance whose pose it copied, or -1.
+// A pose is a function of the model and battlePoseInputsEqual's fields, so a
+// unit whose inputs equal the previous tick's keeps the previous tick's pose,
+// which old already holds as its current endpoint.
+func (s *battleSource) appendUnit(pub *battlePublication, key battleEntityKey, mesh int, current frame.UnitView, previous *frame.UnitView, old *battlePublication) int {
 	span := s.beginInstance(pub, key, mesh)
+	if old != nil && previous != nil {
+		if prior, ok := old.byID[key]; ok && prior.mesh == span.mesh && prior.count == span.count && battlePoseInputsEqual(previous, &current) {
+			pose := old.frame.Current[prior.offset : prior.offset+prior.count]
+			copy(pub.frame.Current[span.offset:span.offset+span.count], pose)
+			copy(pub.frame.Previous[span.offset:span.offset+span.count], pose)
+			return prior.instance
+		}
+	}
 	s.poseScratch.unitInto(pub.frame.Current[span.offset:span.offset+span.count], s.models[mesh], current)
 	s.copyPriorOrSnap(pub, span, key, old, func(dst []Mat4) {
 		if previous != nil {
@@ -315,6 +335,13 @@ func (s *battleSource) appendUnit(pub *battlePublication, key battleEntityKey, m
 			copy(dst, pub.frame.Current[span.offset:span.offset+span.count])
 		}
 	})
+	return -1
+}
+
+// battlePoseInputsEqual compares every field unitInto reads.
+func battlePoseInputsEqual(a, b *frame.UnitView) bool {
+	return a.X == b.X && a.Y == b.Y && a.Z == b.Z && a.Heading == b.Heading && a.Pitch == b.Pitch && a.Bank == b.Bank &&
+		a.BMCode == b.BMCode && (a.BuildRemaining <= 0) == (b.BuildRemaining <= 0) && slices.Equal(a.Pieces, b.Pieces)
 }
 func (s *battleSource) copyPriorOrSnap(pub *battlePublication, span battlePoseSpan, key battleEntityKey, old *battlePublication, derive func([]Mat4)) {
 	dst := pub.frame.Previous[span.offset : span.offset+span.count]
@@ -454,7 +481,8 @@ func (s *battlePoseScratch) projectileInto(dst []Mat4, m *model.Model, p frame.P
 	}
 }
 func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
-	origin := transform.Apply([3]numeric.Fixed{})
+	// Composition already applied the chain to the zero vector.
+	origin := transform.Position()
 	matrix := Mat4{15: 1}
 	const basisSize = 1024
 	for axis := 0; axis < 3; axis++ {
@@ -474,6 +502,7 @@ func battleAffine(transform model.Transform, x, y, z numeric.Fixed) Mat4 {
 
 type battleSpriteAdapter interface {
 	SetSourceEffects(drawlist.Effects)
+	SetWalkSlack(float32)
 	Append([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
 	// Reselect is Append at another camera for the last Append's frames.
 	Reselect([]Sprite, []Light, *frame.Frame, *frame.Frame, [3]float32, [2]int) ([]Sprite, []Light)
