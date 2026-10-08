@@ -53,10 +53,15 @@ func battleModelBounds(m *model.Model, matrices []Mat4, originY float32) (float3
 // its vertical bounds are this pose's.
 func (s *battleSource) applyUnitVisual(pub *battlePublication, u *frame.UnitView, f *frame.Frame, posed *Instance) {
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
+	// Only the build erase reads the vertical extent, while BuildRemaining is
+	// positive, so a finished unit skips the vertex walk. A reused pose shares
+	// that state (battlePoseInputsEqual).
 	var lo, hi float32
-	if posed != nil {
+	switch {
+	case u.BuildRemaining <= 0:
+	case posed != nil:
 		lo, hi = posed.Visual.Bounds[0], posed.Visual.Bounds[1]
-	} else {
+	default:
 		matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
 		lo, hi = battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
 	}

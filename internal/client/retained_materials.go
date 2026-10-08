@@ -232,15 +232,8 @@ type RetainedMaterialKey struct {
 // presentations, and an unprepared resolver has no table to key. The texture
 // table is per index generation, so a reload yields a new key.
 func (r RetainedMaterialResolver) CacheKey() (RetainedMaterialKey, bool) {
-	if r.client == nil || r.model == nil || r.model.compiled == nil || r.refs == nil {
+	if r.client == nil || r.model == nil || r.model.compiled == nil || r.refs == nil || r.refs.animated {
 		return RetainedMaterialKey{}, false
-	}
-	for _, piece := range r.refs.refs {
-		for _, ref := range piece {
-			if ref.kind == texAnimated {
-				return RetainedMaterialKey{}, false
-			}
-		}
 	}
 	return RetainedMaterialKey{model: r.model, refs: r.refs, skin: r.skin, selector: r.selector, projectile: r.projectile}, true
 }
