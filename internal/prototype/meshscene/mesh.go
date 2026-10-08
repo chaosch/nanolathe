@@ -103,6 +103,11 @@ func compileMesh(m *model.Model, atlas *atlasResult, pal *palette.Tables, multip
 				corners[vi].UV = [2]float32{0.5, 0.5}
 				if textured && n == 4 {
 					corners[vi].UV = uvCorners[vi]
+					// Authored corners place the quad inside its texture as
+					// fractions from the first to the last texel.
+					if primitive.UV != nil {
+						corners[vi].UV = [2]float32{float32(primitive.UV[vi][0]) / 65535, float32(primitive.UV[vi][1]) / 65535}
+					}
 				}
 			}
 			// A split stands in for a remastered model: each strip is its own
