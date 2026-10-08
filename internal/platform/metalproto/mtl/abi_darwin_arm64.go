@@ -9,14 +9,14 @@ var floatTrampolineABI0 uintptr
 // Call is one C call's register file under AAPCS64: integer and pointer
 // arguments in X, floating-point arguments (as their bit patterns, a float32
 // in the low half) in D, further integer arguments in Stack, and X8 for an
-// indirect result. R and F return x0, x1 and d0..d3. Composites larger than
+// indirect result (unused so far). R and F return x0, x1 and d0..d3. Composites larger than
 // 16 bytes that are not floating-point aggregates pass by reference.
 type Call struct {
 	Fn    uintptr
 	X     [8]uintptr
 	D     [8]uint64
 	Stack [4]uintptr
-	X8    uintptr
+	x8    uintptr
 	R     [2]uintptr
 	F     [4]uint64
 }

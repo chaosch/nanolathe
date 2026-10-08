@@ -165,19 +165,6 @@ func ErrorText(err ID) string {
 	return GoString(ID(send0(err, selLocalizedDescription)))
 }
 
-// StringCharacters returns an NSString's UTF-16 code units.
-func StringCharacters(s ID, dst []uint16) []uint16 {
-	dst = dst[:0]
-	if s == 0 {
-		return dst
-	}
-	n := int(send0(s, selLength))
-	for i := 0; i < n; i++ {
-		dst = append(dst, uint16(send1(s, selCharacterAtIndex, uintptr(i))))
-	}
-	return dst
-}
-
 // IsMainThread is [NSThread isMainThread].
 func IsMainThread() bool { return send0(GetClass("NSThread"), selIsMainThread)&0xff != 0 }
 

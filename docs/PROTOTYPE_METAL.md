@@ -2024,7 +2024,12 @@ growth is in the world encoder's direct subjects, face preparation, shadow
 bodies and outline rings.
 
 **What limits now.** At 120 draws/s every scene is at the cap. The large view
-at remaster density is the first to need GPU work (its p95 exceeds the
-8.3 ms slot), so face preparation and the direct-subject draws are the next
-targets. Tick draws still carry the 7 ms simulation step inline in this
-benchmark; play runs the simulation on its own goroutine.
+at remaster density is the first to need GPU work: its p95 exceeds the
+8.3 ms slot. With the world split into phases, fragment-stage busy time grows
+only 0.17 ms at split 2 and idle gaps stay near 0.05 ms per frame; the rest
+is vertex and tiling work for the doubled geometry in the model draws
+(atlas raster, direct subjects, shadow bodies). The model vertex shader
+repeats per-face work at every corner, battle-light irradiance among it, so
+moving that into face preparation is the next target. Tick draws still carry
+the 7 ms simulation step inline in this benchmark; play runs the simulation
+on its own goroutine.
