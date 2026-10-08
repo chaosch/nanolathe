@@ -57,6 +57,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @property id<MTLBuffer> compositionSlots,compositionSelectors,compositionPaint;
 @property id<MTLBuffer> annotations;@property NSMutableData* annotationRanges;@property NSUInteger annotationRangeCount;
 @property NSMutableData* slotRanks; // per slot: paint index, or UINT32_MAX
+@property NSMutableData* projectilePaint; // paint index of each projectile body, in order
 @property NSUInteger directSlotCount;
 @property NSUInteger compositionPageWidth,compositionPageHeight; // this frame's raster-scaled page
 @property NSUInteger compositionSlotCount,compositionDrawCount,compositionPaintCount;
@@ -496,9 +497,9 @@ static void encodeCloaks(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> pos
  }
 }
 static BOOL nmRetainedProjectile(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,const void* uniforms,uint32_t slot,uint32_t flags) {
- if(flags&1)return NO;const uint32_t* paint=ring.compositionPaint.contents;NSUInteger at=0,body=0;
- for(;at<ring.compositionPaintCount;at++)if(paint[at*4+3]==2){if(body++==slot)break;}
- if(at==ring.compositionPaintCount||!paint[at*4])return NO;if(flags&2)return YES;NMUniforms u=*(const NMUniforms*)uniforms;
+ if(flags&1)return NO;const uint32_t* paint=ring.compositionPaint.contents;
+ if(slot>=ring.projectilePaint.length/4)return NO;NSUInteger at=((const uint32_t*)ring.projectilePaint.bytes)[slot];
+ if(!paint[at*4])return NO;if(flags&2)return YES;NMUniforms u=*(const NMUniforms*)uniforms;
  id<MTLRenderCommandEncoder> enc=nmFxShared?:nmRenderEncoder(cb,worldPass(r,NO),"effects.projectileCommit");[enc setDepthStencilState:nil];[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:at*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];if(enc!=nmFxShared)[enc endEncoding];return YES;
 }
 static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {

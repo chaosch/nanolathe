@@ -8,6 +8,7 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  ring.compositionPaint=grow(r,ring.compositionPaint,(NSUInteger)u->composition_paint_count*16);
  if(!ring.compositionSlots||!ring.compositionSelectors||!ring.compositionPaint)return NO;
  ring.annotationRangeCount=0;
+ if(!ring.projectilePaint)ring.projectilePaint=[NSMutableData new];ring.projectilePaint.length=0;
  if(!u->composed)return YES;
  if(u->annotation_count&&u->annotation_range_count==u->composition_slot_count&&u->annotations&&u->annotation_ranges){
   ring.annotations=grow(r,ring.annotations,(NSUInteger)u->annotation_count*32);if(!ring.annotations)return NO;NMCOPY(NMUpComposition,ring.annotations.contents,u->annotations,(NSUInteger)u->annotation_count*32);
@@ -19,6 +20,8 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  if(u->instance_count)NMCOPY(NMUpComposition,ring.compositionSelectors.contents,u->composition_selectors,u->instance_count*4);
  if(u->composition_slot_count)NMCOPY(NMUpComposition,ring.compositionSlots.contents,u->composition_slots,u->composition_slot_count*48);
  if(u->composition_paint_count)NMCOPY(NMUpComposition,ring.compositionPaint.contents,u->composition_paint,u->composition_paint_count*16);
+ // Effects commit the n-th projectile body by its position among them.
+ for(uint32_t i=0;i<u->composition_paint_count;i++)if(((const uint32_t*)u->composition_paint)[i*4+3]==2)[ring.projectilePaint appendBytes:&i length:4];
  // Depth slabs: a direct slot's band is its index in the phase-major paint walk.
  if(!ring.slotRanks)ring.slotRanks=[NSMutableData new];
  ring.slotRanks.length=MAX((NSUInteger)u->composition_slot_count,1)*4;memset(ring.slotRanks.mutableBytes,0xff,ring.slotRanks.length);
