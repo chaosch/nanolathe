@@ -1920,3 +1920,111 @@ preparation. Other draws need 2.8 ms. The largest remaining per-draw costs are:
 - the effect layer adapter, 0.3 ms.
 
 Results and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round9/`.
+
+### Tenth round: pure Go, authored UVs and remaster density (2026-10-07)
+
+The user asked for three things before this round: the renderer must build
+with the Go toolchain alone, it must beat the Modern renderer, and quads must
+map partial textures properly, so that remastered units of 100–250 quads can
+follow.
+
+**Pure Go.** The Objective-C bridge (`native/bridge.m` and its includes) has a
+Go port. A new package, `internal/platform/metalproto/mtl`, calls the
+Objective-C runtime, Metal, AppKit and Core Graphics without cgo:
+
+- *Integer calls.* `objc_msgSend` with integer and pointer arguments goes
+  through the runtime's own libc trampoline, `syscall.rawSyscall9`, pulled by
+  linkname as `golang.org/x/sys` does. A send costs 9 ns and allocates
+  nothing; purego's `SyscallN` costs 59 ns and one allocation.
+- *Floating-point and stack arguments.* Calls that pass or return doubles,
+  or need more than the registers, use a short trampoline in Go assembly under
+  `runtime.cgocall` (18 ns, no allocation). Its `Call` value lives on the
+  caller's stack; no Go callback runs during a call, so the stack cannot move.
+- *No callbacks.* The dylib's completion and presentation handlers become
+  polling. A ring slot waits for the command buffer that last used it; each
+  drawable's `presentedTime` is read once Core Animation sets it.
+- *No compiler beyond Go.* Shaders still compile at startup through
+  `newLibraryWithSource`, as before. `tools/metal-play` and
+  `tools/metal-proto` run `go build` alone; `NANOLATHE_METAL_DYLIB=1` still
+  builds the Objective-C reference with clang for comparison.
+
+`Run` reaches either implementation through a `nativeRenderer` interface;
+`--metal-library go` (the default) selects the port and a path selects a
+dylib. The upload descriptors now hold `unsafe.Pointer` rather than `uintptr`,
+so Go code may read them and the stack copier keeps them valid.
+
+The port is a translation, not a redesign: the same shaders, encoding order
+and resource lifetimes. Large field and coastal captures are pixel-identical
+to the dylib's, and every renderer counter matches (water reflections, group
+merges, outline subjects, effect layers). Pass timing
+(`NANOLATHE_METAL_PASS_TIMING`) works without the dylib. A playable match
+was driven with real input events (scroll pans, arrow keys, left and right
+clicks, Command-Q to close) and behaved as before.
+
+**Fewer calls.** The port made 25,400 Objective-C calls per large-view draw,
+12,000 of them buffer binds. The render encoder wrapper now remembers the
+open encoder's bindings and drops repeats; a buffer rebound at a new offset
+sends only the offset. Calls fell to 14,200 per draw with no change to the
+output.
+Native encode fell from 1.27 ms per large-view draw (Objective-C) to
+0.97 ms for the plain port and 0.69 ms with the cache, on a quiet host. In
+the matrix below, under a load of 4–7, it was 1.54 ms against 0.84 ms.
+
+**Intel Macs.** The calling layer has an AMD64 System V trampoline beside the
+AAPCS64 one. The two ABIs differ only in two small files: on AMD64,
+aggregates larger than 16 bytes (viewports, regions, sizes, origins, clear
+colours, window rectangles) travel by value on the stack, and NSRect returns
+through `objc_msgSend_stret`. Both Mac architectures build with
+`CGO_ENABLED=0`. Under Rosetta an offscreen capture matched the arm64 one
+except for 779 of 7.46 million pixels, where an effect beam lands a pixel
+apart (arm64 fuses multiply-adds); a windowed run reported the right view and
+presented every frame.
+
+**Authored UVs.** Each prepared face (now 160 bytes) carries the
+selected-frame texel coordinates of its four rotated corners instead of one
+frame rectangle, so a quad maps any region of its texture through the
+production two-chain walk. Retail's default corners reproduce the old lanes
+exactly; captures did not move. The mesh compiler honours
+`model.Primitive.UV`, so any source of authored corners reaches the GPU.
+
+`NANOLATHE_METAL_QUAD_SPLIT=2..8` stands in for remastered models: every
+four-corner face becomes that many authored strip faces, each with its own
+selector and material over its part of the texture. Split 2 doubles the
+face count to remaster density and draws the same picture: at 3× zoom it
+cannot be told from retail, and 3.4% of pixels differ, almost all by texel
+shifts along split lines.
+
+**Results** (windowed, 3,600 measured draws at a 120-draw target, two
+alternating runs per cell, GOMAXPROCS=2, simulation stepped inline every
+fourth draw; one-minute load 3.9–7.2 from macOS indexing). Late draws are
+those over 12.5 ms.
+
+| Scene | Renderer | Draws/s | Late draws | p99 frame | Allocs/draw | GC |
+|---|---|---|---|---|---|---|
+| Field, 3456×2160 | Classic (CPU) | 29.3 | 3,599 | 57.1 ms | 2,420 | 2 |
+| | Modern (Ebitengine) | 69.8 | 1,784 | 28.3 ms | 37,373 | 5 |
+| | Metal, pure Go | 119.0 | 16 | 9.9 ms | 435 | 0 |
+| Field, 1920×1080 | Classic | 65.0 | 2,111 | 33.2 ms | 1,911 | 2 |
+| | Modern | 95.6 | 848 | 19.3 ms | 21,331 | 4 |
+| | Metal, pure Go | 119.6 | 9 | 9.5 ms | 432 | 0 |
+| Coastal, 1920×1080 | Classic | 53.1 | 3,559 | 30.7 ms | 1,703 | 2 |
+| | Modern | 101.1 | 565 | 17.4 ms | 27,545 | 6 |
+| | Metal, pure Go | 119.9 | 2 | 9.4 ms | 292 | 0 |
+
+Metal's GPU time per draw was 5.8–6.4 ms (p50). The Objective-C bridge ran
+the large field at 118.8 draws/s with 11 late draws, the same as the port.
+
+**Remaster density** (every quad split in two, large field view): Modern
+fell from 69.8 to 47.2 draws/s. Metal, alternating retail and split runs,
+held 118.8 against 119.1 draws/s, with 17.5 late draws against 13. Its CPU
+cost was flat (record +0.05 ms, encode +0.04 ms) and the GPU paid instead:
+p50 6.3 → 7.7 ms, p95 7.5 → 9.7 ms. Pass timing on a quieter host put the
+busy time at 5.2, 5.6 and 6.9 ms for one, two and four strips per quad; the
+growth is in the world encoder's direct subjects, face preparation, shadow
+bodies and outline rings.
+
+**What limits now.** At 120 draws/s every scene is at the cap. The large view
+at remaster density is the first to need GPU work (its p95 exceeds the
+8.3 ms slot), so face preparation and the direct-subject draws are the next
+targets. Tick draws still carry the 7 ms simulation step inline in this
+benchmark; play runs the simulation on its own goroutine.
