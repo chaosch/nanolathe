@@ -114,7 +114,8 @@ static void nmTimingWrite(void) {
 // Diagnostic ablation for whole-frame A/B: NANOLATHE_METAL_ABLATE is a comma
 // list of pass families to skip (effects, glow, water). Output is incomplete.
 static BOOL nmAblate(const char* family) {
- static NSArray<NSString*>* list;static dispatch_once_t once;
- dispatch_once(&once,^{const char* v=getenv("NANOLATHE_METAL_ABLATE");list=v?[[NSString stringWithUTF8String:v] componentsSeparatedByString:@","]:@[];});
- return [list containsObject:@(family)];
+ static NSArray<NSString*>* list;static BOOL any;static dispatch_once_t once;
+ dispatch_once(&once,^{const char* v=getenv("NANOLATHE_METAL_ABLATE");list=v?[[NSString stringWithUTF8String:v] componentsSeparatedByString:@","]:@[];any=list.count>0;});
+ // Per-slot callers would otherwise build a string per call.
+ return any&&[list containsObject:@(family)];
 }

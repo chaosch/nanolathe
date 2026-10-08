@@ -51,6 +51,13 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
  if(u->slot_count)NMCOPY(NMUpShadows,f.slots.contents,(const void*)u->slots,u->slot_count*48);
  if(u->subject_count)NMCOPY(NMUpShadows,f.subjects.contents,(const void*)u->subjects,u->subject_count*96);
  if(u->body_rule_count)NMCOPY(NMUpShadows,f.bodyRules.contents,(const void*)u->body_rules,u->body_rule_count*112);
+ // Index subjects by commit slot, so each slot's commit visits only its own.
+ if(!f.slotFirst)f.slotFirst=[NSMutableData new];if(!f.subjectNext)f.subjectNext=[NSMutableData new];
+ const NMShadowSubject* subjects=(const NMShadowSubject*)u->subjects;uint32_t slotCount=0;
+ for(uint32_t i=0;i<u->subject_count;i++)slotCount=MAX(slotCount,subjects[i].order.x+1);
+ f.slotFirst.length=(NSUInteger)slotCount*4;f.subjectNext.length=(NSUInteger)u->subject_count*4;
+ uint32_t* first=f.slotFirst.mutableBytes;uint32_t* next=f.subjectNext.mutableBytes;if(slotCount)memset(first,0xff,(NSUInteger)slotCount*4);
+ for(uint32_t i=u->subject_count;i-->0;){next[i]=first[subjects[i].order.x];first[subjects[i].order.x]=i;}
  if(!f.bodyRuleSlots)f.bodyRuleSlots=[NSMutableData new];f.bodyRuleSlots.length=u->body_count*4;
  if(u->body_count){NMCOPY(NMUpCPU,f.bodyRuleSlots.mutableBytes,(const void*)u->body_rule_slots,u->body_count*4);const uint32_t* slots=f.bodyRuleSlots.bytes;for(NSUInteger i=0;i<u->body_count;i++)if(slots[i]>u->body_rule_count)return NO;}
  // The caller sets pieceFlags from its resident copy.
@@ -107,8 +114,8 @@ static void nmShadowsRaster(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,NMRi
 // sprite/model writes. A staged child's solo shadow precedes the parent's.
 static void nmShadowsCommitSlot(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,id<MTLRenderCommandEncoder> enc,NMUniforms u,uint32_t slot) {
  if(!f.subjectCount||nmAblate("shadows")||nmAblate("shadowcommit"))return;
- const NMShadowSubject* subjects=f.subjects.contents;
  [enc setRenderPipelineState:s.commit];[enc setDepthStencilState:nmSlabCommitActive?r.spriteDepth:nil];[enc setCullMode:MTLCullModeNone];[enc setVertexBuffer:f.subjects offset:0 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBuffer:f.subjects offset:0 atIndex:0];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  vector_float4 tint=f.tint,water=f.water;[enc setFragmentBytes:&tint length:16 atIndex:5];[enc setFragmentBytes:&water length:16 atIndex:6];[enc setFragmentTexture:s.body atIndex:0];[enc setFragmentTexture:s.depth atIndex:1];[enc setFragmentTexture:s.mask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];
- for(uint32_t i=0;i<f.subjectCount;i++)if(subjects[i].order.x==slot){[enc setVertexBytes:&i length:4 atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];}
+ const uint32_t* first=f.slotFirst.bytes;const uint32_t* next=f.subjectNext.bytes;
+ if(slot<f.slotFirst.length/4)for(uint32_t i=first[slot];i!=UINT32_MAX;i=next[i]){[enc setVertexBytes:&i length:4 atIndex:1];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];}
 }

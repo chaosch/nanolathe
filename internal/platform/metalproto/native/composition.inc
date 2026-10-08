@@ -42,9 +42,16 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  }
  return YES;
 }
-static BOOL nmSlotDirect(NMRing* ring,uint32_t slot){
- if(!slot||slot>ring.compositionSlotCount||!ring.directSlotCount)return NO;
- return ((const float*)ring.compositionSlots.contents)[(slot-1)*12+10]>0.5f&&((const uint32_t*)ring.slotRanks.bytes)[slot-1]!=UINT32_MAX;
+// One frame's direct-slot table, read from the ring once per loop rather than
+// four property reads per slot test.
+typedef struct {const float* slots;const uint32_t* ranks;NSUInteger count;} NMDirectView;
+static NMDirectView nmDirectView(NMRing* ring){
+ NMDirectView v={0};
+ if(ring.directSlotCount){v.slots=ring.compositionSlots.contents;v.ranks=ring.slotRanks.bytes;v.count=ring.compositionSlotCount;}
+ return v;
+}
+static inline BOOL nmSlotDirect(const NMDirectView* v,uint32_t slot){
+ return slot&&slot<=v->count&&v->slots[(slot-1)*12+10]>0.5f&&v->ranks[slot-1]!=UINT32_MAX;
 }
 // Depth for one paint band. Later ranks are nearer; local 0..1 orders inside it.
 static double nmSlabDepth(NMRing* ring,NSUInteger rank,double local){
@@ -65,10 +72,10 @@ static void nmDirectPhase(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEncoder>
  if(!ring.directSlotCount)return;
  const NMCloakDraw* draws=ring.compositionDraws.bytes;const float* slots=ring.compositionSlots.contents;const uint32_t* ranks=ring.slotRanks.bytes;
  u.mode.z=0;u.mode.w=2;
- BOOL bound=NO;
- for(NSUInteger i=0;i<ring.compositionDrawCount;i++){
+ BOOL bound=NO;NMDirectView view=nmDirectView(ring);
+ for(NSUInteger i=0,n=ring.compositionDrawCount;i<n;i++){
   uint32_t slot=draws[i].group;
-  if(!nmSlotDirect(ring,slot)||(uint32_t)slots[(slot-1)*12+9]!=phase)continue;
+  if(!nmSlotDirect(&view,slot)||(uint32_t)slots[(slot-1)*12+9]!=phase)continue;
   if(!bound){modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.directModel];[enc setDepthStencilState:r.depth];bound=YES;}
   const float* s=&slots[(slot-1)*12];
   struct {vector_float4 slab,screen,atlas;} direct={{(float)ring.compositionPaintCount+1,(float)ranks[slot-1],0,0},{s[0],s[1],s[2],s[3]},{s[4],s[5],s[6],s[7]}};
@@ -87,7 +94,8 @@ static void nmCompositionRaster(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> 
  id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,p,"composition.nmCompositionRaster#1");u.mode.z=0;u.mode.w=2;
  modelBindings(r,enc,poses,ring,u);[enc setFrontFacingWinding:MTLWindingClockwise];[enc setCullMode:MTLCullModeNone];[enc setRenderPipelineState:r.atlasModelMetadata];[enc setDepthStencilState:r.depth];
  const NMCloakDraw* draws=ring.compositionDraws.bytes;
- for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(!nmSlotDirect(ring,draws[i].group))drawSubjectMember(r,enc,ring,draws[i],NO);
+ NMDirectView view=nmDirectView(ring);
+ for(NSUInteger i=0,n=ring.compositionDrawCount;i<n;i++)if(!nmSlotDirect(&view,draws[i].group))drawSubjectMember(r,enc,ring,draws[i],NO);
  // Construction row endpoints resolve complete native pixel blocks after this pass.
  [enc endEncoding];
 }
@@ -96,7 +104,7 @@ static void nmCompositionCommit(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEn
  NSUInteger end=begin;while(end<ring.compositionPaintCount&&paint[end*4+1]==phase)end++;if(begin==end)return;
  // With slabs, every quad is depth-tested (never written) inside its own paint
  // band, so a later-ranked direct body still covers it [DESIGN_GPU_RENDERER C-G3].
- BOOL slabs=ring.directSlotCount>0;nmSlabCommitActive=slabs;
+ BOOL slabs=ring.directSlotCount>0;nmSlabCommitActive=slabs;NMDirectView view=nmDirectView(ring);
  [enc setDepthStencilState:slabs?r.spriteDepth:nil];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  while(begin<end){
   BOOL sprite=paint[begin*4+3]==1;NSUInteger stop=begin+1;
@@ -112,7 +120,7 @@ static void nmCompositionCommit(NMRenderer* r,NMRing* ring,id<MTLRenderCommandEn
    if(range[1]){if(slabs){nmSlabViewport(r,enc,nmSlabDepth(ring,begin,0.9998));[enc setDepthStencilState:r.spriteDepth];}
     [enc setRenderPipelineState:r.annotation];[enc setVertexBuffer:ring.annotations offset:(NSUInteger)range[0]*32 atIndex:0];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:range[1]];}
   }
-  if(!sprite&&paint[begin*4+3]==0&&nmSlotDirect(ring,paint[begin*4])){begin=stop;continue;}
+  if(!sprite&&paint[begin*4+3]==0&&nmSlotDirect(&view,paint[begin*4])){begin=stop;continue;}
   if(slabs){nmSlabViewport(r,enc,nmSlabDepth(ring,begin,0.5));[enc setDepthStencilState:r.spriteDepth];}
   if(sprite){[enc setRenderPipelineState:r.sprite];[enc setVertexBuffer:ring.sprites offset:(paint[begin*4]-1)*96 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];}
   else{[enc setRenderPipelineState:r.atlasCommit];[enc setVertexBuffer:ring.compositionSlots offset:0 atIndex:0];[enc setVertexBuffer:ring.compositionPaint offset:begin*16 atIndex:1];[enc setFragmentTexture:r.modelAtlasColor atIndex:0];[enc setFragmentTexture:r.modelAtlasEmission atIndex:1];nmWaterObjectsBindCommit(r,ring,enc,u);}

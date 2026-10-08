@@ -29,6 +29,10 @@ typedef struct {uintptr_t vertices,indices;uint32_t vertex_count,index_count;} N
 @property NSMutableData* bodyDraws;
 @property NSMutableData* bodyRuleSlots;
 @property NSMutableData* projectedDraws;
+// slotFirst[slot] is the slot's first subject and subjectNext[i] the next
+// subject of subject i's slot, in subject order; UINT32_MAX ends a list.
+@property NSMutableData* slotFirst;
+@property NSMutableData* subjectNext;
 @property NSUInteger subjectCount,bodyCount,projectedCount;
 @property uint32_t width,height;
 @property(nonatomic) vector_float4 tint,water;
