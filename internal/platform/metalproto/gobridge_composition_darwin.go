@@ -793,6 +793,7 @@ func (r *gbRenderer) compositionCommit(ring *gbRing, enc mtl.RenderEncoder, u gb
 			enc.Pipeline(r.sprite)
 			enc.VertexBuffer(ring.sprites, int(paint[begin*4]-1)*96, 0)
 			enc.FragmentTexture(r.spriteAtlas, 0)
+			enc.FragmentTexture(r.spriteDetailAtlas(), 1)
 		} else {
 			enc.Pipeline(r.atlasCommit)
 			enc.VertexBuffer(ring.compositionSlots, 0, 0)

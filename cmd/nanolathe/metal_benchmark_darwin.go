@@ -38,7 +38,7 @@ type metalBenchmarkRow struct {
 // executors. Only translation, submission and the platform window differ.
 func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *client.Client, step func(), census func() any, options ebitenapp.BenchmarkOptions) error {
 	display := c.DisplayPalette()
-	terrainSources, detailSprites := metalDetailArt(c)
+	terrainSources, detailSprites := metalDetailArt(c, opts.MetalLibrary)
 	scene, world, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: detailSprites,
 		LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(c), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures},
 		Width:       options.Width, Height: options.Height, Zoom: float32(viewZoomOf(b).Float()),

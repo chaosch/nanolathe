@@ -52,7 +52,7 @@ func makeReport(rows []nativeRow, o Options, s *meshscene.Scene, device map[stri
 		}
 	}
 	return map[string]any{
-		"backend": "retained Metal prototype via purego Objective-C bridge", "scene": s.Name, "scene_metadata": s.Metadata, "width": o.Width, "height": o.Height, "frames": len(rows), "warmup_frames": o.Warmup, "fps_cap": o.FPS, "vsync": o.VSync, "offscreen": o.Offscreen, "effects": o.Effects, "device": device,
+		"backend": "retained Metal prototype (device.native_bridge names the Go or Objective-C bridge)", "scene": s.Name, "scene_metadata": s.Metadata, "width": o.Width, "height": o.Height, "frames": len(rows), "warmup_frames": o.Warmup, "fps_cap": o.FPS, "vsync": o.VSync, "offscreen": o.Offscreen, "effects": o.Effects, "device": device,
 		"cpu_encode": percentiles(encode), "inflight_wait": percentiles(wait), "drawable_wait": percentiles(drawable), "gpu_execution": percentiles(gpu), "submission_interval": percentiles(interval), "presentation_interval": percentiles(present), "submit_to_present": percentiles(latency), "peak_device_allocated_bytes": maxMemory,
 		"presented_rows": presentedRows, "missing_presentation_rows": len(rows) - presentedRows, "presentation_available_fraction": float64(presentedRows) / float64(len(rows)), "presentation_drain_timeout_ms": 250,
 		"output_dir": o.OutputDir, "max_inflight": 3, "pose_samples_hz": 30, "pose_frames": len(s.Frames), "instances": len(s.Instances),

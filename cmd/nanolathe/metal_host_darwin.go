@@ -98,7 +98,7 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.SetExternalSelection(true)
 	display := cl.DisplayPalette()
 	worldGamma := cl.GammaFactor()
-	terrainSources, detailSprites := metalDetailArt(cl)
+	terrainSources, detailSprites := metalDetailArt(cl, opts.MetalLibrary)
 	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: detailSprites, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
@@ -172,12 +172,17 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 
 // metalDetailArt returns the production 2x terrain tiles and feature banks.
 // The Metal world draws them wherever it magnifies the map, which on a 2x
-// drawable is every zoom above one half. NANOLATHE_METAL_DETAIL=0 keeps the
-// authored art at every scale, for comparisons.
-func metalDetailArt(c *client.Client) (drawlist.Terrain, map[string]*formats.GAF) {
+// drawable is every zoom above one half. The Objective-C reference bridge
+// binds no feature variant atlas, so it keeps the authored features.
+// NANOLATHE_METAL_DETAIL=0 keeps the authored art at every scale, for
+// comparisons.
+func metalDetailArt(c *client.Client, library string) (drawlist.Terrain, map[string]*formats.GAF) {
 	terrain := c.BattleTerrainSources()
 	if os.Getenv("NANOLATHE_METAL_DETAIL") == "0" {
 		terrain.Detail = nil
+		return terrain, nil
+	}
+	if library != "" && library != "go" {
 		return terrain, nil
 	}
 	return terrain, c.BattleFeatureDetail()

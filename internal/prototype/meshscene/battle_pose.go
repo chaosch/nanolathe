@@ -627,6 +627,7 @@ func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog,
 	sprites.SetFeatureModelBounds(s.featureModelBounds())
 	s.sprites = sprites
 	s.scene.SpriteAtlas = sprites.Texture()
+	s.scene.SpriteDetailAtlas = sprites.DetailTexture()
 	return nil
 }
 func (s *battleSource) spriteReport() map[string]any {

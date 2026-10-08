@@ -241,16 +241,17 @@ fragment TerrainMRT terrain_fragment(Out in [[stage_in]],texture2d<float> terrai
  if(u.visual.x>0.5){float mask=shadows.sample(s,in.position.xy/u.viewport.xy).r;out.color.rgb*=1-mask;}
  return out;
 }
-struct SpriteOut { float4 position [[position]];float2 uv;float4 color;float2 emissionAdditive; };
+struct SpriteOut { float4 position [[position]];float2 uv;float4 color;float2 emissionAdditive;float detail [[flat]]; };
 vertex SpriteOut sprite_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const Sprite* sprites [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
  const float2 c[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
  Sprite s=sprites[iid];float3 world=mix(s.previous.xyz,s.current.xyz,u.timing.x);float2 corner=s.rect.xy+c[v]*s.rect.zw;
  float cosine=cos(s.params.z),sine=sin(s.params.z);corner=float2(corner.x*cosine-corner.y*sine,corner.x*sine+corner.y*cosine)*u.camera.z;
- SpriteOut o;o.position=project(world,u);o.position.xy+=float2(corner.x/u.viewport.x*2,-corner.y/u.viewport.y*2);o.position.z=clamp(o.position.z+s.params.w,0.0001,0.9998);o.uv=mix(s.uv.xy,s.uv.zw,c[v]);o.color=s.color;o.emissionAdditive=s.params.xy;return o;
+ SpriteOut o;o.position=project(world,u);o.position.xy+=float2(corner.x/u.viewport.x*2,-corner.y/u.viewport.y*2);o.position.z=clamp(o.position.z+s.params.w,0.0001,0.9998);o.uv=mix(s.uv.xy,s.uv.zw,c[v]);o.color=s.color;o.emissionAdditive=s.params.xy;o.detail=s.previous.w;return o;
 }
-fragment MRT sprite_fragment(SpriteOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],constant Uniforms& u [[buffer(3)]]) {
- // Authored GAF art is indexed: whole texels, as the production sprite path draws them.
- constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float4 tex=atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;if(alpha<0.001)discard_fragment();
+fragment MRT sprite_fragment(SpriteOut in [[stage_in]],texture2d<float> atlas [[texture(0)]],texture2d<float> detail [[texture(1)]],constant Uniforms& u [[buffer(3)]]) {
+ // Authored GAF art is indexed: whole texels, as the production sprite path
+ // draws them. A flagged sprite reads its 2x feature variant atlas.
+ constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float4 tex=in.detail>.5?detail.sample(s,in.uv):atlas.sample(s,in.uv);float alpha=tex.a*in.color.a;if(alpha<0.001)discard_fragment();
  float3 premult=tex.rgb*in.color.rgb*alpha;MRT out;out.color=float4(premult,in.emissionAdditive.y>0.5?0:alpha);out.glow=float4(premult*max(in.emissionAdditive.x,0.0)*smoothstep(0.45,1.0,max(tex.r,max(tex.g,tex.b)))*u.timing.w,0);return out;
 }
 // Selected-unit quads: physical-pixel rectangles drawn inside their unit's

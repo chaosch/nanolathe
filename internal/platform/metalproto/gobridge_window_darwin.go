@@ -124,6 +124,31 @@ func (r *gbRenderer) serviceRunLoop() {
 	}
 }
 
+// gbPumpStall is one AppKit call in the event pump that held the render
+// thread past gbPumpStallMS. A mouse-down on the title bar or the menu bar,
+// for example, runs AppKit's own tracking loop until the button is released,
+// and no frame is prepared or presented meanwhile.
+type gbPumpStall struct {
+	Frame     uint64  `json:"frame"`
+	MS        float64 `json:"ms"`
+	Call      string  `json:"call"`
+	EventType uint64  `json:"event_type,omitempty"`
+}
+
+const gbPumpStallMS, gbPumpStallCapacity = 50, 64
+
+// timeAppKit runs one AppKit call and records it when it stalls the loop.
+func (r *gbRenderer) timeAppKit(call string, eventType uintptr, f func()) {
+	start := mtl.MediaTime()
+	f()
+	if ms := (mtl.MediaTime() - start) * 1000; ms > gbPumpStallMS {
+		r.pumpStallCount++
+		if len(r.pumpStalls) < gbPumpStallCapacity {
+			r.pumpStalls = append(r.pumpStalls, gbPumpStall{Frame: uint64(r.frameNumber), MS: ms, Call: call, EventType: uint64(eventType)})
+		}
+	}
+}
+
 func (r *gbRenderer) pushEvent(e meshscene.NativeEvent) {
 	// Only adjacent pointer motion with no wheel can collapse. Edges never merge.
 	if e.Kind == 1 && e.WheelX == 0 && e.WheelY == 0 && r.eventCount > 0 {
@@ -328,7 +353,7 @@ func (r *gbRenderer) pump() {
 		return
 	}
 	a := &gbAppState
-	r.serviceRunLoop()
+	r.timeAppKit("runLoop", 0, r.serviceRunLoop)
 	r.observeFocus()
 	for {
 		event := mtl.ID(mtl.SendBlocking(a.app, a.nextEvent, ^uintptr(0), uintptr(a.distantPast), uintptr(a.mode), 1))
@@ -435,7 +460,7 @@ func (r *gbRenderer) pump() {
 						// A click returning to the game activates it only when
 						// AppKit sees the mouse-down; the view ignores the click.
 						r.focusLog("down while not key")
-						a.app.Send(a.sendEvent, uintptr(event))
+						r.timeAppKit("sendEvent", kind, func() { a.app.Send(a.sendEvent, uintptr(event)) })
 						if !r.window.Bool(a.isKeyWindow) {
 							r.window.Send(a.makeKeyWindow)
 						}
@@ -514,7 +539,7 @@ func (r *gbRenderer) pump() {
 			}
 		}
 		if !consumed {
-			a.app.Send(a.sendEvent, uintptr(event))
+			r.timeAppKit("sendEvent", kind, func() { a.app.Send(a.sendEvent, uintptr(event)) })
 		}
 		r.observeFocus()
 	}

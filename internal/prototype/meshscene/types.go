@@ -67,6 +67,7 @@ type Scene struct {
 	WaterMaskStep            int
 	WaterLava, WaterDamaging bool
 	SpriteAtlas              Texture
+	SpriteDetailAtlas        Texture // 2x feature variants; Go bridge only
 	Materials                []Material
 	TextureFrames            [][4]float32
 	HeightField              HeightField

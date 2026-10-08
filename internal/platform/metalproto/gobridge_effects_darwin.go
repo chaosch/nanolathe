@@ -1113,6 +1113,7 @@ func (r *gbRenderer) waterObjectsSeabed(ring *gbRing, enc mtl.RenderEncoder, u g
 	enc.VertexBytes(unsafe.Pointer(&u), gbUniformsSize, 3)
 	enc.FragmentBytes(unsafe.Pointer(&u), gbUniformsSize, 3)
 	enc.FragmentTexture(r.spriteAtlas, 0)
+	enc.FragmentTexture(r.spriteDetailAtlas(), 1)
 	for _, index := range unsafe.Slice((*uint32)(f.seabed.Ptr), f.seabedCount) {
 		enc.VertexBuffer(ring.sprites, int(index)*96, 0)
 		enc.Draw(mtl.PrimitiveTriangle, 0, 6)

@@ -51,7 +51,8 @@ type Annotation struct {
 // screen-space offset x,y,width,height in world pixels before camera zoom.
 // Live screen Y projects world z-y/2; UV is u0,v0,u1,v1. Color is straight RGBA; the shader premultiplies it.
 // Current.w marks a short-feature sprite for the pre-model ground pass (1);
-// otherwise zero. Previous.w is reserved.
+// otherwise zero. Previous.w selects the 2x feature detail atlas (1) or the
+// authored sprite atlas (0).
 // Params: emission, additive (0/1), screen rotation radians, normalized
 // clip-depth bias (negative brings the sprite toward the camera).
 type Sprite struct {

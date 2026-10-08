@@ -351,7 +351,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	for _, extra := range []struct {
 		slot    int32
 		texture meshscene.Texture
-	}{{5, scene.WaterMask}, {6, scene.ModelPalette}} {
+	}{{5, scene.WaterMask}, {6, scene.ModelPalette}, {7, scene.SpriteDetailAtlas}} {
 		t := extra.texture
 		if len(t.RGBA) > 0 && b.texture(extra.slot, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload texture %d", extra.slot)
@@ -692,6 +692,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var device map[string]any
 	if err := json.Unmarshal([]byte(b.info()), &device); err != nil {
 		return nil, err
+	}
+	if _, ok := device["native_bridge"]; !ok {
+		device["native_bridge"] = "objective-c"
 	}
 	if b.capture(filepath.Join(opts.OutputDir, "final.png")) == 0 {
 		return nil, fmt.Errorf("metalproto: final PNG readback failed")

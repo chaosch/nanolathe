@@ -59,8 +59,8 @@ type spriteBankCensus struct {
 // detail, when not nil, holds the production 2x feature banks keyed by
 // lowercase bank filename; each loaded frame takes its variant by entry name
 // and frame index, as the production client indexes them (DESIGN_GPU_RENDERER
-// §14.3). Variants share the atlas; when they cannot fit it they are dropped
-// and the authored frames draw at every scale.
+// §14.3). Variants have an atlas of their own (DetailTexture); when they
+// cannot fit it they are dropped and the authored frames draw at every scale.
 func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, detail map[string]*formats.GAF, featureNames ...string) (*BattleSprites, error) {
 	if fs == nil || pal == nil || cat == nil {
 		return nil, fmt.Errorf("nanolathe: prototype sprite preparation failed: logical path battle sprites, providers searched [arguments], expected VFS, palette and catalog")
@@ -108,7 +108,9 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, det
 		}
 	}
 	cells := []spriteCell{{region: atlasRegion{w: 1, h: 1}, rgba: []byte{255, 255, 255, 255}}}
-	var detailCells []spriteCell
+	// Detail variants have an atlas of their own; cell zero is a placeholder
+	// so a zero detail cell means none.
+	detailCells := []spriteCell{{region: atlasRegion{w: 1, h: 1}, rgba: []byte{0, 0, 0, 0}}}
 	digests := make(map[[32]byte]int)
 	banks := make([]string, 0, len(requests))
 	for bank := range requests {
@@ -203,7 +205,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, det
 				if v := spriteDetailFrame(detail, bank, name, i); v != nil && v.Width > 0 && v.Height > 0 {
 					pixels, dw, dh, dx, dy, _ := cropSpriteMargins(spriteFrameRGBA(v, pal), int(v.Width), int(v.Height))
 					detailCells = append(detailCells, spriteCell{region: atlasRegion{w: dw, h: dh}, rgba: pixels})
-					seq.frames[i].detail = spriteDetail{cell: len(detailCells), width: dw, height: dh, xoff: int(v.XOffset) - dx, yoff: int(v.YOffset) - dy}
+					seq.frames[i].detail = spriteDetail{cell: len(detailCells) - 1, width: dw, height: dh, xoff: int(v.XOffset) - dx, yoff: int(v.YOffset) - dy}
 					b.detailPixels += int64(dw) * int64(dh)
 				}
 				a := seq.frames[i]
@@ -215,30 +217,21 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, det
 		}
 		b.bankCensus = append(b.bankCensus, census)
 	}
-	// Detail cells follow the authored ones; their indices were one-based
-	// within detailCells until the authored count was known.
-	base := len(cells) - 1
-	for _, seq := range b.sequences { // load-time index fix-up; order-free
-		for i := range seq.frames {
-			if seq.frames[i].detail.cell != 0 {
-				seq.frames[i].detail.cell += base
-			}
-		}
+	if err := b.packSprites(cells); err != nil {
+		return nil, err
 	}
-	if len(detailCells) > 0 {
-		if err := b.packSprites(append(cells, detailCells...)); err == nil {
-			b.detailFrames = len(detailCells)
+	if len(detailCells) > 1 {
+		texture, regions, err := packAtlas(detailCells)
+		if err == nil {
+			b.detailTexture, b.detailRegions, b.detailFrames = texture, regions, len(detailCells)-1
 			return b, nil
 		}
-		b.detailOmitted = len(detailCells)
-		for _, seq := range b.sequences {
+		b.detailOmitted = len(detailCells) - 1
+		for _, seq := range b.sequences { // load-time reset; order-free
 			for i := range seq.frames {
 				seq.frames[i].detail = spriteDetail{}
 			}
 		}
-	}
-	if err := b.packSprites(cells); err != nil {
-		return nil, err
 	}
 	return b, nil
 }
@@ -393,6 +386,24 @@ func (b *BattleSprites) sequence(bank, entry string) *spriteSequence {
 }
 
 func (b *BattleSprites) packSprites(cells []spriteCell) error {
+	texture, regions, err := packAtlas(cells)
+	if err != nil {
+		largest := append([]spriteBankCensus(nil), b.bankCensus...)
+		sort.SliceStable(largest, func(i, j int) bool { return largest[i].UniquePixels > largest[j].UniquePixels })
+		var descriptions []string
+		for _, bank := range largest[:min(len(largest), 3)] {
+			descriptions = append(descriptions, fmt.Sprintf("%s=%d pixels", bank.Path, bank.UniquePixels))
+		}
+		return fmt.Errorf("nanolathe: prototype sprite atlas too large: logical path sprite atlas, providers searched [prepared animation banks], expected at most 8192x8192, prepared %d cells from %d feature definitions; largest banks [%s]", len(cells), len(b.preparedFeatureNames), strings.Join(descriptions, ", "))
+	}
+	b.texture, b.regions = texture, regions
+	return nil
+}
+
+var errAtlasTooLarge = fmt.Errorf("atlas exceeds 8192x8192")
+
+// packAtlas shelf-packs cells tallest first with two replicated gutters.
+func packAtlas(cells []spriteCell) (Texture, []atlasRegion, error) {
 	order := make([]int, len(cells))
 	for i := range order {
 		order[i] = i
@@ -422,26 +433,20 @@ func (b *BattleSprites) packSprites(cells []spriteCell) error {
 		width *= 2
 	}
 	if width > 8192 || height > 8192 {
-		largest := append([]spriteBankCensus(nil), b.bankCensus...)
-		sort.SliceStable(largest, func(i, j int) bool { return largest[i].UniquePixels > largest[j].UniquePixels })
-		var descriptions []string
-		for _, bank := range largest[:min(len(largest), 3)] {
-			descriptions = append(descriptions, fmt.Sprintf("%s=%d pixels", bank.Path, bank.UniquePixels))
-		}
-		return fmt.Errorf("nanolathe: prototype sprite atlas too large: logical path sprite atlas, providers searched [prepared animation banks], expected at most 8192x8192, prepared %d cells from %d feature definitions; largest banks [%s]", len(cells), len(b.preparedFeatureNames), strings.Join(descriptions, ", "))
+		return Texture{}, nil, errAtlasTooLarge
 	}
-	b.texture = Texture{Width: width, Height: height, RGBA: make([]byte, width*height*4)}
-	b.regions = make([]atlasRegion, len(cells))
+	texture := Texture{Width: width, Height: height, RGBA: make([]byte, width*height*4)}
+	regions := make([]atlasRegion, len(cells))
 	for i, cell := range cells {
 		r := cell.region
-		b.regions[i] = r
+		regions[i] = r
 		// Two replicated gutters; no premultiplication before the shader.
 		for y := -2; y < r.h+2; y++ {
 			for x := -2; x < r.w+2; x++ {
 				sx, sy := min(max(x, 0), r.w-1), min(max(y, 0), r.h-1)
-				copy(b.texture.RGBA[((r.y+y)*width+r.x+x)*4:], cell.rgba[(sy*r.w+sx)*4:(sy*r.w+sx+1)*4])
+				copy(texture.RGBA[((r.y+y)*width+r.x+x)*4:], cell.rgba[(sy*r.w+sx)*4:(sy*r.w+sx+1)*4])
 			}
 		}
 	}
-	return nil
+	return texture, regions, nil
 }

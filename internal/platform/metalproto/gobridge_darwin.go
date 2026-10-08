@@ -166,6 +166,8 @@ type gbRenderer struct {
 	pointerModifiers                                               uint32
 	overlayVersion, overlayTextureUploads, overlayTextureBytes     uint64
 	runLoopPumps, runLoopSources                                   uint64
+	pumpStalls                                                     []gbPumpStall
+	pumpStallCount                                                 int
 	offscreen, effects, visualPasses                               bool
 	held, pressed                                                  [128]bool
 	pauseToggle                                                    bool
@@ -205,6 +207,7 @@ type gbRenderer struct {
 	lastRing, pendingRing                                                             *gbRing
 	emptyLights, materials, textureFrames                                             *mtl.Buffer
 	spriteAtlas, overlayAtlas, fogAtlas, waterMask, modelPalette                      *mtl.Texture
+	spriteDetail                                                                      *mtl.Texture
 	atlas, terrainImage, color, emission, blurA, blurB, depthImage, output, heights   *mtl.Texture
 	shadowMask, worldSnapshot, postColor, emptyFog, emptyMask                         *mtl.Texture
 	subjectColor, subjectEmission, subjectDepth                                       *mtl.Texture
@@ -717,11 +720,23 @@ func (r *gbRenderer) texture(slot, width, height int32, rgba unsafe.Pointer) int
 		replaceTexture(&r.waterMask, t)
 	case 6:
 		replaceTexture(&r.modelPalette, t)
+	case 7:
+		replaceTexture(&r.spriteDetail, t)
 	default:
 		mtl.Release(t.ID)
 		return 0
 	}
 	return 1
+}
+
+// spriteDetailAtlas is the 2x feature variant atlas, or the authored atlas
+// when there is none: no sprite is flagged for it then, but the sprite
+// fragment's second texture is always bound.
+func (r *gbRenderer) spriteDetailAtlas() *mtl.Texture {
+	if r.spriteDetail != nil {
+		return r.spriteDetail
+	}
+	return r.spriteAtlas
 }
 
 func (r *gbRenderer) configure(camera, rect unsafe.Pointer, count int32) int32 {
@@ -1064,6 +1079,8 @@ func (r *gbRenderer) info() string {
 		"pose_interpolation_output_buffer_capacity_bytes": poseOutputBytes,
 		"live_overlay_upload_buffer_capacity_bytes":       overlayUploadBytes,
 		"run_loop_service_calls":                          r.runLoopPumps,
+		"event_pump_stalls":                               r.pumpStalls,
+		"event_pump_stall_count":                          r.pumpStallCount,
 		"run_loop_handled_sources":                        r.runLoopSources,
 		"pointer_captured":                                r.pointerCaptured,
 		"overlay_texture_version":                         r.overlayVersion,

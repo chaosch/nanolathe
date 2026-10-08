@@ -334,6 +334,7 @@ func (r *gbRenderer) drawUpperSprites(enc mtl.RenderEncoder, ring *gbRing, u gbU
 		enc.FragmentBytes(unsafe.Pointer(&u), gbUniformsSize, 3)
 	}
 	enc.FragmentTexture(r.spriteAtlas, 0)
+	enc.FragmentTexture(r.spriteDetailAtlas(), 1)
 	enc.DrawInstanced(mtl.PrimitiveTriangle, 0, 6, ring.spriteCount-ring.groundSpriteCount)
 }
 
@@ -473,6 +474,7 @@ func (r *gbRenderer) encode(cb mtl.CommandBuffer, endpoints, poses *mtl.Buffer, 
 		enc.DepthState(r.spriteDepth)
 		enc.VertexBuffer(ring.sprites, 0, 0)
 		enc.FragmentTexture(r.spriteAtlas, 0)
+		enc.FragmentTexture(r.spriteDetailAtlas(), 1)
 		enc.DrawInstanced(mtl.PrimitiveTriangle, 0, 6, ring.groundSpriteCount)
 	}
 	switch {
