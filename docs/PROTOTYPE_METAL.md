@@ -2037,3 +2037,64 @@ state, bounds, outline, emission and the seven rule vectors) that the
 fragment stage could read from the instance tables instead. Tick draws still carry
 the 7 ms simulation step inline in this benchmark; play runs the simulation
 on its own goroutine.
+
+### Eleventh round: map edge, remastered art and missed frames (2026-10-08)
+
+The user played a match and reported three things: art above the map when
+zoomed out, no remastered terrain or features, and missed frames even early
+in a new match. They also asked how the approach reaches Windows and Linux.
+
+**Map edge.** When zoomed out, the camera centres a map shorter than the view,
+leaving a border above and below it. Metal left that border at its grey clear
+colour and drew the overhang of sprites on the top rows into it; Modern shows
+black there. The final world passes now resolve every live pixel whose ground
+position leaves the terrain rectangle to black. Large-field captures are
+pixel-identical to round 10. `NANOLATHE_METAL_TEST_CAMERA=x,z,zoom` replaces
+the entry camera for offscreen captures of such views.
+
+**Remastered art.** The production detail art (`--auto-remaster`, on by
+default) is 64-pixel terrain tiles plus 2x variants of the map's feature
+sprites. Modern draws it only above 1x. The Metal world draws at device
+resolution, so on a 2x drawable every zoom above one half already has the
+pixels for it. Metal now uses both wherever a world pixel spans more than one
+device pixel (`meshscene.DetailScale`).
+
+The variants have their own sprite atlas, selected by `Sprite.Previous.w`.
+Town & Country's authored atlas is already 8192×7204 and cannot hold its 541
+variants (26.8 million texels). The Objective-C reference bridge does not bind
+the variant atlas, so it keeps the authored features; detail terrain works in
+both bridges. `NANOLATHE_METAL_DETAIL=0` keeps the authored art at every scale.
+
+Cost on the large field scene at 2x zoom (the Retina view of 1x play), Metal
+offscreen, alternating, one-minute load 3–8:
+
+| Pair | Art | GPU p50 | GPU mean | Encode p50 | Peak device memory |
+|---|---|---|---|---|---|
+| Terrain only, 4 pairs | detail / authored | 5.39–6.05 / 5.33–5.71 ms | 5.6–7.1 / 5.5–7.1 ms | 0.37–0.41 / 0.36–0.42 ms | 1,449 / 1,290 MB |
+| Terrain and features, 2 pairs | detail / authored | 5.49, 5.88 / 5.29, 5.86 ms | 5.98, 7.11 / 5.98, 7.00 ms | 0.40, 0.41 / 0.38, 0.39 ms | 1,570 / 1,290 MB |
+
+The GPU pays 0.0–0.2 ms per frame (p50) and nothing measurable in the mean;
+encoding is unchanged. Memory grows by 280 MB on this map: 165 MB for the
+terrain detail atlas and the rest for the feature variants. Captures at 1x
+zoom are pixel-identical, since nothing is magnified there.
+
+**Missed frames.** The user's match ran windowed at 2880×1800. Its last
+8,192 frames (3.2 minutes) held 16 late presents, all in the first 50 s, and
+none in the 145 s after. Every late frame left the GPU at least 20 ms before
+its display slot. The presents themselves came late, or WindowServer
+dropped them and showed a later drawable, as composited windows do when the
+window server misses a refresh. During the match `mediaanalysisd` had used
+120% CPU for 3.7 hours and WindowServer used 39%.
+
+One 1.45 s freeze had no submissions and no simulation ticks. The render
+thread was blocked outside frame preparation, most likely inside an AppKit
+tracking loop such as a title-bar drag. The event pump now records any AppKit
+call that holds the render thread for more than 50 ms
+(`event_pump_stalls` in the report), so the next one names its cause.
+
+macOS Game Mode was tried for Modern on 2026-09-27: an app bundle with a games
+category got Game Mode for the whole run, and late presents did not change.
+Game Mode also needs fullscreen and an app bundle, and the Metal window has
+neither. What fixed Modern's fullscreen misses was the composited route on
+fast displays (DESIGN_GPU_RENDERER §13.5); the Metal host would need
+fullscreen first.
