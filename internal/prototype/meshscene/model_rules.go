@@ -13,29 +13,18 @@ type ModelRules struct {
 }
 
 // ApplyModelRules resolves the current publication's subject identities in the
-// supplied instance order. Call after Frame, before another Frame replaces its
-// private identity mapping. The callback never receives a mutable session.
-func (r *RetainedBattle) ApplyModelRules(f *LiveFrame, rules func(kind uint8, id uint64) ModelRules) []ModelRules {
+// supplied instance order, reusing dst's storage. Call after Frame, before
+// another Frame replaces its private identity mapping. The callback never
+// receives a mutable session.
+func (r *RetainedBattle) ApplyModelRules(dst []ModelRules, f *LiveFrame, rules func(kind uint8, id uint64) ModelRules) []ModelRules {
 	if f == nil {
 		return nil
 	}
-	out := make([]ModelRules, len(f.Instances))
-	if r == nil || r.previous == nil || rules == nil {
+	out := resizeComposition(dst, len(f.Instances))
+	clear(out)
+	if rules == nil {
 		return out
 	}
-	type poseIdentity struct{ mesh, offset int }
-	byPose := make(map[poseIdentity]battleEntityKey, len(r.previous.byID))
-	// Each drawable subject owns a disjoint pose span. Map iteration only
-	// builds a lookup; callback/draw order always follows the instance slice.
-	for key, span := range r.previous.byID {
-		if span.count > 0 {
-			byPose[poseIdentity{span.mesh, span.offset}] = key
-		}
-	}
-	for i, instance := range f.Instances {
-		if key, ok := byPose[poseIdentity{instance.Mesh, instance.PoseOffset}]; ok {
-			out[i] = rules(key.kind, key.id)
-		}
-	}
+	r.VisitSubjects(f, func(i int, kind uint8, id uint64, _, _ int) { out[i] = rules(kind, id) })
 	return out
 }

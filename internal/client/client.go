@@ -104,6 +104,7 @@ type Client struct {
 	externalSelection       bool
 	retainedSelections      []RetainedSelection
 	retainedSelectionWS     drawlist.WorldSpace
+	retainedLightBuckets    worldBuckets               // tall-feature order for retained light sources
 	retainedProjectileOrder *[]RetainedProjectileModel // active only during the source-only projectile batch
 	communityHUD            CommunityHUDOptions
 	communityColors         communityColorState

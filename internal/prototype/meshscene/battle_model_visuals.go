@@ -47,14 +47,16 @@ func battleModelBounds(m *model.Model, matrices []Mat4, originY float32) (float3
 	}
 	return lo, hi
 }
-func (s *battleSource) applyUnitVisual(pub *battlePublication, u frame.UnitView, f *frame.Frame) {
+
+// u and feature point into f, so the material request borrows them without a copy.
+func (s *battleSource) applyUnitVisual(pub *battlePublication, u *frame.UnitView, f *frame.Frame) {
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
 	matrices := pub.frame.Current[instance.PoseOffset : instance.PoseOffset+len(s.models[instance.Mesh].Pieces)]
 	lo, hi := battleModelBounds(s.models[instance.Mesh], matrices, float32(u.Y)/65536)
 	instance.Visual.Bounds = [4]float32{lo, hi, battleGroundHeight(s.scene.HeightField, u.X, u.Z), float32(u.Y) / 65536}
 	// Unknown team colours omit the textured primitive [03 R-RAST-01 §3].
 	instance.Visual.State[0] = -1
-	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Unit: &u})
+	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Unit: u})
 	if u.OwnerColorKnown {
 		instance.Visual.State[0] = float32(u.OwnerColor)
 	}
@@ -74,11 +76,11 @@ func (s *battleSource) applyUnitVisual(pub *battlePublication, u frame.UnitView,
 		instance.Visual.Outline = [4]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255, 1}
 	}
 }
-func (s *battleSource) applyFeatureVisual(pub *battlePublication, feature frame.FeatureView, f *frame.Frame) {
+func (s *battleSource) applyFeatureVisual(pub *battlePublication, feature *frame.FeatureView, f *frame.Frame) {
 	instance := &pub.frame.Instances[len(pub.frame.Instances)-1]
 	// 3DO features use the pseudo-unit's player-zero logo [03 R-RAST-01 §3].
 	instance.Visual.State[0] = -1
-	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Feature: &feature})
+	s.applyModelMaterials(instance, ModelMaterialRequest{Frame: f, Feature: feature})
 	if f.Players[0].Present {
 		instance.Visual.State[0] = float32(f.Players[0].Logo)
 	}

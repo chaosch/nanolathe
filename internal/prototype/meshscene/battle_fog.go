@@ -76,7 +76,8 @@ func (s *battleSource) prepareFog() error {
 // Retain the production cell operations rather than sampling the authored masks
 // on the CPU. The native compositor visits the same ordered 2x2 neighbourhood
 // and reads native mask pixels from Scene.FogAtlas (DESIGN_GPU_RENDERER C-G7).
-func (s *battleSource) appendFog(cur *frame.Frame, old *battlePublication) FogFrame {
+// store, when non-nil, is a texture no reader holds; a changed fog reuses it.
+func (s *battleSource) appendFog(cur *frame.Frame, old *battlePublication, store []byte) FogFrame {
 	if s.spectator || cur == nil || !cur.Fog.Valid {
 		return FogFrame{}
 	}
@@ -92,7 +93,12 @@ func (s *battleSource) appendFog(cur *frame.Frame, old *battlePublication) FogFr
 	dst := FogFrame{
 		Width: int(src.W), Height: int(src.H), Dithered: dithered,
 		Rect: [4]float32{float32(src.OriginX*cell + cell/2), float32(src.OriginZ*cell + cell/2), float32((src.OriginX+src.W)*cell + cell/2), float32((src.OriginZ+src.H)*cell + cell/2)},
-		RGBA: make([]byte, len(src.Ch0)*4),
+	}
+	if n := len(src.Ch0) * 4; cap(store) >= n {
+		dst.RGBA = store[:n]
+		clear(dst.RGBA)
+	} else {
+		dst.RGBA = make([]byte, n)
 	}
 	for row := 0; row < dst.Height; row++ {
 		for col := 0; col < dst.Width; col++ {

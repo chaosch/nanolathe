@@ -91,6 +91,8 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 		return err
 	}
 	prepareMetalScene(scene, sess.World)
+	// Diagnostic: 0 rebuilds the world on every camera change, as before.
+	retained.SetCameraReuse(os.Getenv("NANOLATHE_METAL_CAMERA_REUSE") != "0")
 	host := &metalBattleHost{worldGamma: worldGamma, fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	host.visuals.worldPalette = &display
 	scene.Live = host
@@ -155,6 +157,8 @@ type metalBattleHost struct {
 	visuals                       metalVisuals
 	fps                           metalFPS
 	selection                     metalSelection
+	projection                    metalProjection
+	subjects                      metalSubjectRules
 	trace                         metalInputTrace
 	scene                         *meshscene.Scene
 	composer                      *metalModelComposer
@@ -249,17 +253,29 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.ditheredFog = dithered
 		h.cached = false
 	}
-	if cur != nil && (!h.cached || h.cachedTick != cur.Tick || h.cachedFrame != cur || h.cachedPrevious != previous || h.frame.Camera != camera) {
-		sourcePrevious := previous
-		_, _, blend := h.cl.PresentedTicks()
-		if !blend {
-			sourcePrevious = cur
+	if cur != nil {
+		stale := !h.cached || h.cachedTick != cur.Tick || h.cachedFrame != cur || h.cachedPrevious != previous
+		// A camera-only change keeps the build's models while its culling
+		// region still covers the view, and reselects only the sprites.
+		if !stale && h.frame.Camera != camera {
+			if h.world.Covers(camera) {
+				h.world.Recull(&h.frame, camera)
+			} else {
+				stale = true
+			}
 		}
-		h.frame = h.world.Frame(sourcePrevious, cur, camera)
-		h.cached = true
-		h.cachedTick = cur.Tick
-		h.cachedFrame = cur
-		h.cachedPrevious = previous
+		if stale {
+			sourcePrevious := previous
+			_, _, blend := h.cl.PresentedTicks()
+			if !blend {
+				sourcePrevious = cur
+			}
+			h.frame = h.world.Frame(sourcePrevious, cur, camera)
+			h.cached = true
+			h.cachedTick = cur.Tick
+			h.cachedFrame = cur
+			h.cachedPrevious = previous
+		}
 	}
 	h.frame.Camera = camera
 	h.frame.Alpha = float32(fraction) / 65536
@@ -316,8 +332,8 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	for i := range dirty {
 		h.frame.OverlayDirty[i] = uint32(dirty[i])
 	}
-	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2)
-	if err := prepareMetalProjection(h.cl, h.world, &h.frame, 2); err != nil {
+	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2, &h.subjects)
+	if err := h.projection.Prepare(h.cl, h.world, &h.frame, 2); err != nil {
 		return meshscene.LiveFrame{}, err
 	}
 	if h.composer == nil {

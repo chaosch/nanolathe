@@ -77,7 +77,8 @@ func (c *Client) recordRetainedLightSources(storage *RetainedEffectStorage) Reta
 	c.emitWorldBegin()
 	// The feature tail within each pass-A row retains source enumeration order;
 	// unit ordering in that row does not change feature-to-feature ordering.
-	var buckets worldBuckets
+	buckets := &c.retainedLightBuckets
+	buckets.reset()
 	for i := range cur.Features {
 		f := &cur.Features[i]
 		if f.Height >= 10 && win.admitsCell(f.CX, f.CZ) && tallFeatureVisibleForFrame(cur, *f) {

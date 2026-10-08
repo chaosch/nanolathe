@@ -20,10 +20,12 @@ type battleEntityKey struct {
 	kind uint8
 	id   uint64
 }
-type battlePoseSpan struct{ mesh, offset, count int }
+type battlePoseSpan struct{ mesh, offset, count, instance int }
 type battlePublication struct {
 	frame                 LiveFrame
 	byID                  map[battleEntityKey]battlePoseSpan
+	keys                  []battleEntityKey     // each frame.Instances entry's subject, in instance order
+	materials             []NativeModelMaterial // backs the instances' uncached material walks
 	census                battleCensus
 	fogSource, fogVersion uint64
 	blendStart            time.Time
@@ -80,15 +82,22 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		matrixCapacity = max(matrixCapacity, len(old.frame.Current)+128)
 	}
 	var pub *battlePublication
+	// The recycled publication's fog texture is free unless old still shares it.
+	var fogStore []byte
 	if recycle != nil && recycle != old {
+		if fog := recycle.frame.Fog.RGBA; len(fog) > 0 && (old == nil || len(old.frame.Fog.RGBA) == 0 || &fog[0] != &old.frame.Fog.RGBA[0]) {
+			fogStore = fog
+		}
 		byID := recycle.byID
 		clear(byID)
 		*recycle = battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: recycle.frame.Current[:0], Previous: recycle.frame.Previous[:0], Instances: recycle.frame.Instances[:0],
-			Sprites: recycle.frame.Sprites[:0], Lights: recycle.frame.Lights[:0], Distortions: recycle.frame.Distortions[:0]}, byID: byID}
+			Sprites: recycle.frame.Sprites[:0], Lights: recycle.frame.Lights[:0], Distortions: recycle.frame.Distortions[:0]}, byID: byID,
+			keys: recycle.keys[:0], materials: recycle.materials[:0]}
 		pub = recycle
 	} else {
 		pub = &battlePublication{frame: LiveFrame{Camera: camera, Tick: current.Tick, Current: make([]Mat4, 0, matrixCapacity), Previous: make([]Mat4, 0, matrixCapacity), Instances: make([]Instance, 0, len(current.Units)+len(current.Projectiles))}, byID: make(map[battleEntityKey]battlePoseSpan, len(current.Units)+len(current.Projectiles))}
 	}
+	s.materialArena = &pub.materials
 	s.timing.begin()
 	census := battleCensus{Tick: current.Tick, Units: len(current.Units), Projectiles: len(current.Projectiles), Effects: len(current.Effects), Features: len(current.Features), Strips: len(current.Strips), Fragments: len(current.Fragments), Debris: len(current.Debris)}
 	previousUnits, previousFeatures, previousProjectiles := s.lookup.previous()
@@ -114,7 +123,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	}
 	s.timing.split(0)
 	currentUnits := s.lookup.current()
-	for _, u := range current.Units {
+	for ui, u := range current.Units {
 		currentUnits[u.InstanceID] = true
 		if int(u.Owner) < len(census.UnitsPerOwner) {
 			census.UnitsPerOwner[u.Owner]++
@@ -149,7 +158,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		}
 		presenter, _ := battleUnitPresenter(u, unitSlots)
 		priorPresenter := previousUnits[presenter.InstanceID]
-		if !battleInView(presenter.X, presenter.Y, presenter.Z, camera, s.viewport) && (priorPresenter == nil || !battleInView(priorPresenter.X, priorPresenter.Y, priorPresenter.Z, camera, s.viewport)) {
+		if !battleInView(presenter.X, presenter.Y, presenter.Z, camera, s.viewport, s.cullSlack) && (priorPresenter == nil || !battleInView(priorPresenter.X, priorPresenter.Y, priorPresenter.Z, camera, s.viewport, s.cullSlack)) {
 			census.CulledModels++
 			continue
 		}
@@ -160,7 +169,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		t0 := time.Now()
 		s.appendUnit(pub, key, mesh, u, prior, old)
 		t1 := time.Now()
-		s.applyUnitVisual(pub, u, current)
+		s.applyUnitVisual(pub, &current.Units[ui], current)
 		t2 := time.Now()
 		s.applyUnitSubject(pub, u, unitSlots)
 		s.timing.pose += t1.Sub(t0)
@@ -194,7 +203,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		if prior != nil && battleModelKey(prior.Model) != battleModelKey(f.Model) {
 			prior = nil
 		}
-		if !battleInView(f.X, f.Y, f.Z, camera, s.viewport) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport)) {
+		if !battleInView(f.X, f.Y, f.Z, camera, s.viewport, s.cullSlack) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport, s.cullSlack)) {
 			census.CulledModels++
 			continue
 		}
@@ -212,7 +221,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		// TODO(question): publish stable feature identities if temporal wreck
 		// interpolation is wanted; zero-ID features snap to committed poses.
 		s.appendUnit(pub, battleEntityKey{kind: 2, id: uint64(fi) + 1}, mesh, u, prevUnit, nil)
-		s.applyFeatureVisual(pub, f, current)
+		s.applyFeatureVisual(pub, &current.Features[fi], current)
 		census.SubmittedFeatures++
 	}
 	s.timing.split(2)
@@ -237,7 +246,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 		if prior != nil && battleModelKey(prior.Model) != battleModelKey(p.Model) {
 			prior = nil
 		}
-		if !battleInView(p.X, p.Y, p.Z, camera, s.viewport) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport)) {
+		if !battleInView(p.X, p.Y, p.Z, camera, s.viewport, s.cullSlack) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport, s.cullSlack)) {
 			census.CulledModels++
 			continue
 		}
@@ -262,7 +271,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 	s.timing.split(4)
 	census.SubmittedDebris = s.appendDetachedDebris(pub, current, camera, s.spectator)
 	s.timing.split(5)
-	pub.frame.Fog = s.appendFog(current, old)
+	pub.frame.Fog = s.appendFog(current, old, fogStore)
 	s.timing.split(6)
 	pub.fogSource, pub.fogVersion = current.Fog.Source, current.Fog.Version
 	census.SubmittedDistortions = len(pub.frame.Distortions)
@@ -291,7 +300,8 @@ func (s *battleSource) beginInstance(pub *battlePublication, key battleEntityKey
 	pub.frame.Current = slices.Grow(pub.frame.Current, count)[:offset+count]
 	pub.frame.Previous = slices.Grow(pub.frame.Previous, count)[:offset+count]
 	pub.frame.Instances = append(pub.frame.Instances, Instance{Mesh: mesh, PoseOffset: offset, Visual: ModelVisual{State: [4]float32{0, 1, 0, 0}}})
-	span := battlePoseSpan{mesh: mesh, offset: offset, count: count}
+	pub.keys = append(pub.keys, key)
+	span := battlePoseSpan{mesh: mesh, offset: offset, count: count, instance: len(pub.frame.Instances) - 1}
 	pub.byID[key] = span
 	return span
 }
@@ -316,12 +326,19 @@ func (s *battleSource) copyPriorOrSnap(pub *battlePublication, span battlePoseSp
 	}
 	derive(dst)
 }
-func battleInView(x, y, z numeric.Fixed, camera [3]float32, viewport [2]int) bool {
+
+// battleCullMargin is the world-unit margin around the view within which a
+// model's origin admits it, so a body that overhangs the edge still draws.
+const battleCullMargin = 256
+
+// battleInView admits a model origin within the view plus the margin and the
+// caller's slack, both in world units.
+func battleInView(x, y, z numeric.Fixed, camera [3]float32, viewport [2]int, slack float32) bool {
 	// Live projection follows camera.WorldToScreen's half-height term [03 §2.5].
 	dx := float32(x)/65536 - camera[0]
 	dy := float32(z)/65536 - float32(y)/131072 - camera[1]
-	halfW := float32(viewport[0])/(2*camera[2]) + 256
-	halfH := float32(viewport[1])/(2*camera[2]) + 256
+	halfW := float32(viewport[0])/(2*camera[2]) + battleCullMargin + slack
+	halfH := float32(viewport[1])/(2*camera[2]) + battleCullMargin + slack
 	return dx >= -halfW && dx <= halfW && dy >= -halfH && dy <= halfH
 }
 

@@ -13,7 +13,7 @@ import (
 func (s *battleSource) appendDetachedDebris(pub *battlePublication, current *frame.Frame, camera [3]float32, spectator bool) int {
 	count := 0
 	for _, v := range current.Debris {
-		if !battlePointVisible(current, v.X, v.Y, v.Z, spectator) || !battleInView(v.X, v.Y, v.Z, camera, s.viewport) {
+		if !battlePointVisible(current, v.X, v.Y, v.Z, spectator) || !battleInView(v.X, v.Y, v.Z, camera, s.viewport, s.cullSlack) {
 			continue
 		}
 		mesh, ok := s.modelIndices[battleModelKey(v.Model)]

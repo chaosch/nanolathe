@@ -42,6 +42,9 @@ type battleSource struct {
 	poseScratch                                       battlePoseScratch
 	timing                                            sectionTiming
 	materialCache                                     map[modelMaterialCacheKey][]NativeModelMaterial
+	materialArena                                     *[]NativeModelMaterial // the publication being built; uncached material walks use its storage
+	materialPieces                                    []bool
+	cullSlack                                         float32 // widens model culling, world units (RetainedBattle.Frame)
 	lookup                                            publicationLookup
 	latest                                            atomic.Pointer[battlePublication]
 	mu                                                sync.Mutex // short camera/lifecycle exchange; never held while stepping

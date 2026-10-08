@@ -8,27 +8,19 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
 
-// applyMetalWaterObjects borrows the pinned frame and current retained identity
-// spans, on the presentation owner. It neither records meshes nor steps time.
-func applyMetalWaterObjects(cl *client.Client, world *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame) []meshscene.WaterObject {
+// waterObjects borrows the pinned frame and current retained identity spans,
+// on the presentation owner. It neither records meshes nor steps time.
+func (m *metalSubjectRules) waterObjects(cl *client.Client, world *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame) []meshscene.WaterObject {
 	if cl == nil || world == nil || live == nil || current == nil {
 		return nil
 	}
-	units := make(map[uint64]*frame.UnitView, len(current.Units))
-	projectiles := make(map[uint64]*frame.ProjectileView, len(current.Projectiles))
-	for i := range current.Units {
-		v := &current.Units[i]
-		units[v.InstanceID] = v
-	}
-	for i := range current.Projectiles {
-		v := &current.Projectiles[i]
-		projectiles[v.PresentationID] = v
-	}
-	resolved := world.ApplyModelRules(live, func(kind uint8, id uint64) meshscene.ModelRules {
+	m.water = resizeMetal(m.water, len(live.Instances))
+	clear(m.water)
+	world.VisitSubjects(live, func(i int, kind uint8, id uint64, _, _ int) {
 		var r client.RetainedWaterObject
 		switch kind {
 		case 1:
-			if v, ok := units[id]; ok {
+			if v, ok := m.units[id]; ok {
 				r = cl.RetainedUnitWaterObject(*v, current.Tick)
 			}
 		case 2:
@@ -36,11 +28,11 @@ func applyMetalWaterObjects(cl *client.Client, world *meshscene.RetainedBattle, 
 				r = cl.RetainedFeatureWaterObject(current.Features[id-1])
 			}
 		case 3:
-			if v, ok := projectiles[id]; ok {
+			if v, ok := m.projectiles[id]; ok {
 				r = cl.RetainedProjectileWaterObject(*v)
 			}
 		}
-		var p [4]float32
+		p := &m.water[i].Params
 		p[1] = r.SeaY
 		if r.Reflect {
 			p[0] = 1
@@ -48,11 +40,13 @@ func applyMetalWaterObjects(cl *client.Client, world *meshscene.RetainedBattle, 
 		if r.Underwater {
 			p[2] = 1
 		}
-		return meshscene.ModelRules{Clip: p}
 	})
-	out := make([]meshscene.WaterObject, len(resolved))
-	for i, r := range resolved {
-		out[i].Params = r.Clip
+	return m.water
+}
+
+func resizeMetal[T any](v []T, n int) []T {
+	if cap(v) < n {
+		return make([]T, n, n+n/4)
 	}
-	return out
+	return v[:n]
 }

@@ -9,22 +9,46 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/render"
 )
 
-// applyMetalModelRules borrows only the host's pinned current publication.
+// metalSubjectRules keeps each build's identity lookups and its rule and
+// water results between builds, so a build allocates nothing. Results are
+// valid until the next build's Prepare; native upload copies them first.
+type metalSubjectRules struct {
+	units       map[uint64]*frame.UnitView
+	projectiles map[uint64]*frame.ProjectileView
+	rules       []meshscene.ModelRules
+	water       []meshscene.WaterObject
+}
+
+// index maps the pinned frame's unit and projectile identities.
+func (m *metalSubjectRules) index(current *frame.Frame) {
+	if m.units == nil {
+		m.units = make(map[uint64]*frame.UnitView, len(current.Units))
+		m.projectiles = make(map[uint64]*frame.ProjectileView, len(current.Projectiles))
+	}
+	clear(m.units)
+	clear(m.projectiles)
+	for i := range current.Units {
+		v := &current.Units[i]
+		m.units[v.InstanceID] = v
+	}
+	for i := range current.Projectiles {
+		v := &current.Projectiles[i]
+		m.projectiles[v.PresentationID] = v
+	}
+}
+
+// modelRules borrows only the host's pinned current publication.
 // Unit/feature policy stays in the production client; projectiles retain their
 // direct keyless model path [03 §5.4][03 R-COMP-02 §6].
-func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame) []meshscene.ModelRules {
+func (m *metalSubjectRules) modelRules(cl *client.Client, world *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame) []meshscene.ModelRules {
 	if world == nil || live == nil || current == nil {
 		return nil
 	}
-	units := make(map[uint64]*frame.UnitView, len(current.Units))
-	for i := range current.Units {
-		units[current.Units[i].InstanceID] = &current.Units[i]
-	}
-	return world.ApplyModelRules(live, func(kind uint8, id uint64) meshscene.ModelRules {
+	m.rules = world.ApplyModelRules(m.rules, live, func(kind uint8, id uint64) meshscene.ModelRules {
 		resolved := client.RetainedModelRules{KeyBias: render.NanoframeHeightBias}
 		switch kind {
 		case 1: // Retained battle unit publication identity.
-			if unit := units[id]; unit != nil {
+			if unit := m.units[id]; unit != nil {
 				resolved = cl.RetainedUnitRules(*unit, current.Tick)
 			}
 		case 2: // Retained battle feature publication identity.
@@ -34,6 +58,7 @@ func applyMetalModelRules(cl *client.Client, world *meshscene.RetainedBattle, li
 		}
 		return metalModelRules(resolved)
 	})
+	return m.rules
 }
 
 func metalModelRules(r client.RetainedModelRules) meshscene.ModelRules {

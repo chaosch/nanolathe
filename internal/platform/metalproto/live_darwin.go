@@ -146,8 +146,10 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		start += p.spans[i].Count
 	}
 	if cap(p.offsets) < len(f.Instances) {
-		p.offsets = make([]uint32, len(f.Instances))
-		p.visuals = make([]meshscene.ModelVisual, len(f.Instances))
+		// Headroom keeps a growing battle from reallocating every frame.
+		n := len(f.Instances)
+		p.offsets = make([]uint32, n, n+n/4+64)
+		p.visuals = make([]meshscene.ModelVisual, n, n+n/4+64)
 	} else {
 		p.offsets = p.offsets[:len(f.Instances)]
 		p.visuals = p.visuals[:len(f.Instances)]

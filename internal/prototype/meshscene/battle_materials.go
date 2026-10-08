@@ -96,10 +96,11 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 	mesh := &s.scene.Meshes[instance.Mesh]
 	m := s.models[instance.Mesh]
 	q.Model = m.Name
-	instance.Materials = make([]NativeModelMaterial, len(mesh.MaterialSlots))
 	// Resolve the script alias once per piece, not once per face. The last
 	// matching lane remains authoritative, as in the original retained walk.
-	currentPieces := make([]bool, len(m.Pieces))
+	s.materialPieces = resizeComposition(s.materialPieces, len(m.Pieces))
+	currentPieces := s.materialPieces
+	clear(currentPieces)
 	if q.Unit != nil && q.Unit.BuildRemaining <= 0 {
 		for pi, piece := range m.Pieces {
 			for _, lane := range q.Unit.Pieces {
@@ -130,6 +131,13 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 				return
 			}
 		}
+	}
+	// A cached walk keeps its own storage; any other lives as long as the
+	// publication being built.
+	if cacheable || s.materialArena == nil {
+		instance.Materials = make([]NativeModelMaterial, len(mesh.MaterialSlots))
+	} else {
+		instance.Materials = materialStorage(s.materialArena, len(mesh.MaterialSlots))
 	}
 	if cacheable {
 		defer func() {
@@ -220,27 +228,34 @@ func (s *battleSource) baseModelMaterial(q ModelMaterialRequest) ModelMaterialSe
 }
 
 func (s *battleSource) applyStandaloneMaterials(pub *battlePublication, current *frame.Frame) {
-	byOffset := make(map[int]*Instance, len(pub.frame.Instances))
-	for i := range pub.frame.Instances {
-		instance := &pub.frame.Instances[i]
-		byOffset[instance.PoseOffset] = instance
-	}
 	for i := range current.Projectiles {
 		p := &current.Projectiles[i]
 		if span, ok := pub.byID[battleEntityKey{kind: 3, id: p.PresentationID}]; ok {
-			if instance := byOffset[span.offset]; instance != nil {
-				s.applyModelMaterials(instance, ModelMaterialRequest{Frame: current, Projectile: p})
-			}
+			s.applyModelMaterials(&pub.frame.Instances[span.instance], ModelMaterialRequest{Frame: current, Projectile: p})
 		}
 	}
 	for i := range current.Debris {
 		d := &current.Debris[i]
 		if span, ok := pub.byID[battleEntityKey{kind: 4, id: uint64(d.Slot)}]; ok {
-			if instance := byOffset[span.offset]; instance != nil {
-				s.applyModelMaterials(instance, ModelMaterialRequest{Frame: current, Debris: d})
-			}
+			s.applyModelMaterials(&pub.frame.Instances[span.instance], ModelMaterialRequest{Frame: current, Debris: d})
 		}
 	}
+}
+
+// materialStorage returns n zeroed materials from the arena. Growing it
+// leaves earlier walks on the old array, which stays valid; the publication
+// keeps the larger array for its next build.
+func materialStorage(arena *[]NativeModelMaterial, n int) []NativeModelMaterial {
+	a := *arena
+	if cap(a)-len(a) < n {
+		a = make([]NativeModelMaterial, 0, max(2*cap(a), n, 1024))
+	}
+	start := len(a)
+	a = a[:start+n]
+	*arena = a
+	out := a[start : start+n : start+n]
+	clear(out)
+	return out
 }
 
 // ApplyMaterials supplies the same material selection for native projectile

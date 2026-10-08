@@ -26,11 +26,6 @@ const (
 // precedes the post-record scale; output scale must never enter the floor.
 type ModelProjection struct{ Origin, Anchors, Control [4]float32 }
 
-type ModelProjectionSubject struct {
-	Projection ModelProjection
-	PieceFlags []uint32 // model piece order; empty means all local
-}
-
 // ModelProjectionFrame records follow original LiveFrame.Instances order;
 // PieceFlags follow the original pose buffer, never the mesh-packed instances.
 // View is record camera X/Z and post-record physical translation X/Y.
@@ -77,39 +72,35 @@ func NewModelProjection(origin [3]numeric.Fixed, native, doubled [2]int32, flags
 }
 
 // ApplyModelProjections copies a source-only callback into retained instance
-// and pose order. Call immediately after Frame and before another Frame.
-// Unsupported families have unknown records and keep existing world projection.
-func (r *RetainedBattle) ApplyModelProjections(f *LiveFrame, view [4]float32, resolve func(kind uint8, id uint64) ModelProjectionSubject) (ModelProjectionFrame, error) {
-	out := ModelProjectionFrame{View: view}
+// and pose order, reusing dst's storage. resolve receives the subject's
+// zeroed model-piece flags to fill. Call after Frame and before another
+// Frame. Unsupported families have unknown records and keep existing world
+// projection.
+func (r *RetainedBattle) ApplyModelProjections(dst *ModelProjectionFrame, f *LiveFrame, view [4]float32, resolve func(kind uint8, id uint64, pieces []uint32) (ModelProjection, error)) error {
+	dst.View = view
+	dst.Records, dst.PieceFlags = dst.Records[:0], dst.PieceFlags[:0]
 	if f == nil {
-		return out, nil
+		return nil
 	}
-	out.Records = make([]ModelProjection, len(f.Instances))
-	out.PieceFlags = make([]uint32, len(f.Current))
-	if r == nil || r.previous == nil || resolve == nil {
-		return out, nil
+	dst.Records = resizeComposition(dst.Records, len(f.Instances))
+	clear(dst.Records)
+	dst.PieceFlags = resizeComposition(dst.PieceFlags, len(f.Current))
+	clear(dst.PieceFlags)
+	if resolve == nil {
+		return nil
 	}
-	type poseIdentity struct{ mesh, offset int }
-	byPose := make(map[poseIdentity]battleEntityKey, len(r.previous.byID))
-	for key, span := range r.previous.byID {
-		if span.count > 0 {
-			byPose[poseIdentity{span.mesh, span.offset}] = key
+	var err error
+	r.VisitSubjects(f, func(i int, kind uint8, id uint64, offset, count int) {
+		if err != nil {
+			return
 		}
-	}
-	for i, instance := range f.Instances {
-		key, ok := byPose[poseIdentity{instance.Mesh, instance.PoseOffset}]
-		if !ok {
-			continue
+		if offset < 0 || offset+count > len(dst.PieceFlags) {
+			err = modelProjectionError("flags aligned to subject pose span")
+			return
 		}
-		span := r.previous.byID[key]
-		subject := resolve(key.kind, key.id)
-		if len(subject.PieceFlags) != 0 && len(subject.PieceFlags) != span.count || span.offset < 0 || span.offset+span.count > len(out.PieceFlags) {
-			return ModelProjectionFrame{}, modelProjectionError("flags aligned to subject pose span")
-		}
-		out.Records[i] = subject.Projection
-		copy(out.PieceFlags[span.offset:span.offset+span.count], subject.PieceFlags)
-	}
-	return out, nil
+		dst.Records[i], err = resolve(kind, id, dst.PieceFlags[offset:offset+count])
+	})
+	return err
 }
 
 func modelProjectionError(expected string) error {

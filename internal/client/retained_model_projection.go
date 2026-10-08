@@ -29,21 +29,23 @@ type RetainedModelProjectionFrame struct {
 	RecordScale float32
 	Doubled     bool
 	Subjects    []RetainedModelProjection
+	pieces      []bool // backs the subjects' PieceDirect
 }
 
 // RecordRetainedModelProjections samples the same pinned, blended and
 // arrival-adjusted inputs as production recording (§2.2.1, §17.2–§17.5).
 // It reads no posed vertices and changes no cached body/orientation state.
-// Call on the presentation owner after BeginPresentationFrame. The returned
-// metadata owns its slices; no committed frame is mutated [I6].
-func (c *Client) RecordRetainedModelProjections() RetainedModelProjectionFrame {
-	var out RetainedModelProjectionFrame
+// Call on the presentation owner after BeginPresentationFrame. It records
+// into out, reusing its storage, so the metadata is valid until the next
+// record into out; no committed frame is mutated [I6].
+func (c *Client) RecordRetainedModelProjections(out *RetainedModelProjectionFrame) {
+	*out = RetainedModelProjectionFrame{Subjects: out.Subjects[:0], pieces: out.pieces[:0]}
 	if c == nil || c.cam == nil {
-		return out
+		return
 	}
 	cur := c.presentationFrame()
 	if cur == nil {
-		return out
+		return
 	}
 	if cur != c.committedFrame() && c.beginCameraBlend() {
 		defer c.endCameraBlend(true)
@@ -77,7 +79,7 @@ func (c *Client) RecordRetainedModelProjections() RetainedModelProjectionFrame {
 			// cache decision. This alone cannot establish whether DirectAll
 			// applies. Reading the compiled piece names does not compose poses.
 			if m := c.modelForUnit(v); m != nil && m.compiled != nil {
-				p.PieceDirect = make([]bool, len(m.compiled.Pieces))
+				p.PieceDirect = out.pieceStorage(len(m.compiled.Pieces))
 				for _, piece := range v.Pieces {
 					index := piece.Index
 					if piece.Name != "" {
@@ -106,5 +108,17 @@ func (c *Client) RecordRetainedModelProjections() RetainedModelProjectionFrame {
 		anchors(&p)
 		out.Subjects = append(out.Subjects, p)
 	}
-	return out
+}
+
+// pieceStorage returns n cleared flags. Growing leaves earlier subjects on
+// the old array, which stays valid; the next record reuses the larger one.
+func (out *RetainedModelProjectionFrame) pieceStorage(n int) []bool {
+	if cap(out.pieces)-len(out.pieces) < n {
+		out.pieces = make([]bool, 0, max(2*cap(out.pieces), n, 1024))
+	}
+	start := len(out.pieces)
+	out.pieces = out.pieces[:start+n]
+	flags := out.pieces[start : start+n : start+n]
+	clear(flags)
+	return flags
 }

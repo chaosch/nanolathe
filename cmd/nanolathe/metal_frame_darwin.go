@@ -24,7 +24,7 @@ func prepareMetalScene(scene *meshscene.Scene, terrain *world.Terrain) {
 	scene.WaterDamaging = terrain.WaterDoesDamage != 0 && terrain.WaterDamage != 0
 }
 
-func prepareMetalFrame(cl *client.Client, world *meshscene.RetainedBattle, scene *meshscene.Scene, live *meshscene.LiveFrame, current *frame.Frame, width, height int) {
+func prepareMetalFrame(cl *client.Client, world *meshscene.RetainedBattle, scene *meshscene.Scene, live *meshscene.LiveFrame, current *frame.Frame, width, height int, subjects *metalSubjectRules) {
 	live.LightControls &= 1
 	if cl.Effects().Finish {
 		live.LightControls |= 2
@@ -35,9 +35,11 @@ func prepareMetalFrame(cl *client.Client, world *meshscene.RetainedBattle, scene
 	if cl.Effects().Supersample {
 		live.LightControls |= 8
 	}
-	if live.ModelRules == nil {
-		live.ModelRules = applyMetalModelRules(cl, world, live, current)
-		live.WaterObjects = applyMetalWaterObjects(cl, world, live, current)
+	// Rules and water verdicts belong to a build; a Recull keeps both.
+	if live.ModelRules == nil && current != nil {
+		subjects.index(current)
+		live.ModelRules = subjects.modelRules(cl, world, live, current)
+		live.WaterObjects = subjects.waterObjects(cl, world, live, current)
 	}
 	z := live.Camera[2]
 	if z <= 0 {

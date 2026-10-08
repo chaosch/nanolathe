@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/client"
@@ -72,6 +73,15 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 	// paint bands, labels before strip 9, world art on its load palette.
 	c.SetExternalSelection(true)
 	host.visuals.worldPalette = &display
+	if v := os.Getenv("NANOLATHE_METAL_TEST_PAN"); v != "" {
+		pan, err := strconv.ParseFloat(v, 32)
+		if err != nil {
+			return fmt.Errorf("nanolathe: NANOLATHE_METAL_TEST_PAN must be world units per draw, not %q", v)
+		}
+		host.pan = float32(pan)
+		metadata["test_pan"] = pan
+	}
+	world.SetCameraReuse(os.Getenv("NANOLATHE_METAL_CAMERA_REUSE") != "0")
 	scene.Live = host
 	// Every draw, the synchronous step included, is prepared on a worker while
 	// the previous draw presents and paces, as the match host prepares every
@@ -138,6 +148,9 @@ func runMetalBattleBenchmark(opts Options, cs *contentSet, b *battleSession, c *
 type metalBenchmarkSource struct {
 	visuals                  metalVisuals
 	selection                metalSelection
+	projection               metalProjection
+	subjects                 metalSubjectRules
+	pan                      float32 // NANOLATHE_METAL_TEST_PAN world units per draw; 0 holds the camera
 	b                        *battleSession
 	c                        *client.Client
 	world                    *meshscene.RetainedBattle
@@ -188,13 +201,33 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	fraction := h.c.ResolveTickFraction()
 	view := h.c.CameraViewFor(h.c.PresentationDigest())
 	camera := [3]float32{float32(view.X + float64(h.options.Width)/(2*view.Factor)), float32(view.Z + float64(h.options.Height)/(2*view.Factor)), float32(view.Factor)}
+	if h.pan != 0 {
+		// Test motion of the Metal world's camera only: a triangle wave in
+		// position and zoom. The production camera, order and HUD stay put.
+		t := float32(h.draw % 240)
+		if t > 120 {
+			t = 240 - t
+		}
+		camera[0] += h.pan * t
+		camera[1] += h.pan * t / 2
+		camera[2] *= 1 + t/2400
+	}
 	previous, current := h.c.PresentedFramePair()
 	// Settings are host inputs. Apply them on each completed source sample;
 	// this does not create an independent simulation or presentation clock.
 	h.world.SetSourceEffects(h.c.Effects())
 	h.world.SetDitheredFog(h.c.DitheredFog())
 	split()
-	if h.current != current || h.previous != previous || h.camera != camera || current != nil && h.frame.Tick != current.Tick {
+	stale := h.current != current || h.previous != previous || current != nil && h.frame.Tick != current.Tick
+	if !stale && h.camera != camera {
+		if h.world.Covers(camera) {
+			h.world.Recull(&h.frame, camera)
+			h.camera = camera
+		} else {
+			stale = true
+		}
+	}
+	if stale {
 		sourcePrevious := previous
 		_, _, blend := h.c.PresentedTicks()
 		if !blend {
@@ -234,9 +267,9 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 		h.frame.OverlayDirty[i] = uint32(value)
 	}
 	split()
-	prepareMetalFrame(h.c, h.world, h.scene, &h.frame, current, h.options.Width, h.options.Height)
+	prepareMetalFrame(h.c, h.world, h.scene, &h.frame, current, h.options.Width, h.options.Height, &h.subjects)
 	split()
-	if err := prepareMetalProjection(h.c, h.world, &h.frame, 1); err != nil {
+	if err := h.projection.Prepare(h.c, h.world, &h.frame, 1); err != nil {
 		return meshscene.LiveFrame{}, err
 	}
 	split()

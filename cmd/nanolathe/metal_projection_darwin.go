@@ -3,28 +3,49 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
 
-func prepareMetalProjection(cl *client.Client, retained *meshscene.RetainedBattle, live *meshscene.LiveFrame, outputScale float32) error {
-	source := cl.RecordRetainedModelProjections()
+// metalProjection keeps the client's projection metadata, its subject lookup
+// and the result between frames, so a frame allocates nothing. The result is
+// valid until the next Prepare; native upload copies it before then.
+type metalProjection struct {
+	source   client.RetainedModelProjectionFrame
+	subjects map[metalSubjectKey]int
+	out      meshscene.ModelProjectionFrame
+}
+
+type metalSubjectKey struct {
+	kind uint8
+	id   uint64
+}
+
+func (m *metalProjection) Prepare(cl *client.Client, retained *meshscene.RetainedBattle, live *meshscene.LiveFrame, outputScale float32) error {
+	cl.RecordRetainedModelProjections(&m.source)
+	source := &m.source
 	control, view, err := meshscene.ModelProjectionView(source.World, source.Camera, source.RecordScale, source.Doubled, outputScale)
 	if err != nil {
 		return err
 	}
-	type identity struct {
-		kind uint8
-		id   uint64
+	if m.subjects == nil {
+		m.subjects = make(map[metalSubjectKey]int, len(source.Subjects))
 	}
-	subjects := make(map[identity]client.RetainedModelProjection, len(source.Subjects))
-	for _, s := range source.Subjects {
-		subjects[identity{s.Kind, s.ID}] = s
+	clear(m.subjects)
+	for i := range source.Subjects {
+		s := &source.Subjects[i]
+		m.subjects[metalSubjectKey{s.Kind, s.ID}] = i
 	}
-	live.ModelProjections, err = retained.ApplyModelProjections(live, view, func(kind uint8, id uint64) meshscene.ModelProjectionSubject {
-		s, ok := subjects[identity{kind, id}]
+	err = retained.ApplyModelProjections(&m.out, live, view, func(kind uint8, id uint64, pieces []uint32) (meshscene.ModelProjection, error) {
+		at, ok := m.subjects[metalSubjectKey{kind, id}]
 		if !ok {
-			return meshscene.ModelProjectionSubject{}
+			return meshscene.ModelProjection{}, nil
+		}
+		s := &source.Subjects[at]
+		if len(s.PieceDirect) != 0 && len(s.PieceDirect) != len(pieces) {
+			return meshscene.ModelProjection{}, fmt.Errorf("nanolathe: retained projection failed: logical path model projection metadata, providers searched [production client retained subject identities], expected flags aligned to subject pose span")
 		}
 		var flags uint32
 		if s.ModeKnown {
@@ -33,16 +54,13 @@ func prepareMetalProjection(cl *client.Client, retained *meshscene.RetainedBattl
 		if s.DirectAll {
 			flags |= meshscene.ModelProjectionDirectAll
 		}
-		var pieces []uint32
-		if len(s.PieceDirect) > 0 {
-			pieces = make([]uint32, len(s.PieceDirect))
-			for i, direct := range s.PieceDirect {
-				if direct {
-					pieces[i] = meshscene.ModelProjectionPieceDirect
-				}
+		for i, direct := range s.PieceDirect {
+			if direct {
+				pieces[i] = meshscene.ModelProjectionPieceDirect
 			}
 		}
-		return meshscene.ModelProjectionSubject{Projection: meshscene.NewModelProjection(s.Origin, s.NativeAnchor, s.DoubledAnchor, flags, control), PieceFlags: pieces}
+		return meshscene.NewModelProjection(s.Origin, s.NativeAnchor, s.DoubledAnchor, flags, control), nil
 	})
+	live.ModelProjections = m.out
 	return err
 }
