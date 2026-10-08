@@ -1567,3 +1567,103 @@ sprite selection (1.2 ms per draw while the camera moves; it walks every
 feature), and the rest of per-draw preparation in the large view (about
 3.7 ms: visual sources 1.6, composer 0.6, shadows 0.5, HUD 0.3, projection
 0.3). Results and scripts: `~/nanolathe-bench/metal-depth-slabs-2026-10-07/round5/`.
+
+### Sixth round: what each draw sends to the GPU (2026-10-07)
+
+**Census.** The native bridge now counts the bytes each upload copies into
+GPU-visible memory, by kind (`nm_info` reports `upload_bytes_by_kind` and
+`upload_frames`; the benchmark restarts the count after warm-up). In the large
+field view a draw copied 4.66 MB, half of it per-instance copies of material
+tables. Most of it repeated the previous draw: the world tables change once
+per tick, three of every four draws fall between ticks, and most instances
+share one cached material table.
+
+**Resident copies.** `LiveFrame.Generation` names a build's world tables and
+`FogFrame.Generation` a fog texture's contents. Native keeps three copies of
+the world tables (pose endpoints, instance offsets, model rules, material
+offsets and overrides) and of the fog texture, keyed by generation; an upload
+whose generation a copy holds copies nothing, and a new generation fills a
+copy that neither other ring slot's frame reads (frames complete in commit
+order, as the ring itself already assumes). Arrays that no build names are
+numbered by content instead: Go compares each packed array with its last copy
+and keeps the generation when they are equal. That covers the sprites, the
+shadow and projection piece flags and the ground marks.
+
+**Smaller records.**
+
+- Packing uploads each shared material table once; instances that hit the
+  retained material cache point at the same table.
+- Shadow bodies bind the instance's resident model rules. Only rules that
+  differ (a grouped child's key plane) travel with the shadows.
+- Glow quads travel as four vertices, drawn through a shared index buffer,
+  instead of six.
+- Ground marks keep their painted-map mapping and clip in a small per-frame
+  table (80 to 48 bytes per mark). A scorch's age is whole ticks plus the
+  frame's tick fraction; it now travels as whole ticks and the shader adds the
+  same fraction back, the same float32 sum production makes, so the marks are
+  constant through a tick.
+
+| Kind, KB per draw (large field view, offscreen, after warm-up) | Before | After |
+|---|---:|---:|
+| Material overrides | 2,279 | 67 |
+| Pose endpoints | 899 | 225 |
+| Fog texture | 291 | 73 |
+| Ground marks | 256 | 39 |
+| Glow vertices | 232 | 155 |
+| Shadows | 172 | 88 |
+| Effects (quads, vertices, samples, smoke) | 107 | 107 |
+| Instance offsets, rules, material offsets | 90 | 23 |
+| Sprites | 85 | 20 |
+| Projection | 64 | 43 |
+| Composition | 55 | 55 |
+| Instance visuals | 48 | 48 |
+| Everything else (HUD, atlases, groups, water, selectors, lights) | 80 | 80 |
+| **Total** | **4,658** | **1,021** |
+
+**Allocation.** The remaining presentation allocations went: material cache
+keys escaped to the heap on every lookup, hits included, because the miss path
+took the key's address; model-name keys were lower-cased per subject;
+production's effect draw options built three method closures per strip; the
+recorded effect batch escaped through the projectile-order pointer; and the run
+loop boxed whole frame structures to keep them alive across the native call.
+Per draw this is 1,398 to 593 allocations and 106 to 84 KB; what remains is the
+simulation's (path searches, weapon slots, unit lists) and slices growing with
+the battle.
+
+**Scrolling.** Each camera-only reselect walked every feature, effect and strip
+again, resolving art and visibility, although only the cull depends on the
+camera. The build's walk now records its resolved candidates before culling,
+and `BattleSprites.Reselect` culls them again in order, then walks projectiles
+and wreck lights as before. Counters that culling decides are kept apart, so
+the cumulative sprite census is identical. Offscreen, with the camera moving,
+the recull fell from 1.17 to 0.33 ms per draw.
+
+**Results** (windowed, as in the fifth round; before is ebda27958; one-minute
+load about 4):
+
+| Case | Draws/s | Prep, tick draw | Prep, other draws | Draws over 12.5 ms | GPU p50 | KB allocated/draw |
+|---|---:|---:|---:|---:|---:|---:|
+| Field 3456×2160, before (two runs) | 104.3, 103.3 | 8.06, 8.14 | 3.74, 3.74 | 402, 422 | 9.78, 9.88 | 80 |
+| Field 3456×2160, after | 104.0, 104.7 | 8.17, 8.05 | 3.72, 3.64 | 394, 393 | 9.76, 9.72 | 63 |
+| Field 3456×2160, moving camera, before | 106.4 | 8.13 | 5.01 | 232 | | 82 |
+| Field 3456×2160, moving camera, after | 108.1 | 8.17 | 3.91 | 168 | | 63 |
+| Coastal 1080p, before | 119.6 | 4.91 | 2.11 | 5 | | 61 |
+| Coastal 1080p, after | 119.4 | 4.99 | 2.12 | 13 | | 50 |
+
+Sending 78% fewer bytes did not change the still large view's rate: on
+unified memory the copies were cheap (native encoding, which includes them,
+fell from 2.93 to 2.72 ms per draw), and that view is bound by GPU time,
+about 9.7 ms in both builds. The moving camera gains from the sprite replay:
+1.1 ms less preparation between ticks and 28% fewer late draws.
+
+Offscreen final frames are byte-identical to the fifth round's in the field
+view, with the camera still and moving.
+
+**Still per draw.** What remains is computed at the draw's camera and tick
+fraction on the CPU: effect quads and glow from the production recorder's
+blended frame, composition slots, shadow subjects, projection records and the
+interpolated instance visuals. Sending those once per tick means recording
+them in world space with both endpoints and interpolating on the GPU, and the
+effect recorder is shared with the production renderers. Large-view GPU time
+is the other open item. Results and scripts:
+`~/nanolathe-bench/metal-depth-slabs-2026-10-07/round6/`.
