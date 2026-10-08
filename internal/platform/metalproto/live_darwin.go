@@ -73,6 +73,7 @@ type liveUpload struct {
 	AnnotationCount, AnnotationRangeCount                                                                            uint32
 	WorldGain                                                                                                        float32
 	Reserved                                                                                                         uint32
+	WorldGeneration, FogGeneration                                                                                   uint64
 }
 type livePacking struct {
 	projectionPacking                                ProjectionPacking
@@ -98,6 +99,9 @@ type livePacking struct {
 	rules                                            []meshscene.ModelRules
 	materialOffsets                                  []uint32
 	materials                                        []meshscene.NativeModelMaterial
+	materialBlocks                                   map[*meshscene.NativeModelMaterial]uint32
+	frameGeneration, packGeneration                  uint64
+	rulesLen                                         int
 	phases                                           []uint32
 	cloaks                                           []cloakDraw
 	cloakSubjects                                    []cloakSubject
@@ -122,7 +126,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	if !visualPasses {
 		f.Fog = meshscene.FogFrame{}
 	}
-	if unsafe.Sizeof(u) != 688 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
+	if unsafe.Sizeof(u) != 704 || unsafe.Sizeof(cloakDraw{}) != 16 || unsafe.Sizeof(meshscene.OverlayQuad{}) != 64 || unsafe.Sizeof(meshscene.NativeEvent{}) != 32 || unsafe.Sizeof(meshscene.Distortion{}) != 64 || unsafe.Sizeof(meshscene.Sprite{}) != 96 || unsafe.Sizeof(meshscene.Light{}) != 32 || unsafe.Sizeof(nativeInput{}) != 16 {
 		return u, r, fmt.Errorf("metalproto: live GPU ABI mismatch")
 	}
 	if len(f.ModelRules) != 0 && len(f.ModelRules) != len(f.Instances) {
@@ -155,21 +159,39 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		p.visuals = p.visuals[:len(f.Instances)]
 	}
 	p.phases = slices.Grow(p.phases[:0], len(f.Instances))[:len(f.Instances)]
-	p.rules = slices.Grow(p.rules[:0], len(f.Instances))[:len(f.Instances)]
-	p.materialOffsets = slices.Grow(p.materialOffsets[:0], len(f.Instances))[:len(f.Instances)]
-	clear(p.rules)
-	clear(p.materialOffsets)
-	p.materials = p.materials[:0]
+	// Rules and material tables belong to the world generation, which native
+	// keeps resident with the poses: pack them again only for a new one, and
+	// number each packing for native. Instances whose walk hit the retained
+	// material cache share one table, uploaded once.
+	packWorld := f.Generation == 0 || f.Generation != p.frameGeneration || len(f.ModelRules) != p.rulesLen
+	if packWorld {
+		p.packGeneration++
+		p.frameGeneration, p.rulesLen = f.Generation, len(f.ModelRules)
+		p.rules = slices.Grow(p.rules[:0], len(f.Instances))[:len(f.Instances)]
+		clear(p.rules)
+		p.materialOffsets = slices.Grow(p.materialOffsets[:0], len(f.Instances))[:len(f.Instances)]
+		clear(p.materialOffsets)
+		p.materials = p.materials[:0]
+		if p.materialBlocks == nil {
+			p.materialBlocks = make(map[*meshscene.NativeModelMaterial]uint32)
+		}
+		clear(p.materialBlocks)
+	}
 	p.sourcePacked = slices.Grow(p.sourcePacked[:0], len(f.Instances))[:len(f.Instances)]
 	for sourceIndex, instance := range f.Instances {
 		at := p.cursor[instance.Mesh]
 		p.sourcePacked[sourceIndex] = at
-		if sourceIndex < len(f.ModelRules) {
+		if packWorld && sourceIndex < len(f.ModelRules) {
 			p.rules[at] = f.ModelRules[sourceIndex]
 		}
-		if len(instance.Materials) > 0 {
-			p.materialOffsets[at] = uint32(len(p.materials)) + 1
-			p.materials = append(p.materials, instance.Materials...)
+		if packWorld && len(instance.Materials) > 0 {
+			offset, ok := p.materialBlocks[&instance.Materials[0]]
+			if !ok {
+				offset = uint32(len(p.materials)) + 1
+				p.materials = append(p.materials, instance.Materials...)
+				p.materialBlocks[&instance.Materials[0]] = offset
+			}
+			p.materialOffsets[at] = offset
 		}
 		if instance.Phase > meshscene.PhaseAir {
 			return u, r, fmt.Errorf("metalproto: invalid model phase")
@@ -219,6 +241,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 	}
 	u = liveUpload{Rules: pointer(p.rules), MaterialOffsets: pointer(p.materialOffsets), Materials: pointer(p.materials), RulesCount: uint32(len(f.ModelRules)), MaterialCount: uint32(len(p.materials)), Water: f.Water, GroundSpriteCount: uint32(groundSprites), Overlay: pointer(f.Overlay), OverlayCount: uint32(len(f.Overlay)), Visuals: pointer(p.visuals), Distortions: pointer(f.Distortions), DistortionCount: uint32(len(f.Distortions)), Fog: pointer(f.Fog.RGBA), FogWidth: uint32(f.Fog.Width), FogHeight: uint32(f.Fog.Height), FogRect: f.Fog.Rect, Previous: pointer(f.Previous), Current: pointer(f.Current), Offsets: pointer(p.offsets), Spans: pointer(p.spans), Sprites: pointer(p.sprites), Lights: pointer(lights), Camera: [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], 0}, Alpha: f.Alpha, PoseCount: uint32(len(f.Current)), InstanceCount: uint32(len(f.Instances)), SpriteCount: uint32(len(p.sprites)), LightCount: uint32(len(lights)), Seconds: seconds}
 	u.WorldGain = f.WorldGain
+	u.WorldGeneration, u.FogGeneration = p.packGeneration, f.Fog.Generation
 	if f.OverlayVersion != 0 && f.OverlayVersion != p.overlayVersion {
 		t := f.OverlayTexture
 		if t.Width <= 0 || t.Height <= 0 || t.Width > math.MaxInt32 || t.Height > math.MaxInt32 || uint64(t.Width)*uint64(t.Height)*4 != uint64(len(t.RGBA)) {

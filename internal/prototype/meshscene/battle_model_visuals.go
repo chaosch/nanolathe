@@ -145,7 +145,7 @@ func (s *battleSource) applyUnitSubject(pub *battlePublication, u frame.UnitView
 		instance.Visual.State[1] = 0.5
 	}
 	if u.Carrier != 0 && u.Carrier != u.Slot {
-		if _, resolved := s.modelIndices[battleModelKey(presenter.Model)]; resolved {
+		if _, resolved := s.modelIndices[s.modelKeys.key(presenter.Model)]; resolved {
 			// Keyless/direct cargo writes ordinary opaque polygons [03 R-REN-03A §4].
 			instance.Visual.State[1] = 1
 			if presenter.ZBuffer || presenter.BuildRemaining > 0 || presenter.Digger {

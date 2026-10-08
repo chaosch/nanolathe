@@ -22,6 +22,8 @@ type RetainedBattle struct {
 	camera  [3]float32
 	slack   float32
 	noReuse bool
+	// generation numbers builds for LiveFrame.Generation.
+	generation uint64
 	// Timings splits the last Frame build in milliseconds: maps, units,
 	// features, projectiles, sprites, debris, fog, census, materials (diagnostic).
 	Timings              [9]float64
@@ -115,6 +117,8 @@ func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32
 	if b, ok := r.source.sprites.(*BattleSprites); ok {
 		r.SpriteSplits = b.Splits
 	}
+	r.generation++
+	pub.frame.Generation = r.generation
 	r.previous = pub
 	return pub.frame
 }

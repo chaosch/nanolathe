@@ -90,8 +90,9 @@ func (s *battleSource) appendFog(cur *frame.Frame, old *battlePublication, store
 		return FogFrame{}
 	}
 	const cell = render.FogTilePixels
+	s.fogGeneration++
 	dst := FogFrame{
-		Width: int(src.W), Height: int(src.H), Dithered: dithered,
+		Width: int(src.W), Height: int(src.H), Dithered: dithered, Generation: s.fogGeneration,
 		Rect: [4]float32{float32(src.OriginX*cell + cell/2), float32(src.OriginZ*cell + cell/2), float32((src.OriginX+src.W)*cell + cell/2), float32((src.OriginZ+src.H)*cell + cell/2)},
 	}
 	if n := len(src.Ch0) * 4; cap(store) >= n {

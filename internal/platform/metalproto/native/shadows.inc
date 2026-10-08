@@ -48,14 +48,14 @@ static BOOL nmShadowsPrepare(NMRenderer* r,NMShadowState* s,NMShadowFrame* f,con
  f.subjectCount=u->subject_count;f.bodyCount=u->body_count;f.projectedCount=u->projected_count;f.width=u->width;f.height=u->height;vector_float4 tint,water;memcpy(&tint,u->tint,16);memcpy(&water,u->water,16);f.tint=tint;f.water=water;
  f.slots=grow(r,f.slots,(NSUInteger)u->slot_count*48);f.subjects=grow(r,f.subjects,(NSUInteger)u->subject_count*96);f.bodyRules=grow(r,f.bodyRules,(NSUInteger)u->body_count*112);f.pieceFlags=grow(r,f.pieceFlags,(NSUInteger)u->piece_count*4);
  if(!f.slots||!f.subjects||!f.bodyRules||!f.pieceFlags)return NO;
- if(u->slot_count)memcpy(f.slots.contents,(const void*)u->slots,u->slot_count*48);
- if(u->subject_count)memcpy(f.subjects.contents,(const void*)u->subjects,u->subject_count*96);
- if(u->body_count)memcpy(f.bodyRules.contents,(const void*)u->body_rules,u->body_count*112);
- if(u->piece_count)memcpy(f.pieceFlags.contents,(const void*)u->piece_flags,u->piece_count*4);
+ if(u->slot_count)NMCOPY(NMUpShadows,f.slots.contents,(const void*)u->slots,u->slot_count*48);
+ if(u->subject_count)NMCOPY(NMUpShadows,f.subjects.contents,(const void*)u->subjects,u->subject_count*96);
+ if(u->body_count)NMCOPY(NMUpShadows,f.bodyRules.contents,(const void*)u->body_rules,u->body_count*112);
+ if(u->piece_count)NMCOPY(NMUpShadows,f.pieceFlags.contents,(const void*)u->piece_flags,u->piece_count*4);
  if(!f.bodyDraws)f.bodyDraws=[NSMutableData new];if(!f.projectedDraws)f.projectedDraws=[NSMutableData new];
  f.bodyDraws.length=u->body_count*16;f.projectedDraws.length=u->projected_count*16;
- if(u->body_count)memcpy(f.bodyDraws.mutableBytes,(const void*)u->body_draws,f.bodyDraws.length);
- if(u->projected_count)memcpy(f.projectedDraws.mutableBytes,(const void*)u->projected_draws,f.projectedDraws.length);
+ if(u->body_count)NMCOPY(NMUpCPU,f.bodyDraws.mutableBytes,(const void*)u->body_draws,f.bodyDraws.length);
+ if(u->projected_count)NMCOPY(NMUpCPU,f.projectedDraws.mutableBytes,(const void*)u->projected_draws,f.projectedDraws.length);
  NSUInteger w=MAX(s.body.width,u->width),h=MAX(s.body.height,u->height);
  if(w&&h&&(w!=s.body.width||h!=s.body.height)){
   s.body=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.emission=target(r,w,h,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget);

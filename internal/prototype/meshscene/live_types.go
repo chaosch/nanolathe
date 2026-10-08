@@ -96,6 +96,7 @@ type LiveFrame struct {
 	// WorldGain is the display gamma factor over the factor the retained
 	// world art was built with; zero means unchanged.
 	WorldGain         float32
+	Generation        uint64 // nonzero names Previous, Current and Instances with their materials; equal means unchanged
 	Previous, Current []Mat4
 	Instances         []Instance
 	Sprites           []Sprite
@@ -153,6 +154,7 @@ type FogFrame struct {
 	RGBA          []byte
 	Rect          [4]float32
 	Dithered      bool
+	Generation    uint64 // nonzero names the RGBA contents, as LiveFrame.Generation
 }
 
 // Distortion is 64 bytes. Positions are world xyz, with GPU interpolation.

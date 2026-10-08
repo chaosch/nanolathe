@@ -10,15 +10,15 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
  ring.annotationRangeCount=0;
  if(!u->composed)return YES;
  if(u->annotation_count&&u->annotation_range_count==u->composition_slot_count&&u->annotations&&u->annotation_ranges){
-  ring.annotations=grow(r,ring.annotations,(NSUInteger)u->annotation_count*32);if(!ring.annotations)return NO;memcpy(ring.annotations.contents,u->annotations,(NSUInteger)u->annotation_count*32);
-  if(!ring.annotationRanges)ring.annotationRanges=[NSMutableData new];ring.annotationRanges.length=(NSUInteger)u->annotation_range_count*8;memcpy(ring.annotationRanges.mutableBytes,u->annotation_ranges,ring.annotationRanges.length);
+  ring.annotations=grow(r,ring.annotations,(NSUInteger)u->annotation_count*32);if(!ring.annotations)return NO;NMCOPY(NMUpComposition,ring.annotations.contents,u->annotations,(NSUInteger)u->annotation_count*32);
+  if(!ring.annotationRanges)ring.annotationRanges=[NSMutableData new];ring.annotationRanges.length=(NSUInteger)u->annotation_range_count*8;NMCOPY(NMUpCPU,ring.annotationRanges.mutableBytes,u->annotation_ranges,ring.annotationRanges.length);
   ring.annotationRangeCount=u->annotation_range_count;
  }
  if(u->composition_slot_count&&(!u->composition_slots||!u->composition_paint||!u->composition_width||!u->composition_height))return NO;
  if(u->composition_width>8192||u->composition_height>8192)return NO;
- if(u->instance_count)memcpy(ring.compositionSelectors.contents,u->composition_selectors,u->instance_count*4);
- if(u->composition_slot_count)memcpy(ring.compositionSlots.contents,u->composition_slots,u->composition_slot_count*48);
- if(u->composition_paint_count)memcpy(ring.compositionPaint.contents,u->composition_paint,u->composition_paint_count*16);
+ if(u->instance_count)NMCOPY(NMUpComposition,ring.compositionSelectors.contents,u->composition_selectors,u->instance_count*4);
+ if(u->composition_slot_count)NMCOPY(NMUpComposition,ring.compositionSlots.contents,u->composition_slots,u->composition_slot_count*48);
+ if(u->composition_paint_count)NMCOPY(NMUpComposition,ring.compositionPaint.contents,u->composition_paint,u->composition_paint_count*16);
  // Depth slabs: a direct slot's band is its index in the phase-major paint walk.
  if(!ring.slotRanks)ring.slotRanks=[NSMutableData new];
  ring.slotRanks.length=MAX((NSUInteger)u->composition_slot_count,1)*4;memset(ring.slotRanks.mutableBytes,0xff,ring.slotRanks.length);
@@ -27,7 +27,7 @@ static BOOL nmCompositionPrepare(NMRenderer* r,NMRing* ring,const NMLiveUpload* 
   for(uint32_t i=0;i<u->composition_paint_count;i++)if(paint[i*4+3]==0&&paint[i*4]>0&&paint[i*4]<=u->composition_slot_count)ranks[paint[i*4]-1]=i;
   for(uint32_t i=0;i<u->composition_slot_count;i++)if(slots[i*12+10]>0.5f&&ranks[i]!=UINT32_MAX)ring.directSlotCount++;}
  if(!ring.compositionDraws)ring.compositionDraws=[NSMutableData new];ring.compositionDraws.length=u->composition_draw_count*sizeof(NMCloakDraw);
- if(u->composition_draw_count)memcpy(ring.compositionDraws.mutableBytes,u->composition_draws,ring.compositionDraws.length);
+ if(u->composition_draw_count)NMCOPY(NMUpCPU,ring.compositionDraws.mutableBytes,u->composition_draws,ring.compositionDraws.length);
  // Production always rasterizes the body at 2x; Supersample chooses the resolve
  // sample pattern, and underwater refraction keeps its weighted gather.
  float rasterScale=2;float* slots=ring.compositionSlots.contents;for(NSUInteger i=0;i<u->composition_slot_count;i++)for(int j=4;j<8;j++)slots[i*12+j]*=rasterScale;

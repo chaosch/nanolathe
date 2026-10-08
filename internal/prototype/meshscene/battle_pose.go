@@ -150,7 +150,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.RejectedUnits++
 			continue
 		}
-		mesh, ok := s.modelIndices[battleModelKey(u.Model)]
+		mesh, ok := s.modelIndices[s.modelKeys.key(u.Model)]
 		if !ok {
 			census.MissingModels++
 			s.noteMissing(u.Model)
@@ -162,7 +162,7 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.CulledModels++
 			continue
 		}
-		if prior != nil && battleModelKey(prior.Model) != battleModelKey(u.Model) {
+		if prior != nil && s.modelKeys.key(prior.Model) != s.modelKeys.key(u.Model) {
 			prior = nil
 		}
 		key := battleEntityKey{kind: 1, id: u.InstanceID}
@@ -193,14 +193,14 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.RejectedFeatures++
 			continue
 		}
-		mesh, ok := s.modelIndices[battleModelKey(f.Model)]
+		mesh, ok := s.modelIndices[s.modelKeys.key(f.Model)]
 		if !ok {
 			census.MissingModels++
 			s.noteMissing(f.Model)
 			continue
 		}
 		prior := previousFeatures[f.InstanceID]
-		if prior != nil && battleModelKey(prior.Model) != battleModelKey(f.Model) {
+		if prior != nil && s.modelKeys.key(prior.Model) != s.modelKeys.key(f.Model) {
 			prior = nil
 		}
 		if !battleInView(f.X, f.Y, f.Z, camera, s.viewport, s.cullSlack) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport, s.cullSlack)) {
@@ -236,14 +236,14 @@ func (s *battleSource) buildPublication(previous, current *frame.Frame, camera [
 			census.RejectedProjectiles++
 			continue
 		}
-		mesh, ok := s.modelIndices[battleModelKey(p.Model)]
+		mesh, ok := s.modelIndices[s.modelKeys.key(p.Model)]
 		if !ok {
 			census.MissingModels++
 			s.noteMissing(p.Model)
 			continue
 		}
 		prior := previousProjectiles[p.PresentationID]
-		if prior != nil && battleModelKey(prior.Model) != battleModelKey(p.Model) {
+		if prior != nil && s.modelKeys.key(prior.Model) != s.modelKeys.key(p.Model) {
 			prior = nil
 		}
 		if !battleInView(p.X, p.Y, p.Z, camera, s.viewport, s.cullSlack) && (prior == nil || !battleInView(prior.X, prior.Y, prior.Z, camera, s.viewport, s.cullSlack)) {

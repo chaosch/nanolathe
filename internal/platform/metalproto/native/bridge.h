@@ -48,6 +48,10 @@ typedef struct {
  const void* annotations;const uint32_t* annotation_ranges;uint32_t annotation_count,annotation_range_count;
  // Display gamma factor now over the factor the world art was baked with.
  float world_gain;uint32_t reserved;
+ // Nonzero generations name unchanged contents: the world tables (poses,
+ // instance offsets, material offsets and overrides) and the fog texels. A
+ // resident copy with the same generation is reused instead of copied.
+ uint64_t world_generation,fog_generation;
 } NMLiveUpload;
 typedef struct { float pan_x,pan_z,zoom;uint32_t pause_toggle; } NMInput;
 // Ordered events use top-left physical drawable pixels; shared lane meanings
@@ -70,5 +74,7 @@ void nm_drain(void* renderer);
 int nm_rows(void* renderer,void* rows,int capacity);
 int nm_capture(void* renderer,const char* path);
 void nm_info(void* renderer,char* output,int capacity);
+// Restarts the upload census nm_info reports, at the end of a warm-up.
+void nm_upload_census_reset(void* renderer);
 void nm_destroy(void* renderer);
 #endif

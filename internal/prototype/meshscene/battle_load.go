@@ -285,6 +285,23 @@ func battleModelKey(name string) string {
 	name = strings.TrimPrefix(name, "objects3d/")
 	return strings.TrimSuffix(name, ".3do")
 }
+
+// battleModelKeys memoizes battleModelKey for the names every frame repeats;
+// normalizing a name with upper case would otherwise allocate per subject.
+type battleModelKeys map[string]string
+
+func (m *battleModelKeys) key(name string) string {
+	if k, ok := (*m)[name]; ok {
+		return k
+	}
+	if *m == nil || len(*m) >= 4096 {
+		*m = make(battleModelKeys)
+	}
+	k := battleModelKey(name)
+	(*m)[name] = k
+	return k
+}
+
 func battleModelMapName(name string) string {
 	name = strings.ReplaceAll(name, `\`, "/")
 	name = strings.TrimPrefix(name, "maps/")

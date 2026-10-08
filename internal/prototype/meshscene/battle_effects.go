@@ -170,8 +170,24 @@ func (b *BattleSprites) appendArtLight(dst []Light, a spriteArt, p [4]float32, e
 		radius = min(max(size*1.4, 56), 96)
 	}
 	p[1] += float32(a.identity.Height) * 0.25
-	b.counts[kind+"_lights"]++
+	b.counts[artLightCounter(kind)]++
 	return b.appendLight(dst, p, radius, 1, color, camera, viewport)
+}
+
+// artLightCounter names kind's census counter without building a string
+// for every light.
+func artLightCounter(kind string) string {
+	switch kind {
+	case "fire":
+		return "fire_lights"
+	case "spark":
+		return "spark_lights"
+	case "projectile":
+		return "projectile_lights"
+	case "explosion":
+		return "explosion_lights"
+	}
+	return kind + "_lights"
 }
 func wreckCooling(f frame.FeatureView, tick uint32) [3]float32 {
 	age := float32(tick - f.WreckBornTick)
@@ -195,7 +211,7 @@ func (b *BattleSprites) appendWreckLights(dst []Light, f *frame.Frame, camera [3
 		if max(color[0], color[1], color[2]) < 0.015 {
 			continue
 		}
-		bounds, ok := b.featureModelBounds[battleModelKey(v.Model)]
+		bounds, ok := b.featureModelBounds[b.modelKeys.key(v.Model)]
 		if !ok {
 			b.counts["wreck_light_bounds_missing"]++
 			continue

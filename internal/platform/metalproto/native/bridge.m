@@ -4,6 +4,12 @@
 #import <QuartzCore/CAMetalLayer.h>
 #import <simd/simd.h>
 #include "bridge.h"
+// Upload census: bytes the CPU copies per kind into GPU-visible storage (CPU is
+// native-only encoding metadata). nm_info reports the totals and frame count.
+enum{NMUpPoses,NMUpTables,NMUpVisuals,NMUpMaterials,NMUpFog,NMUpSprites,NMUpLights,NMUpOverlay,NMUpOverlayTexture,NMUpSelectors,NMUpComposition,NMUpEffects,NMUpEffectsAtlas,NMUpGround,NMUpShadows,NMUpGroups,NMUpProjection,NMUpWater,NMUpGlow,NMUpDistortions,NMUpCPU,NMUpKinds};
+static const char* nmUploadNames[NMUpKinds]={"poses","tables","visuals","materials","fog","sprites","lights","overlay","overlay_texture","selectors","composition","effects","effects_atlas","ground","shadows","groups","projection","water","glow","distortions","cpu"};
+static uint64_t nmUploadBytes[NMUpKinds],nmUploadFrames;
+#define NMCOPY(kind,dst,src,n) (nmUploadBytes[kind]+=(uint64_t)(n),memcpy((dst),(src),(n)))
 #include "timing.inc"
 #include "glow.h"
 #include "glow.inc"
@@ -29,7 +35,10 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 #include "faces.h"
 #include "face_reflections.h"
 #include "outline_rows.h"
-@interface NMRing : NSObject
+@interface NMRing : NSObject {
+@public
+ NSUInteger resident[2]; // resident slot this ring's frame reads, per kind
+}
 @property NMGroupFrame* groups;
 @property NMFaceRing* faceRing;
 @property NMOutlineRowsRing* outlineRowsRing;
@@ -60,7 +69,7 @@ typedef struct { vector_float4 camera,rect,viewport,timing,mode,heightRect,fogRe
 @end
 @implementation NMRing
 @end
-_Static_assert(sizeof(NMLiveUpload)==688,"live upload layout");
+_Static_assert(sizeof(NMLiveUpload)==704,"live upload layout");
 _Static_assert(sizeof(NMAssets)==56,"retained assets layout");
 _Static_assert(sizeof(NMInput)==16,"input layout");
 _Static_assert(sizeof(NMEvent)==32,"event layout");
@@ -90,6 +99,11 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
  uint64_t overlayVersion,overlayTextureUploads,overlayTextureBytes,runLoopPumps,runLoopSources;
  BOOL offscreen,effects,visualPasses,held[128],pressed[128],pauseToggle;
  float wheel;
+ // Resident world tables and fog: three copies each, keyed by generation.
+ uint64_t residentGenerations[2][3];
+ uint32_t worldCounts[3][4]; // pose, instance, material and rule counts per copy
+ id<MTLBuffer> worldPoses[3],worldInstances[3],worldMaterialOffsets[3],worldMaterials[3],worldRules[3];
+ id<MTLTexture> fogTextures[3];
 }
 @property NMTerrainTiles* terrainTiles;
 @property NMEffectsState* effectState;
@@ -593,6 +607,18 @@ static id<MTLBuffer> grow(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
 static id<MTLBuffer> growPoseOutput(NMRenderer* r,id<MTLBuffer> old,NSUInteger bytes) {
  if(old.length>=MAX(bytes,64))return old;NSUInteger capacity=MAX(old.length,4096);while(capacity<bytes)capacity*=2;return [r.device newBufferWithLength:capacity options:MTLResourceStorageModePrivate];
 }
+enum{NMResidentWorld,NMResidentFog};
+// nmResidentSlot returns the copy holding a nonzero generation, or else a copy
+// no in-flight frame reads, with *fresh set; the caller records the generation
+// once its copy succeeds. Frames complete in commit order, so only the other
+// two rings' frames can still be on the GPU.
+static NSUInteger nmResidentSlot(NMRenderer* r,NSUInteger kind,uint64_t generation,BOOL* fresh){
+ uint64_t* g=r->residentGenerations[kind];*fresh=NO;
+ if(generation)for(NSUInteger i=0;i<3;i++)if(g[i]==generation)return i;
+ NMRing* a=r.rings[(r->frameNumber+1)%3];NMRing* b=r.rings[(r->frameNumber+2)%3];
+ for(NSUInteger i=0;i<3;i++)if(i!=a->resident[kind]&&i!=b->resident[kind]){g[i]=0;*fresh=YES;return i;}
+ return 0;
+}
 // nm_live_upload copies one live frame into the next free ring slot and
 // nm_live_present acquires a drawable, encodes and commits it. Every read of
 // caller memory happens in the upload, so the caller may reuse its buffers
@@ -604,7 +630,7 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
  double copyStart=CACurrentMediaTime();NMRing* ring=r.rings[r->frameNumber%3];ring.worldGain=upload->world_gain;
  if(!nmEffectsPrepare(r,ring,upload->effects)||!nmGroundPrepare(r,ring,upload->ground_effects)){dispatch_semaphore_signal(r->available);return 0;}
  if(!ring.shadows)ring.shadows=[NMShadowFrame new];if(!nmShadowsPrepare(r,r.shadows,ring.shadows,&upload->shadows)){r.lastError=@"Shadow preparation failed";dispatch_semaphore_signal(r->available);return 0;}
- ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)memcpy(ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;memcpy(&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;
+ ring.glowVertices=grow(r,ring.glowVertices,(NSUInteger)upload->glow_count*48);if(!ring.glowVertices){dispatch_semaphore_signal(r->available);return 0;}if(upload->glow_count)NMCOPY(NMUpGlow,ring.glowVertices.contents,upload->glow_vertices,upload->glow_count*48);ring.glowCount=upload->glow_count;ring.glowEnabled=upload->glow_enabled;NMGlowParameters glow;NMCOPY(NMUpGlow,&glow,upload->glow_parameters,sizeof(glow));ring.glowParams=glow;
  if(!nmCompositionPrepare(r,ring,upload)){dispatch_semaphore_signal(r->available);return 0;}
  BOOL uploadOverlay=upload->overlay_version&&upload->overlay_version!=r->overlayVersion;
  NSUInteger overlayX=0,overlayY=0,overlayW=0,overlayH=0,overlayRowBytes=0;
@@ -617,38 +643,51 @@ int nm_live_upload(void* handle,const NMLiveUpload* upload) {
   if(overlayX+overlayW>upload->overlay_width||overlayY+overlayH>upload->overlay_height){dispatch_semaphore_signal(r->available);return 0;}
   overlayRowBytes=(overlayW*4+255)&~(NSUInteger)255;ring.overlayUpload=grow(r,ring.overlayUpload,overlayRowBytes*overlayH);if(!ring.overlayUpload){dispatch_semaphore_signal(r->available);return 0;}
   const uint8_t* source=upload->overlay_texture;uint8_t* staging=ring.overlayUpload.contents;
-  for(NSUInteger y=0;y<overlayH;y++)memcpy(staging+y*overlayRowBytes,source+((overlayY+y)*upload->overlay_width+overlayX)*4,overlayW*4);
+  for(NSUInteger y=0;y<overlayH;y++)NMCOPY(NMUpOverlayTexture,staging+y*overlayRowBytes,source+((overlayY+y)*upload->overlay_width+overlayX)*4,overlayW*4);
   r->overlayVersion=upload->overlay_version;r->overlayTextureUploads++;r->overlayTextureBytes+=(uint64_t)overlayW*overlayH*4;
  }
  if(upload->cloak_count&&!upload->cloaks){dispatch_semaphore_signal(r->available);return 0;}
  for(NSUInteger i=0;i<upload->cloak_count;i++){NMCloakDraw d=upload->cloaks[i];if(d.mesh>=r.meshes.count||d.instance>=upload->instance_count||d.phase>2){dispatch_semaphore_signal(r->available);return 0;}}
- if(!ring.cloaks)ring.cloaks=[NSMutableData new];ring.cloaks.length=upload->cloak_count*sizeof(NMCloakDraw);if(upload->cloak_count)memcpy(ring.cloaks.mutableBytes,upload->cloaks,ring.cloaks.length);ring.cloakCount=upload->cloak_count;ring.airCount=upload->air_count;
+ if(!ring.cloaks)ring.cloaks=[NSMutableData new];ring.cloaks.length=upload->cloak_count*sizeof(NMCloakDraw);if(upload->cloak_count)NMCOPY(NMUpCPU,ring.cloaks.mutableBytes,upload->cloaks,ring.cloaks.length);ring.cloakCount=upload->cloak_count;ring.airCount=upload->air_count;
  if(upload->cloak_count&&!r.subjectColor){NSUInteger w=r.color.width,h=r.color.height;r.subjectColor=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);r.subjectEmission=target(r,w,h,MTLPixelFormatRGBA16Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);r.subjectDepth=target(r,w,h,MTLPixelFormatDepth32Float,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);if(!r.subjectColor||!r.subjectEmission||!r.subjectDepth){dispatch_semaphore_signal(r->available);return 0;}}
  ring.overlayAtlas=r.overlayAtlas;
  // Reuse/grow only the now-free slot. Existing command buffers retain their own
  // resources; no other in-flight slot is modified or resized here.
  memcpy(r->water,upload->water,sizeof(r->water));
- ring.poses=grow(r,ring.poses,(NSUInteger)upload->pose_count*128);ring.instances=grow(r,ring.instances,(NSUInteger)upload->instance_count*4);ring.sprites=grow(r,ring.sprites,(NSUInteger)upload->sprite_count*96);ring.lights=grow(r,ring.lights,(NSUInteger)upload->light_count*32);ring.visuals=grow(r,ring.visuals,(NSUInteger)upload->instance_count*64);ring.distortions=grow(r,ring.distortions,(NSUInteger)upload->distortion_count*64);ring.selectors=grow(r,ring.selectors,(NSUInteger)upload->instance_count*12);ring.overlay=grow(r,ring.overlay,(NSUInteger)upload->overlay_count*64);
- ring.retainedLights=grow(r,ring.retainedLights,MAX((NSUInteger)upload->retained_light_count*64,64));if(!ring.retainedLights){dispatch_semaphore_signal(r->available);return 0;}if(upload->retained_light_count)memcpy(ring.retainedLights.contents,upload->retained_lights,upload->retained_light_count*64);
- ring.rules=grow(r,ring.rules,MAX((NSUInteger)upload->instance_count*112,112));ring.materialOffsets=grow(r,ring.materialOffsets,MAX((NSUInteger)upload->instance_count*4,4));ring.materialOverrides=grow(r,ring.materialOverrides,MAX((NSUInteger)upload->material_count*48,48));
+ BOOL freshWorld=NO;NSUInteger ws=nmResidentSlot(r,NMResidentWorld,upload->world_generation,&freshWorld);ring->resident[NMResidentWorld]=ws;
+ if(freshWorld){r->worldPoses[ws]=grow(r,r->worldPoses[ws],(NSUInteger)upload->pose_count*128);r->worldInstances[ws]=grow(r,r->worldInstances[ws],(NSUInteger)upload->instance_count*4);r->worldMaterialOffsets[ws]=grow(r,r->worldMaterialOffsets[ws],MAX((NSUInteger)upload->instance_count*4,4));r->worldMaterials[ws]=grow(r,r->worldMaterials[ws],MAX((NSUInteger)upload->material_count*48,48));r->worldRules[ws]=grow(r,r->worldRules[ws],MAX((NSUInteger)upload->instance_count*112,112));}
+ else if(r->worldCounts[ws][0]!=upload->pose_count||r->worldCounts[ws][1]!=upload->instance_count||r->worldCounts[ws][2]!=upload->material_count||r->worldCounts[ws][3]!=upload->rules_count){r.lastError=@"Resident world generation reused with different counts";dispatch_semaphore_signal(r->available);return 0;}
+ ring.poses=r->worldPoses[ws];ring.instances=r->worldInstances[ws];ring.materialOffsets=r->worldMaterialOffsets[ws];ring.materialOverrides=r->worldMaterials[ws];ring.rules=r->worldRules[ws];
+ ring.sprites=grow(r,ring.sprites,(NSUInteger)upload->sprite_count*96);ring.lights=grow(r,ring.lights,(NSUInteger)upload->light_count*32);ring.visuals=grow(r,ring.visuals,(NSUInteger)upload->instance_count*64);ring.distortions=grow(r,ring.distortions,(NSUInteger)upload->distortion_count*64);ring.selectors=grow(r,ring.selectors,(NSUInteger)upload->instance_count*12);ring.overlay=grow(r,ring.overlay,(NSUInteger)upload->overlay_count*64);
+ ring.retainedLights=grow(r,ring.retainedLights,MAX((NSUInteger)upload->retained_light_count*64,64));if(!ring.retainedLights){dispatch_semaphore_signal(r->available);return 0;}if(upload->retained_light_count)NMCOPY(NMUpLights,ring.retainedLights.contents,upload->retained_lights,upload->retained_light_count*64);
+ 
  ring.interpolatedPoses=growPoseOutput(r,ring.interpolatedPoses,(NSUInteger)upload->pose_count*64);
  if(!ring.rules||!ring.materialOffsets||!ring.materialOverrides||!ring.poses||!ring.interpolatedPoses||!ring.instances||!ring.sprites||!ring.lights||!ring.visuals||!ring.distortions||!ring.selectors||!ring.overlay){dispatch_semaphore_signal(r->available);return 0;}
- if(upload->pose_count){memcpy(ring.poses.contents,upload->previous,upload->pose_count*64);memcpy((char*)ring.poses.contents+upload->pose_count*64,upload->current,upload->pose_count*64);}
- if(upload->instance_count){memcpy(ring.rules.contents,upload->rules,upload->instance_count*112);memcpy(ring.materialOffsets.contents,upload->material_offsets,upload->instance_count*4);memcpy(ring.instances.contents,upload->offsets,upload->instance_count*4);memcpy(ring.visuals.contents,upload->visuals,upload->instance_count*64);}
- if(upload->material_count)memcpy(ring.materialOverrides.contents,upload->material_overrides,upload->material_count*48);
- if(upload->distortion_count)memcpy(ring.distortions.contents,upload->distortions,upload->distortion_count*64);ring.distortionCount=upload->distortion_count;
- if(upload->fog_width&&upload->fog_height){if(ring.fog.width!=upload->fog_width||ring.fog.height!=upload->fog_height){MTLTextureDescriptor* d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:upload->fog_width height:upload->fog_height mipmapped:NO];d.storageMode=MTLStorageModeShared;d.usage=MTLTextureUsageShaderRead;ring.fog=[r.device newTextureWithDescriptor:d];}if(!ring.fog){dispatch_semaphore_signal(r->available);return 0;}[ring.fog replaceRegion:MTLRegionMake2D(0,0,upload->fog_width,upload->fog_height) mipmapLevel:0 withBytes:upload->fog bytesPerRow:upload->fog_width*4];}else ring.fog=nil;
- if(upload->overlay_count)memcpy(ring.overlay.contents,upload->overlay,upload->overlay_count*64);ring.overlayCount=upload->overlay_count;
- if(upload->sprite_count)memcpy(ring.sprites.contents,upload->sprites,upload->sprite_count*96);
- if(upload->light_count)memcpy(ring.lights.contents,upload->lights,upload->light_count*32);
- if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*NM_SPAN_PASSES*8];if(r.meshes.count)memcpy(ring.spans.mutableBytes,upload->spans,r.meshes.count*NM_SPAN_PASSES*8);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*NM_SPAN_PASSES;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)memcpy(ring.selectors.contents,upload->selectors,selectorCount*4);
+ if(freshWorld){
+  if(upload->pose_count){NMCOPY(NMUpPoses,ring.poses.contents,upload->previous,upload->pose_count*64);NMCOPY(NMUpPoses,(char*)ring.poses.contents+upload->pose_count*64,upload->current,upload->pose_count*64);}
+  if(upload->instance_count){NMCOPY(NMUpTables,ring.rules.contents,upload->rules,upload->instance_count*112);NMCOPY(NMUpTables,ring.materialOffsets.contents,upload->material_offsets,upload->instance_count*4);NMCOPY(NMUpTables,ring.instances.contents,upload->offsets,upload->instance_count*4);}
+  if(upload->material_count)NMCOPY(NMUpMaterials,ring.materialOverrides.contents,upload->material_overrides,upload->material_count*48);
+  r->worldCounts[ws][0]=upload->pose_count;r->worldCounts[ws][1]=upload->instance_count;r->worldCounts[ws][2]=upload->material_count;r->worldCounts[ws][3]=upload->rules_count;r->residentGenerations[NMResidentWorld][ws]=upload->world_generation;
+ }
+ if(upload->instance_count)NMCOPY(NMUpVisuals,ring.visuals.contents,upload->visuals,upload->instance_count*64);
+ if(upload->distortion_count)NMCOPY(NMUpDistortions,ring.distortions.contents,upload->distortions,upload->distortion_count*64);ring.distortionCount=upload->distortion_count;
+ if(upload->fog_width&&upload->fog_height){BOOL freshFog=NO;NSUInteger fs=nmResidentSlot(r,NMResidentFog,upload->fog_generation,&freshFog);ring->resident[NMResidentFog]=fs;id<MTLTexture> fog=r->fogTextures[fs];
+  if(freshFog&&(fog.width!=upload->fog_width||fog.height!=upload->fog_height)){MTLTextureDescriptor* d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:upload->fog_width height:upload->fog_height mipmapped:NO];d.storageMode=MTLStorageModeShared;d.usage=MTLTextureUsageShaderRead;fog=r->fogTextures[fs]=[r.device newTextureWithDescriptor:d];}
+  if(!fog||fog.width!=upload->fog_width||fog.height!=upload->fog_height){dispatch_semaphore_signal(r->available);return 0;}
+  if(freshFog){nmUploadBytes[NMUpFog]+=(uint64_t)upload->fog_width*upload->fog_height*4;[fog replaceRegion:MTLRegionMake2D(0,0,upload->fog_width,upload->fog_height) mipmapLevel:0 withBytes:upload->fog bytesPerRow:upload->fog_width*4];r->residentGenerations[NMResidentFog][fs]=upload->fog_generation;}
+  ring.fog=fog;
+ }else{ring.fog=nil;ring->resident[NMResidentFog]=3;}
+ if(upload->overlay_count)NMCOPY(NMUpOverlay,ring.overlay.contents,upload->overlay,upload->overlay_count*64);ring.overlayCount=upload->overlay_count;
+ if(upload->sprite_count)NMCOPY(NMUpSprites,ring.sprites.contents,upload->sprites,upload->sprite_count*96);
+ if(upload->light_count)NMCOPY(NMUpLights,ring.lights.contents,upload->lights,upload->light_count*32);
+ if(!ring.spans)ring.spans=[NSMutableData dataWithLength:r.meshes.count*NM_SPAN_PASSES*8];if(r.meshes.count)NMCOPY(NMUpCPU,ring.spans.mutableBytes,upload->spans,r.meshes.count*NM_SPAN_PASSES*8);ring.spriteCount=upload->sprite_count;ring.groundSpriteCount=upload->ground_sprite_count;const uint32_t* copiedSpans=ring.spans.bytes;NSUInteger selectorCount=0;for(NSUInteger i=r.meshes.count;i<r.meshes.count*NM_SPAN_PASSES;i++)selectorCount+=copiedSpans[i*2+1];if(selectorCount)NMCOPY(NMUpSelectors,ring.selectors.contents,upload->selectors,selectorCount*4);
  ring.terrainFlags=upload->terrain_flags;
  if(!nmProjectionPrepare(r,ring,upload->projections,upload->instance_count,upload->pose_count)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmGroupsPrepare(r,ring,upload->groups)||!nmFacesPrepare(r,ring,upload->instance_count)||!nmFaceReflectionsPrepare(r,ring)||!nmOutlineRowsPrepare(r,ring)){dispatch_semaphore_signal(r->available);return 0;}
  if(!nmWaterObjectsPrepare(r,ring,upload->water_objects)||!nmWaterObjectsPrepareSources(r,ring,upload->water_sources)){dispatch_semaphore_signal(r->available);return 0;}
  NMUniforms u=r->uniforms;u.camera=(vector_float4){upload->camera[0],upload->camera[1],upload->camera[2],0};u.timing=(vector_float4){upload->alpha,(float)upload->seconds,(float)upload->pose_count,r->effects?1:0};u.mode=(vector_float4){1,upload->light_count,0,0};u.lightControl=(vector_float4){upload->retained_light_count,(upload->light_controls&1)?1:0,(upload->light_controls&2)?1:0,(upload->light_controls&4)?1:0};u.composition=(vector_float4){r.modelAtlasColor.width,r.modelAtlasColor.height,(upload->light_controls&8)?2:1,upload->composition_slot_count};u.visual.x=r->visualPasses?1:0;u.visual.w=upload->rules_count?1:0;u.visual.z=upload->fog_width&&upload->fog_height?1:0;u.fogRect=(vector_float4){upload->fog_rect[0],upload->fog_rect[1],upload->fog_rect[2],upload->fog_rect[3]};r->lastUniforms=u;r.lastRing=ring;
  r.pendingRing=ring;r->pendingUniforms=u;r->pendingOverlay=uploadOverlay;r->pendingOverlayRect[0]=overlayX;r->pendingOverlayRect[1]=overlayY;r->pendingOverlayRect[2]=overlayW;r->pendingOverlayRect[3]=overlayH;r->pendingOverlayRect[4]=overlayRowBytes;
- r->pendingRetainedLights=upload->retained_light_count;r->pendingWait=(acquired-start)*1000;r->pendingCopy=(CACurrentMediaTime()-copyStart)*1000;r->livePending=YES;return 1;
+ nmUploadFrames++;r->pendingRetainedLights=upload->retained_light_count;r->pendingWait=(acquired-start)*1000;r->pendingCopy=(CACurrentMediaTime()-copyStart)*1000;r->livePending=YES;return 1;
  }
 }
 int nm_live_present(void* handle) {
@@ -683,6 +722,7 @@ int nm_capture(void* handle,const char* path) {
  NSData* png=[image representationUsingType:NSBitmapImageFileTypePNG properties:@{}];return [png writeToFile:[NSString stringWithUTF8String:path] atomically:YES]?1:0;}
 }
 void nm_info(void* handle,char* output,int capacity) {
- @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;nmTimingWrite();NSUInteger poseOutputBytes=0;for(id<MTLBuffer> poses in r.interpolatedPoses)poseOutputBytes+=poses.length;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){poseOutputBytes+=ring.interpolatedPoses.length;overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"cloak_scratch_bytes":@(r.subjectColor.width*r.subjectColor.height*20),@"model_atlas_bytes":@(r.modelAtlasColor.width*r.modelAtlasColor.height*20),@"model_atlas_dimensions":@[@(r.modelAtlasColor.width),@(r.modelAtlasColor.height)],@"shadow_atlas_bytes":@(r.shadows.body.width*r.shadows.body.height*13),@"shadow_atlas_dimensions":@[@(r.shadows.body.width),@(r.shadows.body.height)],@"model_composition":@"ordered subjects with isolated atlas byte-key depth",@"pose_interpolation_method":@"per-piece shortest-path quaternion slerp",@"pose_interpolation_output_buffer_capacity_bytes":@(poseOutputBytes),@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"run_loop_service_calls":@(r->runLoopPumps),@"run_loop_handled_sources":@(r->runLoopSources),@"pointer_captured":@(r->pointerCaptured),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSMutableDictionary* combined=[info mutableCopy];[combined addEntriesFromDictionary:nmEffectsInfo(r)];[combined addEntriesFromDictionary:nmGroundInfo(r)];[combined addEntriesFromDictionary:nmWaterObjectsInfo(r)];[combined addEntriesFromDictionary:nmGroupsInfo(r)];[combined addEntriesFromDictionary:nmTerrainTilesInfo(r.terrainTiles)];[combined addEntriesFromDictionary:nmFaceReflectionsInfo(r.lastRing)];[combined addEntriesFromDictionary:nmOutlineRowsInfo(r,r.lastRing)];[combined addEntriesFromDictionary:nmWaterTilesInfo(r.waterObjectsState.tiles,r.lastRing.waterObjectsRing.tiles)];combined[@"stock_effects_bloom_submitted"]=@(r.lastRing.glowEnabled);NSData* d=[NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
+ @autoreleasepool {NMRenderer* r=(__bridge NMRenderer*)handle;nmTimingWrite();NSUInteger poseOutputBytes=0;for(id<MTLBuffer> poses in r.interpolatedPoses)poseOutputBytes+=poses.length;NSUInteger poseBytes=0,instanceBytes=0,spriteBytes=0,lightBytes=0,visualBytes=0,distortionBytes=0,fogBytes=0,selectorBytes=0,overlayBytes=0,overlayUploadBytes=0;for(NMRing* ring in r.rings){poseOutputBytes+=ring.interpolatedPoses.length;overlayUploadBytes+=ring.overlayUpload.length;overlayBytes+=ring.overlay.length;poseBytes+=ring.poses.length;instanceBytes+=ring.instances.length;spriteBytes+=ring.sprites.length;lightBytes+=ring.lights.length;visualBytes+=ring.visuals.length;distortionBytes+=ring.distortions.length;fogBytes+=ring.fog.width*ring.fog.height*4;selectorBytes+=ring.selectors.length;}NSDictionary* info=@{@"cloak_scratch_bytes":@(r.subjectColor.width*r.subjectColor.height*20),@"model_atlas_bytes":@(r.modelAtlasColor.width*r.modelAtlasColor.height*20),@"model_atlas_dimensions":@[@(r.modelAtlasColor.width),@(r.modelAtlasColor.height)],@"shadow_atlas_bytes":@(r.shadows.body.width*r.shadows.body.height*13),@"shadow_atlas_dimensions":@[@(r.shadows.body.width),@(r.shadows.body.height)],@"model_composition":@"ordered subjects with isolated atlas byte-key depth",@"pose_interpolation_method":@"per-piece shortest-path quaternion slerp",@"pose_interpolation_output_buffer_capacity_bytes":@(poseOutputBytes),@"live_overlay_upload_buffer_capacity_bytes":@(overlayUploadBytes),@"run_loop_service_calls":@(r->runLoopPumps),@"run_loop_handled_sources":@(r->runLoopSources),@"pointer_captured":@(r->pointerCaptured),@"overlay_texture_version":@(r->overlayVersion),@"overlay_texture_uploads":@(r->overlayTextureUploads),@"overlay_texture_uploaded_bytes":@(r->overlayTextureBytes),@"interactive":@(r->interactive),@"total_frames_submitted":@(r->rowCount),@"timing_capacity_frames":@(r->rowCapacity),@"input_queue_capacity":@NM_EVENT_CAPACITY,@"input_queue_overflow":@(r->eventOverflow),@"live_overlay_buffer_capacity_bytes":@(overlayBytes),@"retained_overlay_atlas_bytes":@(r.overlayAtlas.width*r.overlayAtlas.height*4),@"live_selector_buffer_capacity_bytes":@(selectorBytes),@"live_visual_buffer_capacity_bytes":@(visualBytes),@"live_distortion_buffer_capacity_bytes":@(distortionBytes),@"live_fog_texture_capacity_bytes":@(fogBytes),@"visual_passes":@(r->visualPasses),@"visual_hdr_target_bytes":@(r.postColor.width*r.postColor.height*8*2),@"visual_shadow_mask_bytes":@(r->visualPasses?r.shadowMask.width*r.shadowMask.height:0),@"visual_target_bytes":@(r.postColor.width*r.postColor.height*17),@"retained_height_bytes":@(r.heights.width*r.heights.height*4),@"retained_material_bytes":@(r.materials.length+r.textureFrames.length),@"live_pose_buffer_capacity_bytes":@(poseBytes),@"live_instance_buffer_capacity_bytes":@(instanceBytes),@"live_sprite_buffer_capacity_bytes":@(spriteBytes),@"live_light_buffer_capacity_bytes":@(lightBytes),@"device":r.device.name,@"current_allocated_bytes":@(r.device.currentAllocatedSize),@"recommended_working_set_bytes":@(r.device.recommendedMaxWorkingSetSize),@"unified_memory":@(r.device.hasUnifiedMemory),@"max_buffer_length":@(r.device.maxBufferLength),@"native_error":r.lastError?:@"",@"presentation_drain_timed_out":@(r->presentationDrainTimedOut),@"presentation_drain_timeout_ms":@250,@"drawable_width":@(r.output.width),@"drawable_height":@(r.output.height),@"view_width_points":@(r.window.contentView.bounds.size.width),@"view_height_points":@(r.window.contentView.bounds.size.height),@"layer_contents_scale":@(r.layer.contentsScale),@"screen_maximum_fps":@(NSScreen.mainScreen.maximumFramesPerSecond)};NSMutableDictionary* combined=[info mutableCopy];[combined addEntriesFromDictionary:nmEffectsInfo(r)];[combined addEntriesFromDictionary:nmGroundInfo(r)];[combined addEntriesFromDictionary:nmWaterObjectsInfo(r)];[combined addEntriesFromDictionary:nmGroupsInfo(r)];[combined addEntriesFromDictionary:nmTerrainTilesInfo(r.terrainTiles)];[combined addEntriesFromDictionary:nmFaceReflectionsInfo(r.lastRing)];[combined addEntriesFromDictionary:nmOutlineRowsInfo(r,r.lastRing)];[combined addEntriesFromDictionary:nmWaterTilesInfo(r.waterObjectsState.tiles,r.lastRing.waterObjectsRing.tiles)];combined[@"stock_effects_bloom_submitted"]=@(r.lastRing.glowEnabled);{NSMutableDictionary* kinds=[NSMutableDictionary new];for(int i=0;i<NMUpKinds;i++)kinds[[NSString stringWithUTF8String:nmUploadNames[i]]]=@(nmUploadBytes[i]);combined[@"upload_bytes_by_kind"]=kinds;combined[@"upload_frames"]=@(nmUploadFrames);}NSData* d=[NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];NSString* s=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding];copyError(output,capacity,s);}
 }
+void nm_upload_census_reset(void* handle){(void)handle;memset(nmUploadBytes,0,sizeof(nmUploadBytes));nmUploadFrames=0;}
 void nm_destroy(void* handle) { @autoreleasepool {NMRenderer* r=(__bridge_transfer NMRenderer*)handle;nm_drain((__bridge void*)r);restorePointer(r);if(r->cursorHidden){[NSCursor unhide];r->cursorHidden=NO;}[r.window orderOut:nil];[r.window close];} }

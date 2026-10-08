@@ -44,7 +44,9 @@ type battleSource struct {
 	materialCache                                     map[modelMaterialCacheKey][]NativeModelMaterial
 	materialArena                                     *[]NativeModelMaterial // the publication being built; uncached material walks use its storage
 	materialPieces                                    []bool
+	modelKeys                                         battleModelKeys
 	cullSlack                                         float32 // widens model culling, world units (RetainedBattle.Frame)
+	fogGeneration                                     uint64  // numbers built fog textures (FogFrame.Generation)
 	lookup                                            publicationLookup
 	latest                                            atomic.Pointer[battlePublication]
 	mu                                                sync.Mutex // short camera/lifecycle exchange; never held while stepping

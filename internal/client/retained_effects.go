@@ -109,21 +109,27 @@ func (c *Client) RecordRetainedEffectsInto(storage *RetainedEffectStorage) Retai
 			start := time.Now()
 			defer func() { storage.Timings[k] = float64(time.Since(start)) / 1e6 }()
 		}
-		batch := RetainedEffectBatch{ProjectileModels: projectiles}
+		// The projectile order is appended through a pointer the client holds
+		// while drawing; with storage it points into storage, so the batch
+		// stays on the stack.
+		var order *[]RetainedProjectileModel
 		if storage != nil {
-			batch.ProjectileOrder = storage.orders[k][:0]
-			defer func() { storage.orders[k] = batch.ProjectileOrder[:0] }()
+			order = &storage.orders[k]
+			*order = (*order)[:0]
+		} else {
+			order = new([]RetainedProjectileModel)
 		}
 		previousOrder := c.retainedProjectileOrder
 		c.retainedProjectileOrder = nil
 		if projectiles {
-			c.retainedProjectileOrder = &batch.ProjectileOrder
+			c.retainedProjectileOrder = order
 		}
 		defer func() { c.retainedProjectileOrder = previousOrder }()
 		c.list.Reset()
 		c.emitWorldBegin()
 		draw()
 		c.emitWorldEnd()
+		batch := RetainedEffectBatch{ProjectileModels: projectiles, ProjectileOrder: *order}
 		batch.List = c.cloneRetained(storage, func(s *RetainedEffectStorage) *drawlist.List { return &s.lists[k] })
 		return batch
 	}

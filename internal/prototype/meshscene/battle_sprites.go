@@ -29,6 +29,7 @@ type BattleSprites struct {
 	previousFeatures                                     map[uint64][4]float32
 	spectator                                            bool
 	featureModelBounds                                   map[string][4]float32
+	modelKeys                                            battleModelKeys
 	texture                                              Texture
 	regions                                              []atlasRegion
 	sequences                                            map[string]*spriteSequence

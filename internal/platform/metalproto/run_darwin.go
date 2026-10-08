@@ -40,6 +40,7 @@ type bridge struct {
 	rows            func(uintptr, uintptr, int32) int32
 	capture         func(uintptr, uintptr) int32
 	info            func(uintptr, uintptr, int32)
+	censusReset     func(uintptr)
 	destroy         func(uintptr)
 }
 
@@ -131,6 +132,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	purego.RegisterLibFunc(&b.rows, lib, "nm_rows")
 	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
 	purego.RegisterLibFunc(&b.info, lib, "nm_info")
+	purego.RegisterLibFunc(&b.censusReset, lib, "nm_upload_census_reset")
 	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
 	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + OutlineRowsShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
 	errorText := make([]byte, 8192)
@@ -368,6 +370,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			close(requests)
 		}
 	}()
+	// One prepared frame outlives the loop, so keeping it alive across the
+	// native upload never boxes a copy.
+	var p preparedLive
 	for i := 0; interactive || i < len(rows); i++ {
 		var entry time.Time
 		if opts.Benchmark != nil {
@@ -377,6 +382,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if err := measurement.begin(); err != nil {
 				return nil, err
 			}
+			b.censusReset(handle)
 			hostTiming = benchmarkHostTiming{}
 			deadline = time.Now()
 			entry = deadline
@@ -422,7 +428,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			next := i + 1
 			prepareNext := opts.PrepareAhead != nil && (interactive || next < len(rows)) &&
 				(opts.Benchmark == nil || next != opts.Warmup) && opts.PrepareAhead(next)
-			var p preparedLive
+			p = preparedLive{}
 			var nextInput meshscene.Input
 			polled := false
 			if ahead {
@@ -466,9 +472,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				submitStart = time.Now()
 			}
 			status = b.liveUpload(handle, uintptr(unsafe.Pointer(&p.upload)))
-			runtime.KeepAlive(p.live)
-			runtime.KeepAlive(packing)
-			runtime.KeepAlive(p.upload)
+			runtime.KeepAlive(&p)
+			runtime.KeepAlive(&packing)
 			if status == 1 {
 				if prepareNext {
 					at := time.Now()

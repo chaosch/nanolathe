@@ -105,7 +105,7 @@ func (b *BattleSprites) Distortions(dst []Distortion, previous, current *frame.F
 		if age >= 300 {
 			continue
 		}
-		rect, ok := b.featureModelBounds[battleModelKey(v.Model)]
+		rect, ok := b.featureModelBounds[b.modelKeys.key(v.Model)]
 		if !ok {
 			b.counts["wreck_heat_bounds_missing"]++
 			continue

@@ -28,8 +28,8 @@ static BOOL nmGroupsPrepare(NMRenderer* r,NMRing* ring,const NMGroupUpload* uplo
  if(MAX(MAX(gb,mb),ib)>r.device.maxBufferLength)return nmGroupsFail(r,@"Group device buffer limit");
  f.descriptors=grow(r,f.descriptors,MAX(gb,32));f.members=grow(r,f.members,MAX(mb,16));f.instanceGroups=grow(r,f.instanceGroups,MAX(ib,16));
  if(!f.descriptors||!f.members||!f.instanceGroups)return nmGroupsFail(r,@"Group buffer allocation failed");
- memset(f.instanceGroups.contents,0,MAX(ib,16));if(ib)memcpy(f.instanceGroups.contents,upload->instance_groups,ib);
- if(gb)memcpy(f.descriptors.contents,upload->groups,gb);if(mb)memcpy(f.members.contents,upload->members,mb);
+ memset(f.instanceGroups.contents,0,MAX(ib,16));if(ib)NMCOPY(NMUpGroups,f.instanceGroups.contents,upload->instance_groups,ib);
+ if(gb)NMCOPY(NMUpGroups,f.descriptors.contents,upload->groups,gb);if(mb)NMCOPY(NMUpGroups,f.members.contents,upload->members,mb);
  const NMGroup* groups=f.descriptors.contents;const NMGroupMember* members=f.members.contents;const int32_t* identities=f.instanceGroups.contents;
  const uint32_t* selectors=ring.compositionSelectors.contents;
  for(NSUInteger i=0;i<upload->group_count;i++){

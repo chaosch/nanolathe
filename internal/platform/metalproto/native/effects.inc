@@ -91,14 +91,14 @@ static BOOL nmEffectsPrepare(NMRenderer* r,NMRing* ring,const NMEffectsUpload* u
  if(qb>r.device.maxBufferLength||vb>r.device.maxBufferLength||sb>r.device.maxBufferLength)return nmEffectsFail(r,@"Stock-effects device buffer limit");
  f.quads=grow(r,f.quads,qb);f.vertices=grow(r,f.vertices,vb);f.samples=grow(r,f.samples,sb);
  if(!f.quads||!f.vertices||!f.samples)return nmEffectsFail(r,@"Stock-effects buffer allocation failed");
- if(qb)memcpy(f.quads.contents,u->quads,qb);if(vb)memcpy(f.vertices.contents,u->vertices,vb);if(sb)memcpy(f.samples.contents,u->samples,sb);
+ if(qb)NMCOPY(NMUpEffects,f.quads.contents,u->quads,qb);if(vb)NMCOPY(NMUpEffects,f.vertices.contents,u->vertices,vb);if(sb)NMCOPY(NMUpEffects,f.samples.contents,u->samples,sb);
  NSUInteger smokeBytes=(NSUInteger)u->smoke_count*96,subjectBytes=(NSUInteger)u->smoke_count*36;
  if(smokeBytes>r.device.maxBufferLength||subjectBytes>r.device.maxBufferLength)return nmEffectsFail(r,@"Smoke receiver device buffer limit");
  f.smoke=grow(r,f.smoke,MAX(smokeBytes,96));f.smokeSubjects=grow(r,f.smokeSubjects,MAX(subjectBytes,36));if(!f.smoke||!f.smokeSubjects)return nmEffectsFail(r,@"Smoke receiver allocation failed");
- if(u->smoke_count)memcpy(f.smoke.contents,u->smoke,u->smoke_count*96);f.smokeCount=u->smoke_count;
+ if(u->smoke_count)NMCOPY(NMUpEffects,f.smoke.contents,u->smoke,u->smoke_count*96);f.smokeCount=u->smoke_count;
  if(!f.lenses)f.lenses=[NSMutableData new];if(!f.ops)f.ops=[NSMutableData new];if(!f.layers)f.layers=[NSMutableData new];
  f.lenses.length=(NSUInteger)u->lens_count*sizeof(NMEffectsLens);f.ops.length=(NSUInteger)u->op_count*sizeof(NMEffectsOp);f.layers.length=(NSUInteger)u->layer_count*sizeof(NMEffectsLayer);
- if(f.lenses.length)memcpy(f.lenses.mutableBytes,u->lenses,f.lenses.length);if(f.ops.length)memcpy(f.ops.mutableBytes,u->ops,f.ops.length);if(f.layers.length)memcpy(f.layers.mutableBytes,u->layers,f.layers.length);
+ if(f.lenses.length)NMCOPY(NMUpCPU,f.lenses.mutableBytes,u->lenses,f.lenses.length);if(f.ops.length)NMCOPY(NMUpCPU,f.ops.mutableBytes,u->ops,f.ops.length);if(f.layers.length)NMCOPY(NMUpCPU,f.layers.mutableBytes,u->layers,f.layers.length);
  NMEffectsState* s=r.effectState;BOOL resize=s.atlas.width!=u->width||s.atlas.height!=u->height;
  if(resize){s.atlas=target(r,u->width,u->height,MTLPixelFormatRGBA8Unorm,MTLTextureUsageShaderRead);if(!s.atlas)return nmEffectsFail(r,@"Stock-effects atlas allocation failed");s.atlasNeedsFullUpload=YES;}
  f.atlas=s.atlas;f.version=u->version;
@@ -109,7 +109,7 @@ static BOOL nmEffectsPrepare(NMRenderer* r,NMRing* ring,const NMEffectsUpload* u
   NSUInteger rowBytes=(w*4+255)&~(NSUInteger)255;if(rowBytes*h>r.device.maxBufferLength)return nmEffectsFail(r,@"Stock-effects upload buffer limit");
   f.atlasUpload=grow(r,f.atlasUpload,rowBytes*h);if(!f.atlasUpload)return nmEffectsFail(r,@"Stock-effects staging allocation failed");
   const uint8_t* source=u->atlas;uint8_t* staging=f.atlasUpload.contents;
-  for(NSUInteger row=0;row<h;row++)memcpy(staging+row*rowBytes,source+((y+row)*u->width+x)*4,w*4);
+  for(NSUInteger row=0;row<h;row++)NMCOPY(NMUpEffectsAtlas,staging+row*rowBytes,source+((y+row)*u->width+x)*4,w*4);
   f.uploadX=x;f.uploadY=y;f.uploadW=w;f.uploadH=h;f.uploadRowBytes=rowBytes;f.uploadPending=YES;
  }
  if(u->lens_count&&(f.snapshot.width!=r.color.width||f.snapshot.height!=r.color.height)){

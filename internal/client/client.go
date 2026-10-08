@@ -105,6 +105,7 @@ type Client struct {
 	retainedSelections      []RetainedSelection
 	retainedSelectionWS     drawlist.WorldSpace
 	retainedLightBuckets    worldBuckets               // tall-feature order for retained light sources
+	effectOptions           EffectDrawOptions          // bound once; method values would allocate per strip
 	retainedProjectileOrder *[]RetainedProjectileModel // active only during the source-only projectile batch
 	communityHUD            CommunityHUDOptions
 	communityColors         communityColorState
@@ -709,6 +710,7 @@ func New(opts Options) (*Client, error) {
 		c.base[i][2] = byte(i)
 		c.base[i][3] = 255
 	}
+	c.effectOptions = EffectDrawOptions{TerrainCoverage: c.terrainScreenCoverage, ResolveFrame: c.resolveEffectFrame, BlastSize: c.resolveBlastSize}
 	return c, nil
 }
 

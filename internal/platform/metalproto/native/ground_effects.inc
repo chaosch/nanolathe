@@ -25,7 +25,7 @@ static BOOL nmGroundPrepare(NMRenderer* r,NMRing* ring,const NMGroundUpload* u){
  if(!f){f=[NMGroundRing new];ring.groundRing=f;}f.count=0;
  NSUInteger bytes=(NSUInteger)u->count*sizeof(NMGroundMark);if(bytes>r.device.maxBufferLength)return nmEffectsFail(r,@"Ground-effects buffer limit");
  f.marks=grow(r,f.marks,bytes);if(!f.marks)return nmEffectsFail(r,@"Ground-effects buffer allocation failed");
- if(bytes)memcpy(f.marks.contents,u->marks,bytes);f.count=u->count;f.ages=(vector_float4){u->ages[0],u->ages[1],u->ages[2],u->ages[3]};r.groundState.prepared++;return YES;
+ if(bytes)NMCOPY(NMUpGround,f.marks.contents,u->marks,bytes);f.count=u->count;f.ages=(vector_float4){u->ages[0],u->ages[1],u->ages[2],u->ages[3]};r.groundState.prepared++;return YES;
 }
 static BOOL nmGroundDraw(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,const void* uniforms,uint32_t first,uint32_t count){
  NMGroundRing* f=ring.groundRing;NMGroundState* s=r.groundState;if(!f||!s||(uint64_t)first+count>f.count){s.suppressed+=count;return NO;}

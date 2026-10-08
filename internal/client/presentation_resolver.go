@@ -336,11 +336,11 @@ func (c *Client) effectEntry(bankName, entryName string) (*formats.GAFEntry, boo
 // event that publishes no entry name, or one whose bank or entry does not
 // resolve, draws nothing at all.
 func (c *Client) effectDrawOptions() EffectDrawOptions {
-	return EffectDrawOptions{
-		TerrainCoverage: c.terrainScreenCoverage,
-		ResolveFrame:    c.resolveEffectFrame,
-		BlastSize:       c.resolveBlastSize,
+	if c.effectOptions.ResolveFrame != nil {
+		return c.effectOptions
 	}
+	// A client built without New binds them per call.
+	return EffectDrawOptions{TerrainCoverage: c.terrainScreenCoverage, ResolveFrame: c.resolveEffectFrame, BlastSize: c.resolveBlastSize}
 }
 
 // resolveEffectFrame resolves an effect view's published art identity to the

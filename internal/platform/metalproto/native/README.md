@@ -92,9 +92,14 @@ including meshes with no initial instances or empty/nonrendering geometry.
 Empty vertex/index storage has a minimum allocation and is never copied or drawn.
 
 Every live submission packs per-mesh instance spans and pose offsets in Go,
-then passes one 232-byte `NMLiveUpload` pointer through purego. The bridge copies
+then passes one 704-byte `NMLiveUpload` pointer through purego. The bridge copies
 all slices synchronously before returning. Each of the three reusable slots
-owns pose input and computed output, instance-offset, 64-byte visual, sprite, light, selector, distortion and overlay buffers, fog texture, plus CPU draw spans. A slot
+owns computed pose output, 64-byte visual, sprite, light, selector, distortion and overlay buffers, plus CPU draw spans. A slot
+reads its world tables (pose input, instance offsets, model rules, material
+offsets and overrides) and its fog texture from one of three resident copies
+keyed by `world_generation` and `fog_generation`: an upload whose nonzero
+generation a copy already holds copies nothing, and a new generation fills a
+copy that neither other slot's frame reads (frames complete in commit order). A slot
 is modified only after bounded-queue acquisition; the serial Metal command queue
 has finished the earlier work that used it. Growth replaces only that free
 slot's buffer, doubling capacity; it does not wait for or resize other slots.

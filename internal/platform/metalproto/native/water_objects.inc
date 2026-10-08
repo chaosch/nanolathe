@@ -51,7 +51,7 @@ static BOOL nmWaterObjectsPrepare(NMRenderer* r,NMRing* ring,const NMWaterObject
  if(ob>r.device.maxBufferLength||sb>r.device.maxBufferLength||fb>r.device.maxBufferLength)return nmWaterObjectsFail(r,@"Water-object device buffer limit");
  f.objects=grow(r,f.objects,ob);f.seabed=grow(r,f.seabed,sb);f.slotFlags=grow(r,f.slotFlags,fb);
  if(!f.objects||!f.seabed||!f.slotFlags)return nmWaterObjectsFail(r,@"Water-object allocation failed");
- if(ob)memcpy(f.objects.contents,u->objects,ob);if(sb)memcpy(f.seabed.contents,u->seabed,sb);
+ if(ob)NMCOPY(NMUpWater,f.objects.contents,u->objects,ob);if(sb)NMCOPY(NMUpWater,f.seabed.contents,u->seabed,sb);
  const uint32_t* seabed=f.seabed.contents;for(NSUInteger i=0;i<u->seabed_count;i++)if(seabed[i]>=ring.spriteCount)return nmWaterObjectsFail(r,@"Seabed sprite exceeds retained sprite span");
  vector_float4* flags=f.slotFlags.contents;if(fb)memset(flags,0,fb);
  const uint32_t* selectors=ring.compositionSelectors.contents;
@@ -72,7 +72,7 @@ static BOOL nmWaterObjectsPrepareSources(NMRenderer* r,NMRing* ring,const NMWate
  NMWaterObjectsRing* f=ring.waterObjectsRing;if(!u){if(f)f.sourceVertices=0;return YES;}
  if(!r.waterObjectsState||!f||u->vertex_count>INT32_MAX||u->vertex_count%4||(u->vertex_count&&!u->sources))return nmWaterObjectsFail(r,@"Invalid stock water-source upload");
  f.sourceVertices=0;NSUInteger bytes=(NSUInteger)u->vertex_count*sizeof(NMWaterSourceVertex);if(bytes>r.device.maxBufferLength)return nmWaterObjectsFail(r,@"Stock water-source buffer limit");
- f.sources=grow(r,f.sources,bytes);if(!f.sources)return nmWaterObjectsFail(r,@"Stock water-source allocation failed");if(bytes)memcpy(f.sources.contents,u->sources,bytes);f.sourceVertices=u->vertex_count;return YES;
+ f.sources=grow(r,f.sources,bytes);if(!f.sources)return nmWaterObjectsFail(r,@"Stock water-source allocation failed");if(bytes)NMCOPY(NMUpWater,f.sources.contents,u->sources,bytes);f.sourceVertices=u->vertex_count;return YES;
 }
 static MTLRenderPassDescriptor* nmWaterObjectsPass(id<MTLTexture> color,BOOL clear){MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=color;p.colorAttachments[0].loadAction=clear?MTLLoadActionClear:MTLLoadActionLoad;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);return p;}
 static void nmWaterObjectsUniforms(NMRenderer* r,NMWaterObjectsRing* f,id<MTLRenderCommandEncoder> enc,NMUniforms u){[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBytes:r->water length:sizeof(r->water) atIndex:9];[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];vector_float4 control=f.controls;[enc setVertexBytes:&control length:sizeof(control) atIndex:19];[enc setFragmentBytes:&control length:sizeof(control) atIndex:19];}

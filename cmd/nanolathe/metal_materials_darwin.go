@@ -61,7 +61,10 @@ func (m *metalPreparedMaterial) CacheKey() (any, bool) {
 		if len(m.keys) >= metalMaterialKeyLimit {
 			clear(m.keys)
 		}
-		interned = &key
+		// A copy, not &key: taking key's address would move every call's key
+		// to the heap, hits included.
+		interned = new(client.RetainedMaterialKey)
+		*interned = key
 		m.keys[key] = interned
 	}
 	return interned, true

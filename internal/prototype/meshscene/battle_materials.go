@@ -191,7 +191,7 @@ func (s *battleSource) applyModelMaterials(instance *Instance, q ModelMaterialRe
 }
 
 func (s *battleSource) baseModelMaterial(q ModelMaterialRequest) ModelMaterialSelection {
-	pr := s.models[s.modelIndices[battleModelKey(q.Model)]].Pieces[q.Piece].Primitives[q.Primitive]
+	pr := s.models[s.modelIndices[s.modelKeys.key(q.Model)]].Pieces[q.Piece].Primitives[q.Primitive]
 	out := ModelMaterialSelection{Color: uint8(pr.ColorIndex)}
 	if pr.IsColored&1 != 0 {
 		if pr.TextureName != "" && len(s.materialAtlas.framesByName[canonicalTexture(pr.TextureName)]) == 0 {
