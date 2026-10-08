@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/clock"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
@@ -74,6 +75,20 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.Resize(logicalW, logicalH)
 	battle.setSurfaceSize(int32(logicalW), int32(logicalH))
 	battle.placeEntryCamera(logicalW, logicalH)
+	// Diagnostic: "x,z,zoom" replaces the entry camera for scripted captures.
+	if v := os.Getenv("NANOLATHE_METAL_TEST_CAMERA"); v != "" {
+		var x, z int32
+		var factor string
+		if _, err := fmt.Sscanf(v, "%d,%d,%s", &x, &z, &factor); err != nil {
+			return fmt.Errorf("nanolathe: NANOLATHE_METAL_TEST_CAMERA wants x,z,zoom: %w", err)
+		}
+		zoom, err := camera.ParseZoom(factor)
+		if err != nil {
+			return err
+		}
+		battle.cam.SetZoomAbout(0, 0, zoom)
+		battle.cam.JumpTo(x, z)
+	}
 	cl.SetEnhanced(true)
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)

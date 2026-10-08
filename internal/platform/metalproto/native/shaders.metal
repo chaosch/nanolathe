@@ -362,6 +362,15 @@ float3 applyFog(float3 col,float2 projected,float checker,texture2d<float> grid,
  }
  return col;
 }
+// The production world surface is black beyond the map rectangle, which a
+// zoomed-out camera centres in the view. Live pixels whose ground position
+// leaves the terrain rectangle resolve to black, so edge-row sprites do not
+// overhang into that border.
+float3 nmMapClip(float3 c,float2 pixel,constant Uniforms& u) {
+ if(u.mode.x<0.5||u.rect.z<=u.rect.x||u.rect.w<=u.rect.y)return c;
+ float2 p=(pixel-u.viewport.xy*0.5)/u.camera.z+u.camera.xy;
+ return any(p<u.rect.xy)||any(p>=u.rect.zw)?float3(0):c;
+}
 fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[texture(0)]],texture2d<float> fog [[texture(1)]],texture2d<float> masks [[texture(2)]],constant Uniforms& u [[buffer(3)]]) {
  constexpr sampler s(coord::normalized,address::clamp_to_edge,filter::nearest);float3 c=color.sample(s,in.uv).rgb;
  if(u.visual.z>0.5){
@@ -370,7 +379,7 @@ fragment float4 fog_fragment(Screen in [[stage_in]],texture2d<float> color [[tex
   float checker=float(int(floor(in.p.x)+floor(in.p.y)+cameraOrigin.x+cameraOrigin.y)&1);
   c=applyFog(c,projected,checker,fog,masks,u);
  }
- return float4(c,1);
+ return float4(nmMapClip(c,in.p.xy,u),1);
 }
 // One pass on the drawable replaces world resolve, full-frame snapshot copy,
 // distortion target and fog: the resolved world is never stored. bands>0
@@ -411,7 +420,7 @@ fragment float4 final_fragment(Screen in [[stage_in]],texture2d<float> color [[t
  }
  c=nmFinalGlow(c,in.p.xy,octaves,g);
  if(f.bloom>0.5)c+=glow.sample(s,in.uv).rgb*0.65;
- return float4(nmFinalGain(nmFinalFog(c,in.p.xy,fog,masks,u),f),1);
+ return float4(nmFinalGain(nmMapClip(nmFinalFog(c,in.p.xy,fog,masks,u),in.p.xy,u),f),1);
 }
 struct DistortionOut { float4 position [[position]]; float2 local; float4 shape [[flat]]; float4 params [[flat]]; };
 vertex DistortionOut distortion_vertex(uint v [[vertex_id]],uint iid [[instance_id]],device const Distortion* sources [[buffer(0)]],constant Uniforms& u [[buffer(3)]]) {
@@ -497,5 +506,5 @@ fragment float4 distortion_final_fragment(DistortionOut in [[stage_in]],texture2
  float2 shift=nmDistortionShift(in,u);
  float2 uv=clamp((in.position.xy+shift*u.camera.z)/u.viewport.xy,float2(0),float2(1));
  float3 c=nmFinalGlow(color.sample(s,uv).rgb,uv*u.viewport.xy,octaves,g);if(f.bloom>0.5)c+=glow.sample(s,uv).rgb*0.65;
- return float4(nmFinalGain(nmFinalFog(c,in.position.xy,fog,masks,u),f),1);
+ return float4(nmFinalGain(nmMapClip(nmFinalFog(c,in.position.xy,fog,masks,u),in.position.xy,u),f),1);
 }
