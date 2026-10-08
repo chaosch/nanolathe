@@ -71,6 +71,11 @@ type Scene struct {
 	TextureFrames            [][4]float32
 	HeightField              HeightField
 	Live                     LiveSource // nil retains the original recorded-pose workload
+	// Production's water block index: WaterBlocksW×WaterBlocksH flags, one per
+	// WaterBlockSize painted-map pixels, set where the block holds water.
+	WaterBlocks                []bool
+	WaterBlocksW, WaterBlocksH int
+	WaterBlockSize             int
 	// Terrain rectangle in world x,z; it is a flat 2D backdrop.
 	TerrainRect [4]float32
 	Instances   []Instance

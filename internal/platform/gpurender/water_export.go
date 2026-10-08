@@ -11,3 +11,12 @@ func (m *PreparedWaterMask) UploadRGBA() (rgba []byte, width, height, step int) 
 	}
 	return slices.Clone(m.pixels), m.w, m.h, m.step
 }
+
+// UploadBlocks exports the mask's block index, one flag per block of size
+// painted-map pixels that holds water, as visibleWater reads it (§26.1).
+func (m *PreparedWaterMask) UploadBlocks() (blocks []bool, width, height, size int) {
+	if m == nil {
+		return nil, 0, 0, 0
+	}
+	return slices.Clone(m.blocks), m.blockW, m.blockH, waterBlockSize
+}

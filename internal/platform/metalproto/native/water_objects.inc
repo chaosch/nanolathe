@@ -76,10 +76,19 @@ static BOOL nmWaterObjectsPrepareSources(NMRenderer* r,NMRing* ring,const NMWate
 }
 static MTLRenderPassDescriptor* nmWaterObjectsPass(id<MTLTexture> color,BOOL clear){MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=color;p.colorAttachments[0].loadAction=clear?MTLLoadActionClear:MTLLoadActionLoad;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);return p;}
 static void nmWaterObjectsUniforms(NMRenderer* r,NMWaterObjectsRing* f,id<MTLRenderCommandEncoder> enc,NMUniforms u){[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setVertexBytes:r->water length:sizeof(r->water) atIndex:9];[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];vector_float4 control=f.controls;[enc setVertexBytes:&control length:sizeof(control) atIndex:19];[enc setFragmentBytes:&control length:sizeof(control) atIndex:19];}
-static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMUniforms u){
- NMWaterObjectsRing* f=ring.waterObjectsRing;NMWaterObjectsState* s=r.waterObjectsState;if(!f||(!f.objectCount&&!f.sourceVertices)||!s||!r.waterMask||r->water[4]<=0)return YES;
+// Reflections run when water lies within a block of the view (water[11], as
+// production's visibleWater) and a source is admitted.
+static BOOL nmWaterObjectsReflecting(NMRenderer* r,NMRing* ring){
+ NMWaterObjectsRing* f=ring.waterObjectsRing;if(!f||(!f.objectCount&&!f.sourceVertices)||!r.waterObjectsState||!r.waterMask||r->water[4]<=0||r->water[11]<.5)return NO;
+ if(f.sourceVertices>0)return YES;
  const NMWaterObject* objects=f.objects.contents;const NMCloakDraw* draws=ring.compositionDraws.bytes;const uint32_t* selectors=ring.compositionSelectors.contents;
- BOOL admitted=f.sourceVertices>0;for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(r.modelMetadata&&draws[i].instance<f.objectCount&&selectors[draws[i].instance]!=0&&objects[draws[i].instance].params[0]>.5){admitted=YES;break;}if(!admitted)return YES;
+ for(NSUInteger i=0;i<ring.compositionDrawCount;i++)if(r.modelMetadata&&draws[i].instance<f.objectCount&&selectors[draws[i].instance]!=0&&objects[draws[i].instance].params[0]>.5)return YES;
+ return NO;
+}
+static BOOL nmWaterObjectsReflections(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer> cb,id<MTLBuffer> poses,NMUniforms u){
+ if(!nmWaterObjectsReflecting(r,ring))return YES;
+ NMWaterObjectsRing* f=ring.waterObjectsRing;NMWaterObjectsState* s=r.waterObjectsState;
+ const NMWaterObject* objects=f.objects.contents;const NMCloakDraw* draws=ring.compositionDraws.bytes;const uint32_t* selectors=ring.compositionSelectors.contents;
  if(!s.reflectionColor||s.reflectionColor.width!=r.color.width||s.reflectionColor.height!=r.color.height){s.reflectionColor=target(r,r.color.width,r.color.height,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);s.reflectionSoft=target(r,r.color.width,r.color.height,MTLPixelFormatRGBA8Unorm,MTLTextureUsageRenderTarget|MTLTextureUsageShaderRead);}
  if(!s.reflectionColor||!s.reflectionSoft)return nmWaterObjectsFail(r,@"Reflection source allocation failed");
  MTLRenderPassDescriptor* pass=nmWaterObjectsPass(s.reflectionColor,YES);pass.colorAttachments[1].texture=s.reflectionSoft;pass.colorAttachments[1].loadAction=MTLLoadActionClear;pass.colorAttachments[1].storeAction=MTLStoreActionStore;pass.colorAttachments[1].clearColor=MTLClearColorMake(0,0,0,0);
@@ -119,7 +128,7 @@ static BOOL nmWaterObjectsSurface(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer
  if(!f.painted||f.painted.width!=r.color.width||f.painted.height!=r.color.height)f.painted=target(r,r.color.width,r.color.height,MTLPixelFormatRGBA16Float,MTLTextureUsageShaderRead);if(!f.painted)return nmWaterObjectsFail(r,@"Painted seabed snapshot allocation failed");
  id<MTLBlitCommandEncoder> blit=nmBlitEncoder(cb,"water_objects.nmWaterObjectsSurface#1");[blit copyFromTexture:r.color sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(r.color.width,r.color.height,1) toTexture:f.painted destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[blit endEncoding];
  float water[20];memcpy(water,r->water,sizeof(water));water[12]=u.camera.x-u.viewport.x*.5/u.camera.z;water[13]=u.camera.y-u.viewport.y*.5/u.camera.z;water[14]=u.camera.x+u.viewport.x*.5/u.camera.z;water[15]=u.camera.y+u.viewport.y*.5/u.camera.z;
- id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,nmWaterObjectsPass(r.color,NO),"water_objects.nmWaterObjectsSurface#2");nmWaterObjectsUniforms(r,f,enc,u);[enc setFragmentBytes:water length:sizeof(water) atIndex:9];[enc setRenderPipelineState:r.waterObjectsState.surface];[enc setFragmentTexture:f.painted atIndex:0];[enc setFragmentTexture:r.waterMask atIndex:3];[enc setFragmentTexture:r.shadowMask?:r.emptyFog atIndex:2];[enc setFragmentTexture:r.groundField?:r.emptyFog atIndex:5];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
+ id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,nmWaterObjectsPass(r.color,NO),"water_objects.nmWaterObjectsSurface#2");nmWaterObjectsUniforms(r,f,enc,u);[enc setFragmentBytes:water length:sizeof(water) atIndex:9];[enc setRenderPipelineState:r.waterObjectsState.surface];[enc setFragmentTexture:f.painted atIndex:0];[enc setFragmentTexture:r.waterMask atIndex:3];[enc setFragmentTexture:r.emptyMask atIndex:2];[enc setFragmentTexture:r.groundField?:r.emptyFog atIndex:5];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];[enc endEncoding];return YES;
 }
 // Device-classified physical tiles reject only mathematically empty filter
 // footprints and select the unchanged cheap filter when softness is zero.

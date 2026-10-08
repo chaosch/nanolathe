@@ -5,7 +5,8 @@ import "github.com/nanolathe-gg/nanolathe/internal/drawlist"
 // WaterUniform is five sequential float4 groups shared with native/water.metal.
 // Phase is seconds, integrated tidal X/Z and observed foam energy. Mask is
 // projected mask step, width, height and surface-pass admission. Controls is
-// motion, shore foam, shading (0 off, 1 water, 2 no tint) and reserved.
+// motion, shore foam, shading (0 off, 1 water, 2 no tint) and whether water
+// lies within one block of the view (set by the host).
 // TerrainRect is the full painted-map texture extent. SampleRect bounds the
 // viewport at physical pixel centres in painted-map coordinates, retaining
 // production's displacement clamp. These values are presentation-only (§26).

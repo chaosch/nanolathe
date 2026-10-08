@@ -81,6 +81,10 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
  NMUniforms uniforms, lastUniforms, pendingUniforms;
  BOOL livePending,pendingOverlay;NSUInteger pendingOverlayRect[5];uint32_t pendingRetainedLights;double pendingWait,pendingCopy;
  float water[20];
+ // Production glow clears and redraws the emission target, and only the
+ // legacy bloom reads what world passes leave there; otherwise those passes
+ // neither load nor store it.
+ BOOL emissionDead;
  NMRow* rows;
  uint64_t* rowGenerations;
  NMEvent events[NM_EVENT_CAPACITY];
@@ -130,7 +134,7 @@ _Static_assert(sizeof(NMCloakDraw)==16,"cloak draw layout");
 @property NMRing* pendingRing;
 @property id<MTLBuffer> emptyLights,materials,textureFrames;
 @property id<MTLTexture> spriteAtlas,overlayAtlas,fogAtlas,waterMask,modelPalette;
-@property id<MTLTexture> atlas,terrainImage,color,emission,blurA,blurB,depthImage,output,heights,shadowMask,worldSnapshot,postColor,emptyFog,subjectColor,subjectEmission,subjectDepth;
+@property id<MTLTexture> atlas,terrainImage,color,emission,blurA,blurB,depthImage,output,heights,shadowMask,worldSnapshot,postColor,emptyFog,emptyMask,subjectColor,subjectEmission,subjectDepth;
 @property id<MTLTexture> modelMetadata,modelAtlasColor,modelAtlasEmission,modelAtlasDepth,groundField;
 @property CAMetalLayer* layer;
 @property NSWindow* window;
@@ -193,7 +197,7 @@ void* nm_create(int width,int height,int isOffscreen,int vsync,int effects,int v
  r.shadow=pipeline(r,lib,@"shadow_vertex",@"shadow_fragment",NO,&e);r.outline=pipeline(r,lib,@"model_vertex",@"outline_fragment",YES,&e);r.world=pipeline(r,lib,@"screen_vertex",@"world_fragment",NO,&e);r.distortion=pipeline(r,lib,@"distortion_vertex",@"distortion_fragment",NO,&e);r.fog=pipeline(r,lib,@"screen_vertex",@"fog_fragment",NO,&e);r.finalPass=pipeline(r,lib,@"screen_vertex",@"final_fragment",NO,&e);r.distortionFinal=pipeline(r,lib,@"distortion_vertex",@"distortion_final_fragment",NO,&e);r.overlay=pipeline(r,lib,@"overlay_vertex",@"overlay_fragment",NO,&e);r.overlayMultiply=pipeline(r,lib,@"overlay_vertex",@"overlay_multiply_fragment",NO,&e);
  r.materials=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];r.textureFrames=[r.device newBufferWithLength:16 options:MTLResourceStorageModeShared];
  MTLTextureDescriptor* hd=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR32Float width:1 height:1 mipmapped:NO];hd.storageMode=MTLStorageModeShared;hd.usage=MTLTextureUsageShaderRead;r.heights=[r.device newTextureWithDescriptor:hd];float zero=0;[r.heights replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&zero bytesPerRow:4];
- hd.pixelFormat=MTLPixelFormatRGBA8Unorm;r.emptyFog=[r.device newTextureWithDescriptor:hd];uint32_t white=0xffffffff;[r.emptyFog replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];
+ hd.pixelFormat=MTLPixelFormatRGBA8Unorm;r.emptyFog=[r.device newTextureWithDescriptor:hd];uint32_t white=0xffffffff;[r.emptyFog replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];r.emptyMask=[r.device newTextureWithDescriptor:hd];uint32_t clear=0;[r.emptyMask replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&clear bytesPerRow:4];
  r.sprite=pipeline(r,lib,@"sprite_vertex",@"sprite_fragment",YES,&e);r.annotation=pipeline(r,lib,@"annotation_vertex",@"annotation_fragment",YES,&e);
  r.blur=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"blur"] error:&e];
  r.selectLights=[r.device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"select_subject_lights"] error:&e];
@@ -434,7 +438,7 @@ static void encodeOverlayInto(NMRenderer* r,id<MTLRenderCommandEncoder> enc,NMUn
 static MTLRenderPassDescriptor* worldPass(NMRenderer* r,BOOL clearDepth) {
  MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];
  p.colorAttachments[0].texture=r.color;p.colorAttachments[0].loadAction=MTLLoadActionLoad;p.colorAttachments[0].storeAction=MTLStoreActionStore;
- p.colorAttachments[1].texture=r.emission;p.colorAttachments[1].loadAction=MTLLoadActionLoad;p.colorAttachments[1].storeAction=MTLStoreActionStore;
+ p.colorAttachments[1].texture=r.emission;p.colorAttachments[1].loadAction=r->emissionDead?MTLLoadActionDontCare:MTLLoadActionLoad;p.colorAttachments[1].storeAction=r->emissionDead?MTLStoreActionDontCare:MTLStoreActionStore;
  p.depthAttachment.texture=r.depthImage;p.depthAttachment.loadAction=clearDepth?MTLLoadActionClear:MTLLoadActionLoad;p.depthAttachment.storeAction=MTLStoreActionStore;p.depthAttachment.clearDepth=1;return p;
 }
 static void modelBindings(NMRenderer* r,id<MTLRenderCommandEncoder> enc,id<MTLBuffer> poses,NMRing* ring,NMUniforms u) {
@@ -500,22 +504,28 @@ static BOOL nmRetainedProjectile(NMRenderer* r,NMRing* ring,id<MTLCommandBuffer>
 static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints,id<MTLBuffer> poses,NMUniforms u,id<MTLTexture> destination,NMRing* ring) {
  // Compute once per submitted piece in this acquired slot. Body, outline and
  // shadow passes share the result; capture reruns the same path after drain.
+ r->emissionDead=ring&&(ring.glowEnabled||!r->effects);
  NSUInteger count=(NSUInteger)u.timing.z;
  if(count){id<MTLComputeCommandEncoder> compute=nmComputeEncoder(cb,"pose.interpolate");[compute setComputePipelineState:r.interpolatePoses];[compute setBuffer:endpoints offset:0 atIndex:0];[compute setBuffer:poses offset:0 atIndex:1];[compute setBytes:&u length:sizeof(u) atIndex:3];NSUInteger group=MIN((NSUInteger)256,r.interpolatePoses.maxTotalThreadsPerThreadgroup);[compute dispatchThreads:MTLSizeMake(count,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];[compute endEncoding];}
  if(u.lightControl.y>0.5&&!nmAblate("groundlight")){MTLRenderPassDescriptor* p=[MTLRenderPassDescriptor renderPassDescriptor];p.colorAttachments[0].texture=r.groundField;p.colorAttachments[0].loadAction=MTLLoadActionClear;p.colorAttachments[0].storeAction=MTLStoreActionStore;p.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);id<MTLRenderCommandEncoder> e=nmRenderEncoder(cb,p,"light.groundField");[e setRenderPipelineState:r.groundLight];[e setVertexBytes:&u length:sizeof(u) atIndex:3];[e setVertexBuffer:ring.retainedLights offset:0 atIndex:16];[e setFragmentBuffer:ring.retainedLights offset:0 atIndex:16];if(u.lightControl.x>0)[e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:(NSUInteger)u.lightControl.x];[e endEncoding];}
  if(ring.composed&&ring.compositionSlotCount&&u.lightControl.y>0.5){id<MTLComputeCommandEncoder> e=nmComputeEncoder(cb,"light.selectSubjects");[e setComputePipelineState:r.selectLights];[e setBytes:&u length:sizeof(u) atIndex:3];[e setBuffer:ring.compositionSlots offset:0 atIndex:13];[e setBuffer:ring.retainedLights offset:0 atIndex:16];[e setBuffer:ring.subjectLights offset:0 atIndex:17];[e dispatchThreads:MTLSizeMake(ring.compositionSlotCount,1,1) threadsPerThreadgroup:MTLSizeMake(MIN((NSUInteger)64,r.selectLights.maxTotalThreadsPerThreadgroup),1,1)];[e endEncoding];}
  if(ring.composed){if(!nmFacesEncode(r,ring,cb,poses,ring.waterObjectsRing.objects,u)||!nmFaceReflectionsEncode(r,ring,cb,ring.waterObjectsRing.objects,(uint32_t)ring.waterObjectsRing.objectCount))return NO;nmCompositionRaster(r,ring,cb,poses,u);if(!nmOutlineRowsEncode(r,ring,cb,poses,u)||!nmGroupsEncode(r,ring,cb,u))return NO;if(!nmAblate("shadows")&&!nmAblate("shadowraster"))nmShadowsRaster(r,r.shadows,ring.shadows,ring,cb,poses,u);}
  MTLRenderPassDescriptor* pass;
- if(u.visual.x>0.5){
+ // Composed frames draw shadows as commits, never into the mask, so they
+ // bind an empty mask instead of clearing and storing a full-size one.
+ id<MTLTexture> shadowMask=ring.composed?r.emptyMask:r.shadowMask;
+ if(u.visual.x>0.5&&!ring.composed){
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.shadowMask;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
- id<MTLRenderCommandEncoder> shadow=nmRenderEncoder(cb,pass,"shadow.mask");[shadow setRenderPipelineState:r.shadow];[shadow setVertexBytes:&u length:sizeof(u) atIndex:3];[shadow setVertexBuffer:poses offset:0 atIndex:2];[shadow setVertexTexture:r.heights atIndex:1];[shadow setVertexBuffer:r.materials offset:0 atIndex:6];[shadow setVertexBuffer:r.textureFrames offset:0 atIndex:7];[shadow setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[shadow setFragmentTexture:r.atlas atIndex:0];[shadow setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];[shadow setFragmentBytes:&u length:sizeof(u) atIndex:3];if(!ring.composed)drawMeshes(r,shadow,ring,1);[shadow endEncoding];}
+ id<MTLRenderCommandEncoder> shadow=nmRenderEncoder(cb,pass,"shadow.mask");[shadow setRenderPipelineState:r.shadow];[shadow setVertexBytes:&u length:sizeof(u) atIndex:3];[shadow setVertexBuffer:poses offset:0 atIndex:2];[shadow setVertexTexture:r.heights atIndex:1];[shadow setVertexBuffer:r.materials offset:0 atIndex:6];[shadow setVertexBuffer:r.textureFrames offset:0 atIndex:7];[shadow setVertexBuffer:ring?ring.materialOverrides:r.emptyLights offset:0 atIndex:11];[shadow setFragmentTexture:r.atlas atIndex:0];[shadow setFragmentTexture:r.modelPalette?:r.emptyFog atIndex:4];[shadow setFragmentBytes:&u length:sizeof(u) atIndex:3];drawMeshes(r,shadow,ring,1);[shadow endEncoding];}
  pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=r.color;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0.08,0.09,0.1,1);
- pass.colorAttachments[1].texture=r.emission;pass.colorAttachments[1].loadAction=MTLLoadActionClear;pass.colorAttachments[1].storeAction=MTLStoreActionStore;
+ pass.colorAttachments[1].texture=r.emission;pass.colorAttachments[1].loadAction=r->emissionDead?MTLLoadActionDontCare:MTLLoadActionClear;pass.colorAttachments[1].storeAction=r->emissionDead?MTLStoreActionDontCare:MTLStoreActionStore;
  pass.depthAttachment.texture=r.depthImage;pass.depthAttachment.loadAction=MTLLoadActionClear;pass.depthAttachment.storeAction=MTLStoreActionStore;pass.depthAttachment.clearDepth=1;
  id<MTLRenderCommandEncoder> enc=nmRenderEncoder(cb,pass,"world.terrain");[enc setDepthStencilState:r.depth];[enc setVertexBytes:&u length:sizeof(u) atIndex:3];[enc setFragmentBytes:&u length:sizeof(u) atIndex:3];[enc setCullMode:MTLCullModeNone];[enc setFragmentBuffer:ring?ring.lights:r.emptyLights offset:0 atIndex:4];
  BOOL deferredWater=ring.composed&&ring.waterObjectsRing&&r->water[7]>.5;
- if(deferredWater){NMUniforms base=u;base.lightControl.y=0;base.visual.x=0;float water[20];memcpy(water,r->water,sizeof(water));water[7]=0;[enc setFragmentBytes:&base length:sizeof(base) atIndex:3];[enc setFragmentBytes:water length:sizeof(water) atIndex:9];}
- if(!nmTerrainTilesBind(r.terrainTiles,enc,(ring.terrainFlags&1)!=0,(ring.terrainFlags&2)!=0)){[enc endEncoding];r.lastError=@"Terrain tile bind failed";return NO;}[enc setRenderPipelineState:r.terrain];[enc setDepthStencilState:r.spriteDepth];[enc setFragmentTexture:r.groundField atIndex:5];[enc setFragmentTexture:r.terrainImage atIndex:0];[enc setFragmentTexture:r.heights atIndex:1];[enc setFragmentTexture:r.shadowMask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];if(!deferredWater)[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+ // The surface pass applies the ground-light field and shadows after the water;
+ // the terrain must not fall back to per-pixel point lights meanwhile.
+ if(deferredWater){NMUniforms base=u;base.lightControl.y=0;base.visual.x=0;base.mode.y=0;float water[20];memcpy(water,r->water,sizeof(water));water[7]=0;[enc setFragmentBytes:&base length:sizeof(base) atIndex:3];[enc setFragmentBytes:water length:sizeof(water) atIndex:9];}
+ if(!nmTerrainTilesBind(r.terrainTiles,enc,(ring.terrainFlags&1)!=0,(ring.terrainFlags&2)!=0)){[enc endEncoding];r.lastError=@"Terrain tile bind failed";return NO;}[enc setRenderPipelineState:r.terrain];[enc setDepthStencilState:r.spriteDepth];[enc setFragmentTexture:r.groundField atIndex:5];[enc setFragmentTexture:r.terrainImage atIndex:0];[enc setFragmentTexture:r.heights atIndex:1];[enc setFragmentTexture:shadowMask atIndex:2];[enc setFragmentTexture:r.waterMask?:r.emptyFog atIndex:3];if(!deferredWater)[enc setFragmentBytes:r->water length:sizeof(r->water) atIndex:9];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
  [enc setFragmentBytes:&u length:sizeof(u) atIndex:3];
  // Short features are painted after TNT and before any model [03 R-RAST-01 §6].
  if(ring.groundSpriteCount&&!ring.composed){[enc setRenderPipelineState:r.sprite];[enc setDepthStencilState:r.spriteDepth];[enc setVertexBuffer:ring.sprites offset:0 atIndex:0];[enc setFragmentTexture:r.spriteAtlas atIndex:0];[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:ring.groundSpriteCount];}
@@ -525,9 +535,15 @@ static BOOL encode(NMRenderer* r,id<MTLCommandBuffer> cb,id<MTLBuffer> endpoints
   // One world encoder from the first effect layer to the last: effect layers
   // and commit phases alternate in painter order without storing and
   // reloading the world between them. Lens snapshots need the split path.
-  nmWaterObjectsSeabed(r,ring,enc,u);[enc endEncoding];if(!nmAblate("water")){if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;}
+  // With no water pass between them, the world continues in the terrain's
+  // encoder rather than storing and reloading colour and depth.
+  nmWaterObjectsSeabed(r,ring,enc,u);
+  if(!nmAblate("water")&&(deferredWater||nmWaterObjectsReflecting(r,ring))){
+   [enc endEncoding];if(deferredWater&&!nmWaterObjectsSurface(r,ring,cb,u))return NO;if(!nmWaterObjectsReflections(r,ring,cb,poses,u))return NO;
+   enc=nmRenderEncoder(cb,worldPass(r,NO),"world.merged");
+  }
   BOOL fx=!nmAblate("effects");
-  enc=nmRenderEncoder(cb,worldPass(r,NO),"world.merged");nmFxExternal=enc;
+  nmFxExternal=enc;
   if(fx)nmEffectsDraw(r,ring,cb,0,u);
   nmDirectPhase(r,ring,enc,poses,u,0);nmCompositionCommit(r,ring,enc,u,0);
   if(fx)nmEffectsDraw(r,ring,cb,1,u);
