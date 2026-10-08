@@ -1,6 +1,10 @@
 package meshscene
 
-import "time"
+import (
+	"time"
+
+	"github.com/nanolathe-gg/nanolathe/formats"
+)
 
 // LiveSource publishes presentation data from a running ordinary session.
 // Next is called on the render thread or on the host's single prepare-ahead
@@ -63,7 +67,7 @@ type Light struct {
 
 type LiveFrame struct {
 	ModelProjections  ModelProjectionFrame
-	TerrainFlags      uint32 // production fractional filtering (1), detail record step (2)
+	TerrainFlags      uint32 // production fractional filtering (1), detail tiles (2)
 	StockEffects      *StockFrame
 	Lighting          RetainedLightingFrame
 	LightControls     uint32 // production lighting present, finish, glint, supersample
@@ -121,6 +125,10 @@ type BattleOptions struct {
 	// DisplayPalette, when set, replaces PALETTE.PAL for all retained art so
 	// models, features and effects carry the same gamma as the terrain.
 	DisplayPalette *[256][4]byte
+	// DetailSprites, when set, are the production 2x feature banks keyed by
+	// lowercase bank filename. Sprites drawn at more than one device pixel per
+	// world pixel use them instead of the authored frames.
+	DetailSprites map[string]*formats.GAF
 }
 
 // Material is a 16-byte immutable texture binding. Index zero is reserved.

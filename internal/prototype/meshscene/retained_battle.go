@@ -137,6 +137,10 @@ func (r *RetainedBattle) Covers(camera [3]float32) bool {
 	if r == nil || r.noReuse || r.previous == nil || camera[2] <= 0 || r.camera[2] <= 0 {
 		return false
 	}
+	// Recorded sprites carry the art variant chosen for their camera scale.
+	if DetailScale(camera[2]) != DetailScale(r.camera[2]) {
+		return false
+	}
 	// Both regions add the same margin, which cancels.
 	for axis := range 2 {
 		view := float32(r.source.viewport[axis])

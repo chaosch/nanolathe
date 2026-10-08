@@ -210,7 +210,7 @@ func retainBattle(opts BattleOptions, fs *vfs.FS, cat *content.Catalog, pal *pal
 	if err := source.prepareFog(); err != nil {
 		return nil, nil, err
 	}
-	if err := source.prepareSprites(pal, cat); err != nil {
+	if err := source.prepareSprites(pal, cat, opts.DetailSprites); err != nil {
 		return nil, nil, err
 	}
 	if opts.Playable {

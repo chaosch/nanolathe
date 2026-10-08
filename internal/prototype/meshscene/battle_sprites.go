@@ -49,6 +49,8 @@ type BattleSprites struct {
 	featureScopeFiltered                                 bool
 	rawSpritePixels, croppedSpritePixels                 int64
 	fullyTransparentFrames                               int
+	detailFrames, detailOmitted                          int
+	detailPixels                                         int64
 	// emitted counts what culling decides (accepted kinds, culled lights,
 	// ground sprites); Append merges it into counts.
 	emitted map[string]int
@@ -222,15 +224,23 @@ const (
 	hotFeatureALP
 	hotMissingFeatureFrames
 	hotFeaturesOutsideView
+	hotDetailSprites
 	hotSpriteCounters
 )
 
-var hotSpriteCounterNames = [hotSpriteCounters]string{"features_seen", "features_visibility_rejected", "culled_sprites", "feature_alp_approximations", "missing_feature_frames", "features_outside_view"}
+var hotSpriteCounterNames = [hotSpriteCounters]string{"features_seen", "features_visibility_rejected", "culled_sprites", "feature_alp_approximations", "missing_feature_frames", "features_outside_view", "detail_sprites"}
 
 func (b *BattleSprites) appendSprite(dst []Sprite, a spriteArt, previous, current [4]float32, color [4]float32, emission float32, camera [3]float32, viewport [2]int, kind string) []Sprite {
-	r := b.regions[a.cell]
+	cell, rect := a.cell, [4]float32{-float32(a.xoff), -float32(a.yoff), float32(a.width), float32(a.height)}
+	// A 2x variant covers the authored frame's world rectangle with twice the
+	// texels; it is drawn wherever the camera magnifies the art.
+	if d := a.detail; d.cell != 0 && DetailScale(camera[2]) {
+		cell, rect = d.cell, [4]float32{-float32(d.xoff) / 2, -float32(d.yoff) / 2, float32(d.width) / 2, float32(d.height) / 2}
+		b.hot[hotDetailSprites]++
+	}
+	r := b.regions[cell]
 	u0, u1 := r.uv([2]float32{}, b.texture.Width, b.texture.Height), r.uv([2]float32{1, 1}, b.texture.Width, b.texture.Height)
-	s := Sprite{Previous: previous, Current: current, Rect: [4]float32{-float32(a.xoff), -float32(a.yoff), float32(a.width), float32(a.height)}, UV: [4]float32{u0[0], u0[1], u1[0], u1[1]}, Color: color, Params: [4]float32{emission, 0, 0, 0}}
+	s := Sprite{Previous: previous, Current: current, Rect: rect, UV: [4]float32{u0[0], u0[1], u1[0], u1[1]}, Color: color, Params: [4]float32{emission, 0, 0, 0}}
 	if b.walk.recording {
 		*b.walk.at = append(*b.walk.at, spriteWalkOp{sprite: s, kind: kind})
 	}
@@ -675,5 +685,5 @@ func (b *BattleSprites) Report() map[string]any {
 		"wreck plumes use actual prepared static projected model bounds; orientation-dependent bounds are approximated",
 		"beams use continuous rotated quads and interpolate centres; span/angle snap to current endpoints",
 		"sprite depth uses native world anchor; tall billboard pixel depth and terrain overlap are approximations",
-	}, "terrain_anchor_snapshot": fmt.Sprintf("%dx%d", b.anchorW, b.anchorH), "art_reach_world_units": b.artReach}
+	}, "terrain_anchor_snapshot": fmt.Sprintf("%dx%d", b.anchorW, b.anchorH), "art_reach_world_units": b.artReach, "detail_frames": b.detailFrames, "detail_frames_omitted": b.detailOmitted, "detail_texel_area": b.detailPixels, "detail_policy": "production 2x feature variants above one device pixel per world pixel; authored frames otherwise"}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
@@ -602,7 +603,7 @@ type battleSpriteAdapter interface {
 
 // Sprite construction is linked by the parallel art adapter; there are no
 // filesystem reads or sprite-cursor writes on the render thread.
-func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog) error {
+func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog, detail map[string]*formats.GAF) error {
 	current, previous := s.sess.Snapshot.PinLatest()
 	if current == nil {
 		s.sess.Snapshot.Unpin(previous)
@@ -617,7 +618,7 @@ func (s *battleSource) prepareSprites(pal *palette.Tables, cat *content.Catalog)
 	if len(featureNames) == 0 {
 		featureNames = append(featureNames, "") // Explicit scope: unit corpse chains only.
 	}
-	sprites, err := NewBattleSprites(s.fs, pal, cat, featureNames...)
+	sprites, err := NewBattleSprites(s.fs, pal, cat, detail, featureNames...)
 	if err != nil {
 		return err
 	}

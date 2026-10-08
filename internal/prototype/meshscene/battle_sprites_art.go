@@ -20,7 +20,12 @@ type spriteArt struct {
 	hue                             [3]float32
 	emission                        [3]float32
 	identity                        *formats.GAFFrame
+	detail                          spriteDetail
 }
+
+// spriteDetail is a frame's production 2x variant in its own 2x pixels; cell
+// zero means the frame has none and draws its authored art at every scale.
+type spriteDetail struct{ cell, width, height, xoff, yoff int }
 type spriteSequence struct {
 	frames []spriteArt
 	extent float32
@@ -50,7 +55,13 @@ type spriteBankCensus struct {
 // All catalog units cover future factory products without predicting gameplay.
 // No arguments preserves the unrestricted catalog diagnostic; an empty string
 // argument requests corpse-only preparation for a map with no placed features.
-func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, featureNames ...string) (*BattleSprites, error) {
+//
+// detail, when not nil, holds the production 2x feature banks keyed by
+// lowercase bank filename; each loaded frame takes its variant by entry name
+// and frame index, as the production client indexes them (DESIGN_GPU_RENDERER
+// §14.3). Variants share the atlas; when they cannot fit it they are dropped
+// and the authored frames draw at every scale.
+func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, detail map[string]*formats.GAF, featureNames ...string) (*BattleSprites, error) {
 	if fs == nil || pal == nil || cat == nil {
 		return nil, fmt.Errorf("nanolathe: prototype sprite preparation failed: logical path battle sprites, providers searched [arguments], expected VFS, palette and catalog")
 	}
@@ -97,6 +108,7 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 		}
 	}
 	cells := []spriteCell{{region: atlasRegion{w: 1, h: 1}, rgba: []byte{255, 255, 255, 255}}}
+	var detailCells []spriteCell
 	digests := make(map[[32]byte]int)
 	banks := make([]string, 0, len(requests))
 	for bank := range requests {
@@ -188,6 +200,12 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 				// from the offset so every retained texel keeps its authored point.
 				// The dispatch identity keeps the original authored canvas metadata.
 				seq.frames[i] = spriteArt{cell: cell, width: w, height: h, xoff: int(f.XOffset) - minX, yoff: int(f.YOffset) - minY, hold: max(int32(meta.Frames[i].Value), 1), hue: hue, emission: emission, identity: &formats.GAFFrame{Width: f.Width, Height: f.Height, XOffset: f.XOffset, YOffset: f.YOffset}}
+				if v := spriteDetailFrame(detail, bank, name, i); v != nil && v.Width > 0 && v.Height > 0 {
+					pixels, dw, dh, dx, dy, _ := cropSpriteMargins(spriteFrameRGBA(v, pal), int(v.Width), int(v.Height))
+					detailCells = append(detailCells, spriteCell{region: atlasRegion{w: dw, h: dh}, rgba: pixels})
+					seq.frames[i].detail = spriteDetail{cell: len(detailCells), width: dw, height: dh, xoff: int(v.XOffset) - dx, yoff: int(v.YOffset) - dy}
+					b.detailPixels += int64(dw) * int64(dh)
+				}
 				a := seq.frames[i]
 				b.artReach = max(b.artReach, float32(max(a.xoff, -a.xoff, a.width-a.xoff, a.xoff-a.width, a.yoff, -a.yoff, a.height-a.yoff, a.yoff-a.height)))
 				b.framesLoaded++
@@ -197,11 +215,52 @@ func NewBattleSprites(fs *vfs.FS, pal *palette.Tables, cat *content.Catalog, fea
 		}
 		b.bankCensus = append(b.bankCensus, census)
 	}
+	// Detail cells follow the authored ones; their indices were one-based
+	// within detailCells until the authored count was known.
+	base := len(cells) - 1
+	for _, seq := range b.sequences { // load-time index fix-up; order-free
+		for i := range seq.frames {
+			if seq.frames[i].detail.cell != 0 {
+				seq.frames[i].detail.cell += base
+			}
+		}
+	}
+	if len(detailCells) > 0 {
+		if err := b.packSprites(append(cells, detailCells...)); err == nil {
+			b.detailFrames = len(detailCells)
+			return b, nil
+		}
+		b.detailOmitted = len(detailCells)
+		for _, seq := range b.sequences {
+			for i := range seq.frames {
+				seq.frames[i].detail = spriteDetail{}
+			}
+		}
+	}
 	if err := b.packSprites(cells); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
+
+// spriteDetailFrame finds one frame's 2x variant by bank, entry name and frame
+// index, or nil when the provider does not cover it.
+func spriteDetailFrame(detail map[string]*formats.GAF, bank, entry string, index int) *formats.GAFFrame {
+	g := detail[strings.ToLower(strings.TrimSpace(bank))]
+	if g == nil {
+		return nil
+	}
+	e, ok := g.Find(entry)
+	if !ok || e == nil || index >= len(e.Frames) {
+		return nil
+	}
+	return e.Frames[index].Frame
+}
+
+// DetailScale reports whether a camera scale, in device pixels per world
+// pixel, draws production 2x art (feature variants and detail terrain
+// tiles): any magnification of the authored art has the pixels to show them.
+func DetailScale(scale float32) bool { return scale > 1 }
 
 // cropSpriteMargins preserves every nonzero-alpha texel verbatim, with one
 // source-transparent pixel of margin wherever the canvas provides it. This

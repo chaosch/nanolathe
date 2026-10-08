@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/clock"
@@ -97,11 +98,12 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	cl.SetExternalSelection(true)
 	display := cl.DisplayPalette()
 	worldGamma := cl.GammaFactor()
-	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
+	terrainSources, detailSprites := metalDetailArt(cl)
+	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: detailSprites, LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads, TextureScale: opts.MetalTextures}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
 	}
-	scene.TerrainTiles, err = meshscene.BuildBattleTerrainTiles(cl.BattleTerrainSources(), cl.DisplayPalette())
+	scene.TerrainTiles, err = meshscene.BuildBattleTerrainTiles(terrainSources, cl.DisplayPalette())
 	if err != nil {
 		return err
 	}
@@ -166,6 +168,19 @@ func runMetalPrototype(opts Options, cs *contentSet) error {
 	}
 	fmt.Fprintln(os.Stderr, "nanolathe: Metal match artifacts:", opts.MetalPrototype)
 	return runErr
+}
+
+// metalDetailArt returns the production 2x terrain tiles and feature banks.
+// The Metal world draws them wherever it magnifies the map, which on a 2x
+// drawable is every zoom above one half. NANOLATHE_METAL_DETAIL=0 keeps the
+// authored art at every scale, for comparisons.
+func metalDetailArt(c *client.Client) (drawlist.Terrain, map[string]*formats.GAF) {
+	terrain := c.BattleTerrainSources()
+	if os.Getenv("NANOLATHE_METAL_DETAIL") == "0" {
+		terrain.Detail = nil
+		return terrain, nil
+	}
+	return terrain, c.BattleFeatureDetail()
 }
 
 type metalBattleHost struct {

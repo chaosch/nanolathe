@@ -119,7 +119,8 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	if k != 1 || world.OffsetX != 0 || world.OffsetY != 0 {
 		live.TerrainFlags |= 1
 	}
-	if world.Step == camera.ViewScaleDetail {
+	// Detail tiles wherever the camera magnifies the map, as for sprites.
+	if meshscene.DetailScale(live.Camera[2]) {
 		live.TerrainFlags |= 2
 	}
 	k *= scale
