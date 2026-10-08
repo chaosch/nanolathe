@@ -24,7 +24,7 @@ type nativeGroupMember struct {
 	Reserved       uint32
 }
 type nativeGroupUpload struct {
-	Groups, Members, InstanceGroups                  uintptr
+	Groups, Members, InstanceGroups                  unsafe.Pointer
 	GroupCount, MemberCount, InstanceCount, Reserved uint32
 }
 

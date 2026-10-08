@@ -19,7 +19,7 @@ import (
 var TerrainTilesShaderSource string
 
 type nativeTerrainTilesUpload struct {
-	Base, Detail, Lookup                                                  uintptr
+	Base, Detail, Lookup                                                  unsafe.Pointer
 	BaseWidth, BaseHeight, DetailWidth, DetailHeight, MapWidth, MapHeight uint32
 }
 

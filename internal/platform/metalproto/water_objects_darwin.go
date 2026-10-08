@@ -18,7 +18,7 @@ import (
 var waterObjectsShaderSource string
 
 type nativeWaterObjectsUpload struct {
-	Objects, Seabed          uintptr
+	Objects, Seabed          unsafe.Pointer
 	ObjectCount, SeabedCount uint32
 	Controls                 [4]float32
 }
@@ -65,7 +65,7 @@ func (p *waterObjectsPacking) Prepare(objects []meshscene.WaterObject, seabed []
 // stable. Each source is a four-corner quad; native cap accounting counts these
 // corners, not the six fan-triangle vertices submitted to the GPU.
 type nativeWaterSourcesUpload struct {
-	Sources               uintptr
+	Sources               unsafe.Pointer
 	VertexCount, Reserved uint32
 }
 

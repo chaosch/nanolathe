@@ -15,10 +15,10 @@ import (
 var groundEffectsShaderSource string
 
 type nativeGroundUpload struct {
-	Marks             uintptr
+	Marks             unsafe.Pointer
 	Count, Reserved   uint32
 	Ages              [4]float32
-	Frames            uintptr
+	Frames            unsafe.Pointer
 	FrameCount, Spare uint32
 }
 

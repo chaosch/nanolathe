@@ -20,34 +20,62 @@ import (
 //go:embed native/shaders.metal
 var shaderSource string
 
-type bridge struct {
-	meshOutlineRows func(uintptr, uint32, uintptr) int32
-	terrainTiles    func(uintptr, uintptr) int32
-	meshFaces       func(uintptr, uint32, uintptr) int32
-	pointerCapture  func(uintptr, int32) int32
-	create          func(int32, int32, int32, int32, int32, int32, int32, uintptr, uintptr, int32) uintptr
-	mesh            func(uintptr, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, int32, uintptr, uintptr, int32) int32
-	assets          func(uintptr, uintptr) int32
-	texture         func(uintptr, int32, int32, int32, uintptr) int32
-	configure       func(uintptr, uintptr, uintptr, int32) int32
-	frame           func(uintptr, uintptr, uintptr, float32, float64) int32
-	liveUpload      func(uintptr, uintptr) int32
-	livePresent     func(uintptr) int32
-	input           func(uintptr, uintptr)
-	events          func(uintptr, uintptr, int32) int32
-	playable        func(uintptr, int32)
-	drain           func(uintptr)
-	rows            func(uintptr, uintptr, int32) int32
-	capture         func(uintptr, uintptr) int32
-	info            func(uintptr, uintptr, int32)
-	censusReset     func(uintptr)
-	destroy         func(uintptr)
+// nativeRenderer is the native half of the prototype: the pure-Go Metal
+// renderer (gobridge) or the Objective-C dylib it was ported from. Every call
+// comes from Run's locked main thread. Pointers borrow Go storage only until
+// the call returns; both implementations copy what they keep.
+type nativeRenderer interface {
+	terrainTiles(upload *nativeTerrainTilesUpload) int32
+	pointerCapture(captured int32) int32
+	mesh(vertices unsafe.Pointer, vertexCount int32, indices unsafe.Pointer, indexCount int32, offsets unsafe.Pointer, instances int32, edges unsafe.Pointer, edgeCount int32, visuals, centers unsafe.Pointer, primitiveCount int32) int32
+	meshFaces(index uint32, upload *NativeMeshFacesUpload) int32
+	meshOutlineRows(index uint32, upload *NativeOutlineRowsUpload) int32
+	assets(a *nativeAssets) int32
+	texture(slot, width, height int32, rgba unsafe.Pointer) int32
+	configure(camera, rect unsafe.Pointer, poseCount int32) int32
+	frame(previous, next unsafe.Pointer, alpha float32, seconds float64) int32
+	liveUpload(u *liveUpload) int32
+	livePresent() int32
+	input(in *nativeInput)
+	events(out []meshscene.NativeEvent) int32
+	playable(on int32)
+	drain()
+	rows(out []nativeRow) int32
+	capture(path string) int32
+	info() string
+	censusReset()
+	destroy()
+}
+
+type dylibBridge struct {
+	handle          uintptr
+	meshOutlineRows_ func(uintptr, uint32, unsafe.Pointer) int32
+	terrainTiles_    func(uintptr, unsafe.Pointer) int32
+	meshFaces_       func(uintptr, uint32, unsafe.Pointer) int32
+	pointerCapture_  func(uintptr, int32) int32
+	create           func(int32, int32, int32, int32, int32, int32, int32, unsafe.Pointer, unsafe.Pointer, int32) uintptr
+	mesh_            func(uintptr, unsafe.Pointer, int32, unsafe.Pointer, int32, unsafe.Pointer, int32, unsafe.Pointer, int32, unsafe.Pointer, unsafe.Pointer, int32) int32
+	assets_          func(uintptr, unsafe.Pointer) int32
+	texture_         func(uintptr, int32, int32, int32, unsafe.Pointer) int32
+	configure_       func(uintptr, unsafe.Pointer, unsafe.Pointer, int32) int32
+	frame_           func(uintptr, unsafe.Pointer, unsafe.Pointer, float32, float64) int32
+	liveUpload_      func(uintptr, unsafe.Pointer) int32
+	livePresent_     func(uintptr) int32
+	input_           func(uintptr, unsafe.Pointer)
+	events_          func(uintptr, unsafe.Pointer, int32) int32
+	playable_        func(uintptr, int32)
+	drain_           func(uintptr)
+	rows_            func(uintptr, unsafe.Pointer, int32) int32
+	capture_         func(uintptr, unsafe.Pointer) int32
+	info_            func(uintptr, unsafe.Pointer, int32)
+	censusReset_     func(uintptr)
+	destroy_         func(uintptr)
 }
 
 // bindPerFrame replaces the calls made on every draw with direct symbol
 // calls: a RegisterLibFunc wrapper goes through reflection and allocates its
 // arguments on each call.
-func (b *bridge) bindPerFrame(lib uintptr) error {
+func (b *dylibBridge) bindPerFrame(lib uintptr) error {
 	var symbols [5]uintptr
 	for i, name := range [...]string{"nm_pointer_capture", "nm_live_upload", "nm_live_present", "nm_input", "nm_events"} {
 		symbol, err := purego.Dlsym(lib, name)
@@ -56,33 +84,122 @@ func (b *bridge) bindPerFrame(lib uintptr) error {
 		}
 		symbols[i] = symbol
 	}
-	b.pointerCapture = func(handle uintptr, captured int32) int32 {
+	b.pointerCapture_ = func(handle uintptr, captured int32) int32 {
 		r, _, _ := purego.SyscallN(symbols[0], handle, uintptr(captured))
 		return int32(r)
 	}
-	b.liveUpload = func(handle, upload uintptr) int32 {
-		r, _, _ := purego.SyscallN(symbols[1], handle, upload)
+	b.liveUpload_ = func(handle uintptr, upload unsafe.Pointer) int32 {
+		r, _, _ := purego.SyscallN(symbols[1], handle, uintptr(upload))
 		return int32(r)
 	}
-	b.livePresent = func(handle uintptr) int32 {
+	b.livePresent_ = func(handle uintptr) int32 {
 		r, _, _ := purego.SyscallN(symbols[2], handle)
 		return int32(r)
 	}
-	b.input = func(handle, input uintptr) {
-		purego.SyscallN(symbols[3], handle, input)
+	b.input_ = func(handle uintptr, input unsafe.Pointer) {
+		purego.SyscallN(symbols[3], handle, uintptr(input))
 	}
-	b.events = func(handle, events uintptr, count int32) int32 {
-		r, _, _ := purego.SyscallN(symbols[4], handle, events, uintptr(count))
+	b.events_ = func(handle uintptr, events unsafe.Pointer, count int32) int32 {
+		r, _, _ := purego.SyscallN(symbols[4], handle, uintptr(events), uintptr(count))
 		return int32(r)
 	}
 	return nil
 }
 
-func pointer[T any](s []T) uintptr {
-	if len(s) == 0 {
-		return 0
+func newDylibRenderer(libPath string, width, height int32, offscreen, vsync, effects, visualPasses int32, capacity int32, shader string) (nativeRenderer, error) {
+	lib, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_LOCAL)
+	if err != nil {
+		return nil, fmt.Errorf("metalproto: load %s: %w", libPath, err)
 	}
-	return uintptr(unsafe.Pointer(&s[0]))
+	// Keep the dylib loaded: a drawable's presentation callback may finish after
+	// the last command buffer has completed. Unmapping its callback code is unsafe.
+	b := &dylibBridge{}
+	purego.RegisterLibFunc(&b.create, lib, "nm_create")
+	purego.RegisterLibFunc(&b.terrainTiles_, lib, "nm_terrain_tiles")
+	purego.RegisterLibFunc(&b.pointerCapture_, lib, "nm_pointer_capture")
+	purego.RegisterLibFunc(&b.mesh_, lib, "nm_mesh")
+	purego.RegisterLibFunc(&b.meshFaces_, lib, "nm_mesh_faces")
+	purego.RegisterLibFunc(&b.meshOutlineRows_, lib, "nm_mesh_outline_rows")
+	purego.RegisterLibFunc(&b.assets_, lib, "nm_assets")
+	purego.RegisterLibFunc(&b.texture_, lib, "nm_texture")
+	purego.RegisterLibFunc(&b.configure_, lib, "nm_configure")
+	purego.RegisterLibFunc(&b.frame_, lib, "nm_frame")
+	purego.RegisterLibFunc(&b.liveUpload_, lib, "nm_live_upload")
+	purego.RegisterLibFunc(&b.livePresent_, lib, "nm_live_present")
+	purego.RegisterLibFunc(&b.input_, lib, "nm_input")
+	purego.RegisterLibFunc(&b.events_, lib, "nm_events")
+	purego.RegisterLibFunc(&b.playable_, lib, "nm_playable")
+	purego.RegisterLibFunc(&b.drain_, lib, "nm_drain")
+	purego.RegisterLibFunc(&b.rows_, lib, "nm_rows")
+	purego.RegisterLibFunc(&b.capture_, lib, "nm_capture")
+	purego.RegisterLibFunc(&b.info_, lib, "nm_info")
+	purego.RegisterLibFunc(&b.censusReset_, lib, "nm_upload_census_reset")
+	purego.RegisterLibFunc(&b.destroy_, lib, "nm_destroy")
+	if err := b.bindPerFrame(lib); err != nil {
+		return nil, err
+	}
+	source := cstring(shader)
+	errorText := make([]byte, 8192)
+	b.handle = b.create(width, height, offscreen, vsync, effects, visualPasses, capacity, pointer(source), pointer(errorText), int32(len(errorText)))
+	runtime.KeepAlive(source)
+	runtime.KeepAlive(errorText)
+	if b.handle == 0 {
+		return nil, fmt.Errorf("metalproto: initialize: %s", terminated(errorText))
+	}
+	return b, nil
+}
+
+func (b *dylibBridge) terrainTiles(u *nativeTerrainTilesUpload) int32 {
+	return b.terrainTiles_(b.handle, unsafe.Pointer(u))
+}
+func (b *dylibBridge) pointerCapture(captured int32) int32 { return b.pointerCapture_(b.handle, captured) }
+func (b *dylibBridge) mesh(vertices unsafe.Pointer, vertexCount int32, indices unsafe.Pointer, indexCount int32, offsets unsafe.Pointer, instances int32, edges unsafe.Pointer, edgeCount int32, visuals, centers unsafe.Pointer, primitiveCount int32) int32 {
+	return b.mesh_(b.handle, vertices, vertexCount, indices, indexCount, offsets, instances, edges, edgeCount, visuals, centers, primitiveCount)
+}
+func (b *dylibBridge) meshFaces(index uint32, u *NativeMeshFacesUpload) int32 {
+	return b.meshFaces_(b.handle, index, unsafe.Pointer(u))
+}
+func (b *dylibBridge) meshOutlineRows(index uint32, u *NativeOutlineRowsUpload) int32 {
+	return b.meshOutlineRows_(b.handle, index, unsafe.Pointer(u))
+}
+func (b *dylibBridge) assets(a *nativeAssets) int32 { return b.assets_(b.handle, unsafe.Pointer(a)) }
+func (b *dylibBridge) texture(slot, width, height int32, rgba unsafe.Pointer) int32 {
+	return b.texture_(b.handle, slot, width, height, rgba)
+}
+func (b *dylibBridge) configure(camera, rect unsafe.Pointer, poseCount int32) int32 {
+	return b.configure_(b.handle, camera, rect, poseCount)
+}
+func (b *dylibBridge) frame(previous, next unsafe.Pointer, alpha float32, seconds float64) int32 {
+	return b.frame_(b.handle, previous, next, alpha, seconds)
+}
+func (b *dylibBridge) liveUpload(u *liveUpload) int32 { return b.liveUpload_(b.handle, unsafe.Pointer(u)) }
+func (b *dylibBridge) livePresent() int32             { return b.livePresent_(b.handle) }
+func (b *dylibBridge) input(in *nativeInput)          { b.input_(b.handle, unsafe.Pointer(in)) }
+func (b *dylibBridge) events(out []meshscene.NativeEvent) int32 {
+	return b.events_(b.handle, pointer(out), int32(len(out)))
+}
+func (b *dylibBridge) playable(on int32)            { b.playable_(b.handle, on) }
+func (b *dylibBridge) drain()                       { b.drain_(b.handle) }
+func (b *dylibBridge) rows(out []nativeRow) int32   { return b.rows_(b.handle, pointer(out), int32(len(out))) }
+func (b *dylibBridge) capture(path string) int32 {
+	p := cstring(path)
+	r := b.capture_(b.handle, pointer(p))
+	runtime.KeepAlive(p)
+	return r
+}
+func (b *dylibBridge) info() string {
+	out := make([]byte, 8192)
+	b.info_(b.handle, pointer(out), int32(len(out)))
+	return terminated(out)
+}
+func (b *dylibBridge) censusReset() { b.censusReset_(b.handle) }
+func (b *dylibBridge) destroy()     { b.destroy_(b.handle) }
+
+func pointer[T any](s []T) unsafe.Pointer {
+	if len(s) == 0 {
+		return nil
+	}
+	return unsafe.Pointer(&s[0])
 }
 func cstring(s string) []byte { return append([]byte(s), 0) }
 func boolInt(v bool) int32 {
@@ -132,47 +249,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
 		return nil, err
 	}
-	libPath := opts.LibraryPath
-	if libPath == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return nil, err
-		}
-		libPath = filepath.Join(filepath.Dir(exe), "libnanometal.dylib")
-	}
-	lib, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, fmt.Errorf("metalproto: load %s: %w", libPath, err)
-	}
-	// Keep the dylib loaded: a drawable's presentation callback may finish after
-	// the last command buffer has completed. Unmapping its callback code is unsafe.
-	var b bridge
-	purego.RegisterLibFunc(&b.create, lib, "nm_create")
-	purego.RegisterLibFunc(&b.terrainTiles, lib, "nm_terrain_tiles")
-	purego.RegisterLibFunc(&b.pointerCapture, lib, "nm_pointer_capture")
-	purego.RegisterLibFunc(&b.mesh, lib, "nm_mesh")
-	purego.RegisterLibFunc(&b.meshFaces, lib, "nm_mesh_faces")
-	purego.RegisterLibFunc(&b.meshOutlineRows, lib, "nm_mesh_outline_rows")
-	purego.RegisterLibFunc(&b.assets, lib, "nm_assets")
-	purego.RegisterLibFunc(&b.texture, lib, "nm_texture")
-	purego.RegisterLibFunc(&b.configure, lib, "nm_configure")
-	purego.RegisterLibFunc(&b.frame, lib, "nm_frame")
-	purego.RegisterLibFunc(&b.liveUpload, lib, "nm_live_upload")
-	purego.RegisterLibFunc(&b.livePresent, lib, "nm_live_present")
-	purego.RegisterLibFunc(&b.input, lib, "nm_input")
-	purego.RegisterLibFunc(&b.events, lib, "nm_events")
-	purego.RegisterLibFunc(&b.playable, lib, "nm_playable")
-	purego.RegisterLibFunc(&b.drain, lib, "nm_drain")
-	purego.RegisterLibFunc(&b.rows, lib, "nm_rows")
-	purego.RegisterLibFunc(&b.capture, lib, "nm_capture")
-	purego.RegisterLibFunc(&b.info, lib, "nm_info")
-	purego.RegisterLibFunc(&b.censusReset, lib, "nm_upload_census_reset")
-	purego.RegisterLibFunc(&b.destroy, lib, "nm_destroy")
-	if err := b.bindPerFrame(lib); err != nil {
-		return nil, err
-	}
-	shader := cstring(waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + OutlineRowsShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource)
-	errorText := make([]byte, 8192)
+	shader := waterShaderSource + "\n" + LightingShaderSource + "\n" + effectsShaderSource + "\n" + GlowShaderSource + "\n" + groundEffectsShaderSource + "\n" + projectionShaderSource + "\n" + facesShaderSource + "\n" + faceReflectionsShaderSource + "\n" + TerrainTilesShaderSource + "\n" + shaderSource + "\n" + groupShaderSource + "\n" + OutlineRowsShaderSource + "\n" + shadowShaderSource + "\n" + WaterTilesShaderSource + "\n" + waterObjectsShaderSource
 	capacity := opts.Frames + opts.Warmup
 	if interactive {
 		capacity = 8192
@@ -181,14 +258,18 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if interactive {
 		nativeCapacity = -capacity
 	}
-	handle := b.create(int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), boolInt(opts.VisualPasses && scene.Live != nil), int32(nativeCapacity), pointer(shader), pointer(errorText), int32(len(errorText)))
-	runtime.KeepAlive(shader)
-	runtime.KeepAlive(errorText)
-	if handle == 0 {
-		return nil, fmt.Errorf("metalproto: initialize: %s", terminated(errorText))
+	var b nativeRenderer
+	var err error
+	if libPath := opts.LibraryPath; libPath != "" && libPath != "go" {
+		b, err = newDylibRenderer(libPath, int32(opts.Width), int32(opts.Height), boolInt(opts.Offscreen), boolInt(opts.VSync), boolInt(opts.Effects), boolInt(opts.VisualPasses && scene.Live != nil), int32(nativeCapacity), shader)
+	} else {
+		b, err = newGoRenderer(opts.Width, opts.Height, opts.Offscreen, opts.VSync, opts.Effects, opts.VisualPasses && scene.Live != nil, nativeCapacity, shader)
 	}
-	defer b.destroy(handle)
-	b.playable(handle, boolInt(scene.Playable))
+	if err != nil {
+		return nil, err
+	}
+	defer b.destroy()
+	b.playable(boolInt(scene.Playable))
 	var vertexBytes, indexBytes, instanceBytes, drawnVertices, drawnIndices, drawCalls uint64
 	for i, m := range scene.Meshes {
 		var offsets []uint32
@@ -202,21 +283,21 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if len(offsets) == 0 && scene.Live == nil {
 			continue
 		}
-		if b.mesh(handle, pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals), pointer(m.PrimitiveCenters), int32(len(m.PrimitiveCenters))) == 0 {
+		if b.mesh(pointer(m.Vertices), int32(len(m.Vertices)), pointer(m.Indices), int32(len(m.Indices)), pointer(offsets), int32(len(offsets)), pointer(m.EdgeIndices), int32(len(m.EdgeIndices)), pointer(visuals), pointer(m.PrimitiveCenters), int32(len(m.PrimitiveCenters))) == 0 {
 			return nil, fmt.Errorf("metalproto: upload mesh %s", m.Name)
 		}
 		faces, err := PrepareMeshFaces(&m)
 		if err != nil {
 			return nil, err
 		}
-		if b.meshFaces(handle, uint32(drawCalls), uintptr(unsafe.Pointer(&faces))) == 0 {
+		if b.meshFaces(uint32(drawCalls), &faces) == 0 {
 			return nil, fmt.Errorf("metalproto: upload authored faces %s", m.Name)
 		}
 		outline, err := PrepareOutlineRows(&m)
 		if err != nil {
 			return nil, err
 		}
-		if b.meshOutlineRows(handle, uint32(drawCalls), uintptr(unsafe.Pointer(&outline.Native))) == 0 {
+		if b.meshOutlineRows(uint32(drawCalls), &outline.Native) == 0 {
 			return nil, fmt.Errorf("metalproto: upload authored outline rings %s", m.Name)
 		}
 		vertexBytes += uint64(len(outline.Rings)) * 16
@@ -233,7 +314,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		drawCalls++
 	}
 	assets := nativeAssets{Materials: pointer(scene.Materials), Frames: pointer(scene.TextureFrames), Heights: pointer(scene.HeightField.Values), MaterialCount: uint32(len(scene.Materials)), FrameCount: uint32(len(scene.TextureFrames)), Width: uint32(scene.HeightField.Width), Height: uint32(scene.HeightField.Height), Rect: scene.HeightField.Rect}
-	if b.assets(handle, uintptr(unsafe.Pointer(&assets))) == 0 {
+	if b.assets(&assets) == 0 {
 		return nil, fmt.Errorf("metalproto: upload retained visual assets")
 	}
 	runtime.KeepAlive(scene)
@@ -243,7 +324,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if b.terrainTiles(handle, uintptr(unsafe.Pointer(&upload))) == 0 {
+		if b.terrainTiles(&upload) == 0 {
 			return nil, fmt.Errorf("metalproto: terrain tile upload failed")
 		}
 		runtime.KeepAlive(scene.TerrainTiles)
@@ -256,7 +337,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 	}
 	for i, t := range textures {
-		if b.texture(handle, int32(i), int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+		if b.texture(int32(i), int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload texture %d", i)
 		}
 		runtime.KeepAlive(t)
@@ -266,13 +347,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		texture meshscene.Texture
 	}{{5, scene.WaterMask}, {6, scene.ModelPalette}} {
 		t := extra.texture
-		if len(t.RGBA) > 0 && b.texture(handle, extra.slot, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+		if len(t.RGBA) > 0 && b.texture(extra.slot, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload texture %d", extra.slot)
 		}
 		runtime.KeepAlive(t)
 	}
 	if t := scene.FogAtlas; len(t.RGBA) > 0 {
-		if b.texture(handle, 4, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
+		if b.texture(4, int32(t.Width), int32(t.Height), pointer(t.RGBA)) == 0 {
 			return nil, fmt.Errorf("metalproto: upload retained fog masks")
 		}
 		runtime.KeepAlive(t)
@@ -281,7 +362,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if scene.Live == nil {
 		poseCount = len(scene.Frames[0].Transforms)
 	}
-	if b.configure(handle, pointer(scene.Camera[:]), pointer(scene.TerrainRect[:]), int32(poseCount)) == 0 {
+	if b.configure(pointer(scene.Camera[:]), pointer(scene.TerrainRect[:]), int32(poseCount)) == 0 {
 		return nil, fmt.Errorf("metalproto: allocate pose buffers")
 	}
 	runtime.KeepAlive(scene)
@@ -345,7 +426,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if !interactive || presents == reported {
 			return timing
 		}
-		n := int(b.rows(handle, pointer(recent[:]), int32(min(presents-reported, uint64(len(recent))))))
+		n := int(b.rows(recent[:min(presents-reported, uint64(len(recent)))]))
 		if n <= 0 || n > len(recent) {
 			return timing
 		}
@@ -368,8 +449,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	pollLive := func(at time.Time) (meshscene.Input, error) {
 		var input nativeInput
-		b.input(handle, uintptr(unsafe.Pointer(&input)))
-		eventCount := int(b.events(handle, pointer(events), int32(len(events))))
+		b.input(&input)
+		eventCount := int(b.events(events))
 		runtime.KeepAlive(events)
 		if eventCount < 0 || eventCount > len(events) {
 			return meshscene.Input{}, fmt.Errorf("metalproto: invalid native event count")
@@ -419,7 +500,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if err := measurement.begin(); err != nil {
 				return nil, err
 			}
-			b.censusReset(handle)
+			b.censusReset()
 			hostTiming = benchmarkHostTiming{}
 			deadline = time.Now()
 			entry = deadline
@@ -499,7 +580,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if p.live.Exit {
 				break
 			}
-			if b.pointerCapture(handle, boolInt(p.live.PointerCaptured)) == 0 {
+			if b.pointerCapture(boolInt(p.live.PointerCaptured)) == 0 {
 				return nil, fmt.Errorf("metalproto: native pointer capture unavailable")
 			}
 			p.metrics.NextMS, p.metrics.PrepMS = p.source, p.packed
@@ -508,7 +589,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if opts.Benchmark != nil {
 				submitStart = time.Now()
 			}
-			status = b.liveUpload(handle, uintptr(unsafe.Pointer(&p.upload)))
+			status = b.liveUpload(&p.upload)
 			runtime.KeepAlive(&p)
 			runtime.KeepAlive(&packing)
 			if status == 1 {
@@ -527,7 +608,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 					requests <- prepareRequest{sourceSeconds(next, at), nextInput}
 					ahead = true
 				}
-				status = b.livePresent(handle)
+				status = b.livePresent()
 				if status == 1 {
 					goTimes[presents%uint64(len(goTimes))] = [2]float64{p.source, p.packed}
 					presents++
@@ -542,7 +623,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			alpha := float32(sample - float64(tick))
 			a := scene.Frames[tick%len(scene.Frames)].Transforms
 			next := scene.Frames[(tick+1)%len(scene.Frames)].Transforms
-			status = b.frame(handle, pointer(a), pointer(next), alpha, seconds)
+			status = b.frame(pointer(a), pointer(next), alpha, seconds)
 			runtime.KeepAlive(a)
 			runtime.KeepAlive(next)
 		}
@@ -572,13 +653,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			return nil, err
 		}
 	}
-	b.drain(handle)
+	b.drain()
 	if opts.Benchmark != nil {
 		after = measurement.after
 	} else {
 		runtime.ReadMemStats(&after)
 	}
-	n := int(b.rows(handle, pointer(rows), int32(len(rows))))
+	n := int(b.rows(rows))
 	runtime.KeepAlive(rows)
 	if n < 0 || n > len(rows) || n > actual {
 		return nil, fmt.Errorf("metalproto: invalid native timing count")
@@ -602,18 +683,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if actual <= opts.Warmup {
 		return nil, fmt.Errorf("metalproto: window closed before measurement")
 	}
-	deviceBytes := make([]byte, 8192)
-	b.info(handle, pointer(deviceBytes), int32(len(deviceBytes)))
-	runtime.KeepAlive(deviceBytes)
 	var device map[string]any
-	if err := json.Unmarshal([]byte(terminated(deviceBytes)), &device); err != nil {
+	if err := json.Unmarshal([]byte(b.info()), &device); err != nil {
 		return nil, err
 	}
-	capture := cstring(filepath.Join(opts.OutputDir, "final.png"))
-	if b.capture(handle, pointer(capture)) == 0 {
+	if b.capture(filepath.Join(opts.OutputDir, "final.png")) == 0 {
 		return nil, fmt.Errorf("metalproto: final PNG readback failed")
 	}
-	runtime.KeepAlive(capture)
 	skipWarmup := max(opts.Warmup-firstFrame, 0)
 	measured := rows[skipWarmup:]
 	report := makeReport(measured, opts, scene, device)

@@ -31,12 +31,12 @@ type nativeEffectsLens struct {
 // 64-bit host). Its uintptr values borrow packing storage until the synchronous
 // nm_live_upload copy returns; the host must keep effectsPacking alive then.
 type nativeEffectsUpload struct {
-	Quads, Vertices, Samples, Lenses, Ops, Layers, Atlas                                             uintptr
+	Quads, Vertices, Samples, Lenses, Ops, Layers, Atlas                                             unsafe.Pointer
 	Version                                                                                          uint64
 	QuadCount, VertexCount, SampleCount, LensCount, OpCount, LayerCount, Width, Height               uint32
 	Dirty                                                                                            [4]uint32
 	ModelSubmitted, ModelSuppressed, ProjectileModels, SourceCount, QuadSpanFaces, SupersampleModels uint32
-	Smoke                                                                                            uintptr
+	Smoke                                                                                            unsafe.Pointer
 	SmokeCount, Reserved                                                                             uint32
 }
 

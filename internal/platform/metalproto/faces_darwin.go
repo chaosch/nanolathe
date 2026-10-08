@@ -21,7 +21,7 @@ var facesShaderSource string
 // returns. Mesh upload is cold; no posed vertices cross the host boundary.
 // Its C counterpart NMFaceUpload is 40 bytes on the supported 64-bit host.
 type NativeMeshFacesUpload struct {
-	Faces, Corners, Indices                      uintptr
+	Faces, Corners, Indices                      unsafe.Pointer
 	FaceCount, CornerCount, IndexCount, Reserved uint32
 }
 

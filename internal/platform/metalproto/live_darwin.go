@@ -34,42 +34,42 @@ type cloakMember struct {
 // Same scalar/pointer layout as NMLiveUpload. Slices are copied synchronously;
 // the native ring never retains a pointer into Go memory after the call.
 type nativeAssets struct {
-	Materials, Frames, Heights               uintptr
+	Materials, Frames, Heights               unsafe.Pointer
 	MaterialCount, FrameCount, Width, Height uint32
 	Rect                                     [4]float32
 }
 type liveUpload struct {
-	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors, Overlay                uintptr
+	Previous, Current, Offsets, Spans, Sprites, Lights, Visuals, Distortions, Fog, Selectors, Overlay                unsafe.Pointer
 	Camera, FogRect                                                                                                  [4]float32
 	Alpha                                                                                                            float32
 	PoseCount, InstanceCount, SpriteCount, LightCount, DistortionCount, FogWidth, FogHeight, OverlayCount            uint32
 	Seconds                                                                                                          float64
-	OverlayTexture                                                                                                   uintptr
+	OverlayTexture                                                                                                   unsafe.Pointer
 	OverlayVersion                                                                                                   uint64
 	OverlayWidth, OverlayHeight                                                                                      uint32
 	OverlayDirty                                                                                                     [4]uint32
 	GroundSpriteCount                                                                                                uint32
-	Cloaks                                                                                                           uintptr
+	Cloaks                                                                                                           unsafe.Pointer
 	CloakCount, AirCount                                                                                             uint32
 	Water                                                                                                            meshscene.WaterUniform
-	Rules, MaterialOffsets, Materials                                                                                uintptr
+	Rules, MaterialOffsets, Materials                                                                                unsafe.Pointer
 	RulesCount, MaterialCount                                                                                        uint32
-	CompositionSlots, CompositionSelectors, CompositionDraws, CompositionPaint                                       uintptr
+	CompositionSlots, CompositionSelectors, CompositionDraws, CompositionPaint                                       unsafe.Pointer
 	CompositionSlotCount, CompositionDrawCount, CompositionPaintCount, CompositionWidth, CompositionHeight, Composed uint32
-	RetainedLights                                                                                                   uintptr
+	RetainedLights                                                                                                   unsafe.Pointer
 	RetainedLightCount, LightControls                                                                                uint32
-	Effects                                                                                                          uintptr
-	GlowVertices                                                                                                     uintptr
+	Effects                                                                                                          unsafe.Pointer
+	GlowVertices                                                                                                     unsafe.Pointer
 	GlowCount, GlowEnabled                                                                                           uint32
 	GlowParams                                                                                                       meshscene.RetainedGlowParameters
-	GroundEffects                                                                                                    uintptr
+	GroundEffects                                                                                                    unsafe.Pointer
 	Shadows                                                                                                          nativeShadowUpload
-	WaterObjects                                                                                                     uintptr
-	WaterSources                                                                                                     uintptr
-	Groups                                                                                                           uintptr
+	WaterObjects                                                                                                     unsafe.Pointer
+	WaterSources                                                                                                     unsafe.Pointer
+	Groups                                                                                                           unsafe.Pointer
 	TerrainFlags                                                                                                     uint32
-	Projections                                                                                                      uintptr
-	Annotations, AnnotationRanges                                                                                    uintptr
+	Projections                                                                                                      unsafe.Pointer
+	Annotations, AnnotationRanges                                                                                    unsafe.Pointer
 	AnnotationCount, AnnotationRangeCount                                                                            uint32
 	WorldGain                                                                                                        float32
 	Reserved                                                                                                         uint32
@@ -298,9 +298,9 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		if err != nil {
 			return u, r, err
 		}
-		u.GroundEffects = uintptr(unsafe.Pointer(&p.groundUpload))
+		u.GroundEffects = unsafe.Pointer(&p.groundUpload)
 		u.GroundGeneration = p.groundTrack.observe(residentBytes(p.groundPacking.marks))
-		u.Effects = uintptr(unsafe.Pointer(&p.stockUpload))
+		u.Effects = unsafe.Pointer(&p.stockUpload)
 		u.GlowVertices = pointer(stock.Glow.Vertices)
 		u.GlowCount = uint32(len(stock.Glow.Vertices))
 		u.GlowEnabled = 1
@@ -322,7 +322,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		if groupErr != nil {
 			return u, r, groupErr
 		}
-		u.Groups = uintptr(unsafe.Pointer(&p.groupUpload))
+		u.Groups = unsafe.Pointer(&p.groupUpload)
 		if len(f.WaterObjects) != len(f.Instances) {
 			return u, r, fmt.Errorf("metalproto: water objects differ from instances")
 		}
@@ -335,13 +335,13 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		if err != nil {
 			return u, r, err
 		}
-		u.WaterObjects = uintptr(unsafe.Pointer(&p.waterUpload))
+		u.WaterObjects = unsafe.Pointer(&p.waterUpload)
 		if len(f.ModelProjections.Records) > 0 {
 			p.projectionUpload, err = p.projectionPacking.Prepare(f.ModelProjections, p.sourcePacked)
 			if err != nil {
 				return u, r, err
 			}
-			u.Projections = uintptr(unsafe.Pointer(&p.projectionUpload))
+			u.Projections = unsafe.Pointer(&p.projectionUpload)
 			u.ProjectionFlagGeneration = p.projectionFlagTrack.observe(residentBytes(p.projectionPacking.flags))
 		}
 		u.TerrainFlags = f.TerrainFlags
@@ -349,7 +349,7 @@ func (p *livePacking) prepare(scene *meshscene.Scene, f meshscene.LiveFrame, sec
 		if err != nil {
 			return u, r, err
 		}
-		u.WaterSources = uintptr(unsafe.Pointer(&p.waterSourcesUpload))
+		u.WaterSources = unsafe.Pointer(&p.waterSourcesUpload)
 	}
 	var shadowErr error
 	u.Shadows, shadowErr = p.shadowPacking.Prepare(f.Shadows, p.sourcePacked)

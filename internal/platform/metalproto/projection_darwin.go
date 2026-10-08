@@ -20,7 +20,7 @@ var projectionShaderSource string
 // NativeProjectionUpload is 40 bytes on the supported 64-bit host. Native
 // copies its operands after acquiring a ring slot, before Prepare is repeated.
 type NativeProjectionUpload struct {
-	Records, PieceFlags     uintptr
+	Records, PieceFlags     unsafe.Pointer
 	RecordCount, PieceCount uint32
 	View                    [4]float32
 }

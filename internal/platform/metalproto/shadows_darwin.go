@@ -5,6 +5,7 @@ package metalproto
 import (
 	_ "embed"
 	"fmt"
+	"unsafe"
 
 	"github.com/nanolathe-gg/nanolathe/internal/prototype/meshscene"
 )
@@ -17,14 +18,14 @@ var shadowShaderSource string
 // nativeShadowUpload is 136 bytes on 64-bit hosts, matching NMShadowUpload.
 // Root embeds it in the live upload; acquired ring slots copy every operand.
 type nativeShadowUpload struct {
-	Topology, Slots, Subjects, BodyDraws, ProjectedDraws, BodyRules, PieceFlags                  uintptr
+	Topology, Slots, Subjects, BodyDraws, ProjectedDraws, BodyRules, PieceFlags                  unsafe.Pointer
 	TopologyCount, SlotCount, SubjectCount, BodyCount, ProjectedCount, PieceCount, Width, Height uint32
 	Tint, Water                                                                                  [4]float32
-	BodyRuleSlots                                                                                uintptr
+	BodyRuleSlots                                                                                unsafe.Pointer
 	BodyRuleCount, Reserved                                                                      uint32
 }
 type nativeShadowMesh struct {
-	Vertices, Indices       uintptr
+	Vertices, Indices       unsafe.Pointer
 	VertexCount, IndexCount uint32
 }
 

@@ -20,7 +20,7 @@ var OutlineRowsShaderSource string
 // before material admission, in reverse-piece/forward-primitive order.
 type OutlineRowsRing struct{ Start, Count, Piece, CornerOffset uint32 }
 type NativeOutlineRowsUpload struct {
-	Rings               uintptr
+	Rings               unsafe.Pointer
 	RingCount, Reserved uint32
 }
 
@@ -76,7 +76,7 @@ func PrepareOutlineRows(mesh *meshscene.Mesh) (*OutlineRowsMeshUpload, error) {
 	}
 	out.Native.RingCount = uint32(len(out.Rings))
 	if len(out.Rings) > 0 {
-		out.Native.Rings = uintptr(unsafe.Pointer(&out.Rings[0]))
+		out.Native.Rings = unsafe.Pointer(&out.Rings[0])
 	}
 	return out, nil
 }
