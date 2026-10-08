@@ -2031,6 +2031,9 @@ is vertex and tiling work for the doubled geometry in the model draws
 (atlas raster, direct subjects, shadow bodies). Battle-light irradiance,
 which the model vertex shader repeats at every corner, is not the cause:
 disabling it saved 0.1 ms (p50) at split 2. The likelier lever is the size
-of the vertex output, which the tiler stores for every corner. Tick draws still carry
+of the vertex output, which the tiler stores for every corner: about 77
+scalars (300 bytes), most of them flat per-instance constants (visual
+state, bounds, outline, emission and the seven rule vectors) that the
+fragment stage could read from the instance tables instead. Tick draws still carry
 the 7 ms simulation step inline in this benchmark; play runs the simulation
 on its own goroutine.
