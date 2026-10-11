@@ -21,6 +21,7 @@ func main() {
 	count := flag.Int("count", 64, "instances")
 	detail := flag.Int("detail", 200, "triangles per instance")
 	qualify := flag.Bool("qualify", false, "untimed GPU pose/color/depth/visibility diagnostics")
+	out := flag.String("out", "", "outside-repository diagnostic image directory")
 	flag.Parse()
 	app := gogpu.NewApp(gogpu.DefaultConfig().WithTitle("Nanolathe WebGPU qualification").WithSize(960, 540).WithResizable(true).WithContinuousRender(true))
 	var smoke *host.Smoke
@@ -30,6 +31,7 @@ func main() {
 	var capturePending bool
 	var captureStarted time.Time
 	qualification := []host.Comparison{}
+	var qualificationCounters []render.Counters
 	const cases = 5
 	var failure error
 	draws := 0
@@ -77,7 +79,7 @@ func main() {
 				if failure == nil {
 					failure = retained.Resize(w, h)
 					if *qualify && failure == nil {
-						capture, failure = host.NewCapture(p.Device(), *count, w, h)
+						capture, failure = host.NewCapture(p.Device(), *count, w, h, p.SurfaceFormat())
 					}
 				}
 			} else {
@@ -105,6 +107,13 @@ func main() {
 				result, e := capture.Compare(data, authored, fixture.DiagnosticSnapshot(authored), float32(len(qualification))/4)
 				failure = e
 				result.Resources = retained.Resources()
+				if failure == nil && *count == 64 {
+					png, e := capture.PNG(data)
+					if e == nil {
+						e = host.SaveCapture(*out, fmt.Sprintf("count-%d-alpha-%.2f.png", *count, result.Alpha), png)
+					}
+					failure = e
+				}
 				qualification = append(qualification, result)
 				b, _ := json.Marshal(result)
 				fmt.Println("qualification=" + string(b))
@@ -130,8 +139,20 @@ func main() {
 			if *qualify {
 				sample = fixture.DiagnosticSnapshot(authored)
 			}
-			_, failure = retained.Encode(ctx.CommandEncoder(), ctx.SurfaceView(), w, h, authored.Scene.Camera, alpha, sample)
+			var counters render.Counters
+			counters, failure = retained.Encode(ctx.CommandEncoder(), ctx.SurfaceView(), w, h, authored.Scene.Camera, alpha, sample)
 			if *qualify && failure == nil {
+				qualificationCounters = append(qualificationCounters, counters)
+				if counters.PersistentCreations != 0 || (len(qualificationCounters) > 1 && counters.EndpointBytes != 0) {
+					failure = fmt.Errorf("retention or generation upload contract failed")
+					app.Quit()
+					return
+				}
+				if _, e := retained.Encode(ctx.CommandEncoder(), capture.FinalView(), w, h, authored.Scene.Camera, alpha, sample); e != nil {
+					failure = e
+					app.Quit()
+					return
+				}
 				capture.Encode(ctx.CommandEncoder(), retained)
 				capturePending = true
 				captureStarted = time.Now()
@@ -179,7 +200,7 @@ func main() {
 	if e := app.Run(); e != nil {
 		failure = e
 	}
-	b, _ := json.Marshal(map[string]any{"event": "result", "smoke_draws": draws, "smoke_compute_pass": readback && !*workload, "retained_submission_only": *workload && !*qualify && failure == nil, "qualification": qualification, "qualification_pass": *qualify && len(qualification) == cases && failure == nil, "failure": fmt.Sprint(failure)})
+	b, _ := json.Marshal(map[string]any{"event": "result", "smoke_draws": draws, "smoke_compute_pass": readback && !*workload, "retained_submission_only": *workload && !*qualify && failure == nil, "qualification_counters": qualificationCounters, "qualification": qualification, "qualification_pass": *qualify && len(qualification) == cases && failure == nil, "failure": fmt.Sprint(failure)})
 	fmt.Println(string(b))
 	host.Publish(string(b))
 	if failure != nil {

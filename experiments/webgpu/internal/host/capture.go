@@ -1,12 +1,15 @@
 package host
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/experiments/webgpu/internal/fixture"
 	"github.com/nanolathe-gg/nanolathe/experiments/webgpu/internal/render"
+	"image"
+	"image/png"
 	"math"
 )
 
@@ -15,28 +18,60 @@ type Capture struct {
 	d                     *wgpu.Device
 	buffer                *wgpu.Buffer
 	pending               *wgpu.MapPending
+	final                 *wgpu.Texture
+	finalView             *wgpu.TextureView
+	format                gputypes.TextureFormat
 	size, poseSize, plane uint64
 	row, width, height    int
 }
 
-func NewCapture(d *wgpu.Device, count, width, height int) (*Capture, error) {
+func NewCapture(d *wgpu.Device, count, width, height int, format gputypes.TextureFormat) (*Capture, error) {
 	c := &Capture{d: d, poseSize: uint64(count * 3 * 64), width: width, height: height, row: (width*4 + 255) / 256 * 256}
 	c.plane = uint64(c.row * height)
-	c.size = c.poseSize + c.plane*3
+	c.format = format
+	c.size = c.poseSize + c.plane*4
 	b, e := d.CreateBuffer(&wgpu.BufferDescriptor{Label: "untimed-diagnostic", Size: c.size, Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst})
 	c.buffer = b
+	if e != nil {
+		return c, e
+	}
+	c.final, e = d.CreateTexture(&wgpu.TextureDescriptor{Label: "untimed-final", Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageCopySrc})
+	if e != nil {
+		return c, e
+	}
+	c.finalView, e = d.CreateTextureView(c.final, nil)
 	return c, e
 }
+func (c *Capture) FinalView() *wgpu.TextureView { return c.finalView }
+func (c *Capture) FinalRGBA(data []byte) []byte {
+	out := make([]byte, c.width*c.height*4)
+	for y := 0; y < c.height; y++ {
+		copy(out[y*c.width*4:], data[int(c.poseSize+3*c.plane)+y*c.row:int(c.poseSize+3*c.plane)+y*c.row+c.width*4])
+	}
+	if c.format == wgpu.TextureFormatBGRA8Unorm {
+		for at := 0; at < len(out); at += 4 {
+			out[at], out[at+2] = out[at+2], out[at]
+		}
+	}
+	return out
+}
+func (c *Capture) PNG(data []byte) ([]byte, error) {
+	img := &image.RGBA{Pix: c.FinalRGBA(data), Stride: c.width * 4, Rect: image.Rect(0, 0, c.width, c.height)}
+	var out bytes.Buffer
+	e := png.Encode(&out, img)
+	return out.Bytes(), e
+}
+
 func (c *Capture) Encode(e *wgpu.CommandEncoder, r *render.Renderer) {
 	poses, color, ids, depth := r.DiagnosticResources()
 	e.CopyBufferToBuffer(poses, 0, c.buffer, 0, c.poseSize)
-	for i, t := range []*wgpu.Texture{color, ids, depth} {
+	for i, t := range []*wgpu.Texture{color, ids, depth, c.final} {
 		aspect := gputypes.TextureAspectAll
 		if i == 2 {
 			aspect = gputypes.TextureAspectDepthOnly
 		}
 		old := wgpu.TextureUsageTextureBinding
-		if i == 2 {
+		if i >= 2 {
 			old = wgpu.TextureUsageRenderAttachment
 		}
 		e.TransitionTextures([]wgpu.TextureBarrier{{Texture: t, Range: wgpu.TextureRange{Aspect: aspect, MipLevelCount: 1, ArrayLayerCount: 1}, Usage: wgpu.TextureUsageTransition{OldUsage: old, NewUsage: wgpu.TextureUsageCopySrc}}})
@@ -68,6 +103,14 @@ func (c *Capture) Poll() ([]byte, bool, error) {
 	return data, true, nil
 }
 func (c *Capture) Close() {
+	if c.finalView != nil {
+		c.finalView.Release()
+		c.finalView = nil
+	}
+	if c.final != nil {
+		c.final.Release()
+		c.final = nil
+	}
 	if c.pending != nil {
 		c.pending.Release()
 		c.pending = nil
@@ -122,6 +165,16 @@ func (c *Capture) Compare(data []byte, w *fixture.Workload, s fixture.Snapshot, 
 		return result, fmt.Errorf("minimum visible identity pixels %d < 16", result.MinimumIDPixels)
 	}
 	// Exact nearest color and depth checks at predetermined screen locations in the authored 64-instance diagnostic.
+	final := c.FinalRGBA(data)
+	for _, p := range []struct {
+		x, y int
+		rgba [4]byte
+	}{{16, 16, [4]byte{0, 255, 255, 255}}, {0, 0, [4]byte{5, 8, 10, 255}}} {
+		at := (p.y*c.width + p.x) * 4
+		if [4]byte(final[at:at+4]) != p.rgba {
+			return result, fmt.Errorf("composite/overlay %d,%d got %v want %v", p.x, p.y, final[at:at+4], p.rgba)
+		}
+	}
 	if w.Count == 64 {
 		oracle := fixture.Raster(w, s, alpha)
 		var points [][2]int
@@ -141,6 +194,14 @@ func (c *Capture) Compare(data []byte, w *fixture.Workload, s fixture.Snapshot, 
 			got := [4]byte(data[at : at+4])
 			if got != sample.RGBA {
 				return result, fmt.Errorf("pixel %d,%d got %v expected %v id %d", x, y, got, sample.RGBA, sample.ID)
+			}
+			fat := (y*c.width + x) * 4
+			wantFinal := sample.RGBA
+			if sample.ID == 0 {
+				wantFinal = [4]byte{5, 8, 10, 255}
+			}
+			if [4]byte(final[fat:fat+4]) != wantFinal {
+				return result, fmt.Errorf("final composite %d,%d got %v want %v", x, y, final[fat:fat+4], wantFinal)
 			}
 			result.ColorSamples++
 			if sample.ID > 0 {

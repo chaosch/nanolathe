@@ -39,6 +39,7 @@ type Renderer struct {
 	scene                                                              meshscene.Scene
 	owned, targets                                                     []release
 	live                                                               Resources
+	creations                                                          uint64
 	closed                                                             bool
 	width, height                                                      int
 	generation                                                         uint64
@@ -55,6 +56,7 @@ type Renderer struct {
 }
 
 func (r *Renderer) retain(fn func(), bytes uint64, target bool) {
+	r.creations++
 	x := release{fn, bytes}
 	if target {
 		r.targets = append(r.targets, x)
@@ -287,6 +289,8 @@ func (r *Renderer) Resize(width, height int) error {
 	return e
 }
 func (r *Renderer) Encode(encoder *wgpu.CommandEncoder, view *wgpu.TextureView, width, height int, camera [3]float32, alpha float32, s fixture.Snapshot) (c Counters, err error) {
+	beforeCreations := r.creations
+	defer func() { c.PersistentCreations = int(r.creations - beforeCreations) }()
 	if r.closed {
 		return c, fmt.Errorf("renderer closed")
 	}

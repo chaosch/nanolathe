@@ -12,6 +12,8 @@ func DiagnosticSnapshot(w *Workload) Snapshot {
 	s.Current[0][7] = 4
 	s.Previous[0][11] = 0
 	s.Previous[1][15] = 0
+	s.Current[7][15] = 0
+	s.Current[8][11] = 0
 	s.Current[2] = s.Previous[2]
 	s.Current[2][12] += .01
 	setBasis := func(at int, yawA, yawB float64) {
@@ -26,7 +28,7 @@ func DiagnosticSnapshot(w *Workload) Snapshot {
 			}
 		}
 	}
-	setBasis(3, 179*math.Pi/180, -179*math.Pi/180)
+	setBasis(3, 170*math.Pi/180, -170*math.Pi/180)
 	setBasis(4, .7, .700001)
 	return s
 }
