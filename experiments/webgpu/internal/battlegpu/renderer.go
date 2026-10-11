@@ -18,6 +18,7 @@ type Renderer struct {
 	groundLight          *GroundLight
 	distortions          *Distortions
 	lenses               *Lenses
+	reflections          *StockReflections
 	world, depth         *wgpu.Texture
 	worldView, depthView *wgpu.TextureView
 	width, height        int
@@ -31,6 +32,7 @@ type Counters struct {
 	GroundLight GroundLightCounters
 	Distortions DistortionCounters
 	Lenses      LensCounters
+	Reflections ReflectionCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
@@ -65,6 +67,9 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	}
 	if err == nil {
 		r.lenses, err = NewLenses(d, q, worldFormat)
+	}
+	if err == nil {
+		r.reflections, err = NewStockReflections(d, q, worldFormat)
 	}
 	return
 }
@@ -140,6 +145,16 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	delete(r.layers.missing, "enhanced_distortion")
+	if e := r.reflections.Prepare(f, width, height); e != nil {
+		return Counters{}, e
+	}
+	if e := r.reflections.SetInputs(r.layers.uniform, r.layers.effectAtlas.v, r.layers.waterMask.v); e != nil {
+		return Counters{}, e
+	}
+	delete(r.layers.missing, "water_reflections_and_model_refraction")
+	if f.Water.Mask[3] > .5 {
+		r.layers.missing["model_water_reflection_refraction_and_seabed_promotion"] = 1
+	}
 	if e := r.lenses.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
@@ -147,6 +162,9 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	if e := r.groundLight.Encode(enc); e != nil {
+		return Counters{}, e
+	}
+	if e := r.reflections.Encode(enc); e != nil {
 		return Counters{}, e
 	}
 	beginWorld := func(load gputypes.LoadOp) (*wgpu.RenderPassEncoder, error) {
@@ -174,6 +192,8 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		}
 	}
 	r.layers.DrawTerrain(pass)
+	r.reflections.Draw(pass)
+	r.paintState.reset(pass)
 	drawEffects := func(layer uint32) error {
 		next, err := r.layers.drawEffectsReplay(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) }, func(index uint32) (*wgpu.RenderPassEncoder, error) {
 			if err := pass.End(); err != nil {
@@ -234,7 +254,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := final.End(); e != nil {
 		return Counters{}, e
 	}
-	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters()}, nil
+	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {
@@ -272,6 +292,10 @@ func (r *Renderer) closeTargets() {
 func (r *Renderer) Close() {
 	if r == nil {
 		return
+	}
+	if r.reflections != nil {
+		r.reflections.Close()
+		r.reflections = nil
 	}
 	if r.lenses != nil {
 		r.lenses.Close()
