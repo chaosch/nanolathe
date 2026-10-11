@@ -25,7 +25,16 @@ func (p *battleLensFixture) apply(f *meshscene.LiveFrame) {
 		// left half is HDR; the right half matches the lens key and must retain the
 		// destination. This packet deliberately replaces stock replay for diagnosis.
 		p.art = [4]byte{255, 255, 255, 255}
-		p.layers = append(p.layers[:0], make([]meshscene.EffectLayer, 5)...)
+		p.layers = append(p.layers[:0], make([]meshscene.EffectLayer, len(f.StockEffects.Layers))...)
+		for i, original := range f.StockEffects.Layers {
+			layer := &p.layers[i]
+			layer.RetainedModels, layer.ProjectileOrder = original.RetainedModels, original.ProjectileOrder
+			for _, op := range original.Ops {
+				if op.Kind == meshscene.EffectOpRetainedModel {
+					layer.Ops = append(layer.Ops, op)
+				}
+			}
+		}
 		uv := [4]float32{0, 0, 1, 1}
 		p.quads = [3]meshscene.OverlayQuad{
 			{Rect: [4]float32{0, 0, 120, 60}, UV: uv, Color: [4]float32{.125, .25, .375, 1}},
@@ -34,10 +43,12 @@ func (p *battleLensFixture) apply(f *meshscene.LiveFrame) {
 		}
 		p.samples[0] = meshscene.EffectLensSample{Rect: [4]float32{0, 0, 120, 60}, Source: [4]float32{0, 1010, 120, 60}}
 		p.lenses = append(p.lenses[:0], meshscene.EffectLens{Samples: p.samples[:], ReadRect: p.samples[0].Source, KeyRGB: [3]uint8{12, 23, 34}})
-		p.ops = append(p.ops[:0], meshscene.EffectOp{Kind: meshscene.EffectOpQuads, First: 0, Count: 3}, meshscene.EffectOp{Kind: meshscene.EffectOpLens, First: 0, Count: 1})
-		p.layers[2] = meshscene.EffectLayer{Quads: p.quads[:], Ops: p.ops, Lenses: p.lenses}
+		p.ops = append(p.ops[:0], p.layers[2].Ops...)
+		p.ops = append(p.ops, meshscene.EffectOp{Kind: meshscene.EffectOpQuads, First: 0, Count: 3}, meshscene.EffectOp{Kind: meshscene.EffectOpLens, First: 0, Count: 1})
+		p.layers[2].Quads, p.layers[2].Ops, p.layers[2].Lenses = p.quads[:], p.ops, p.lenses
 		p.stock = meshscene.StockFrame{Layers: p.layers, Atlas: meshscene.Texture{Width: 1, Height: 1, RGBA: p.art[:]}, Version: 0x7fffffffffffffff, Scale: 1}
 		f.StockEffects = &p.stock
+		f.WaterSources = nil // unrelated stock reflections use the replaced atlas
 		return
 	}
 	p.stock = *f.StockEffects
