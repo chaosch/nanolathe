@@ -66,15 +66,10 @@ type modelAtlasResources struct {
 	metadata, merged                 *wgpu.Texture
 	metadataView, mergedView         *wgpu.TextureView
 	mergeGroup                       *wgpu.BindGroup
-	group                            *wgpu.BindGroup
 	width, height                    int
 }
 
 func (a *modelAtlasResources) modelReleaseGroup() {
-	if a.group != nil {
-		a.group.Release()
-		a.group = nil
-	}
 	if a.mergeGroup != nil {
 		a.mergeGroup.Release()
 		a.mergeGroup = nil
@@ -124,6 +119,8 @@ type Models struct {
 	resolveModule                                                               *wgpu.ShaderModule
 	resolveCapacity                                                             int
 	poseGroup, bodyGroup                                                        *wgpu.BindGroup
+	commitGroup                                                                 *wgpu.BindGroup
+	commitViews                                                                 [5]*wgpu.TextureView
 	mergePipeline, copyPipeline                                                 *wgpu.RenderPipeline
 	mergeCapacities                                                             [3]int
 	groupWork                                                                   modelGroupWork
@@ -162,6 +159,68 @@ func modelBytes(b []byte, n int) []byte {
 }
 func modelFinite(v float32) bool           { return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) }
 func (m *Models) modelRetain(close func()) { m.owned = append(m.owned, close) }
+
+// The shared world group borrows both atlas families. Completion precedes
+// Prepare/Close; release it before replacing either family's views.
+func (m *Models) modelReleaseCommitGroup() {
+	if m.commitGroup != nil {
+		m.commitGroup.Release()
+		m.commitGroup = nil
+	}
+	m.commitViews = [5]*wgpu.TextureView{}
+}
+
+func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
+	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
+	return []gputypes.BindGroupLayoutEntry{
+		// Both fixed arrays grow after New; validate their current capacities
+		// against the actual buffers when each commit pipeline is selected.
+		modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
+		modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
+		modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80),
+		modelTextureEntry(3),
+		modelBufferEntry(4, vf, gputypes.BufferBindingTypeUniform, 96),
+		modelTextureEntry(5),
+		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
+		modelTextureEntry(7), modelTextureEntry(8),
+	}
+}
+
+func (m *Models) modelCommitTextureViews() [5]*wgpu.TextureView {
+	a := &m.shadowWork.dummy
+	if m.shadowCount > 0 {
+		a = &m.shadowWork.atlas
+	}
+	return [5]*wgpu.TextureView{m.modelBodyView(), a.bodyView, a.depthView, a.maskView, m.shadowWork.waterView}
+}
+
+func (m *Models) modelCommitEntries(views [5]*wgpu.TextureView) []wgpu.BindGroupEntry {
+	return []wgpu.BindGroupEntry{
+		{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer},
+		{Binding: 2, Buffer: m.uniform, Size: 80}, {Binding: 3, TextureView: views[0]},
+		{Binding: 4, Buffer: m.shadowWork.uniform, Size: 96}, {Binding: 5, TextureView: views[1]},
+		{Binding: 6, TextureView: views[2]}, {Binding: 7, TextureView: views[3]}, {Binding: 8, TextureView: views[4]},
+	}
+}
+
+func (m *Models) modelSyncCommitViews(views [5]*wgpu.TextureView) {
+	if views != m.commitViews {
+		m.modelReleaseCommitGroup()
+	}
+}
+
+func (m *Models) modelPrepareCommitGroup() error {
+	views := m.modelCommitTextureViews()
+	m.modelSyncCommitViews(views)
+	if m.commitGroup != nil {
+		return nil
+	}
+	g, err := m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.resolveLayout, Entries: m.modelCommitEntries(views)})
+	if err == nil {
+		m.commitGroup, m.commitViews = g, views
+	}
+	return err
+}
 func (m *Models) modelBuffer(label string, n uint64, usage gputypes.BufferUsage, data []byte) (*wgpu.Buffer, error) {
 	if n < 4 {
 		n = 4
@@ -270,8 +329,7 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	if next.depth, next.depthView, err = m.modelCreateTexture("battle-model-subject-depth", next.width, next.height, wgpu.TextureFormatDepth32Float, wgpu.TextureUsageRenderAttachment); err != nil {
 		return err
 	}
-	// The old body-resolve layout retains this binding for compatibility. Real
-	// shadows have independent sources; keep only a transparent one-pixel dummy.
+	// DebugResources retains its legacy transparent shadow diagnostic plane.
 	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-dummy", 1, 1, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageCopyDst|wgpu.TextureUsageCopySrc); err != nil {
 		return err
 	}
@@ -289,6 +347,7 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	}
 	// Prepare follows host completion. Release the old group before its views
 	// and textures; atlas resources never enter the static/growth-tier owner.
+	m.modelReleaseCommitGroup()
 	m.atlas.modelClose()
 	m.atlas = next
 	return nil
@@ -529,10 +588,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err = m.modelInitShadows(scene, module, layout); err != nil {
 		return
 	}
-	// A fixed slot array is specialized after growth; its required binding size
-	// is checked against the current group rather than a constant layout size.
-	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelTextureEntry(6)}
-	if m.resolveLayout, m.resolvePipelineLayout, err = m.modelLayout(entries); err != nil {
+	if m.resolveLayout, m.resolvePipelineLayout, err = m.modelLayout(modelCommitLayoutEntries()); err != nil {
 		return
 	}
 	if err = m.modelPrepareResolvePipeline(); err != nil {
@@ -990,6 +1046,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	if changed {
 		m.poseGroup, m.bodyGroup = nil, nil
+		m.modelReleaseCommitGroup()
 		m.atlas.modelReleaseGroup()
 	}
 	if e = m.modelPrepareResolvePipeline(); e != nil {
@@ -1062,12 +1119,6 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return e
 		}
 	}
-	if m.atlas.group == nil {
-		m.atlas.group, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.resolveLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 3, TextureView: m.modelBodyView()}, {Binding: 4, TextureView: m.atlas.shadowView}, {Binding: 5, Sampler: m.sampler}, {Binding: 6, TextureView: m.atlas.colorView}}})
-		if e != nil {
-			return e
-		}
-	}
 	if m.groupWork.count > 0 && m.atlas.mergeGroup == nil {
 		m.atlas.mergeGroup, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.mergeLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.groups.buffer}, {Binding: 1, Buffer: m.members.buffer}, {Binding: 2, Buffer: m.slots.buffer}, {Binding: 3, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 4, TextureView: m.atlas.colorView}, {Binding: 5, TextureView: m.atlas.metadataView}}})
 		if e != nil {
@@ -1075,6 +1126,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 	}
 	if e = m.modelPrepareShadowGPU(f, changed); e != nil {
+		return e
+	}
+	if e = m.modelPrepareCommitGroup(); e != nil {
 		return e
 	}
 	m.counters.Instances, m.counters.Pieces = len(f.Instances), len(f.Current)
@@ -1156,7 +1210,7 @@ func (m *Models) Draw(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil {
 		return
 	}
-	m.state.selectResources(pass, m.resolvePipeline, m.atlas.group)
+	m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
 	for _, p := range m.paint {
 		wanted := p.phase == phase+1 || phase == meshscene.PhaseGround && p.phase == meshscene.ModelPhaseShortFeatures
 		if !wanted {
@@ -1170,7 +1224,7 @@ func (m *Models) DrawShadows(pass *wgpu.RenderPassEncoder) {
 	if m == nil || m.closed || !m.prepared || pass == nil || m.shadowCount == 0 {
 		return
 	}
-	m.state.selectResources(pass, m.shadowWork.commitPipeline, m.shadowWork.atlas.group)
+	m.state.selectResources(pass, m.shadowWork.commitPipeline, m.commitGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount)})
 	m.counters.Draws++
 }
@@ -1182,7 +1236,7 @@ func (m *Models) DrawSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil || slot == 0 || int(slot) > len(m.slotBytes)/modelSlotStride {
 		return
 	}
-	m.state.selectResources(pass, m.resolvePipeline, m.atlas.group)
+	m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
 	m.counters.Draws++
 }
@@ -1194,7 +1248,7 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 		if p.slot != slot {
 			continue
 		}
-		m.state.selectResources(pass, m.shadowWork.commitPipeline, m.shadowWork.atlas.group)
+		m.state.selectResources(pass, m.shadowWork.commitPipeline, m.commitGroup)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: p.subject})
 		m.counters.Draws++
 	}
@@ -1236,6 +1290,7 @@ func (m *Models) Close() {
 		return
 	}
 	m.closed = true
+	m.modelReleaseCommitGroup()
 	m.shadowWork.modelClose()
 	m.atlas.modelClose()
 	if m.resolvePipeline != nil {
