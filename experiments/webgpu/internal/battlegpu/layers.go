@@ -430,10 +430,12 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 		return
 	}
 	l.owned = append(l.owned, l.uniform.Release)
+	// Constructor bind groups exist before Prepare can grow storage. Their
+	// initial buffers must already satisfy each declared record minimum.
 	for _, b := range []struct {
 		dst *layerBuffer
 		n   int
-	}{{&l.sprites, 96}, {&l.annotations, 64}, {&l.overlayQuads, 64}, {&l.effectQuads, 64}, {&l.effectVertices, 48}, {&l.effectGround, 80}, {&l.effectSmoke, layerSmokeStride}, {&l.lights, 64}} {
+	}{{&l.sprites, 96}, {&l.annotations, 64}, {&l.overlayQuads, 64}, {&l.effectQuads, 64}, {&l.effectVertices, layerDirectVertexStride}, {&l.effectGround, 80}, {&l.effectSmoke, layerSmokeStride}, {&l.lights, 64}} {
 		_, err = l.layerUpload(b.dst, nil, b.n)
 		if err != nil {
 			return
