@@ -63,3 +63,9 @@ nonfinite output, readback/file errors and watchdog expiry cannot report success
 
 This is hardware mesh-raster/retained-resolve evidence for GPU design
 §17.4–§17.7, not retail span-raster equivalence or GPU/scanout timing.
+
+
+`-compact-slot-packing` additionally diagnoses height-sorted slot placement.
+The equal-height authored16-case fixture passes, but does not exercise production
+relocation rounding. The real Coast packet changes edge/key pixels; compact
+placement is therefore opt-in and must not be declared pixel-equivalent.

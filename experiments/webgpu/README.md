@@ -369,3 +369,17 @@ with relative paths, sizes and SHA-256 hashes. Final unrun matrices are in
 unrun-final-{go,rust,browser}; older inventories are retained as earlier source
 snapshots. modules-p4.txt records the final nested graph. This branch is retained
 for review and has not been landed.
+
+
+## Continued Metal-gap investigation (2026-10-11)
+
+The qualified default keeps resident-source batching. See the latest section of
+FOLLOWUP_REPORT.md and METAL_GAP_MEASUREMENTS.json for matched full-game Metal
+comparisons, fresh-presentation accounting and all successful/failed variants.
+Source prepare-ahead is explicit (`NANOLATHE_WEBGPU_PREPARE_AHEAD=1`); it has
+mixed performance and still waits for GPU completion per frame. Compact slot
+placement (`NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING=1`) halves Coast body memory
+but changes raster edges, so remains a diagnostic. `tools/build-play OUT
+--metal-cache` builds a private exact-v0.34.2 cache patch for macOS arm64 ABI
+investigation; ordinary builds use unchanged pins. These experiments do not
+establish steady120Hz or qualify the real game on Linux, Windows or browser.

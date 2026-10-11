@@ -484,3 +484,193 @@ and `/private/tmp/nanolathe-modelbatch-build/build-manifest.json`. The sandbox
 attempt selected Empty/software and is explicitly failed; only the native
 Metal gate counts as qualification. Root/default module and shipping renderer
 remain unchanged. No push, merge, deployment or upstream issue was performed.
+
+
+## Metal comparison and bounded source/bridge experiments (2026-10-11)
+
+Main `5dbc6fe222cce820f4f54e21be12c5989bb1f0c5` contains a materially more mature
+native renderer. Its `internal/platform/metalrender` and `internal/platform/mtl`
+packages are identical to this worktree's versions. The matched Metal binary
+was built from the same worktree game/producer source as WebGPU, without the
+experimental command overlay; main was only read. Current main additionally
+contains unrelated newer online/UI changes and an unrelated untracked conversion
+directory. No code, Git state or artifacts in main were changed.
+
+The matched Coast benchmark has byte-identical benchmark-state streams for
+Metal and every WebGPU variant below. Counts, seed, resolution, simulation,
+30Hz tick publication and four render phases per tick are equal. This is stronger
+than comparing a simplified model benchmark to the full game. Native Metal's
+fidelity still differs: it rendered 44,301 model reflection instances over the
+960 total frames, while WebGPU still reports model reflection/refraction gaps.
+Native and WebGPU images are not established renderer-parity equivalents.
+
+Metal's measured 720 Coast rows have distinct source times and `(tick,alpha)`
+values, distinct completed submissions with positive GPU spans, and 720 distinct
+increasing drawable presentation timestamps. Every row has
+submit <= GPU start <= GPU end <= presentation. Ticks361..540 each have
+alpha0,.25,.5,.75. The fresh-drawable span rate is118.84Hz; p50/p95/p99 presentation
+intervals are8.333/8.339/8.340ms. Five intervals exceed12.5ms. This is near120 fresh
+rendered/presented updates, not exactly120 and not proof of different pixels on
+every refresh or direct scanout timing. Native submission-to-presentation p50
+is31.63ms with three frames in flight: throughput is not single-frame latency.
+
+For the same Field3000 fixture and final state, native Metal presents719 of720
+measured rows, at104.82 fresh drawable updates/s; one presentation remains
+unavailable after the bounded drain. Its GPU p50/p95/p99 is3.743/4.907/5.771ms,
+but source Next is4.475/20.006/21.261ms. Native Metal therefore also fails steady
+120Hz for this workload. Its source mean7.896ms is similar to WebGPU's7.964ms;
+source production includes simulation and visual recording, not just GPU upload.
+
+### What explains the gap
+
+Native `run_darwin.go` prepares source and packed upload records on a persistent
+worker while the render thread presents/paces. `gobridge_darwin.go` waits only
+for the reused slot in a three-entry mutable resource ring and commits without
+an immediate global drain. WebGPU had synchronous Next and per-draw WaitIdle.
+The native ring is an ownership design, not a permission to delete WebGPU's
+wait: pinned Metal WriteBuffer can mutate shared memory immediately, and current
+WebGPU preparation replaces borrowed views/bindings and atlas resources.
+
+Native Coast source p50 is2.741ms plus separate packing0.146ms, versus WebGPU
+Next2.428ms before preparation/encoding. Native is not faster at median source
+production. Native CPU encode p50 is0.684ms versus WebGPU2.542ms. Native uses
+fixed-arity allocation-free integer ObjC sends and cached buffer bindings;
+pinned wgpu prepares goffi signatures and argument/type arrays per general send,
+and binds resources to both shader stages. Process Go allocations are about
+399/draw native versus55,284/draw WebGPU, with native's scope additionally
+including final drain. Object-share attribution is not CPU-time attribution.
+
+Both body paths use2x raster sampling. Native skips eligible direct depth-slab
+subjects in body-atlas packing/rasterization; WebGPU allocates isolated body
+slots for all subjects. Coast's final391 slots include263 direct subjects,
+accounting for56% of doubled rectangle pixels. Native body planes use
+4096x1152 and94,371,840 descriptor bytes; WebGPU uses2048x8192 and268,435,456.
+Native uses20 bytes/pixel across body planes versus WebGPU16: formats do not
+explain its smaller allocation. Native also height-sorts slots and limits
+attachment clears/stores to the current page; WebGPU retains a power-of-two
+extent and clears/stores it. Native does not persistently cache body pixels:
+body/shadow raster, face preparation and group composition run every frame.
+Input tables and generations are retained. Native merges groups in place;
+WebGPU uses a separate full merged plane and copies ungrouped subjects.
+
+### Local experiments, preserved rather than over-promoted
+
+`sourceworker.go` implements one serial Next request. `renderer.encodeSourceReady`
+first copies/uploads every borrowed frame operand and derives owned paint
+records; only then may the next Next reuse producer slices while current
+commands encode. No GPU handle/encoder crosses to the worker. Warmup boundaries,
+final capture and joined shutdown stop preparation. Input data is reused only
+after join; predictive source time follows the existing native host contract.
+Input is sampled one draw ahead; interactive cursor/lifecycle qualification is
+still required. Independent review found and fixed an unused-worker startup/close
+race by capturing channel locals; tests cover it, serial join, error shutdown
+and measurement boundaries, including the Go race detector.
+
+Results are mixed, so the worker remains opt-in through
+`NANOLATHE_WEBGPU_PREPARE_AHEAD=1` when Options.PrepareAhead supplies a policy.
+The selected implementation joins the worker before error-checked WaitIdle.
+An attempted wait-before-join ordering is discarded. GPU resources still have
+one protected mutable set. Fully asynchronous frame reuse is not implemented.
+
+| Coast variant | Mean callback Hz | p50/p95/p99 callback ms |
+|---|---:|---|
+| Qualified batched default |101.94|8.72/14.46/15.08|
+| Pointer-cache diagnostic, synchronous source |108.97|8.41/14.57/15.69|
+| Late source worker |103.92|8.61/14.43/15.78|
+| Early worker, wait before join (discarded ordering) |111.73|8.40/13.70/15.68|
+| Early worker + cache, wait before join |108.97|8.43/14.04/15.74|
+| Early worker, join before wait (selected opt-in) |99.25|8.93/15.05/17.32|
+
+Field3000 callback means: batched default74.97Hz; early worker wait-first71.30Hz;
+selected join-first77.57Hz, with p50/p95/p99=10.28/23.39/25.37ms. These are bounded
+single runs, not thermal/background-load-controlled repeated estimates. The
+worker and pointer cache gains are not reliably additive: changing encode time
+changes outstanding work observed by WaitIdle. WebGPU still cannot expose
+actual GPU/presentation clocks through the borrowed context, so completion-wait
+wall time must not be called GPU execution. Every source-worker variant retains
+720 distinct tick/alpha pairs and byte-identical final state and PNG to its
+corresponding default. Coast captures also retain every raw GPU field byte.
+
+`modelpacking.go` preserves logical slot IDs but can height-sort allocation
+traversal. Enable only with `NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING=1` or the
+authored gate's `-compact-slot-packing`. It halves Coast body planes to128MiB
+(2048x4096); selected texture descriptors fall from741,833,377 to607,615,649bytes.
+It did not materially improve FPS (102.28Hz). The authored16-case gate passes,
+but it uses equal-height slots and does not establish production relocation
+parity. Normalized production slot comparison changed3,595/7,612,076 source
+pixels and8,045 key pixels (key differences<=1). Final PNG changed3,323/2,073,600
+pixels, maximum8-bit channel delta106. World HDR changed2,870 pixels. Moving
+rectangles changes floating-point raster/interpolation edge decisions. Therefore
+compact packing remains opt-in and is not an accepted allocation-only fix.
+Shadow, pose, terrain, stock reflection and seabed readbacks stayed identical.
+
+The exact wgpu v0.34.2 pointer-call cache is preserved as
+`patches/metal-pointercache-diagnostic.patch`. It uses immutable signatures and
+pooled exclusive argument/result/CIF frames; mixed float/struct sends retain
+the original implementation. The13 explicit-argument bound matches goffi's15
+including self/selector. Concurrent16x500 Foundation round-trips, return kinds,
+register/stack bounds, nil/error reuse, recursive callback+GC, checkptr=2 and
+race tests pass on macOS arm64. Microbenchmark:111.8ns/136B/5alloc reference versus
+66.15ns/0B/0alloc cached. Coast goes from2.023MB and55,284 objects/draw to0.167MB
+and1,248 objects/draw with unchanged images/state. Shipping benchmark binaries
+remain CGO_ENABLED=0; race testing alone used existing CGO-enabled test tooling.
+
+`tools/build-play NEW_EXTERNAL_DIR --metal-cache` applies the patch only to a
+private copied module through `tools/prepare-metal-cache`, verifies v0.34.2,
+and records the replacement and patch digest. Default graphs, module cache,
+shipping renderer and root sources remain unchanged. This is a reproducible
+macOS arm64 diagnostic, not an adopted fork or other-platform ABI qualification.
+
+### Portable architecture and remaining dependency limits
+
+Resident indexed geometry, normalized UVs, compute pose interpolation, fragment
+depth and ordered composition have portable Go/WGSL paths. The body shader uses
+exactly the baseline eight storage bindings; new direct-path records should
+extend packed instance/material data rather than require a ninth binding.
+Eligible direct subjects can bypass atlas raster, with atlas fallback for groups,
+erasure/key rules and other ordered cases. Metal's in-place texture composition
+can require a ping-pong alternative on baseline WebGPU; that is an implementation
+and bandwidth tradeoff, not evidence that equivalent semantics are impossible.
+Native shared-memory mapping, raw ObjC call assembly and completion blocks are
+backend-specific. Keep a shared renderer/model ABI with small backend host and
+completion adapters, using Metal as fidelity/performance reference; four separate
+full renderer implementations would multiply correctness work.
+
+A hard current-pin lifetime issue is Metal completion-block creation failure:
+`hal/metal/queue.go` reports the submission complete immediately. Native Queue.Poll
+must not be treated as unconditionally failure-safe. GoGPU Finish/Submit happens
+after OnDraw and logs errors rather than returning them. Browser public Poll and
+WaitIdle are no-ops; use its real post-submit onSubmittedWorkDone promise and
+asynchronous yielding. The existing browser harness already has that bridge.
+A local bounded backend/host repair or pinned fork is possible; there is no need
+to wait indefinitely for an upstream release. Latest upstream's general ObjC
+allocation path remains per-call; exposed render bundles alone do not implement
+Metal render bundles.
+
+The next substantial unit is a committed30Hz producer packet owner, independently
+sampled by draw-time alpha/time, plus two/three mutable upload/binding bundles
+sharing immutable geometry, art and queue-ordered GPU targets. Initially native
+can error-check WaitIdle when a bundle batch fills and drain at resize/loss/
+shutdown; asynchronous tickets need the completion-failure fix and reliable
+submission error propagation. Browser needs a real post-submit promise. Do not
+clone entire Renderers/atlases, remove a wait blindly, alter simulation cadence,
+or claim120Hz from target settings. Linux/Windows/core wasm builds pass; the
+real-game host is still macOS-only. Other native hosts and a real browser game
+runtime/input/loss qualification remain work, not delivered cross-platform support.
+
+All fifteen measured variants and native timing scopes are summarized in
+`METAL_GAP_MEASUREMENTS.json`; raw runs/build manifests remain in the named
+`/private/tmp/nanolathe-*` directories. Experiment tools/check passes tests,
+vet, native/Rust/wasm probe builds and mocked browser telemetry; portable core
+builds pass for Linuxamd64, Windowsamd64 and js/wasm. Native reads were sequential,
+with no heavy builds/tests concurrent. Main, shipping defaults, push/merge/deploy
+and external messages remain untouched. Steady120Hz is not established.
+
+Final default validation (`nanolathe-final-default-coast`) confirms worker=false,
+compact=false,720 distinct tick/alpha inputs, and byte-identical final PNG/state
+and every captured GPU field against the qualified batched reference. Its
+callback mean97.07Hz and p50/p95/p99=8.65/15.54/16.56ms also demonstrate run
+variability: neither the small batching timing delta nor worker improvements
+should be sold as a controlled repeatable FPS estimate. Command-count reduction
+and allocation/pixel equivalence are stronger established results. The final
+build manifest records106 experiment Go/WGSL source hashes and CGO_ENABLED=0.

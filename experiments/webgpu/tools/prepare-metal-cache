@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Apply the reviewed diagnostic to a private copy of exact wgpu v0.34.2."""
+import json, os, pathlib, platform, shutil, subprocess, sys
+exp=pathlib.Path(__file__).resolve().parents[1]; repo=exp.parent.parent
+if len(sys.argv)!=2:sys.exit('usage: tools/prepare-metal-cache NEW_EXTERNAL_MODULE_DIRECTORY')
+if platform.system()!='Darwin' or platform.machine()!='arm64':sys.exit('diagnostic qualified only on macOS arm64; do not adopt on other platforms')
+out=pathlib.Path(sys.argv[1]).resolve()
+if out.is_relative_to(repo):sys.exit('output must be outside the repository')
+if out.exists():sys.exit('output must be new')
+env=dict(os.environ,GOWORK='off',GOPROXY='off')
+module=json.loads(subprocess.check_output(['go','list','-m','-json','github.com/gogpu/wgpu'],cwd=exp,env=env,text=True))
+if module.get('Version')!='v0.34.2' or module.get('Replace'):sys.exit('diagnostic requires unmodified wgpu v0.34.2')
+shutil.copytree(module['Dir'],out)
+# Permissions change only in this private copy; never mutate the module cache.
+for p in [out,*out.rglob('*')]:p.chmod(0o755 if p.is_dir() else 0o644)
+patch=exp/'patches/metal-pointercache-diagnostic.patch'
+subprocess.run(['git','apply','--check',str(patch)],cwd=out,check=True)
+subprocess.run(['git','apply',str(patch)],cwd=out,check=True)
+print(out)

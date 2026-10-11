@@ -109,6 +109,13 @@ func (r *Renderer) targets(width, height int) error {
 	return r.layers.SetWorldTexture(r.worldView)
 }
 func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, width, height int, f meshscene.LiveFrame) (Counters, error) {
+	return r.encodeSourceReady(enc, output, width, height, f, nil)
+}
+
+// encodeSourceReady hands source ownership back only after preparation has
+// copied/uploaded every borrowed frame slice and derived ordered paint records.
+// Command encoding after this seam reads renderer-owned state exclusively.
+func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.TextureView, width, height int, f meshscene.LiveFrame, sourceReady func()) (Counters, error) {
 	if width <= 0 || height <= 0 {
 		return Counters{}, nil
 	}
@@ -169,6 +176,10 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := r.lenses.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
+	r.paint = battlePaintOrder(r.paint, f)
+	if sourceReady != nil {
+		sourceReady()
+	}
 	if e := r.models.Compute(enc); e != nil {
 		return Counters{}, e
 	}
@@ -192,7 +203,6 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	}
 	r.paintState.reset(pass)
 	defer r.paintState.reset(nil)
-	r.paint = battlePaintOrder(r.paint, f)
 	paintPhase := func(phase uint32) {
 		for _, p := range r.paint {
 			if p.phase != phase {

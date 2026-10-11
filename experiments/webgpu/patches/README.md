@@ -27,3 +27,22 @@ The P4 public Metal comparison imports the root's existing purego v0.11.1
 (Apache-2.0) into this nested module only. Its downloaded LICENSE was audited;
 no source is copied and the root module graph is unchanged. A distributed
 comparison binary needs its license notice.
+
+
+`metal-pointercache-diagnostic.patch` is a separate exact-wgpu-v0.34.2
+macOS arm64 experiment. Modified upstream ObjC source is MIT, Copyright2025
+The GoGPU Authors; added cache/test code is independently authored MIT,
+Copyright2026 The Nanolathe Authors. Private copies preserve upstream LICENSE.
+Prepared pointer signatures share immutable metadata, while each call owns its
+pooled CIF, argument values and zeroed result storage. Mixed/aggregate/float
+calls are unchanged; unsupported argument counts retain the original error.
+
+Reproduce with `tools/build-play NEW_EXTERNAL_DIR --metal-cache`; the helper
+checks the exact existing module pin and copies it outside the repository.
+Test the copy using `CGO_ENABLED=0 go test -gcflags=all=-d=checkptr=2 -run
+TestPointerCache ./hal/metal`; concurrency/recursive GC/register-stack/return
+cases are included. The race suite uses `CGO_ENABLED=1 go test -race -tags
+nofakecgo -run TestPointerCache ./hal/metal` for testing only. All published
+prototype builds remain pureGo/CGO0. Other architectures, full loss/shutdown
+failure paths and adoption remain unqualified. See FOLLOWUP_REPORT.md for
+microbenchmark and whole-game allocation/timing/pixel evidence.

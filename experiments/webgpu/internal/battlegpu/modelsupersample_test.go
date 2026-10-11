@@ -21,7 +21,7 @@ func TestModelSupersampleBodyPackingAndCoreBound(t *testing.T) {
 	before := append([]meshscene.ModelSlot(nil), input...)
 	dst := make([]meshscene.ModelSlot, 0, len(input))
 	backing := dst[:cap(dst)]
-	slots, width, height, err := modelPackSlotsInto(dst, input)
+	slots, width, height, err := new(modelPackingWork).pack(dst, input)
 	if err != nil {
 		t.Fatal(err)
 	}

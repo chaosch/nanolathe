@@ -1,0 +1,963 @@
+{
+  "hardware": "Apple M3 Pro",
+  "os": "macOS26.6.2",
+  "go": "go1.27.1",
+  "cgo_enabled": 0,
+  "gomaxprocs": 2,
+  "physical_pixels": [
+    1920,
+    1080
+  ],
+  "dpr": 2,
+  "seed": 7,
+  "warmup": 240,
+  "measured": 720,
+  "quantile": "floor(p*(n-1))",
+  "webgpu_clock": "callback starts; GPU/presentation times unavailable",
+  "source_clock": "draw index, four interpolated phases per30Hz simulation tick",
+  "cases": [
+    {
+      "name": "coast-reference",
+      "path": "/tmp/nanolathe-modelbatch-coast-off",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.651706020833333,
+          "p50_ms": 2.444791,
+          "p95_ms": 7.744708,
+          "p99_ms": 8.441834,
+          "max_ms": 25.280209
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.7761842152777776,
+          "p50_ms": 2.725541,
+          "p95_ms": 3.169,
+          "p99_ms": 3.450792,
+          "max_ms": 5.849791
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.8536129680555555,
+          "p50_ms": 1.599917,
+          "p95_ms": 4.497333,
+          "p99_ms": 5.826292,
+          "max_ms": 7.468792
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.966501912378304,
+          "p50_ms": 8.896167,
+          "p95_ms": 14.419375,
+          "p99_ms": 15.605042,
+          "max_ms": 28.691417
+        }
+      },
+      "callback_hz": 100.33610676961885,
+      "allocated_bytes_per_draw": 2299688.422222222,
+      "allocated_objects_per_draw": 61633.99722222222,
+      "gc_cycles": 3,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1805,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-batched",
+      "path": "/tmp/nanolathe-modelbatch-coast-on",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.5582597652777777,
+          "p50_ms": 2.427458,
+          "p95_ms": 7.631042,
+          "p99_ms": 8.218875,
+          "max_ms": 9.33375
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.5860529,
+          "p50_ms": 2.541292,
+          "p95_ms": 2.989292,
+          "p99_ms": 3.146625,
+          "max_ms": 4.739333
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.9627641152777777,
+          "p50_ms": 2.164584,
+          "p95_ms": 4.755541,
+          "p99_ms": 5.564125,
+          "max_ms": 7.2565
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.809517965229485,
+          "p50_ms": 8.717459,
+          "p95_ms": 14.46075,
+          "p99_ms": 15.076208,
+          "max_ms": 22.24075
+        }
+      },
+      "callback_hz": 101.94180830745906,
+      "allocated_bytes_per_draw": 2022953.4666666666,
+      "allocated_objects_per_draw": 55283.68194444444,
+      "gc_cycles": 2,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-bridge-cache",
+      "path": "/tmp/nanolathe-modelcache-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.522244201388889,
+          "p50_ms": 2.387875,
+          "p95_ms": 7.644292,
+          "p99_ms": 8.57125,
+          "max_ms": 9.75375
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 1.9902939736111112,
+          "p50_ms": 1.941709,
+          "p95_ms": 2.350834,
+          "p99_ms": 2.583375,
+          "max_ms": 6.096042
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.9694510444444444,
+          "p50_ms": 2.014833,
+          "p95_ms": 4.697167,
+          "p99_ms": 6.147458,
+          "max_ms": 8.302208
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.176847009735743,
+          "p50_ms": 8.405042,
+          "p95_ms": 14.565125,
+          "p99_ms": 15.6895,
+          "max_ms": 24.617208
+        }
+      },
+      "callback_hz": 108.96988899772407,
+      "allocated_bytes_per_draw": 167401.47777777776,
+      "allocated_objects_per_draw": 1247.8430555555556,
+      "gc_cycles": 0,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-compact-diagnostic",
+      "path": "/tmp/nanolathe-packing-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.521036273611111,
+          "p50_ms": 2.360375,
+          "p95_ms": 7.506083,
+          "p99_ms": 8.273375,
+          "max_ms": 22.404541
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.5960666694444443,
+          "p50_ms": 2.547208,
+          "p95_ms": 2.960709,
+          "p99_ms": 3.155417,
+          "max_ms": 4.360042
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.9313325194444444,
+          "p50_ms": 1.725958,
+          "p95_ms": 4.805291,
+          "p99_ms": 5.73375,
+          "max_ms": 7.346333
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.77720966620306,
+          "p50_ms": 8.580875,
+          "p95_ms": 14.810959,
+          "p99_ms": 16.144416,
+          "max_ms": 25.242
+        }
+      },
+      "callback_hz": 102.2786699007495,
+      "allocated_bytes_per_draw": 2022962.288888889,
+      "allocated_objects_per_draw": 55283.69583333333,
+      "gc_cycles": 2,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "565b17a37b425c44c80639759eedaa895e03453148ea312cb1717cb0ca69d330",
+      "texture_descriptor_bytes": 607615649,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-late-worker",
+      "path": "/tmp/nanolathe-ahead-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.6661224430555555,
+          "p50_ms": 2.446334,
+          "p95_ms": 7.895625,
+          "p99_ms": 9.41,
+          "max_ms": 13.491584
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.6906027875,
+          "p50_ms": 2.605083,
+          "p95_ms": 3.209,
+          "p99_ms": 4.702584,
+          "max_ms": 7.364208
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 2.2196942041666667,
+          "p50_ms": 2.504917,
+          "p95_ms": 4.981916,
+          "p99_ms": 5.70225,
+          "max_ms": 6.494375
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.622478152990265,
+          "p50_ms": 8.610084,
+          "p95_ms": 14.43275,
+          "p99_ms": 15.784542,
+          "max_ms": 30.371
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 2.553397172222222,
+          "p50_ms": 2.329083,
+          "p95_ms": 7.43125,
+          "p99_ms": 8.798292,
+          "max_ms": 11.99675
+        }
+      },
+      "callback_hz": 103.92333285674873,
+      "allocated_bytes_per_draw": 2023594.411111111,
+      "allocated_objects_per_draw": 55283.70138888889,
+      "gc_cycles": 2,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-late-worker-cache",
+      "path": "/tmp/nanolathe-ahead-cache-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.642316188888889,
+          "p50_ms": 2.392333,
+          "p95_ms": 7.778834,
+          "p99_ms": 9.553166,
+          "max_ms": 31.774042
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.0264806194444445,
+          "p50_ms": 1.963166,
+          "p95_ms": 2.3815,
+          "p99_ms": 2.976834,
+          "max_ms": 10.168125
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 2.034669272222222,
+          "p50_ms": 2.079042,
+          "p95_ms": 4.794417,
+          "p99_ms": 6.197584,
+          "max_ms": 10.30425
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.017808820584145,
+          "p50_ms": 8.384,
+          "p95_ms": 14.49,
+          "p99_ms": 15.785417,
+          "max_ms": 32.920792
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 2.222311773611111,
+          "p50_ms": 2.23075,
+          "p95_ms": 7.3255,
+          "p99_ms": 8.589083,
+          "max_ms": 28.733584
+        }
+      },
+      "callback_hz": 110.89168332304733,
+      "allocated_bytes_per_draw": 168037.14444444445,
+      "allocated_objects_per_draw": 1247.8638888888888,
+      "gc_cycles": 0,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-early-worker-wait-first",
+      "path": "/tmp/nanolathe-early-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.5298023333333335,
+          "p50_ms": 2.342667,
+          "p95_ms": 7.815666,
+          "p99_ms": 8.352209,
+          "max_ms": 9.94325
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.638707398611111,
+          "p50_ms": 2.6025,
+          "p95_ms": 3.067375,
+          "p99_ms": 3.298667,
+          "max_ms": 6.353541
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 2.543017311111111,
+          "p50_ms": 2.540834,
+          "p95_ms": 6.013333,
+          "p99_ms": 7.805125,
+          "max_ms": 11.786584
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 8.950231513212795,
+          "p50_ms": 8.396375,
+          "p95_ms": 13.702542,
+          "p99_ms": 15.677625,
+          "max_ms": 18.729666
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 1.1060088611111112,
+          "p50_ms": 0.000209,
+          "p95_ms": 5.514333,
+          "p99_ms": 7.104209,
+          "max_ms": 8.309958
+        }
+      },
+      "callback_hz": 111.7289534381036,
+      "allocated_bytes_per_draw": 2023575.111111111,
+      "allocated_objects_per_draw": 55283.686111111114,
+      "gc_cycles": 2,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "coast-early-worker-cache-wait-first",
+      "path": "/tmp/nanolathe-early-cache-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.5910588069444445,
+          "p50_ms": 2.372334,
+          "p95_ms": 7.989292,
+          "p99_ms": 8.614666,
+          "max_ms": 10.007166
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.045298988888889,
+          "p50_ms": 2.019958,
+          "p95_ms": 2.395959,
+          "p99_ms": 2.433541,
+          "max_ms": 2.691458
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 3.5637875208333334,
+          "p50_ms": 4.073375,
+          "p95_ms": 6.858541,
+          "p99_ms": 7.738375,
+          "max_ms": 13.116083
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.17671766342142,
+          "p50_ms": 8.427166,
+          "p95_ms": 14.038167,
+          "p99_ms": 15.742,
+          "max_ms": 20.539917
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0.7191258541666666,
+          "p50_ms": 0.000167,
+          "p95_ms": 2.576041,
+          "p99_ms": 6.7455,
+          "max_ms": 7.477083
+        }
+      },
+      "callback_hz": 108.97142493399575,
+      "allocated_bytes_per_draw": 168024.3,
+      "allocated_objects_per_draw": 1247.8541666666667,
+      "gc_cycles": 0,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "field3000-batched",
+      "path": "/tmp/nanolathe-modelbatch-field3000-on",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.963691618055556,
+          "p50_ms": 4.503584,
+          "p95_ms": 20.122458,
+          "p99_ms": 21.189125,
+          "max_ms": 26.735042
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 3.1355089375,
+          "p50_ms": 2.995875,
+          "p95_ms": 3.925625,
+          "p99_ms": 5.003584,
+          "max_ms": 7.259958
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.2397385347222223,
+          "p50_ms": 0.5875,
+          "p95_ms": 4.161458,
+          "p99_ms": 5.502958,
+          "max_ms": 7.159125
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 13.338062065368568,
+          "p50_ms": 10.271292,
+          "p95_ms": 24.12775,
+          "p99_ms": 25.694583,
+          "max_ms": 43.375959
+        }
+      },
+      "callback_hz": 74.97341031246485,
+      "allocated_bytes_per_draw": 1780763.3444444444,
+      "allocated_objects_per_draw": 46806.21666666667,
+      "gc_cycles": 1,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "3f246240477f40b6d2997a40043fbe4b70029d78b868fb37b6f1776259cc318e",
+      "final_png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "texture_descriptor_bytes": 719383849,
+      "final_model": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      }
+    },
+    {
+      "name": "field3000-early-worker-wait-first",
+      "path": "/tmp/nanolathe-early-field3000",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.823575222222222,
+          "p50_ms": 4.275083,
+          "p95_ms": 19.656833,
+          "p99_ms": 22.5165,
+          "max_ms": 44.272833
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 3.4387583902777776,
+          "p50_ms": 3.125417,
+          "p95_ms": 5.385167,
+          "p99_ms": 8.310417,
+          "max_ms": 11.286958
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 5.076098783333333,
+          "p50_ms": 5.061583,
+          "p95_ms": 9.757083,
+          "p99_ms": 11.593458,
+          "max_ms": 16.52125
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 14.024985744089012,
+          "p50_ms": 12.284708,
+          "p95_ms": 24.693125,
+          "p99_ms": 30.145458,
+          "max_ms": 55.035625
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 4.161488136111111,
+          "p50_ms": 3.003792,
+          "p95_ms": 16.738208,
+          "p99_ms": 19.819916,
+          "max_ms": 41.536666
+        }
+      },
+      "callback_hz": 71.30132024707842,
+      "allocated_bytes_per_draw": 1781351.6222222222,
+      "allocated_objects_per_draw": 46806.15555555555,
+      "gc_cycles": 1,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "3f246240477f40b6d2997a40043fbe4b70029d78b868fb37b6f1776259cc318e",
+      "final_png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "texture_descriptor_bytes": 719383849,
+      "final_model": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      }
+    },
+    {
+      "name": "coast-native-metal",
+      "path": "/tmp/nanolathe-metal-compare-coast",
+      "timings": {
+        "cpu_encode": {
+          "available": true,
+          "max_ms": 1.1979585979133844,
+          "p50_ms": 0.6835416425019503,
+          "p95_ms": 0.8536665700376034,
+          "p99_ms": 0.9368748869746923,
+          "samples": 720
+        },
+        "gpu_execution": {
+          "available": true,
+          "max_ms": 26.43316681496799,
+          "p50_ms": 5.968083394691348,
+          "p95_ms": 6.530625047162175,
+          "p99_ms": 6.8595833145082,
+          "samples": 720
+        },
+        "inflight_wait": {
+          "available": true,
+          "max_ms": 0.04970841109752655,
+          "p50_ms": 0.006666639819741249,
+          "p95_ms": 0.014499993994832039,
+          "p99_ms": 0.01950003206729889,
+          "samples": 720
+        },
+        "live_source_next": {
+          "available": true,
+          "max_ms": 17.735541,
+          "p50_ms": 2.740833,
+          "p95_ms": 8.325709,
+          "p99_ms": 9.531709,
+          "samples": 720
+        },
+        "live_cpu_prep": {
+          "available": true,
+          "max_ms": 0.331375,
+          "p50_ms": 0.145542,
+          "p95_ms": 0.209166,
+          "p99_ms": 0.27825,
+          "samples": 720
+        },
+        "submission_interval": {
+          "available": true,
+          "max_ms": 32.69537491723895,
+          "p50_ms": 8.331958204507828,
+          "p95_ms": 8.632583310827613,
+          "p99_ms": 8.949250215664506,
+          "samples": 719
+        },
+        "presentation_interval": {
+          "available": true,
+          "max_ms": 33.335416577756405,
+          "p50_ms": 8.333333535119891,
+          "p95_ms": 8.339333347976208,
+          "p99_ms": 8.339999942108989,
+          "samples": 719
+        },
+        "submit_to_present": {
+          "available": true,
+          "max_ms": 56.73662503249943,
+          "p50_ms": 31.626458279788494,
+          "p95_ms": 31.856041634455323,
+          "p99_ms": 31.932541634887457,
+          "samples": 720
+        }
+      },
+      "fresh_presentation_hz": 118.84253731702405,
+      "presented_rows": 720,
+      "measured_rows": 720,
+      "allocated_bytes_per_draw": 59752.322222222225,
+      "allocated_objects_per_draw": 399.2763888888889,
+      "allocation_scope": "includes final drain; process-wide",
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc"
+    },
+    {
+      "name": "field3000-native-metal",
+      "path": "/tmp/nanolathe-metal-compare-field3000",
+      "timings": {
+        "cpu_encode": {
+          "available": true,
+          "max_ms": 1.5069167129695415,
+          "p50_ms": 0.7065832614898682,
+          "p95_ms": 0.8532083593308926,
+          "p99_ms": 0.8888749871402979,
+          "samples": 720
+        },
+        "gpu_execution": {
+          "available": true,
+          "max_ms": 7.847375003620982,
+          "p50_ms": 3.742875065654516,
+          "p95_ms": 4.907208262011409,
+          "p99_ms": 5.770999938249588,
+          "samples": 720
+        },
+        "inflight_wait": {
+          "available": true,
+          "max_ms": 0.0372081995010376,
+          "p50_ms": 0.009333482012152672,
+          "p95_ms": 0.015249941498041153,
+          "p99_ms": 0.01804158091545105,
+          "samples": 720
+        },
+        "live_source_next": {
+          "available": true,
+          "max_ms": 23.328542,
+          "p50_ms": 4.474666,
+          "p95_ms": 20.00625,
+          "p99_ms": 21.260625,
+          "samples": 720
+        },
+        "live_cpu_prep": {
+          "available": true,
+          "max_ms": 0.262875,
+          "p50_ms": 0.172375,
+          "p95_ms": 0.215375,
+          "p99_ms": 0.225875,
+          "samples": 720
+        },
+        "submission_interval": {
+          "available": true,
+          "max_ms": 23.82758352905512,
+          "p50_ms": 8.217375027015805,
+          "p95_ms": 20.036291796714067,
+          "p99_ms": 21.297041792422533,
+          "samples": 719
+        },
+        "presentation_interval": {
+          "available": true,
+          "max_ms": 16.66941656731069,
+          "p50_ms": 8.334291633218527,
+          "p95_ms": 16.664333175867796,
+          "p99_ms": 16.66670828126371,
+          "samples": 718
+        },
+        "submit_to_present": {
+          "available": true,
+          "max_ms": 48.38037514127791,
+          "p50_ms": 28.453166829422116,
+          "p95_ms": 31.795250019058585,
+          "p99_ms": 38.240708177909255,
+          "samples": 719
+        }
+      },
+      "fresh_presentation_hz": 104.81717013313371,
+      "presented_rows": 719,
+      "measured_rows": 720,
+      "allocated_bytes_per_draw": 116573.57777777778,
+      "allocated_objects_per_draw": 854.4652777777778,
+      "allocation_scope": "includes final drain; process-wide",
+      "final_state_sha256": "3f246240477f40b6d2997a40043fbe4b70029d78b868fb37b6f1776259cc318e"
+    },
+    {
+      "name": "coast-early-worker-join-first",
+      "path": "/tmp/nanolathe-joinfirst-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.884739863888889,
+          "p50_ms": 2.598833,
+          "p95_ms": 8.539333,
+          "p99_ms": 9.670625,
+          "max_ms": 13.989791
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.9687672319444443,
+          "p50_ms": 2.798625,
+          "p95_ms": 3.848583,
+          "p99_ms": 5.832917,
+          "max_ms": 28.188625
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 2.5864033444444443,
+          "p50_ms": 2.630292,
+          "p95_ms": 5.963833,
+          "p99_ms": 6.954583,
+          "max_ms": 9.452416
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 2.539637511111111,
+          "p50_ms": 2.369666,
+          "p95_ms": 7.803833,
+          "p99_ms": 9.439958,
+          "max_ms": 15.947334
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 10.075756258692628,
+          "p50_ms": 8.92775,
+          "p95_ms": 15.052042,
+          "p99_ms": 17.318291,
+          "max_ms": 37.344875
+        }
+      },
+      "callback_hz": 99.24813327409274,
+      "allocated_bytes_per_draw": 2023610.7777777778,
+      "allocated_objects_per_draw": 55283.73611111111,
+      "gc_cycles": 3,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      }
+    },
+    {
+      "name": "field3000-early-worker-join-first",
+      "path": "/tmp/nanolathe-joinfirst-field3000",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.849135525,
+          "p50_ms": 4.321333,
+          "p95_ms": 19.808375,
+          "p99_ms": 21.593333,
+          "max_ms": 34.803042
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 3.1737224930555556,
+          "p50_ms": 2.983084,
+          "p95_ms": 4.060416,
+          "p99_ms": 5.723875,
+          "max_ms": 8.95875
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.8938386069444444,
+          "p50_ms": 1.496042,
+          "p95_ms": 5.764875,
+          "p99_ms": 7.32275,
+          "max_ms": 8.087792
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 6.1295933541666665,
+          "p50_ms": 3.894834,
+          "p95_ms": 19.120584,
+          "p99_ms": 20.842,
+          "max_ms": 25.628
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 12.892168,
+          "p50_ms": 10.281291,
+          "p95_ms": 23.391958,
+          "p99_ms": 25.366625,
+          "max_ms": 34.4935
+        }
+      },
+      "callback_hz": 77.56647291595952,
+      "allocated_bytes_per_draw": 1781332.7222222222,
+      "allocated_objects_per_draw": 46806.208333333336,
+      "gc_cycles": 1,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "3f246240477f40b6d2997a40043fbe4b70029d78b868fb37b6f1776259cc318e",
+      "final_png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "texture_descriptor_bytes": 719383849,
+      "final_model": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      }
+    },
+    {
+      "name": "coast-final-default-validation",
+      "path": "/tmp/nanolathe-final-default-coast",
+      "timings": {
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.5270894541666666,
+          "p50_ms": 2.383875,
+          "p95_ms": 7.641125,
+          "p99_ms": 8.375209,
+          "max_ms": 9.78875
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.588615013888889,
+          "p50_ms": 2.540083,
+          "p95_ms": 2.990333,
+          "p99_ms": 3.283583,
+          "max_ms": 4.642541
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.5192806388888889,
+          "p50_ms": 0.735167,
+          "p95_ms": 4.258708,
+          "p99_ms": 5.392375,
+          "max_ms": 6.779292
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        },
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 10.301361730180806,
+          "p50_ms": 8.646292,
+          "p95_ms": 15.544916,
+          "p99_ms": 16.557792,
+          "max_ms": 21.442959
+        }
+      },
+      "callback_hz": 97.07454472453016,
+      "allocated_bytes_per_draw": 2023582.6222222222,
+      "allocated_objects_per_draw": 55283.6625,
+      "gc_cycles": 2,
+      "prepare_ahead": false,
+      "compact_packing": false,
+      "unique_tick_alpha": 720,
+      "final_state_sha256": "438c91ecc876fa6562f4ee73d7c5281b94e3f2ee8aa9edb6ebf6e1280f0308cc",
+      "final_png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "texture_descriptor_bytes": 741833377,
+      "final_model": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      },
+      "build_manifest": "/tmp/nanolathe-final-default-build/build-manifest.json"
+    }
+  ],
+  "implementation": {
+    "main_commit": "5dbc6fe222cce820f4f54e21be12c5989bb1f0c5",
+    "batching_commit": "890b15070cd4",
+    "metal_code": "native packages identical to main; matched runs use common worktree game source",
+    "selected_default": "batching on; source worker/compact packing/bridge cache opt-in",
+    "worker_order": "early source handoff, join-before-wait; wait-first rejected",
+    "fidelity": "native Metal and WebGPU are not renderer-parity-qualified; model water work differs"
+  },
+  "pins": {
+    "gogpu": "v0.54.1-0.20260901095536-12620c9d5007",
+    "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7",
+    "wgpu": "v0.34.2",
+    "gpucontext": "v0.31.3",
+    "gputypes": "v0.8.0",
+    "goffi": "v0.6.3",
+    "go_webgpu": "v0.5.5",
+    "naga": "v0.19.0",
+    "purego": "v0.11.1",
+    "x_sys": "v0.48.0"
+  }
+}

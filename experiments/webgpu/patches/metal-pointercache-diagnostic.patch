@@ -1,0 +1,282 @@
+--- a/hal/metal/objc.go
++++ b/hal/metal/objc.go
+@@ -408,17 +408,20 @@
+ // for Go↔ObjC bridges without CGO; Rust wgpu-hal/metal uses the same approach
+ // via the objc crate's msg_send! macro which also ignores void returns.
+ func MsgSend(obj ID, sel SEL, args ...uintptr) ID {
+-	return msgSendID(obj, sel, pointerArgs(args)...)
++	value, _ := msgSendPointersCached(obj, sel, types.PointerTypeDescriptor, args)
++	return ID(value)
+ }
+ 
+ // MsgSendUint calls a method and returns a uint result.
+ func MsgSendUint(obj ID, sel SEL, args ...uintptr) uint {
+-	return msgSendUint(obj, sel, pointerArgs(args)...)
++	value, _ := msgSendPointersCached(obj, sel, types.UInt64TypeDescriptor, args)
++	return uint(value)
+ }
+ 
+ // MsgSendBool calls a method and returns a bool result.
+ func MsgSendBool(obj ID, sel SEL, args ...uintptr) bool {
+-	return msgSendBool(obj, sel, pointerArgs(args)...)
++	value, _ := msgSendPointersCached(obj, sel, types.UInt8TypeDescriptor, args)
++	return uint8(value) != 0
+ }
+ 
+ // Retain increments the reference count of an object.
+--- /dev/null
++++ b/hal/metal/objc_pointercache.go
+@@ -0,0 +1,88 @@
++// Copyright 2026 The Nanolathe Authors
++// SPDX-License-Identifier: MIT
++
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"runtime"
++	"sync"
++	"unsafe"
++
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++)
++
++// Diagnostic on the exact v0.34.2 ABI: public MsgSend wrappers already describe
++// every explicit uintptr operand as Pointer. Do not use this path for mixed
++// float/struct calls. Unix goffi accepts at most 15 total pointer arguments,
++// including ObjC self/selector. Larger signatures retain the original path.
++const objcPointerCacheLimit = 13
++
++type objcPointerSignature struct {
++	once sync.Once
++	cif  types.CallInterface
++	err  error
++}
++
++var objcPointerSignatures [3][objcPointerCacheLimit + 1]objcPointerSignature
++
++type objcPointerFrame struct {
++	cif    types.CallInterface
++	values [objcPointerCacheLimit + 2]uintptr
++	args   [objcPointerCacheLimit + 2]unsafe.Pointer
++	result uint64
++}
++
++var objcPointerFrames = sync.Pool{New: func() any { return new(objcPointerFrame) }}
++
++func msgSendPointersCached(obj ID, sel SEL, ret *types.TypeDescriptor, args []uintptr) (uint64, error) {
++	if obj == 0 || sel == 0 {
++		return 0, nil
++	}
++	kind := 0
++	switch ret {
++	case types.PointerTypeDescriptor:
++	case types.UInt64TypeDescriptor:
++		kind = 1
++	case types.UInt8TypeDescriptor:
++		kind = 2
++	default:
++		var result uint64
++		err := msgSend(obj, sel, ret, unsafe.Pointer(&result), pointerArgs(args)...)
++		return result, err
++	}
++	if len(args) > objcPointerCacheLimit {
++		var result uint64
++		err := msgSend(obj, sel, ret, unsafe.Pointer(&result), pointerArgs(args)...)
++		return result, err
++	}
++	signature := &objcPointerSignatures[kind][len(args)]
++	signature.once.Do(func() {
++		descriptors := make([]*types.TypeDescriptor, len(args)+2)
++		for i := range descriptors {
++			descriptors[i] = types.PointerTypeDescriptor
++		}
++		signature.err = ffi.PrepareCallInterface(&signature.cif, types.DefaultCall, ret, descriptors)
++	})
++	if signature.err != nil {
++		return 0, signature.err
++	}
++	frame := objcPointerFrames.Get().(*objcPointerFrame)
++	// Separate CIF and argument/result storage for concurrent and reentrant calls.
++	// Cached type descriptors are immutable; no native address outlives this call.
++	frame.cif = signature.cif
++	frame.result = 0
++	frame.values[0], frame.values[1] = uintptr(obj), uintptr(sel)
++	copy(frame.values[2:], args)
++	for i := 0; i < len(args)+2; i++ {
++		frame.args[i] = unsafe.Pointer(&frame.values[i])
++	}
++	_, err := ffi.CallFunction(&frame.cif, objcMsgSendSymbol(ret), unsafe.Pointer(&frame.result), frame.args[:len(args)+2])
++	result := frame.result
++	runtime.KeepAlive(args)
++	runtime.KeepAlive(frame)
++	objcPointerFrames.Put(frame)
++	return result, err
++}
+--- /dev/null
++++ b/hal/metal/objc_pointercache_test.go
+@@ -0,0 +1,162 @@
++// Copyright 2026 The Nanolathe Authors
++// SPDX-License-Identifier: MIT
++
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"runtime"
++	"sync"
++	"testing"
++	"unsafe"
++
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++)
++
++func pointerCacheFoundation(t testing.TB) ID {
++	t.Helper()
++	if err := initObjCRuntime(); err != nil {
++		t.Fatal(err)
++	}
++	_, err := ffi.LoadLibrary("/System/Library/Frameworks/Foundation.framework/Foundation")
++	if err != nil {
++		t.Fatal(err)
++	}
++	cls := GetClass("NSNumber")
++	if cls == 0 {
++		t.Fatal("Foundation NSNumber missing")
++	}
++	return ID(cls)
++}
++
++func TestPointerCacheReturnsAndConcurrentFrames(t *testing.T) {
++	cls := pointerCacheFoundation(t)
++	var wg sync.WaitGroup
++	for worker := range 16 {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			runtime.LockOSThread()
++			defer runtime.UnlockOSThread()
++			pool := MsgSend(MsgSend(ID(GetClass("NSAutoreleasePool")), Sel("alloc")), Sel("init"))
++			defer Release(pool)
++			for iteration := range 500 {
++				value := uint64(worker)*100000 + uint64(iteration)
++				object, err := msgSendPointersCached(cls, Sel("numberWithUnsignedLongLong:"), types.PointerTypeDescriptor, []uintptr{uintptr(value)})
++				if err != nil || object == 0 {
++					t.Errorf("NSNumber creation: %x %v", object, err)
++					return
++				}
++				got, err := msgSendPointersCached(ID(object), Sel("unsignedLongLongValue"), types.UInt64TypeDescriptor, nil)
++				if err != nil || got != value {
++					t.Errorf("concurrent uint roundtrip: %x want %x err %v", got, value, err)
++					return
++				}
++				boolean, err := msgSendPointersCached(ID(object), Sel("boolValue"), types.UInt8TypeDescriptor, nil)
++				if err != nil || (uint8(boolean) != 0) != (value != 0) {
++					t.Errorf("bool roundtrip: %x value %x err %v", boolean, value, err)
++					return
++				}
++				var reference uint64
++				if err = msgSend(ID(object), Sel("unsignedLongLongValue"), types.UInt64TypeDescriptor, unsafe.Pointer(&reference)); err != nil || reference != got {
++					t.Errorf("reference mismatch: %x %x %v", reference, got, err)
++					return
++				}
++			}
++		}()
++	}
++	wg.Wait()
++}
++
++func TestPointerCacheSignatureBoundsAndNil(t *testing.T) {
++	for _, ret := range []*types.TypeDescriptor{types.PointerTypeDescriptor, types.UInt64TypeDescriptor, types.UInt8TypeDescriptor} {
++		for _, nilInput := range [][2]uintptr{{0, 1}, {1, 0}, {0, 0}} {
++			value, err := msgSendPointersCached(ID(nilInput[0]), SEL(nilInput[1]), ret, nil)
++			if value != 0 || err != nil {
++				t.Fatal("nil ObjC input changed behavior", value, err)
++			}
++		}
++	}
++	cls := pointerCacheFoundation(t)
++	var reference uint64
++	args := make([]uintptr, 14)
++	err := msgSend(cls, Sel("description"), types.UInt64TypeDescriptor, unsafe.Pointer(&reference), pointerArgs(args)...)
++	value, cachedErr := msgSendPointersCached(cls, Sel("description"), types.UInt64TypeDescriptor, args)
++	if err == nil || cachedErr == nil || reference != value {
++		t.Fatal("unsupported signature lost original error", reference, value, err, cachedErr)
++	}
++}
++
++func BenchmarkPointerCache(b *testing.B) {
++	cls := pointerCacheFoundation(b)
++	runtime.LockOSThread()
++	defer runtime.UnlockOSThread()
++	pool := MsgSend(MsgSend(ID(GetClass("NSAutoreleasePool")), Sel("alloc")), Sel("init"))
++	defer Release(pool)
++	object := MsgSend(cls, Sel("numberWithUnsignedLongLong:"), uintptr(0xffffffffffffffff))
++	sel := Sel("unsignedLongLongValue")
++	b.Run("reference", func(b *testing.B) {
++		b.ReportAllocs()
++		for b.Loop() {
++			var result uint64
++			_ = msgSend(object, sel, types.UInt64TypeDescriptor, unsafe.Pointer(&result))
++		}
++	})
++	b.Run("cached", func(b *testing.B) {
++		b.ReportAllocs()
++		for b.Loop() {
++			_, _ = msgSendPointersCached(object, sel, types.UInt64TypeDescriptor, nil)
++		}
++	})
++}
++
++func TestPointerCacheRegisterStackAndReentry(t *testing.T) {
++	pointerCacheFoundation(t)
++	original := symObjcMsgSend
++	defer func() { symObjcMsgSend = original }()
++	// A native callback exercises every pointer operand across register/stack
++	// boundaries. Receiver and selector are explicit first operands, as in ObjC.
++	sum := ffi.NewCallback(func(self, selector, a, b, c, d, e, f, g, h, i, j, k, l, m uintptr) uintptr {
++		return self + selector + a + 2*b + 3*c + 4*d + 5*e + 6*f + 7*g + 8*h + 9*i + 10*j + 11*k + 12*l + 13*m
++	})
++	symObjcMsgSend = unsafe.Pointer(sum)
++	args := make([]uintptr, 13)
++	want := uint64(3)
++	for i := range args {
++		args[i] = uintptr(i + 1)
++		want += uint64((i + 1) * (i + 1))
++	}
++	got, err := msgSendPointersCached(ID(1), SEL(2), types.UInt64TypeDescriptor, args)
++	if err != nil || got != want {
++		t.Fatalf("register/stack values: got %x want %x err %v", got, want, err)
++	}
++	for count := 14; count <= 17; count++ {
++		got, err = msgSendPointersCached(ID(1), SEL(2), types.UInt64TypeDescriptor, make([]uintptr, count))
++		if err == nil || got != 0 {
++			t.Fatalf("oversized %d signature: %x %v", count, got, err)
++		}
++	}
++	reentrant := ffi.NewCallback(func(self, selector uintptr) uintptr {
++		if self == 100 {
++			nested, nestedErr := msgSendPointersCached(ID(101), SEL(2), types.UInt64TypeDescriptor, nil)
++			if nestedErr != nil {
++				return 0
++			}
++			runtime.GC() // force pool recreation while the outer frame remains active
++			return uintptr(nested) + 1
++		}
++		return self + selector
++	})
++	symObjcMsgSend = unsafe.Pointer(reentrant)
++	got, err = msgSendPointersCached(ID(100), SEL(2), types.UInt64TypeDescriptor, nil)
++	if err != nil || got != 104 {
++		t.Fatalf("reentrant frame: %x %v", got, err)
++	}
++	symObjcMsgSend = nil
++	got, err = msgSendPointersCached(ID(1), SEL(2), types.UInt8TypeDescriptor, nil)
++	if err == nil || got != 0 {
++		t.Fatalf("nil symbol inherited pooled result: %x %v", got, err)
++	}
++}

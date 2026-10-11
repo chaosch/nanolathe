@@ -134,6 +134,7 @@ type Models struct {
 	poseBytes, instanceBytes, selectedBytes, lightBytes, slotBytes, shadowBytes []byte
 	draws, shadowDraws                                                          []modelDraw
 	batchWork                                                                   modelBatchWork
+	packingWork                                                                 modelPackingWork
 	disableModelBatching                                                        bool
 	paint                                                                       []modelPaint
 	shadowPaint                                                                 []modelShadowPaint
@@ -615,46 +616,6 @@ func (m *Models) modelGroup(layout *wgpu.BindGroupLayout, entries []wgpu.BindGro
 	return g, e
 }
 
-// modelPackSlots allocates immutable body sources and final subjects at 2x,
-// including Metal's direct-slab slots. Even extents/origins keep each native
-// pixel's four samples inside one subject (§17). Shadows use their exported
-// independent slots directly and never pass through this body packer.
-func modelPackSlots(input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
-	return modelPackSlotsInto(nil, input)
-}
-func modelPackSlotsInto(dst, input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
-	out := append(dst[:0], input...)
-	width := 2048
-	for _, s := range out {
-		if !modelFinite(s.Screen[0]+s.Screen[1]+s.Screen[2]+s.Screen[3]) || s.Screen[2] <= 0 || s.Screen[3] <= 0 || s.Screen[2] > 4096 || s.Screen[3] > 4096 {
-			return nil, 0, 0, modelError("finite positive body rectangles within doubled core atlas dimensions")
-		}
-		for width < 2*int(math.Ceil(float64(s.Screen[2]))) {
-			width *= 2
-		}
-	}
-	for {
-		x, y, row := 0, 0, 0
-		for i := range out {
-			w, h := 2*int(math.Ceil(float64(out[i].Screen[2]))), 2*int(math.Ceil(float64(out[i].Screen[3])))
-			if x+w > width {
-				x, y, row = 0, y+row, 0
-			}
-			out[i].Atlas = [4]float32{float32(x), float32(y), float32(w), float32(h)}
-			x += w
-			row = max(row, h)
-		}
-		height := max(64, (y+row+63)&^63)
-		if height <= 8192 {
-			return out, width, height, nil
-		}
-		if width >= 8192 {
-			return nil, 0, 0, modelError("all isolated doubled body slots fitting an 8192-square atlas")
-		}
-		width *= 2
-	}
-}
-
 func modelSelectLights(lights []meshscene.RetainedLight, screen [4]float32) ([8]uint32, uint32) {
 	var ids [8]uint32
 	var scores [8]float32
@@ -889,7 +850,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	// TODO(question): the producer exports no raw/resized cached-plane seed or
 	// cached→outline→live chronology. Immutable source rasters and ordered group
 	// merges below preserve only the coverage this retained mesh pass can supply.
-	slots, aw, ah, e := modelPackSlotsInto(m.packedSlots, inputSlots)
+	slots, aw, ah, e := m.packingWork.pack(m.packedSlots, inputSlots)
 	if e != nil {
 		return e
 	}
