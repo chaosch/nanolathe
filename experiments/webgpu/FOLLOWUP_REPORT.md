@@ -455,21 +455,21 @@ profile attributes 44.77% cumulative samples to `metalBenchmarkSource.Next`,
 these overlap and are not sums. The source includes simulation, visual
 recording and packing: it is not GPU rendering time or an upstream blocker.
 
-The per-frame `driver_darwin.go` WaitIdle is a runtime boundary, not merely a
-qualification readback artifact. It precedes mutable buffer writes on every
-ordinary draw. On this pin, Metal Queue.WriteBuffer immediately copies into
-shared memory, and atlas/growing bind-group replacements release old resources
-at Prepare. Removing the wait without a completion-aware resource ring risks
-writes/releases while prior GPU work still reads those resources. Resize and
-final readback additionally require their own completion boundaries.
+The per-frame `driver_darwin.go` WaitIdle is a runtime boundary before every
+ordinary draw, separate from resize/final readback. **Correction from the exact
+public-API audit:** public Queue.WriteBuffer already uses PendingWrites staging;
+its lower-level Metal HAL direct copy was previously mistaken for this path.
+An application buffer ring is therefore not inherently required. The actual
+risks were direct HostWritable texture uploads, copy-only destination lifetime,
+and false completion on failed completion-block allocation. See the owned-upload
+follow-up below. Resize, capture and teardown retain checked completion boundaries.
 
-A steady 120 Hz draw cadence is not established. The practical next architecture
-unit is a CPU source owner publishing detached committed frame packets plus a
-bounded GPU mutable-resource ring; draw-time alpha/pose interpolation must not
-block on authoritative simulation or overwrite in-flight records. Preserve
-ordered carrier/group/world composition and the current 30 Hz simulation
-contract. Resource ring depth and latest-packet reuse need separate lifecycle
-and timing qualification before the wait can be removed.
+A steady120Hz draw cadence is not established. A committed30Hz presentation
+producer remains the next CPU architecture boundary, sampled at draw-time
+alpha/time without blocking on authoritative simulation. Preserve carrier/group/
+world order, effects and the30Hz simulation contract. Queue-owned immutable
+staging can protect mutable uploads with one renderer; do not clone atlas/geometry
+or assume an app ring is necessary before auditing the actual public path.
 
 The body batching code is portable Go/WGSL and keeps normalized UV attributes
 resident. The real-game command/host remains macOS-only. Linux/Vulkan,
@@ -527,9 +527,10 @@ Native `run_darwin.go` prepares source and packed upload records on a persistent
 worker while the render thread presents/paces. `gobridge_darwin.go` waits only
 for the reused slot in a three-entry mutable resource ring and commits without
 an immediate global drain. WebGPU had synchronous Next and per-draw WaitIdle.
-The native ring is an ownership design, not a permission to delete WebGPU's
-wait: pinned Metal WriteBuffer can mutate shared memory immediately, and current
-WebGPU preparation replaces borrowed views/bindings and atlas resources.
+The native ring is one ownership design. Public WebGPU buffer writes already
+stage immutable bytes on this pin; the immediate-copy concern applies to the
+lower-level HAL path. Public mutable texture writes and failure/lifetime edges
+need the reviewed repair before removing the per-draw drain.
 
 Native Coast source p50 is2.741ms plus separate packing0.146ms, versus WebGPU
 Next2.428ms before preparation/encoding. Native is not faster at median source
@@ -569,8 +570,9 @@ and measurement boundaries, including the Go race detector.
 Results are mixed, so the worker remains opt-in through
 `NANOLATHE_WEBGPU_PREPARE_AHEAD=1` when Options.PrepareAhead supplies a policy.
 The selected implementation joins the worker before error-checked WaitIdle.
-An attempted wait-before-join ordering is discarded. GPU resources still have
-one protected mutable set. Fully asynchronous frame reuse is not implemented.
+An attempted wait-before-join ordering is discarded. That measured worker unit retained
+one protected mutable set. The later owned-upload diagnostic below removes the
+per-draw drain only with explicitly checked dependency contracts.
 
 | Coast variant | Mean callback Hz | p50/p95/p99 callback ms |
 |---|---:|---|
@@ -647,16 +649,15 @@ to wait indefinitely for an upstream release. Latest upstream's general ObjC
 allocation path remains per-call; exposed render bundles alone do not implement
 Metal render bundles.
 
-The next substantial unit is a committed30Hz producer packet owner, independently
-sampled by draw-time alpha/time, plus two/three mutable upload/binding bundles
-sharing immutable geometry, art and queue-ordered GPU targets. Initially native
-can error-check WaitIdle when a bundle batch fills and drain at resize/loss/
-shutdown; asynchronous tickets need the completion-failure fix and reliable
-submission error propagation. Browser needs a real post-submit promise. Do not
-clone entire Renderers/atlases, remove a wait blindly, alter simulation cadence,
-or claim120Hz from target settings. Linux/Windows/core wasm builds pass; the
-real-game host is still macOS-only. Other native hosts and a real browser game
-runtime/input/loss qualification remain work, not delivered cross-platform support.
+The next substantial CPU unit is a committed30Hz producer packet owner,
+independently sampled by draw-time alpha/time. The exact public API supports one
+renderer plus queue-owned staging after the local ownership/completion repair;
+no application-level buffer ring is intrinsically needed. Browser remains on the
+shared renderer path, with its real post-submit promise for capture/completion;
+user requested deferring browser-specific worker/thread machinery. Do not clone
+entire Renderers/atlases, remove a wait blindly, alter simulation cadence, or
+claim120Hz from target settings. Linux/Windows/core wasm builds are compile
+checks; real-game host and asynchronous runtime qualification remain macOS-only.
 
 All fifteen measured variants and native timing scopes are summarized in
 `METAL_GAP_MEASUREMENTS.json`; raw runs/build manifests remain in the named
@@ -674,3 +675,124 @@ variability: neither the small batching timing delta nor worker improvements
 should be sold as a controlled repeatable FPS estimate. Command-count reduction
 and allocation/pixel equivalence are stronger established results. The final
 build manifest records106 experiment Go/WGSL source hashes and CGO_ENABLED=0.
+
+
+### Owned-upload and submission-failure diagnostic
+
+`patches/wgpu-owned-submission.patch` and `patches/gogpu-owned-submission.patch`
+apply only to guarded private copies of the exact pins. Build with
+`tools/build-play NEW_EXTERNAL_DIR --metal-cache --owned-submission`. Enable the
+per-draw drain removal with `NANOLATHE_WEBGPU_ASYNC_UPLOADS=1`; the host rejects
+that setting unless both dependency capability contracts exist, and the device
+contract is true only for the reviewed Metal HAL. Defaults/dependency graph and
+module cache remain unchanged.
+
+Public buffer writes own copied staging bytes. Copy-only destination ResourceRefs
+now survive flush until real completion, and discard/rejected batches balance
+refs. Reviewed Metal mutable texture writes also stage immutable bytes. Dirty
+rectangle packing honors source Offset/row stride, copies only the requested
+texels including a partial last row, and bounds the staging write. Complete block
+rows/layers split into separate GPU staging allocations under the belt limit;
+the1GiB CPU packing bound is distinct from the64MiB default per-GPU-allocation
+limit. The first real setup failed at the earlier64MiB packing cap and produced
+no timing result; this exposed and fixed a partial-constructor diagnostic access
+panic. Failed callbacks now abort before shared-frame submit/present.
+
+Metal validates all CBs and allocates both completion blocks before any commit.
+Block-allocation failure rejects the whole batch; empty HAL submission invents
+no work. Failed/nil idle barriers publish no completion or semaphore credits.
+Submission and barrier/maintenance serialize, including mapping. Known rejected
+CBs release unsubmitted ownership; error after possible execution preserves a
+snapshot of the full batch, marks CBs quarantined, poisons further writes/submits/
+maps and preserves native teardown. A final void Device.Release error is exposed
+to the host; unknown completion retains device, instance, surface, window and
+command graphs. CPU source/profiling cleanup still runs. The patch does not
+implement device-loss recovery or retry/rollback of rejected tracker state.
+
+Injected tests cover completion allocation/barrier failures, barrier-vs-later-
+submit serialization, immutable uploads, balanced lifetime/cancellation,
+short/offset/dirty texture rows and chunk boundaries, caller-slice reuse,
+unknown-submit Release/Free/map guards, hidden Finish/Submit/headless-readback
+errors, callback abort and final release wait failure. Both dependency full
+suites and focused race suites have passed during this unit; final-source checks
+and native results are recorded below. Non-Metal texture packing is retained
+from the pin; compressed layout/runtime qualification there remains incomplete.
+Metal completion callbacks still establish safe retirement rather than proof
+of successful execution; native GPU errors/loss are not qualified.
+
+
+Matched native results (same guarded patched binary plus pointer cache,
+GOMAXPROCS2,1920x1080,DPR2,seed7,240 warmup+720 measured draws):
+
+| Fixture / mode | Callback Hz | Cadence p50 / p95 / p99 ms |
+|---|---:|---:|
+| Coast, per-draw drain |100.92|8.52 /15.73 /16.73|
+| Coast, queued uploads |115.99|8.35 /10.21 /15.26|
+| Coast, queued uploads + source ahead |119.53|8.34 /8.88 /10.20|
+| Field3000, per-draw drain |78.48|9.88 /22.97 /23.89|
+| Field3000, queued uploads |79.90|8.71 /23.63 /24.66|
+| Field3000, queued uploads + source ahead |87.06|9.07 /21.31 /22.60|
+
+Every case retained720 distinct tick/alpha samples and720 distinct prior-submit
+indices (241..960), submitted/completed index963 at checked close, byte-identical
+final PNG and all eight end-state files against the prior fixture reference.
+Coast's18 and Field's14 GPU sidecars match their new synchronous controls byte
+for byte, including raw model/pose/slot records and source/key/shadow/world fields.
+The runs are sequential bounded samples, not repeated thermal-controlled tests.
+Callback cadence is not a presented/scanout clock. Near120Hz Coast mean does not
+establish steady120FPS or dense all-platform success.
+
+Field source p95 stays about19–20ms and source-ahead join p95 remains18.13ms.
+The fixed fixture explicitly runs a synchronous simulation step every four draw
+phases; keeping its workload/state contract means that burst can still block
+presentation. Interactive Metal already uses asynchronous simulation and a
+borrowed per-draw presentation sampler. A first independent-simulation field
+run is excluded from dense proof: edge scrolling moved the scene out of view,
+and608/720 measured frames had zero model instances. Do not promote its117.75Hz
+callback result as dense rendering.
+
+The source boundary needs owned publication inputs, not reused finished frames.
+Per-publication pose endpoints, committed identity/flags/fog and stable subject
+mappings can be owned separately. Base RetainedBattle.Frame is already cached
+between draws of a pair. Keep current per-draw effects/CRT, camera-dependent
+painter order/admission, rounded body/shadow bounds, arrival sampling, water
+phase/drift, HUD and annotations with a presentation owner. Unit and feature
+bucket formulas intentionally differ at non-multiple-of16 camera Z. Copying a
+LiveFrame header or rendering one finished30Hz frame four times would silently
+change those semantics. See cmd/nanolathe/metal_{host,benchmark}_darwin.go,
+internal/client/retained_effects.go, retained_model_projection.go, world_draw.go,
+and internal/meshscene/model_composition.go, retained_shadow_types.go.
+
+Final dependency full tests pass. Focused ownership/failure/chunk/retirement race
+tests pass using CGO1/nofakecgo testing tooling; shipping binaries are CGO0.
+Default full wgpu vet reports six unsafe.Pointer warnings: four stock native
+FFI/software sites and two pointer-cache diagnostic test sites. No warning comes
+from owned-upload code. Vet with only the unsafeptr analyzer disabled passes;
+this is not a clean default-vet claim. Full GoGPU tests pass; default vet reports seven pre-existing Darwin FFI
+unsafe.Pointer sites, and its remaining analyzers pass with unsafeptr disabled.
+Both patched dependency roots build with CGO0 for Linuxamd64, Windowsamd64 and
+js/wasm. These are compilation checks; the asynchronous runtime marker remains
+reviewed Metal only. OWNED_UPLOAD_MEASUREMENTS.json records exact
+quantiles, counts, equality/hash evidence, paths and excluded attempts.
+
+
+Patch scope is773 production added lines and252 removed lines across the two
+saved diffs, plus681 regression-test lines; the wgpu total includes the existing
+public format/block geometry table copied into portable packing. This is a
+nontrivial diagnostic fork, not a shipping dependency adoption. The minimum
+correctness areas are (1) owned pending uploads including initial/replaced
+textures, (2) real Metal completion and checked idle/teardown, and (3) host error
+propagation/callback abort. Conservative unknown-submit guards avoid unsafe
+recycling on HALs that can fail after executing work. No shader compiler, render
+backend, adapter or game renderer was reconstructed. An app-only mutable ring
+would still depend on truthful library completion and rejected/unknown submit
+semantics; duplicating already staged uploads alone does not remove those risks.
+
+
+The repository experiment `tools/check` passes after these edits: formatting,
+unit tests, default experiment vet, native/Rust/wasm probe builds and mocked
+browser telemetry. Its nonfatal self-module stat-cache warnings reflect the
+read-only module cache; no cache permission was bypassed. The six measured
+binaries' source/patch digests match the preserved diagnostics. Default build
+metadata now points to report.json for both preparation and asynchronous upload
+policy. Main and native Metal implementation sources remain unchanged.

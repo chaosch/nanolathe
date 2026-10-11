@@ -1,0 +1,1496 @@
+--- a/buffer.go
++++ b/buffer.go
+@@ -164,0 +165,11 @@
++	if b != nil && b.device != nil && b.device.queue != nil {
++		q := b.device.queue
++		q.mu.Lock()
++		defer q.mu.Unlock()
++		if b.device.released.Load() {
++			return nil, ErrReleased
++		}
++		if q.submissionErr != nil {
++			return nil, q.submissionErr
++		}
++	}
+--- /dev/null
++++ b/completion_owned_native.go
+@@ -0,0 +1,41 @@
++//go:build !rust && !(js && wasm)
++
++package wgpu
++
++import "sync"
++
++// Native asynchronous qualification currently covers reviewed Metal only.
++func (d *Device) CompletionSafeUploads() bool {
++	if d == nil || d.queue == nil {
++		return false
++	}
++	contract, ok := d.queue.hal.(interface{ SubmitErrorsBeforeCommit() bool })
++	return ok && contract.SubmitErrorsBeforeCommit()
++}
++
++// CompletionError exposes terminal unknown completion through the void Release API.
++func (d *Device) CompletionError() error {
++	if value, ok := failedDeviceTeardowns.Load(d); ok {
++		return value.(error)
++	}
++	return nil
++}
++
++type submissionUnknownError struct{ cause error }
++
++func (e *submissionUnknownError) Error() string {
++	return "wgpu: submission completion unknown: " + e.cause.Error()
++}
++func (e *submissionUnknownError) Unwrap() error           { return e.cause }
++func (e *submissionUnknownError) CompletionUnknown() bool { return true }
++
++// A HAL error may follow ExecuteCommandLists/commit. Keep the complete batch
++// when the backend does not explicitly guarantee rejected-before-commit.
++var unknownSubmissionBatches sync.Map
++
++type unknownSubmissionBatch struct {
++	pending        inflightSubmission
++	commands       []*CommandBuffer
++	barrierEncoder any
++	barrierBuffer  any
++}
+--- /dev/null
++++ b/completion_quarantine_native.go
+@@ -0,0 +1,13 @@
++//go:build !rust && !(js && wasm)
++
++// Copyright 2026 The Nanolathe Authors
++// SPDX-License-Identifier: MIT
++package wgpu
++
++import "sync"
++
++// Terminal completion failure must not turn into use-after-free during a void
++// Release API. Quarantine retains the device/instance graph; no recovery or
++// successful loss qualification is implied. The host reports the wait error.
++var failedDeviceTeardowns sync.Map
++var failedInstanceTeardowns sync.Map
+--- a/device_native.go
++++ b/device_native.go
+@@ -921 +921 @@
+-	if d.released.Load() || cb == nil {
++	if d.released.Load() || cb == nil || cb.quarantined {
+@@ -958,0 +959,8 @@
++	// Serialize the barrier and retirement against public Submit/queue writes.
++	if d.queue != nil {
++		d.queue.mu.Lock()
++		defer d.queue.mu.Unlock()
++		if d.queue.submissionErr != nil {
++			return d.queue.submissionErr
++		}
++	}
+@@ -1014,0 +1023,2 @@
++	// Retire acquisitions only after completion is known.
++	// Wait failure preserves the complete device/surface graph.
+@@ -1019,9 +1028,0 @@
+-	for _, surface := range configuredSurfaces {
+-		surface.discardForDevice(d)
+-	}
+-	if d.instance != nil {
+-		defer func() {
+-			d.instance.unregisterDevice(d)
+-			d.instance = nil
+-		}()
+-	}
+@@ -1033 +1034,10 @@
+-	_ = d.waitIdle()
++	if err := d.waitIdle(); err != nil {
++		failedDeviceTeardowns.Store(d, err)
++		return // Completion unknown: keep queue, callbacks and native resources alive.
++	}
++	if d.instance != nil {
++		defer func() { d.instance.unregisterDevice(d); d.instance = nil }()
++	}
++	for _, surface := range configuredSurfaces {
++		surface.discardForDevice(d)
++	}
+@@ -1094 +1104 @@
+-	if d == nil || d.core == nil {
++	if d == nil || d.core == nil || d.released.Load() {
+@@ -1099,6 +1109,9 @@
+-		// Wait on the HAL device so all submissions complete, then drain.
+-		if halDev, ok := d.core.HalDeviceHandle(); ok {
+-			_ = halDev.WaitIdle()
+-		}
+-		// Drain with a sentinel "all indices completed".
+-		return d.core.PollMaps(^uint64(0))
++		if err := d.waitIdle(); err != nil {
++			return false // Completion remains unknown; preserve pending maps.
++		}
++		d.queue.mu.Lock()
++		defer d.queue.mu.Unlock()
++		if d.released.Load() || d.queue.submissionErr != nil {
++			return false
++		}
++		return d.core.PollMaps(d.queue.Poll())
+@@ -1105,0 +1119,7 @@
++		if d.queue != nil {
++			d.queue.mu.Lock()
++			defer d.queue.mu.Unlock()
++			if d.released.Load() || d.queue.submissionErr != nil {
++				return false
++			}
++		}
+--- a/encoder_native.go
++++ b/encoder_native.go
+@@ -823 +823,3 @@
+-	submitted bool
++	submitted   bool
++	released    bool
++	quarantined bool
+@@ -840,3 +842,4 @@
+-	if cb == nil {
+-		return
+-	}
++	if cb == nil || cb.released || cb.quarantined {
++		return
++	}
++	cb.released = true
+--- a/hal/metal/device.go
++++ b/hal/metal/device.go
+@@ -279,0 +280,9 @@
++	mtlTexture.pendingMu.Lock()
++	defer mtlTexture.pendingMu.Unlock()
++	if mtlTexture.pendingRefs > 0 {
++		mtlTexture.pendingDestroy = true
++		return
++	}
++	d.destroyTextureNowLocked(mtlTexture)
++}
++func (d *Device) destroyTextureNowLocked(mtlTexture *Texture) {
+@@ -1397 +1405,0 @@
+-	hal.Logger().Debug("metal: WaitIdle starting")
+@@ -1400,53 +1408,7 @@
+-
+-	// Submit an empty command buffer and wait for it synchronously.
+-	// All previously committed command buffers on this queue will complete
+-	// before this one starts, so waitUntilCompleted acts as a full barrier.
+-	cmdBuffer := MsgSend(d.commandQueue, Sel("commandBuffer"))
+-	if cmdBuffer != 0 {
+-		Retain(cmdBuffer)
+-		_ = MsgSend(cmdBuffer, Sel("commit"))
+-		_ = MsgSend(cmdBuffer, Sel("waitUntilCompleted"))
+-		Release(cmdBuffer)
+-	}
+-
+-	// GPU is idle — all previously submitted command buffers have completed.
+-	// Explicitly advance completedIndex to submissionIndex so that
+-	// PollCompleted() returns the correct value immediately, without waiting
+-	// for addCompletedHandler blocks to fire on Metal's dispatch thread.
+-	// Those blocks fire asynchronously and may not have run yet even though
+-	// waitUntilCompleted has returned (Metal runs handlers on a separate queue).
+-	if d.queue != nil {
+-		target := d.queue.submissionIndex
+-		for {
+-			current := d.queue.completedIndex.Load()
+-			if current >= target {
+-				break
+-			}
+-			if d.queue.completedIndex.CompareAndSwap(current, target) {
+-				break
+-			}
+-		}
+-	}
+-
+-	// Drain and refill the frame semaphore. After waitUntilCompleted, all
+-	// in-flight completion handlers have fired and returned their tokens.
+-	// We drain any remaining tokens and refill to maxFramesInFlight so the
+-	// semaphore is in a clean state for subsequent submissions.
+-	if d.queue != nil && d.queue.frameSemaphore != nil {
+-		// Drain all available tokens (non-blocking).
+-		for {
+-			select {
+-			case <-d.queue.frameSemaphore:
+-			default:
+-				goto refill
+-			}
+-		}
+-	refill:
+-		// Refill to capacity.
+-		for i := 0; i < maxFramesInFlight; i++ {
+-			d.queue.frameSemaphore <- struct{}{}
+-		}
+-	}
+-
+-	hal.Logger().Debug("metal: WaitIdle complete")
+-	return nil
++	return d.waitIdleWithRuntime(metalIdleRuntime{
++		create: func() ID { return MsgSend(d.commandQueue, Sel("commandBuffer")) },
++		retain: func(id ID) { Retain(id) }, release: Release,
++		commit: func(id ID) { _ = MsgSend(id, Sel("commit")) },
++		wait:   func(id ID) { _ = MsgSend(id, Sel("waitUntilCompleted")) },
++		status: func(id ID) uint { return MsgSendUint(id, Sel("status")) },
++	})
+--- a/hal/metal/queue.go
++++ b/hal/metal/queue.go
+@@ -10,0 +11 @@
++	"sync"
+@@ -30,0 +32 @@
++	submissionMu    sync.Mutex
+@@ -54,13 +55,0 @@
+-	// Acquire a frame slot — blocks if maxFramesInFlight frames are in-flight.
+-	// This is the CPU-side throttle point.
+-	if q.frameSemaphore != nil {
+-		<-q.frameSemaphore
+-	}
+-
+-	hal.Logger().Debug("metal: Submit",
+-		"buffers", len(commandBuffers),
+-	)
+-
+-	q.submissionIndex++
+-	subIdx := q.submissionIndex
+-
+@@ -69,33 +58 @@
+-
+-	lastIdx := len(commandBuffers) - 1
+-	for i, buf := range commandBuffers {
+-		cb, ok := buf.(*CommandBuffer)
+-		if !ok || cb == nil {
+-			continue
+-		}
+-
+-		// On the last command buffer, register completion handlers.
+-		if i == lastIdx {
+-			// Track actual GPU completion for PollCompleted().
+-			// Uses addCompletedHandler to atomically store the submission index
+-			// when the GPU finishes, matching Rust wgpu-hal Fence.completed_value.
+-			q.registerSubmissionCompletionHandler(cb.raw, subIdx)
+-
+-			// Release frame semaphore slot for CPU-ahead throttling.
+-			if q.frameSemaphore != nil {
+-				q.registerFrameCompletionHandler(cb.raw)
+-				hal.Logger().Debug("metal: frame completion handler registered")
+-			}
+-		}
+-
+-		// Commit the command buffer
+-		_ = MsgSend(cb.raw, Sel("commit"))
+-	}
+-
+-	// If there were no valid command buffers but we acquired a semaphore slot,
+-	// release it immediately to avoid deadlock.
+-	if lastIdx < 0 && q.frameSemaphore != nil {
+-		q.frameSemaphore <- struct{}{}
+-	}
+-
+-	return subIdx, nil
++	return q.submitWithRuntime(commandBuffers, nativeSubmissionRuntime())
+@@ -109,41 +65,0 @@
+-}
+-
+-// registerSubmissionCompletionHandler attaches an addCompletedHandler: block to
+-// the command buffer that atomically stores the submission index when the GPU
+-// finishes execution. This provides accurate GPU completion tracking for
+-// PollCompleted(), replacing the conservative heuristic that returned
+-// submissionIndex - maxFramesInFlight.
+-//
+-// If block creation fails, the completedIndex is updated immediately as a
+-// fallback — this is conservative (reports completion too early rather than
+-// too late) but prevents maintain() from never recycling resources.
+-func (q *Queue) registerSubmissionCompletionHandler(cmdBuffer ID, subIdx uint64) {
+-	blockPtr := newGPUCompletionBlock(&q.completedIndex, subIdx)
+-	if blockPtr == 0 {
+-		// Block creation failed — update immediately as fallback.
+-		hal.Logger().Warn("metal: submission completion block creation failed, updating immediately")
+-		q.completedIndex.Store(subIdx)
+-		return
+-	}
+-
+-	_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+-	hal.Logger().Debug("metal: submission completion handler registered", "subIdx", subIdx)
+-}
+-
+-// registerFrameCompletionHandler attaches an addCompletedHandler: block to the
+-// command buffer that signals frameSemaphore when the GPU finishes execution.
+-func (q *Queue) registerFrameCompletionHandler(cmdBuffer ID) {
+-	blockPtr := newFrameCompletionBlock(q.frameSemaphore)
+-	if blockPtr == 0 {
+-		// Block creation failed — release the semaphore slot immediately
+-		// so the pipeline does not deadlock. This degrades gracefully to
+-		// no throttling for this frame.
+-		hal.Logger().Warn("metal: frame completion block creation failed")
+-		q.frameSemaphore <- struct{}{}
+-		return
+-	}
+-
+-	// With _NSConcreteGlobalBlock, Block_copy() is a no-op — Metal holds
+-	// the same pointer. The block is pinned via blockPinRegistry until
+-	// the completion callback fires and unpins it.
+-	_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+--- a/hal/metal/resource.go
++++ b/hal/metal/resource.go
+@@ -8,0 +9 @@
++	"sync"
+@@ -61 +62,4 @@
+-	isShared bool
++	isShared       bool
++	pendingMu      sync.Mutex
++	pendingRefs    uint32
++	pendingDestroy bool
+@@ -71,2 +75,24 @@
+-func (t *Texture) AddPendingRef()                      {}
+-func (t *Texture) DecPendingRef()                      {}
++func (t *Texture) AddPendingRef() {
++	t.pendingMu.Lock()
++	defer t.pendingMu.Unlock()
++	t.pendingRefs++
++}
++func (t *Texture) DecPendingRef() {
++	t.pendingMu.Lock()
++	defer t.pendingMu.Unlock()
++	if t.pendingRefs == 0 {
++		panic("metal: unbalanced pending texture ref")
++	}
++	t.pendingRefs--
++	if t.pendingRefs == 0 && t.pendingDestroy && t.device != nil {
++		t.device.destroyTextureNowLocked(t)
++	}
++}
++
++// A queued owned-texture write keeps its original native destination valid
++// after public wrapper release. Surface acquisition leases never use this.
++func (t *Texture) PendingWritesKeepAlive() bool {
++	t.pendingMu.Lock()
++	defer t.pendingMu.Unlock()
++	return t.pendingRefs > 0 && t.raw != 0 && t.device != nil
++}
+--- /dev/null
++++ b/hal/metal/submission_owned.go
+@@ -0,0 +1,120 @@
++//go:build darwin && !(js && wasm)
++
++// Copyright 2026 The Nanolathe Authors
++// SPDX-License-Identifier: MIT
++package metal
++
++import (
++	"fmt"
++	"github.com/gogpu/wgpu/hal"
++	"sync/atomic"
++)
++
++// Dependency-local seam permits failure tests without native calls or mutable
++// process-global hooks. Production supplies the initialized ObjC runtime.
++type metalSubmissionRuntime struct {
++	gpuBlock   func(*atomic.Uint64, uint64) uintptr
++	frameBlock func(chan struct{}) uintptr
++	discard    func(uintptr)
++	attach     func(ID, uintptr)
++	commit     func(ID)
++}
++
++func nativeSubmissionRuntime() metalSubmissionRuntime {
++	return metalSubmissionRuntime{
++		gpuBlock: newGPUCompletionBlock, frameBlock: newFrameCompletionBlock,
++		discard: discardUnregisteredCompletionBlock,
++		attach:  func(id ID, block uintptr) { _ = MsgSend(id, Sel("addCompletedHandler:"), block) },
++		commit:  func(id ID) { _ = MsgSend(id, Sel("commit")) },
++	}
++}
++func discardUnregisteredCompletionBlock(ptr uintptr) {
++	if value, ok := blockPtrToID.LoadAndDelete(ptr); ok {
++		id := value.(uint64)
++		gpuCompletionRegistry.Delete(id)
++		frameCompletionRegistry.Delete(id)
++		blockPinRegistry.Delete(id)
++	}
++}
++
++func (q *Queue) submitWithRuntime(buffers []hal.CommandBuffer, rt metalSubmissionRuntime) (uint64, error) {
++	q.submissionMu.Lock()
++	defer q.submissionMu.Unlock()
++	// No new work means no new completion claim or semaphore consumption.
++	if len(buffers) == 0 {
++		return q.submissionIndex, nil
++	}
++	for i, buffer := range buffers {
++		cb, ok := buffer.(*CommandBuffer)
++		if !ok || cb == nil || cb.raw == 0 {
++			return 0, fmt.Errorf("metal: invalid command buffer %d; no commands committed", i)
++		}
++	}
++	index := q.submissionIndex + 1
++	gpu := rt.gpuBlock(&q.completedIndex, index)
++	if gpu == 0 {
++		return 0, fmt.Errorf("metal: GPU completion block unavailable; no commands committed")
++	}
++	var frame uintptr
++	if q.frameSemaphore != nil {
++		frame = rt.frameBlock(q.frameSemaphore)
++		if frame == 0 {
++			rt.discard(gpu)
++			return 0, fmt.Errorf("metal: frame completion block unavailable; no commands committed")
++		}
++	}
++	// All fallible validation/allocation precedes both native attachment and any
++	// commit. Only a real completion can return this semaphore token.
++	if q.frameSemaphore != nil {
++		<-q.frameSemaphore
++	}
++	last := buffers[len(buffers)-1].(*CommandBuffer).raw
++	rt.attach(last, gpu)
++	if frame != 0 {
++		rt.attach(last, frame)
++	}
++	for _, buffer := range buffers {
++		rt.commit(buffer.(*CommandBuffer).raw)
++	}
++	q.submissionIndex = index
++	return index, nil
++}
++
++type metalIdleRuntime struct {
++	create                        func() ID
++	retain, release, commit, wait func(ID)
++	status                        func(ID) uint
++}
++
++func (d *Device) waitIdleWithRuntime(rt metalIdleRuntime) error {
++	if d.queue != nil {
++		d.queue.submissionMu.Lock()
++		defer d.queue.submissionMu.Unlock()
++	}
++	buffer := rt.create()
++	if buffer == 0 {
++		return fmt.Errorf("metal: cannot allocate idle barrier; completion remains unknown")
++	}
++	rt.retain(buffer)
++	defer rt.release(buffer)
++	rt.commit(buffer)
++	rt.wait(buffer)
++	if status := rt.status(buffer); status != 4 {
++		return fmt.Errorf("metal: idle barrier status %d; completion remains unknown", status)
++	}
++	if d.queue != nil {
++		target := d.queue.submissionIndex
++		for {
++			current := d.queue.completedIndex.Load()
++			if current >= target || d.queue.completedIndex.CompareAndSwap(current, target) {
++				break
++			}
++		}
++	}
++	// Do not refill: registered callbacks own outstanding frame tokens and may
++	// still arrive. A refill would duplicate credits or block a callback forever.
++	return nil
++}
++
++// Submit validates and allocates both completion blocks before any commit.
++func (q *Queue) SubmitErrorsBeforeCommit() bool { return true }
+--- /dev/null
++++ b/hal/metal/submission_owned_test.go
+@@ -0,0 +1,162 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"github.com/gogpu/wgpu/hal"
++	"strings"
++	"sync/atomic"
++	"testing"
++	"time"
++)
++
++func TestOwnedSubmissionPreflightFailures(t *testing.T) {
++	for _, mode := range []string{"invalid", "gpu-block", "frame-block"} {
++		t.Run(mode, func(t *testing.T) {
++			q := &Queue{submissionIndex: 7, frameSemaphore: make(chan struct{}, 3)}
++			q.completedIndex.Store(4)
++			q.frameSemaphore <- struct{}{}
++			q.frameSemaphore <- struct{}{}
++			q.frameSemaphore <- struct{}{}
++			commits, attachments, discards := 0, 0, 0
++			rt := metalSubmissionRuntime{gpuBlock: func(*atomic.Uint64, uint64) uintptr {
++				if mode == "gpu-block" {
++					return 0
++				}
++				return 11
++			}, frameBlock: func(chan struct{}) uintptr {
++				if mode == "frame-block" {
++					return 0
++				}
++				return 12
++			}, discard: func(uintptr) { discards++ }, attach: func(ID, uintptr) { attachments++ }, commit: func(ID) { commits++ }}
++			buffers := []hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{raw: 2}}
++			if mode == "invalid" {
++				buffers[1] = &CommandBuffer{}
++			}
++			_, err := q.submitWithRuntime(buffers, rt)
++			if err == nil || !strings.Contains(err.Error(), "no commands committed") {
++				t.Fatalf("error=%v", err)
++			}
++			if commits != 0 || attachments != 0 || q.submissionIndex != 7 || q.completedIndex.Load() != 4 || len(q.frameSemaphore) != 3 {
++				t.Fatal("rejected submission changed completion/ownership")
++			}
++			if mode == "frame-block" && discards != 1 {
++				t.Fatal("unregistered GPU block leaked")
++			}
++		})
++	}
++}
++func TestOwnedSubmissionPublishesOnlyAfterRealCompletion(t *testing.T) {
++	q := &Queue{submissionIndex: 7, frameSemaphore: make(chan struct{}, 3)}
++	q.completedIndex.Store(4)
++	q.frameSemaphore <- struct{}{}
++	var target *atomic.Uint64
++	var value uint64
++	commits, attachments := 0, 0
++	rt := metalSubmissionRuntime{gpuBlock: func(p *atomic.Uint64, i uint64) uintptr { target, value = p, i; return 11 }, frameBlock: func(chan struct{}) uintptr { return 12 }, discard: func(uintptr) { t.Fatal("discarded valid block") }, attach: func(ID, uintptr) { attachments++ }, commit: func(ID) { commits++ }}
++	got, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{raw: 2}}, rt)
++	if err != nil || got != 8 || commits != 2 || attachments != 2 || q.completedIndex.Load() != 4 || len(q.frameSemaphore) != 0 {
++		t.Fatalf("invalid pre-completion state: %v", err)
++	}
++	target.Store(value)
++	q.frameSemaphore <- struct{}{}
++	if q.PollCompleted() != 8 || len(q.frameSemaphore) != 1 {
++		t.Fatal("completion did not retire exactly one frame")
++	}
++	before := q.submissionIndex
++	got, err = q.submitWithRuntime(nil, rt)
++	if err != nil || got != before || q.completedIndex.Load() != 8 || len(q.frameSemaphore) != 1 {
++		t.Fatal("empty submit invented work")
++	}
++}
++func TestOwnedIdleFailureDoesNotPublishCompletion(t *testing.T) {
++	for _, status := range []uint{0, 3, 5, 4} {
++		t.Run(string(rune('0'+status)), func(t *testing.T) {
++			q := &Queue{submissionIndex: 9, frameSemaphore: make(chan struct{}, 3)}
++			q.completedIndex.Store(2)
++			q.frameSemaphore <- struct{}{}
++			d := &Device{queue: q}
++			releases := 0
++			rt := metalIdleRuntime{create: func() ID {
++				if status == 0 {
++					return 0
++				}
++				return 3
++			}, retain: func(ID) {}, release: func(ID) { releases++ }, commit: func(ID) {}, wait: func(ID) {}, status: func(ID) uint { return status }}
++			err := d.waitIdleWithRuntime(rt)
++			if status == 4 {
++				if err != nil || q.completedIndex.Load() != 9 {
++					t.Fatalf("valid barrier failed: %v", err)
++				}
++			} else if err == nil || q.completedIndex.Load() != 2 {
++				t.Fatal("failed barrier falsely completed work")
++			}
++			if len(q.frameSemaphore) != 1 {
++				t.Fatal("idle wait duplicated semaphore tokens")
++			}
++			if (status != 0) != (releases == 1) {
++				t.Fatal("barrier lifetime unbalanced")
++			}
++		})
++	}
++}
++
++func TestOwnedIdleBarrierSerializesLaterSubmit(t *testing.T) {
++	q := &Queue{submissionIndex: 7}
++	q.completedIndex.Store(4)
++	d := &Device{queue: q}
++	waiting, release := make(chan struct{}), make(chan struct{})
++	done := make(chan error, 1)
++	go func() {
++		done <- d.waitIdleWithRuntime(metalIdleRuntime{
++			create: func() ID { return 3 }, retain: func(ID) {}, release: func(ID) {}, commit: func(ID) {},
++			wait: func(ID) { close(waiting); <-release }, status: func(ID) uint { return 4 },
++		})
++	}()
++	<-waiting
++	attempted, submitted := make(chan struct{}), make(chan error, 1)
++	go func() {
++		close(attempted)
++		_, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 2}}, metalSubmissionRuntime{
++			gpuBlock: func(*atomic.Uint64, uint64) uintptr { return 11 }, attach: func(ID, uintptr) {}, commit: func(ID) {},
++		})
++		submitted <- err
++	}()
++	<-attempted
++	select {
++	case <-submitted:
++		t.Fatal("later work committed during idle barrier")
++	case <-time.After(10 * time.Millisecond):
++	}
++	close(release)
++	if err := <-done; err != nil {
++		t.Fatal(err)
++	}
++	if err := <-submitted; err != nil {
++		t.Fatal(err)
++	}
++	if q.submissionIndex != 8 || q.PollCompleted() != 7 {
++		t.Fatal("idle barrier falsely completed later submission")
++	}
++}
++
++func TestOwnedTextureRetirementWaitsForEveryPendingCopy(t *testing.T) {
++	device := &Device{}
++	texture := &Texture{device: device}
++	texture.AddPendingRef()
++	texture.AddPendingRef()
++	device.DestroyTexture(texture)
++	if texture.device == nil || !texture.pendingDestroy {
++		t.Fatal("texture retired while queued copies remained")
++	}
++	texture.DecPendingRef()
++	if texture.device == nil {
++		t.Fatal("first completed copy retired second copy destination")
++	}
++	texture.DecPendingRef()
++	if texture.device != nil || texture.pendingRefs != 0 {
++		t.Fatal("last copy did not retire texture")
++	}
++	device.DestroyTexture(texture) // Idempotent physical retirement, no native raw handle.
++}
+--- a/hal/metal/surface.go
++++ b/hal/metal/surface.go
+@@ -66 +66,3 @@
+-		_ = s.device.WaitIdle()
++		if err := s.device.WaitIdle(); err != nil {
++			return fmt.Errorf("metal: resize requires known completion: %w", err)
++		}
+--- a/instance_native.go
++++ b/instance_native.go
+@@ -243,0 +244,4 @@
++		if _, failed := failedDeviceTeardowns.Load(device); failed {
++			failedInstanceTeardowns.Store(i, i)
++			return // Keep platform surfaces/driver alive for the quarantined device.
++		}
+--- /dev/null
++++ b/owned_texture_upload_native.go
+@@ -0,0 +1,192 @@
++//go:build !rust && !(js && wasm)
++
++// Copyright 2026 The GoGPU Authors
++// SPDX-License-Identifier: MIT
++package wgpu
++
++import (
++	"fmt"
++	"github.com/gogpu/gputypes"
++	"github.com/gogpu/wgpu/hal"
++)
++
++// packOwnedTextureData bounds every staging write to its allocation and copies
++// only texels required by the extent. Row/image padding belongs to staging.
++func packOwnedTextureData(buf *[]byte, owner *Texture, data []byte, layout *hal.ImageDataLayout, size *hal.Extent3D) ([]byte, uint32, uint32, error) {
++	if size.Width == 0 || size.Height == 0 {
++		return nil, 0, 0, fmt.Errorf("wgpu: empty texture extent")
++	}
++	rowBytes, blockRows := uint64(layout.BytesPerRow), uint64(size.Height)
++	if owner != nil {
++		format := owner.format
++		if format == gputypes.TextureFormatUndefined && owner.coreTexture != nil {
++			format = owner.coreTexture.Format()
++		}
++		bw, bh, bs, ok := ownedTextureFormatBlockInfo(format)
++		if !ok {
++			return nil, 0, 0, fmt.Errorf("wgpu: unsupported texture copy format %s", owner.format)
++		}
++		rowBytes = ((uint64(size.Width) + uint64(bw) - 1) / uint64(bw)) * uint64(bs)
++		blockRows = (uint64(size.Height) + uint64(bh) - 1) / uint64(bh)
++	}
++	if rowBytes == 0 || rowBytes > uint64(^uint32(0))-255 {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture copied row overflow")
++	}
++	srcStride := uint64(layout.BytesPerRow)
++	if srcStride == 0 {
++		srcStride = rowBytes
++	}
++	rows := uint64(layout.RowsPerImage)
++	if rows == 0 {
++		rows = blockRows
++	}
++	layers := uint64(size.DepthOrArrayLayers)
++	if layers == 0 {
++		layers = 1
++	}
++	if srcStride < rowBytes || rows < blockRows {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture source stride smaller than copy extent")
++	}
++	pitch := (rowBytes + 255) &^ uint64(255)
++	// Bound before multiplying: both native slice allocation and single texture
++	// upload packing has a1GiB CPU bound; GPU allocations are split at the belt limit.
++	if rows > maxOwnedTextureUploadSize/pitch || layers > maxOwnedTextureUploadSize/(pitch*rows) {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture staging size exceeds1GiB")
++	}
++	total := pitch * rows * layers
++	if layout.Offset > uint64(len(data)) {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture source offset outside data")
++	}
++	if srcStride > uint64(^uint32(0)) || rows*layers > (^uint64(0)-layout.Offset-rowBytes)/srcStride {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture source range overflow")
++	}
++	needed := layout.Offset + ((layers-1)*rows+blockRows-1)*srcStride + rowBytes
++	if layout.Offset > uint64(len(data)) || needed > uint64(len(data)) {
++		return nil, 0, 0, fmt.Errorf("wgpu: texture source data too short: need%d have%d", needed, len(data))
++	}
++	if uint64(cap(*buf)) < total {
++		*buf = make([]byte, total)
++	} else {
++		*buf = (*buf)[:total]
++		clear(*buf)
++	}
++	for layer := uint64(0); layer < layers; layer++ {
++		for row := uint64(0); row < blockRows; row++ {
++			src := layout.Offset + (layer*rows+row)*srcStride
++			dst := (layer*rows + row) * pitch
++			copy((*buf)[dst:dst+rowBytes], data[src:src+rowBytes])
++		}
++	}
++	return *buf, uint32(pitch), uint32(rows), nil
++}
++
++func ownedTextureFormatBlockInfo(format gputypes.TextureFormat) (width, height, size uint32, ok bool) {
++	blockSize := format.BlockCopySize()
++	if blockSize == 0 {
++		return 0, 0, 0, false
++	}
++
++	switch format {
++	case gputypes.TextureFormatBC1RGBAUnorm,
++		gputypes.TextureFormatBC1RGBAUnormSrgb,
++		gputypes.TextureFormatBC2RGBAUnorm,
++		gputypes.TextureFormatBC2RGBAUnormSrgb,
++		gputypes.TextureFormatBC3RGBAUnorm,
++		gputypes.TextureFormatBC3RGBAUnormSrgb,
++		gputypes.TextureFormatBC4RUnorm,
++		gputypes.TextureFormatBC4RSnorm,
++		gputypes.TextureFormatBC5RGUnorm,
++		gputypes.TextureFormatBC5RGSnorm,
++		gputypes.TextureFormatBC6HRGBUfloat,
++		gputypes.TextureFormatBC6HRGBFloat,
++		gputypes.TextureFormatBC7RGBAUnorm,
++		gputypes.TextureFormatBC7RGBAUnormSrgb,
++		gputypes.TextureFormatETC2RGB8Unorm,
++		gputypes.TextureFormatETC2RGB8UnormSrgb,
++		gputypes.TextureFormatETC2RGB8A1Unorm,
++		gputypes.TextureFormatETC2RGB8A1UnormSrgb,
++		gputypes.TextureFormatETC2RGBA8Unorm,
++		gputypes.TextureFormatETC2RGBA8UnormSrgb,
++		gputypes.TextureFormatEACR11Unorm,
++		gputypes.TextureFormatEACR11Snorm,
++		gputypes.TextureFormatEACRG11Unorm,
++		gputypes.TextureFormatEACRG11Snorm:
++		return 4, 4, blockSize, true
++	}
++
++	switch format {
++	case gputypes.TextureFormatASTC4x4Unorm, gputypes.TextureFormatASTC4x4UnormSrgb:
++		return 4, 4, blockSize, true
++	case gputypes.TextureFormatASTC5x4Unorm, gputypes.TextureFormatASTC5x4UnormSrgb:
++		return 5, 4, blockSize, true
++	case gputypes.TextureFormatASTC5x5Unorm, gputypes.TextureFormatASTC5x5UnormSrgb:
++		return 5, 5, blockSize, true
++	case gputypes.TextureFormatASTC6x5Unorm, gputypes.TextureFormatASTC6x5UnormSrgb:
++		return 6, 5, blockSize, true
++	case gputypes.TextureFormatASTC6x6Unorm, gputypes.TextureFormatASTC6x6UnormSrgb:
++		return 6, 6, blockSize, true
++	case gputypes.TextureFormatASTC8x5Unorm, gputypes.TextureFormatASTC8x5UnormSrgb:
++		return 8, 5, blockSize, true
++	case gputypes.TextureFormatASTC8x6Unorm, gputypes.TextureFormatASTC8x6UnormSrgb:
++		return 8, 6, blockSize, true
++	case gputypes.TextureFormatASTC8x8Unorm, gputypes.TextureFormatASTC8x8UnormSrgb:
++		return 8, 8, blockSize, true
++	case gputypes.TextureFormatASTC10x5Unorm, gputypes.TextureFormatASTC10x5UnormSrgb:
++		return 10, 5, blockSize, true
++	case gputypes.TextureFormatASTC10x6Unorm, gputypes.TextureFormatASTC10x6UnormSrgb:
++		return 10, 6, blockSize, true
++	case gputypes.TextureFormatASTC10x8Unorm, gputypes.TextureFormatASTC10x8UnormSrgb:
++		return 10, 8, blockSize, true
++	case gputypes.TextureFormatASTC10x10Unorm, gputypes.TextureFormatASTC10x10UnormSrgb:
++		return 10, 10, blockSize, true
++	case gputypes.TextureFormatASTC12x10Unorm, gputypes.TextureFormatASTC12x10UnormSrgb:
++		return 12, 10, blockSize, true
++	case gputypes.TextureFormatASTC12x12Unorm, gputypes.TextureFormatASTC12x12UnormSrgb:
++		return 12, 12, blockSize, true
++	default:
++		return 1, 1, blockSize, true
++	}
++}
++
++const maxOwnedTextureUploadSize uint64 = 1 << 30
++
++// Copy each bounded staging buffer into its own rows/layer. A buffer chunk
++// boundary is never interpreted as a complete large texture source.
++func (pw *pendingWrites) recordOwnedTextureCopies(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, data []byte, pitch, rows uint32, size *hal.Extent3D) error {
++	blockHeight := uint32(1)
++	if owner != nil {
++		format := owner.format
++		if format == gputypes.TextureFormatUndefined && owner.coreTexture != nil {
++			format = owner.coreTexture.Format()
++		}
++		_, blockHeight, _, _ = ownedTextureFormatBlockInfo(format)
++	}
++	blockRows := (uint64(size.Height) + uint64(blockHeight) - 1) / uint64(blockHeight)
++	perChunk := pw.belt.maxStagingBufferSize / uint64(pitch)
++	if perChunk == 0 {
++		return fmt.Errorf("wgpu: texture row exceeds staging allocation limit")
++	}
++	layers := uint64(size.DepthOrArrayLayers)
++	if layers == 0 {
++		layers = 1
++	}
++	for layer := uint64(0); layer < layers; layer++ {
++		for row := uint64(0); row < blockRows; {
++			count := min(perChunk, blockRows-row)
++			begin := (layer*uint64(rows) + row) * uint64(pitch)
++			length := count * uint64(pitch)
++			alloc, err := pw.belt.allocate(length, data[begin:begin+length])
++			if err != nil {
++				return err
++			}
++			origin := *dst
++			origin.Origin.Y += uint32(row * uint64(blockHeight))
++			origin.Origin.Z += uint32(layer)
++			copyHeight := min(uint32(count*uint64(blockHeight)), size.Height-uint32(row*uint64(blockHeight)))
++			region := [1]hal.BufferTextureCopy{{BufferLayout: hal.ImageDataLayout{Offset: alloc.offset, BytesPerRow: pitch, RowsPerImage: uint32(count)}, TextureBase: origin, Size: hal.Extent3D{Width: size.Width, Height: copyHeight, DepthOrArrayLayers: 1}}}
++			enc.CopyBufferToTexture(alloc.buffer, dst.Texture, region[:])
++			row += count
++		}
++	}
++	return nil
++}
+--- /dev/null
++++ b/pending_owned_test.go
+@@ -0,0 +1,361 @@
++//go:build !rust && !(js && wasm)
++
++package wgpu
++
++import (
++	"errors"
++	"github.com/gogpu/gputypes"
++	"github.com/gogpu/wgpu/core"
++	"github.com/gogpu/wgpu/hal"
++	"github.com/gogpu/wgpu/hal/noop"
++	"testing"
++)
++
++func TestOwnedPendingBufferRetainsUntilCompletion(t *testing.T) {
++	pw, dev, q := createBatchingPW(t)
++	defer pw.destroy()
++	dst, err := dev.CreateBuffer(&hal.BufferDescriptor{Size: 16, Usage: gputypes.BufferUsageCopyDst})
++	if err != nil {
++		t.Fatal(err)
++	}
++	destroyed := 0
++	ref := core.NewResourceRef("copy-only", func() { destroyed++ })
++	source := []byte{1, 2, 3, 4}
++	for range 2 {
++		if err := pw.writeBufferRef(ref, dst, gputypes.BufferUsageCopyDst, 0, source); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if ref.RefCount() != 2 {
++		t.Fatal("duplicate writes must retain only once")
++	}
++	source[0] = 9
++	if q.lastWriteData[0] != 1 {
++		t.Fatal("upload did not own source bytes")
++	}
++	ref.Drop()
++	if destroyed != 0 {
++		t.Fatal("copy-only destination retired before submit")
++	}
++	cmd, enc, tex, buffers, err := pw.flush()
++	if err != nil {
++		t.Fatal(err)
++	}
++	pw.inflight = append(pw.inflight, inflightSubmission{submissionIndex: 5, cmdBuf: cmd, encoder: enc, dstTextures: tex, dstBuffers: buffers})
++	pw.maintain(4)
++	if destroyed != 0 || ref.RefCount() != 1 {
++		t.Fatal("incomplete copy retired")
++	}
++	pw.maintain(5)
++	pw.maintain(5)
++	if destroyed != 1 || ref.RefCount() != 0 {
++		t.Fatal("completed copy reference not dropped exactly once")
++	}
++}
++func TestOwnedPendingBufferDiscardAndCancel(t *testing.T) {
++	for _, flush := range []bool{false, true} {
++		t.Run(map[bool]string{false: "recording", true: "flushed"}[flush], func(t *testing.T) {
++			pw, dev, _ := createBatchingPW(t)
++			defer pw.destroy()
++			dst, _ := dev.CreateBuffer(&hal.BufferDescriptor{Size: 16, Usage: gputypes.BufferUsageCopyDst})
++			destroyed := 0
++			ref := core.NewResourceRef("abandoned", func() { destroyed++ })
++			if err := pw.writeBufferRef(ref, dst, gputypes.BufferUsageCopyDst, 0, []byte{1, 2, 3, 4}); err != nil {
++				t.Fatal(err)
++			}
++			ref.Drop()
++			if flush {
++				cmd, enc, tex, buffers, err := pw.flush()
++				if err != nil {
++					t.Fatal(err)
++				}
++				pw.cancelFlush(cmd, enc, tex, buffers)
++			} else {
++				pw.discardRecording()
++			}
++			if destroyed != 1 || ref.RefCount() != 0 {
++				t.Fatal("abandoned copy reference unbalanced")
++			}
++		})
++	}
++}
++
++type ownedSharedTexture struct{ hal.Texture }
++
++func (*ownedSharedTexture) IsHostWritable() bool { return true }
++func TestOwnedSharedTextureUsesImmutableStaging(t *testing.T) {
++	pw, dev, q := createBatchingPW(t)
++	defer pw.destroy()
++	texture, err := dev.CreateTexture(&hal.TextureDescriptor{Size: hal.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}, Format: gputypes.TextureFormatRGBA8Unorm, Usage: gputypes.TextureUsageCopyDst})
++	if err != nil {
++		t.Fatal(err)
++	}
++	src := []byte{1, 2, 3, 4}
++	dst := &ownedSharedTexture{texture}
++	if err := pw.writeTexture(&hal.ImageCopyTexture{Texture: dst}, src, &hal.ImageDataLayout{BytesPerRow: 4, RowsPerImage: 1}, &hal.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}); err != nil {
++		t.Fatal(err)
++	}
++	src[0] = 99
++	if q.writeTextureCalls != 0 || len(q.lastWriteData) < 4 || q.lastWriteData[0] != 1 {
++		t.Fatal("host-writable texture bypassed immutable staging")
++	}
++}
++
++type ownedDestroyDevice struct {
++	noop.Device
++	destroyed int
++	idleErr   error
++}
++
++func (d *ownedDestroyDevice) DestroyBuffer(hal.Buffer) { d.destroyed++ }
++func (d *ownedDestroyDevice) WaitIdle() error          { return d.idleErr }
++func TestOwnedPublicBufferRejectedSubmissionDropsCopyRef(t *testing.T) {
++	raw := &ownedDestroyDevice{}
++	queue := &mockBatchingQueue{submitErr: errors.New("reject before commit")}
++	device, err := NewDeviceFromHAL(raw, queue, 0, gputypes.DefaultLimits(), "owned-copy-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer device.Release()
++	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageCopyDst})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := device.Queue().WriteBuffer(buffer, 0, []byte{1, 2, 3, 4}); err != nil {
++		t.Fatal(err)
++	}
++	buffer.Release()
++	if buffer.core.Ref.RefCount() != 1 {
++		t.Fatal("public upload failed to retain its released destination")
++	}
++	if _, err := device.Queue().Submit(); err == nil {
++		t.Fatal("injected submission accepted")
++	}
++	if buffer.core.Ref.RefCount() != 0 || raw.destroyed != 1 {
++		t.Fatal("rejected copy did not release destination exactly once")
++	}
++}
++func TestOwnedDeviceReleasePreservesUnknownCompletion(t *testing.T) {
++	raw := &ownedDestroyDevice{idleErr: errors.New("completion unknown")}
++	device, err := NewDeviceFromHAL(raw, &mockBatchingQueue{}, 0, gputypes.DefaultLimits(), "unknown-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageCopyDst})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := device.Queue().WriteBuffer(buffer, 0, []byte{1, 2, 3, 4}); err != nil {
++		t.Fatal(err)
++	}
++	buffer.Release()
++	device.Release()
++	if _, kept := failedDeviceTeardowns.Load(device); !kept || buffer.core.Ref.RefCount() != 1 || raw.destroyed != 0 {
++		t.Fatal("failed wait destroyed unconfirmed resources")
++	}
++	// Fake HAL has no GPU. Test-only cleanup avoids accumulating quarantines.
++	raw.idleErr = nil
++	_ = device.waitIdle()
++	device.queue.release()
++	failedDeviceTeardowns.Delete(device)
++}
++
++func TestOwnedTextureDirtyRowsOffsetAndBoundedTail(t *testing.T) {
++	var scratch []byte
++	owner := &Texture{format: gputypes.TextureFormatRGBA8Unorm}
++	atlas := make([]byte, 32)
++	for i := range atlas {
++		atlas[i] = byte(i + 1)
++	}
++	packed, pitch, rows, err := packOwnedTextureData(&scratch, owner, atlas[4:24], &hal.ImageDataLayout{BytesPerRow: 12, RowsPerImage: 2}, &hal.Extent3D{Width: 1, Height: 2, DepthOrArrayLayers: 1})
++	if err != nil || pitch != 256 || rows != 2 || len(packed) != 512 {
++		t.Fatalf("dirty rows: %v", err)
++	}
++	for i := range 4 {
++		if packed[i] != atlas[4+i] || packed[256+i] != atlas[16+i] {
++			t.Fatal("valid partial final row was skipped")
++		}
++	}
++	for _, offset := range []uint64{0, 7} {
++		tail := make([]byte, 4096)
++		for i := range tail {
++			tail[i] = byte(i)
++		}
++		packed, pitch, _, err = packOwnedTextureData(&scratch, owner, tail, &hal.ImageDataLayout{Offset: offset, BytesPerRow: 256}, &hal.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1})
++		if err != nil || pitch != 256 || len(packed) != 256 || packed[0] != tail[offset] || packed[3] != tail[offset+3] {
++			t.Fatalf("unbounded/offset staging: %v", err)
++		}
++		for _, v := range packed[4:] {
++			if v != 0 {
++				t.Fatal("stale source padding leaked")
++			}
++		}
++	}
++	if _, _, _, err = packOwnedTextureData(&scratch, owner, atlas[:15], &hal.ImageDataLayout{BytesPerRow: 12}, &hal.Extent3D{Width: 1, Height: 2, DepthOrArrayLayers: 1}); err == nil {
++		t.Fatal("truly short texture source accepted")
++	}
++}
++
++func TestOwnedPollWaitPreservesUnknownMapping(t *testing.T) {
++	raw := &ownedDestroyDevice{idleErr: errors.New("unknown mapping completion")}
++	device, err := NewDeviceFromHAL(raw, &mockBatchingQueue{}, 0, gputypes.DefaultLimits(), "unknown-map-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageMapRead | BufferUsageCopyDst})
++	if err != nil {
++		t.Fatal(err)
++	}
++	pending, err := buffer.MapAsync(MapModeRead, 0, 16)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer pending.Release()
++	if device.Poll(PollWait) {
++		t.Fatal("failed wait claimed pending mappings completed")
++	}
++	if ready, _ := pending.Status(); ready {
++		t.Fatal("unknown GPU mapping was resolved")
++	}
++	raw.idleErr = nil
++	buffer.Unmap()
++	buffer.Release()
++	device.Release()
++}
++
++type ownedUnknownQueue struct{ mockBatchingQueue }
++
++func (*ownedUnknownQueue) SubmitErrorsBeforeCommit() bool { return false }
++func TestOwnedUnclassifiedSubmitPreservesCompleteBatch(t *testing.T) {
++	raw := &ownedDestroyDevice{}
++	queue := &ownedUnknownQueue{mockBatchingQueue: mockBatchingQueue{submitErr: errors.New("possibly committed")}}
++	device, err := NewDeviceFromHAL(raw, queue, 0, gputypes.DefaultLimits(), "unknown-submit-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	buffer, _ := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageCopyDst})
++	if err = device.Queue().WriteBuffer(buffer, 0, []byte{1, 2, 3, 4}); err != nil {
++		t.Fatal(err)
++	}
++	buffer.Release()
++	encoder, _ := device.CreateCommandEncoder(&CommandEncoderDescriptor{})
++	commands, _ := encoder.Finish()
++	ownedEncoder := commands.halEncoder
++	callerSlice := []*CommandBuffer{commands}
++	_, err = device.Queue().Submit(callerSlice...)
++	callerSlice[0] = nil
++	commands.Release()
++	if commands.halEncoder != ownedEncoder {
++		t.Fatal("unknown command buffer recycled by Release")
++	}
++	var unknown interface{ CompletionUnknown() bool }
++	if !errors.As(err, &unknown) || !unknown.CompletionUnknown() || buffer.core.Ref.RefCount() != 1 || raw.destroyed != 0 {
++		t.Fatal("possibly committed upload recycled")
++	}
++	if _, err = device.Queue().Submit(); err == nil {
++		t.Fatal("poisoned queue accepted later work")
++	}
++	mapBuffer, _ := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageMapRead | BufferUsageCopyDst})
++	if _, err = mapBuffer.MapAsync(MapModeRead, 0, 16); !errors.As(err, &unknown) {
++		t.Fatal("unknown submission allowed fresh mapping")
++	}
++	if device.Poll(PollPoll) {
++		t.Fatal("unknown submission claimed mapping completion")
++	}
++	mapBuffer.Release()
++	device.Release()
++	if device.CompletionError() == nil || raw.destroyed != 1 || buffer.core.Ref.RefCount() != 1 {
++		t.Fatal("unknown submit lost at teardown")
++	}
++	// Test HAL has no GPU: explicitly drop the retained test-only batch.
++	value, _ := unknownSubmissionBatches.LoadAndDelete(device.Queue())
++	batch := value.(unknownSubmissionBatch)
++	if len(batch.commands) != 1 || batch.commands[0] != commands {
++		t.Fatal("quarantine borrowed caller slice")
++	}
++	commands.quarantined = false
++	commands.Release()
++	device.queue.pending.cancelFlush(batch.pending.cmdBuf, batch.pending.encoder, batch.pending.dstTextures, batch.pending.dstBuffers)
++	device.queue.submissionErr = nil
++	device.queue.release()
++	failedDeviceTeardowns.Delete(device)
++}
++func TestOwnedReleasedQueueRejectsNewSubmission(t *testing.T) {
++	queue := &mockBatchingQueue{}
++	device, err := NewDeviceFromHAL(&noop.Device{}, queue, 0, gputypes.DefaultLimits(), "released-queue-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	retained := device.Queue()
++	device.Release()
++	if _, err := retained.Submit(); !errors.Is(err, ErrReleased) {
++		t.Fatal("released device queue still accepted work")
++	}
++	if queue.submitCalls != 0 {
++		t.Fatal("HAL called after release")
++	}
++}
++
++type ownedCopyRecord struct {
++	region hal.BufferTextureCopy
++	data   []byte
++}
++type ownedCopyEncoder struct {
++	noop.CommandEncoder
++	queue  *mockBatchingQueue
++	copies []ownedCopyRecord
++}
++
++func (e *ownedCopyEncoder) CopyBufferToTexture(_ hal.Buffer, _ hal.Texture, regions []hal.BufferTextureCopy) {
++	for _, r := range regions {
++		e.copies = append(e.copies, ownedCopyRecord{r, append([]byte(nil), e.queue.lastWriteData...)})
++	}
++}
++
++type ownedCopyDevice struct {
++	noop.Device
++	encoder *ownedCopyEncoder
++}
++
++func (d *ownedCopyDevice) CreateCommandEncoder(*hal.CommandEncoderDescriptor) (hal.CommandEncoder, error) {
++	return d.encoder, nil
++}
++func TestOwnedTextureSplitsAtRowsAndLayers(t *testing.T) {
++	queue := &mockBatchingQueue{}
++	encoder := &ownedCopyEncoder{queue: queue}
++	device := &ownedCopyDevice{encoder: encoder}
++	pool := newEncoderPool(device)
++	defer pool.destroy()
++	pw := newPendingWrites(device, queue, pool)
++	defer pw.destroy()
++	pw.belt.maxStagingBufferSize = 512
++	raw := &noop.Texture{}
++	owner := &Texture{hal: raw, format: gputypes.TextureFormatRGBA8Unorm}
++	data := make([]byte, 24)
++	for i := range data {
++		data[i] = byte(i + 1)
++	}
++	if err := pw.writeTextureFor(owner, &hal.ImageCopyTexture{Texture: raw, Origin: hal.Origin3D{Y: 5, Z: 2}}, data, &hal.ImageDataLayout{BytesPerRow: 4, RowsPerImage: 3}, &hal.Extent3D{Width: 1, Height: 3, DepthOrArrayLayers: 2}); err != nil {
++		t.Fatal(err)
++	}
++	if len(encoder.copies) != 4 {
++		t.Fatal("large texture did not split by complete rows and layers")
++	}
++	for i, c := range encoder.copies {
++		layer, part := i/2, i%2
++		height := uint32(2)
++		if part == 1 {
++			height = 1
++		}
++		if c.region.TextureBase.Origin.Y != uint32(5+part*2) || c.region.TextureBase.Origin.Z != uint32(2+layer) || c.region.Size.Height != height || c.region.Size.DepthOrArrayLayers != 1 || len(c.data) != int(height)*256 {
++			t.Fatalf("copy%d wrong destination/length", i)
++		}
++		for row := range int(height) {
++			for x := range 4 {
++				if c.data[row*256+x] != data[(layer*3+part*2+row)*4+x] {
++					t.Fatal("row/layer data lost at chunk boundary")
++				}
++			}
++		}
++	}
++}
+--- a/pending_writes.go
++++ b/pending_writes.go
+@@ -6,0 +7 @@
++	"github.com/gogpu/wgpu/core"
+@@ -66 +67,2 @@
+-	dstBuffers map[hal.Buffer]gputypes.BufferUsage
++	dstBuffers    map[hal.Buffer]gputypes.BufferUsage
++	dstBufferRefs map[hal.Buffer]*core.ResourceRef
+@@ -103 +105 @@
+-	dstBuffers  []hal.Buffer
++	dstBuffers  []pendingBuffer
+@@ -119,5 +121,6 @@
+-		halDevice:    halDevice,
+-		halQueue:     halQueue,
+-		dstBuffers:   make(map[hal.Buffer]gputypes.BufferUsage),
+-		dstTextures:  make(map[hal.Texture][]*Texture),
+-		usesBatching: halQueue.SupportsCommandBufferCopies(),
++		halDevice:     halDevice,
++		halQueue:      halQueue,
++		dstBuffers:    make(map[hal.Buffer]gputypes.BufferUsage),
++		dstBufferRefs: make(map[hal.Buffer]*core.ResourceRef),
++		dstTextures:   make(map[hal.Texture][]*Texture),
++		usesBatching:  halQueue.SupportsCommandBufferCopies(),
+@@ -148,0 +152,3 @@
++	return pw.writeBufferRef(nil, buffer, usage, offset, data)
++}
++func (pw *pendingWrites) writeBufferRef(ref *core.ResourceRef, buffer hal.Buffer, usage gputypes.BufferUsage, offset uint64, data []byte) error {
+@@ -202,0 +209,4 @@
++	if ref != nil && pw.dstBufferRefs[buffer] == nil {
++		ref.Clone()
++		pw.dstBufferRefs[buffer] = ref
++	}
+@@ -256,35 +266,53 @@
+-	// Host-writable textures (Metal Shared on Apple Silicon UMA) accept direct
+-	// CPU writes without staging buffers or GPU copy commands. Bypass the
+-	// staging belt to avoid allocating ~width*height*4 bytes per frame.
+-	if hw, ok := dst.Texture.(interface{ IsHostWritable() bool }); ok && hw.IsHostWritable() {
+-		return pw.halQueue.WriteTexture(dst, data, layout, size)
+-	}
+-
+-	// Calculate aligned row pitch.
+-	bytesPerRow := layout.BytesPerRow
+-	if bytesPerRow == 0 {
+-		bytesPerRow = uint32(len(data)) //nolint:gosec // data length fits uint32 for textures
+-	}
+-
+-	alignedBytesPerRow := alignUp(bytesPerRow, pendingWritesRowPitchAlignment)
+-
+-	rowsPerImage := layout.RowsPerImage
+-	if rowsPerImage == 0 {
+-		rowsPerImage = size.Height
+-	}
+-
+-	depthOrLayers := size.DepthOrArrayLayers
+-	if depthOrLayers == 0 {
+-		depthOrLayers = 1
+-	}
+-
+-	stagingSize := uint64(alignedBytesPerRow) * uint64(rowsPerImage) * uint64(depthOrLayers)
+-
+-	// CPU copy with row pitch alignment. Returns data directly when no padding needed,
+-	// otherwise writes into pw.alignBuf (grown on demand, never shrunk, reused each call).
+-	stagingData := alignTextureDataInto(&pw.alignBuf, data, layout.Offset, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers, stagingSize)
+-
+-	// Allocate from staging belt (ring-buffer of reusable chunks).
+-	alloc, err := pw.belt.allocate(stagingSize, stagingData)
+-	if err != nil {
+-		return fmt.Errorf("wgpu: pending writes: staging belt allocate texture: %w", err)
++	// Native asynchronous texture qualification currently covers reviewed Metal.
++	contract, reviewed := pw.halQueue.(interface{ SubmitErrorsBeforeCommit() bool })
++	reviewed = reviewed && contract.SubmitErrorsBeforeCommit()
++	if !reviewed {
++		if writer, ok := dst.Texture.(interface{ IsHostWritable() bool }); ok && writer.IsHostWritable() {
++			return pw.halQueue.WriteTexture(dst, data, layout, size)
++		}
++	}
++	var stagingData []byte
++	var alignedBytesPerRow, rowsPerImage uint32
++	var stagingSize uint64
++	if reviewed {
++		// Bound every write and copy only the requested texels/final partial row.
++		var err error
++		stagingData, alignedBytesPerRow, rowsPerImage, err = packOwnedTextureData(&pw.alignBuf, owner, data, layout, size)
++		if err != nil {
++			return err
++		}
++		stagingSize = uint64(len(stagingData))
++	} else {
++		// Calculate aligned row pitch.
++		bytesPerRow := layout.BytesPerRow
++		if bytesPerRow == 0 {
++			bytesPerRow = uint32(len(data)) //nolint:gosec // data length fits uint32 for textures
++		}
++
++		alignedBytesPerRow = alignUp(bytesPerRow, pendingWritesRowPitchAlignment)
++
++		rowsPerImage = layout.RowsPerImage
++		if rowsPerImage == 0 {
++			rowsPerImage = size.Height
++		}
++
++		depthOrLayers := size.DepthOrArrayLayers
++		if depthOrLayers == 0 {
++			depthOrLayers = 1
++		}
++
++		stagingSize = uint64(alignedBytesPerRow) * uint64(rowsPerImage) * uint64(depthOrLayers)
++
++		// CPU copy with row pitch alignment. Returns data directly when no padding needed,
++		// otherwise writes into pw.alignBuf (grown on demand, never shrunk, reused each call).
++		stagingData = alignTextureDataInto(&pw.alignBuf, data, layout.Offset, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers, stagingSize)
++
++	}
++
++	var alloc stagingAllocation
++	var err error
++	if !reviewed {
++		alloc, err = pw.belt.allocate(stagingSize, stagingData)
++		if err != nil {
++			return fmt.Errorf("wgpu: pending writes: staging texture: %w", err)
++		}
+@@ -314,11 +342,19 @@
+-	// Record copy command (stack-allocate to avoid slice heap escape).
+-	texCopy := [1]hal.BufferTextureCopy{{
+-		BufferLayout: hal.ImageDataLayout{
+-			Offset:       alloc.offset,
+-			BytesPerRow:  alignedBytesPerRow,
+-			RowsPerImage: rowsPerImage,
+-		},
+-		TextureBase: *dst,
+-		Size:        *size,
+-	}}
+-	enc.CopyBufferToTexture(alloc.buffer, dst.Texture, texCopy[:])
++	if reviewed {
++		if err := pw.recordOwnedTextureCopies(enc, owner, dst, stagingData, alignedBytesPerRow, rowsPerImage, size); err != nil {
++			pw.discardRecording()
++			return err
++		}
++	} else {
++		// Record copy command (stack-allocate to avoid slice heap escape).
++		texCopy := [1]hal.BufferTextureCopy{{
++			BufferLayout: hal.ImageDataLayout{
++				Offset:       alloc.offset,
++				BytesPerRow:  alignedBytesPerRow,
++				RowsPerImage: rowsPerImage,
++			},
++			TextureBase: *dst,
++			Size:        *size,
++		}}
++		enc.CopyBufferToTexture(alloc.buffer, dst.Texture, texCopy[:])
++
++	}
+@@ -477 +513 @@
+-func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.Texture, []hal.Buffer, error) {
++func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.Texture, []pendingBuffer, error) {
+@@ -487,0 +524,5 @@
++			if owner.surface == nil && owner.released && owner.hal == raw {
++				if retained, ok := raw.(interface{ PendingWritesKeepAlive() bool }); ok && retained.PendingWritesKeepAlive() {
++					continue
++				}
++			}
+@@ -548 +589 @@
+-	var flushedDstBuffers []hal.Buffer
++	var flushedDstBuffers []pendingBuffer
+@@ -550 +591 @@
+-		flushedDstBuffers = append(flushedDstBuffers, buf)
++		flushedDstBuffers = append(flushedDstBuffers, pendingBuffer{buf, pw.dstBufferRefs[buf]})
+@@ -558,0 +600 @@
++	clear(pw.dstBufferRefs)
+@@ -587,0 +630,4 @@
++	for _, ref := range pw.dstBufferRefs {
++		ref.Drop()
++	}
++	clear(pw.dstBufferRefs)
+@@ -594 +640 @@
+-func (pw *pendingWrites) cancelFlush(cmdBuf hal.CommandBuffer, encoder hal.CommandEncoder, dstTextures []hal.Texture) {
++func (pw *pendingWrites) cancelFlush(cmdBuf hal.CommandBuffer, encoder hal.CommandEncoder, dstTextures []hal.Texture, dstBuffers []pendingBuffer) {
+@@ -610,0 +657 @@
++	dropPendingBuffers(dstBuffers)
+@@ -628,0 +676 @@
++		dropPendingBuffers(sub.dstBuffers)
+@@ -675,0 +724 @@
++		dropPendingBuffers(sub.dstBuffers)
+@@ -700,0 +750 @@
++	pw.dstBufferRefs = nil
+@@ -702,0 +753,15 @@
++
++// pendingBuffer retains copy-only public destinations without duplicating their
++// storage. A render/compute binding is not required to establish ownership.
++type pendingBuffer struct {
++	buffer hal.Buffer
++	ref    *core.ResourceRef
++}
++
++func dropPendingBuffers(buffers []pendingBuffer) {
++	for _, b := range buffers {
++		if b.ref != nil {
++			b.ref.Drop()
++		}
++	}
++}
+--- a/pending_writes_test.go
++++ b/pending_writes_test.go
+@@ -1169,0 +1170,3 @@
++
++// Test queue rejects before executing any work.
++func (q *mockBatchingQueue) SubmitErrorsBeforeCommit() bool { return true }
+--- a/queue_native.go
++++ b/queue_native.go
+@@ -41,0 +42 @@
++	submissionErr  error
+@@ -52,0 +54,6 @@
++	if q.device != nil && q.device.released.Load() {
++		return 0, ErrReleased
++	}
++	if q.submissionErr != nil {
++		return 0, q.submissionErr
++	}
+@@ -74 +81 @@
+-	var flushedDstBuffers []hal.Buffer
++	var flushedDstBuffers []pendingBuffer
+@@ -113,0 +121,5 @@
++		if q.pending != nil && pendingCmdBuf != nil {
++			q.pending.mu.Lock()
++			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers)
++			q.pending.mu.Unlock()
++		}
+@@ -118,0 +131,13 @@
++		contract, rejected := q.hal.(interface{ SubmitErrorsBeforeCommit() bool })
++		if !rejected || !contract.SubmitErrorsBeforeCommit() {
++			q.submissionErr = &submissionUnknownError{cause: err}
++			for _, cb := range commandBuffers {
++				cb.quarantined = true
++				cb.submitted = true
++			}
++			unknownSubmissionBatches.Store(q, unknownSubmissionBatch{
++				pending:  inflightSubmission{cmdBuf: pendingCmdBuf, encoder: flushedEncoder, dstTextures: flushedDstTextures, dstBuffers: flushedDstBuffers},
++				commands: append([]*CommandBuffer(nil), commandBuffers...), barrierEncoder: q.barrierEncoder, barrierBuffer: q.barrierCB,
++			})
++			return 0, q.submissionErr
++		}
+@@ -121 +146 @@
+-			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
++			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers)
+@@ -279,0 +305,6 @@
++	if q.device != nil && q.device.released.Load() {
++		return ErrReleased
++	}
++	if q.submissionErr != nil {
++		return q.submissionErr
++	}
+@@ -333 +364 @@
+-		return q.pending.writeBuffer(halBuffer, buffer.Usage(), offset, data)
++		return q.pending.writeBufferRef(buffer.core.Ref, halBuffer, buffer.Usage(), offset, data)
+@@ -346,0 +378,6 @@
++	if q.device != nil && q.device.released.Load() {
++		return ErrReleased
++	}
++	if q.submissionErr != nil {
++		return q.submissionErr
++	}
+@@ -426,0 +464,3 @@
++	if cb.released {
++		return fmt.Errorf("wgpu: command buffer %d is released", index)
++	}
+--- a/staging_belt.go
++++ b/staging_belt.go
+@@ -147,0 +148,3 @@
++	if uint64(len(data)) > size {
++		return stagingAllocation{}, fmt.Errorf("staging belt: write length %d exceeds allocation %d", len(data), size)
++	}

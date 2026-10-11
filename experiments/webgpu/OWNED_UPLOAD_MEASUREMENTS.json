@@ -1,0 +1,625 @@
+{
+  "scope": "bounded M3Pro/macOS26.6.2, Go1.27.1 CGO0 GOMAXPROCS2, exact guarded private dependencies plus pointer cache,1920x1080 DPR2,seed7,240warmup720measured; callback clocks only",
+  "build_manifest": "/tmp/nanolathe-owned-build-retained/build-manifest.json",
+  "cases": [
+    {
+      "name": "owned-sync-coast3",
+      "path": "/tmp/nanolathe-owned-sync-coast3",
+      "scene": "coast",
+      "asynchronous_uploads": false,
+      "prepare_ahead": false,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 9.909176054242003,
+          "p50_ms": 8.517041,
+          "p95_ms": 15.730792,
+          "p99_ms": 16.728625,
+          "max_ms": 21.428625
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.5287404083333334,
+          "p50_ms": 2.348042,
+          "p95_ms": 7.616917,
+          "p99_ms": 8.968125,
+          "max_ms": 15.179625
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.038488309722222,
+          "p50_ms": 1.953375,
+          "p95_ms": 2.387959,
+          "p99_ms": 4.787959,
+          "max_ms": 6.297125
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.3498543208333333,
+          "p50_ms": 0.106583,
+          "p95_ms": 4.784583,
+          "p99_ms": 5.981667,
+          "max_ms": 7.464875
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        }
+      },
+      "callback_hz": 100.91656405397214,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      },
+      "png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "1232f43c30b26683c8ab4f68567210ca2a7ba939eaa1a5928804d272a28e3aca",
+        "state-end/session.json": "4a845d0f62b836305b7b5cf450e307b3f86faaf4402fd9f9b267a19a222be732",
+        "state-end/features.json": "0dcafb3900d8f4fc5938e8790ffa632046bdbce2d84aba9216c3db8a6c88dcd9",
+        "state-end/ai.json": "1e5695c3c215f7c2089f1f97608c4fca9fd0552b7b1d48cc6ef07d951be8a6f7",
+        "state-end/movement.json": "9e44df9a68b73e847a16a9457f53c223ffe3400cc76afa1c9b01b3056ea92860",
+        "state-end/construction-admissions.json": "4d32ea2d24c23e9ccdb048d09556c1cebbf2b7d4c4246866e97fcc1a581d9043",
+        "state-end/construction.json": "6424e524d99704dbb4d4c30a189d1c063fe460a87b16587857678ed13e4e2122",
+        "state-end/projectiles.json": "8661b8de87dc66c6ffaaffd6f2f2f859f8cbff21ed3957ccc9f7d4626d5157ba"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "052ad8edcf2b1db2f1c18cff6700697c9764b00588b913ee905a5df41e7c4cbc",
+        ".glow-octaves.rgba16f": "08b1998fa3f3cd2a76a8e3dff434a418ecb8b9800cbea6e7ac5210273641d65c",
+        ".glow.rgba16f": "072cb33ecec783f5cf4009f59b851cde13c0a4ff5192aedc254fbdeba6d56b55",
+        ".ground.png": "4c4c2b5c7f5be01bbc1dab5f15622bd2f4ec90578a4ed8955f936db7b1183284",
+        ".instances.bin": "79f28b36bba0e118bb58603df6c7609014f5b2e39f2c6fa33dd130702264b7de",
+        ".keys.png": "ffc04e561940b3ba9df1d60fc89b78d1fecb0afc9aa6caa4e5198a5f3281f343",
+        ".keys.png.rgba8": "9bc8b655f3ac84287b7e8efe96e42264f19a2d23975f0d24e7e70c690a36c4cb",
+        ".poses.bin": "18847ada67fbceeb6259d86412723c80d1ed502f35cf20eb021c6b335f4a731d",
+        ".reflection-color.png": "2d8df56b1818bf1c031a7c75a12d4792e7b5b7ef672f579cc4e4a8f2aea6575e",
+        ".reflection-flags.r32u": "1f93ca365a0cb01806413992dfce777e8d6fe74e240bcd697d460288758dfee4",
+        ".reflection-soft.png": "340490dde9ed68211a5074d1dc33cdcbcaab0f55ed1724d837303bde21900dcd",
+        ".seabed.rgba16f": "605ba0f8cb9a69691fb4a65ab4e16b9aba55edbc193dd925c49b0ccb14c90b24",
+        ".shadow-body.png": "569699fb2b807bd0fed49d133601200be0b89cf7347b2d315ebac5f270df255e",
+        ".shadow-depth.f32": "c5e9e0b96fc1a11bb0a0208b5315729303de37a7df98f0619b09faa00ed38458",
+        ".shadow-mask.r8": "00cfae407a1de50d06b37236390e55d7fbee88943924488ebcaa2090adf63f6b",
+        ".slots.bin": "1abb27d841dd3d59ac1de8f0228797c08cf3f4cad6b9f9778df0dfc075af8e5c",
+        ".source.png": "b54436f37f92f6bbb4d8a359a282256ff6f4f9b96a7ea3b26fafcf8481119320",
+        ".world.rgba16f": "efe0fe157f38602c7175bc853cc64b0112894a48d8714b5afbefcb25326d1a13"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 169035.1222222222,
+      "mallocs_per_draw": 1256.0555555555557
+    },
+    {
+      "name": "owned-async-coast",
+      "path": "/tmp/nanolathe-owned-async-coast",
+      "scene": "coast",
+      "asynchronous_uploads": true,
+      "prepare_ahead": false,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 8.621647485396384,
+          "p50_ms": 8.346459,
+          "p95_ms": 10.212,
+          "p99_ms": 15.260042,
+          "max_ms": 24.272041
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.390376304166667,
+          "p50_ms": 2.325875,
+          "p95_ms": 7.308083,
+          "p99_ms": 7.901917,
+          "max_ms": 9.276292
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 1.9557541972222223,
+          "p50_ms": 1.924208,
+          "p95_ms": 2.306291,
+          "p99_ms": 2.404959,
+          "max_ms": 2.74
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        }
+      },
+      "callback_hz": 115.98711286837363,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      },
+      "png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "1232f43c30b26683c8ab4f68567210ca2a7ba939eaa1a5928804d272a28e3aca",
+        "state-end/session.json": "4a845d0f62b836305b7b5cf450e307b3f86faaf4402fd9f9b267a19a222be732",
+        "state-end/features.json": "0dcafb3900d8f4fc5938e8790ffa632046bdbce2d84aba9216c3db8a6c88dcd9",
+        "state-end/ai.json": "1e5695c3c215f7c2089f1f97608c4fca9fd0552b7b1d48cc6ef07d951be8a6f7",
+        "state-end/movement.json": "9e44df9a68b73e847a16a9457f53c223ffe3400cc76afa1c9b01b3056ea92860",
+        "state-end/construction-admissions.json": "4d32ea2d24c23e9ccdb048d09556c1cebbf2b7d4c4246866e97fcc1a581d9043",
+        "state-end/construction.json": "6424e524d99704dbb4d4c30a189d1c063fe460a87b16587857678ed13e4e2122",
+        "state-end/projectiles.json": "8661b8de87dc66c6ffaaffd6f2f2f859f8cbff21ed3957ccc9f7d4626d5157ba"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "052ad8edcf2b1db2f1c18cff6700697c9764b00588b913ee905a5df41e7c4cbc",
+        ".glow-octaves.rgba16f": "08b1998fa3f3cd2a76a8e3dff434a418ecb8b9800cbea6e7ac5210273641d65c",
+        ".glow.rgba16f": "072cb33ecec783f5cf4009f59b851cde13c0a4ff5192aedc254fbdeba6d56b55",
+        ".ground.png": "4c4c2b5c7f5be01bbc1dab5f15622bd2f4ec90578a4ed8955f936db7b1183284",
+        ".instances.bin": "79f28b36bba0e118bb58603df6c7609014f5b2e39f2c6fa33dd130702264b7de",
+        ".keys.png": "ffc04e561940b3ba9df1d60fc89b78d1fecb0afc9aa6caa4e5198a5f3281f343",
+        ".keys.png.rgba8": "9bc8b655f3ac84287b7e8efe96e42264f19a2d23975f0d24e7e70c690a36c4cb",
+        ".poses.bin": "18847ada67fbceeb6259d86412723c80d1ed502f35cf20eb021c6b335f4a731d",
+        ".reflection-color.png": "2d8df56b1818bf1c031a7c75a12d4792e7b5b7ef672f579cc4e4a8f2aea6575e",
+        ".reflection-flags.r32u": "1f93ca365a0cb01806413992dfce777e8d6fe74e240bcd697d460288758dfee4",
+        ".reflection-soft.png": "340490dde9ed68211a5074d1dc33cdcbcaab0f55ed1724d837303bde21900dcd",
+        ".seabed.rgba16f": "605ba0f8cb9a69691fb4a65ab4e16b9aba55edbc193dd925c49b0ccb14c90b24",
+        ".shadow-body.png": "569699fb2b807bd0fed49d133601200be0b89cf7347b2d315ebac5f270df255e",
+        ".shadow-depth.f32": "c5e9e0b96fc1a11bb0a0208b5315729303de37a7df98f0619b09faa00ed38458",
+        ".shadow-mask.r8": "00cfae407a1de50d06b37236390e55d7fbee88943924488ebcaa2090adf63f6b",
+        ".slots.bin": "1abb27d841dd3d59ac1de8f0228797c08cf3f4cad6b9f9778df0dfc075af8e5c",
+        ".source.png": "b54436f37f92f6bbb4d8a359a282256ff6f4f9b96a7ea3b26fafcf8481119320",
+        ".world.rgba16f": "efe0fe157f38602c7175bc853cc64b0112894a48d8714b5afbefcb25326d1a13"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 170425.24444444446,
+      "mallocs_per_draw": 1251.8708333333334
+    },
+    {
+      "name": "owned-ahead-coast",
+      "path": "/tmp/nanolathe-owned-ahead-coast",
+      "scene": "coast",
+      "asynchronous_uploads": true,
+      "prepare_ahead": true,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 8.365868104311543,
+          "p50_ms": 8.336167,
+          "p95_ms": 8.876584,
+          "p99_ms": 10.203667,
+          "max_ms": 14.51225
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 3.517051926388889,
+          "p50_ms": 2.346709,
+          "p95_ms": 7.741333,
+          "p99_ms": 8.355042,
+          "max_ms": 9.761541
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.014936865277778,
+          "p50_ms": 1.963167,
+          "p95_ms": 2.3625,
+          "p99_ms": 2.459625,
+          "max_ms": 8.783583
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0.8940209388888889,
+          "p50_ms": 0.000209,
+          "p95_ms": 4.068333,
+          "p99_ms": 6.823791,
+          "max_ms": 7.753208
+        }
+      },
+      "callback_hz": 119.53332129209961,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1102,
+        "Dispatches": 1,
+        "Instances": 406,
+        "Pieces": 3692,
+        "Triangles": 51551,
+        "UploadBytes": 1709376
+      },
+      "png_sha256": "bfd6bfe63d2af8d17e8e1568a8f372ed5501ddc89fa899ace0b4e4ed678aaef5",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "1232f43c30b26683c8ab4f68567210ca2a7ba939eaa1a5928804d272a28e3aca",
+        "state-end/session.json": "4a845d0f62b836305b7b5cf450e307b3f86faaf4402fd9f9b267a19a222be732",
+        "state-end/features.json": "0dcafb3900d8f4fc5938e8790ffa632046bdbce2d84aba9216c3db8a6c88dcd9",
+        "state-end/ai.json": "1e5695c3c215f7c2089f1f97608c4fca9fd0552b7b1d48cc6ef07d951be8a6f7",
+        "state-end/movement.json": "9e44df9a68b73e847a16a9457f53c223ffe3400cc76afa1c9b01b3056ea92860",
+        "state-end/construction-admissions.json": "4d32ea2d24c23e9ccdb048d09556c1cebbf2b7d4c4246866e97fcc1a581d9043",
+        "state-end/construction.json": "6424e524d99704dbb4d4c30a189d1c063fe460a87b16587857678ed13e4e2122",
+        "state-end/projectiles.json": "8661b8de87dc66c6ffaaffd6f2f2f859f8cbff21ed3957ccc9f7d4626d5157ba"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "052ad8edcf2b1db2f1c18cff6700697c9764b00588b913ee905a5df41e7c4cbc",
+        ".glow-octaves.rgba16f": "08b1998fa3f3cd2a76a8e3dff434a418ecb8b9800cbea6e7ac5210273641d65c",
+        ".glow.rgba16f": "072cb33ecec783f5cf4009f59b851cde13c0a4ff5192aedc254fbdeba6d56b55",
+        ".ground.png": "4c4c2b5c7f5be01bbc1dab5f15622bd2f4ec90578a4ed8955f936db7b1183284",
+        ".instances.bin": "79f28b36bba0e118bb58603df6c7609014f5b2e39f2c6fa33dd130702264b7de",
+        ".keys.png": "ffc04e561940b3ba9df1d60fc89b78d1fecb0afc9aa6caa4e5198a5f3281f343",
+        ".keys.png.rgba8": "9bc8b655f3ac84287b7e8efe96e42264f19a2d23975f0d24e7e70c690a36c4cb",
+        ".poses.bin": "18847ada67fbceeb6259d86412723c80d1ed502f35cf20eb021c6b335f4a731d",
+        ".reflection-color.png": "2d8df56b1818bf1c031a7c75a12d4792e7b5b7ef672f579cc4e4a8f2aea6575e",
+        ".reflection-flags.r32u": "1f93ca365a0cb01806413992dfce777e8d6fe74e240bcd697d460288758dfee4",
+        ".reflection-soft.png": "340490dde9ed68211a5074d1dc33cdcbcaab0f55ed1724d837303bde21900dcd",
+        ".seabed.rgba16f": "605ba0f8cb9a69691fb4a65ab4e16b9aba55edbc193dd925c49b0ccb14c90b24",
+        ".shadow-body.png": "569699fb2b807bd0fed49d133601200be0b89cf7347b2d315ebac5f270df255e",
+        ".shadow-depth.f32": "c5e9e0b96fc1a11bb0a0208b5315729303de37a7df98f0619b09faa00ed38458",
+        ".shadow-mask.r8": "00cfae407a1de50d06b37236390e55d7fbee88943924488ebcaa2090adf63f6b",
+        ".slots.bin": "1abb27d841dd3d59ac1de8f0228797c08cf3f4cad6b9f9778df0dfc075af8e5c",
+        ".source.png": "b54436f37f92f6bbb4d8a359a282256ff6f4f9b96a7ea3b26fafcf8481119320",
+        ".world.rgba16f": "efe0fe157f38602c7175bc853cc64b0112894a48d8714b5afbefcb25326d1a13"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 170298.8777777778,
+      "mallocs_per_draw": 1251.8847222222223
+    },
+    {
+      "name": "owned-sync-field3000",
+      "path": "/tmp/nanolathe-owned-sync-field3000",
+      "scene": "field3000",
+      "asynchronous_uploads": false,
+      "prepare_ahead": false,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 12.742833392211404,
+          "p50_ms": 9.884334,
+          "p95_ms": 22.973708,
+          "p99_ms": 23.894959,
+          "max_ms": 27.182833
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.757563744444444,
+          "p50_ms": 4.27325,
+          "p95_ms": 19.636125,
+          "p99_ms": 20.481375,
+          "max_ms": 23.18325
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.417119623611111,
+          "p50_ms": 2.310917,
+          "p95_ms": 3.07725,
+          "p99_ms": 3.381792,
+          "max_ms": 4.459125
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 1.386040386111111,
+          "p50_ms": 1.088208,
+          "p95_ms": 4.148,
+          "p99_ms": 4.983333,
+          "max_ms": 5.884708
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        }
+      },
+      "callback_hz": 78.47548258860654,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      },
+      "png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "f125cef3e3dc04079eaff3fa4caeca47cf515cf32412b5e304bda263db757acb",
+        "state-end/session.json": "f24b9e8af08636e0c1b6962d3df59bf35afcea72c422a4950f1e46529f235310",
+        "state-end/features.json": "9082cc5c8488a9cb74346c0d86e8e413e0c1e29fc96f4f07ac2465e24873d29f",
+        "state-end/ai.json": "dc33b1a7f24d8eee00330007fb37e7fd60a790a8519f2f83aaa9f2fa47b4778a",
+        "state-end/movement.json": "1dd4708fac7362ce5a9cd2356a4dbb3c372a8d70c5e2ef35d3d965edbebcc25a",
+        "state-end/construction-admissions.json": "3a2f26d86fe0f085677267b2a76c83311d6d96b00423f8b16fd293f98e422a94",
+        "state-end/construction.json": "fdbc6a8eccd7c781ab908a348245fef15f63400cbc8fb9c15090c66d100fd46c",
+        "state-end/projectiles.json": "ca941c6c12e4ae015f8909427d44486fd608c10d7a2b8dc3c94d51442276e6a2"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".glow-octaves.rgba16f": "78ff7a32d6fc8ddf98384312ff2b9cc1d1ab42028335d93633e60bcfd90d2144",
+        ".glow.rgba16f": "ff46be37943f0c54e4f036c16b3beb367702a05271359659d8ac0cfb8b453c02",
+        ".ground.png": "f584dee06b7364ac9f6ab74717f69e345b2da1d09fcc6ca5e115415db6fbeb52",
+        ".instances.bin": "0982f5e4874879dc30c4557ef093d7b41fbbab0cbdebf32478ae2c55fc9339c2",
+        ".keys.png": "a7984c863db62d68815ba8dade68d8edff44b26ccb4ceaab7cbd577be553518b",
+        ".keys.png.rgba8": "61d8d31ff78cb44b165e8a94463dca1a72c34d8de762b266a88a7587de747793",
+        ".poses.bin": "f6c4ee6dbc147858a5bb2bdde87ae8b158aa61683d73fbb2ce38223dc86aa4c3",
+        ".shadow-body.png": "ceb113efca625945cd19cf9cf5cf13ef1de250c4cb623d5ee1620826798e6f56",
+        ".shadow-depth.f32": "41a4338d6a7fe419cf216f810ebb35af4d99110d02c27e9aa8b01e87fc28bea5",
+        ".shadow-mask.r8": "f68d2ea17b7b291d901c7cee5865e1d8d7006228565880e1d50ba93d1be241e5",
+        ".slots.bin": "f6a0642329ef48c518c27aefe5611b9b2747a916d0827f2774aaa7512a130fc3",
+        ".source.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".world.rgba16f": "5eb94593bab1348b81f5188bb3edc07ff3d45155a69c63e8d1d18738857dcfd8"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 190343.77777777778,
+      "mallocs_per_draw": 1561.838888888889
+    },
+    {
+      "name": "owned-async-field3000",
+      "path": "/tmp/nanolathe-owned-async-field3000",
+      "scene": "field3000",
+      "asynchronous_uploads": true,
+      "prepare_ahead": false,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 12.515298100139082,
+          "p50_ms": 8.711958,
+          "p95_ms": 23.627208,
+          "p99_ms": 24.656,
+          "max_ms": 28.62825
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.985512854166667,
+          "p50_ms": 4.440208,
+          "p95_ms": 20.148417,
+          "p99_ms": 21.121417,
+          "max_ms": 24.697875
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.613054395833333,
+          "p50_ms": 2.509916,
+          "p95_ms": 3.325917,
+          "p99_ms": 3.628542,
+          "max_ms": 5.697375
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        }
+      },
+      "callback_hz": 79.90221183695873,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      },
+      "png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "f125cef3e3dc04079eaff3fa4caeca47cf515cf32412b5e304bda263db757acb",
+        "state-end/session.json": "f24b9e8af08636e0c1b6962d3df59bf35afcea72c422a4950f1e46529f235310",
+        "state-end/features.json": "9082cc5c8488a9cb74346c0d86e8e413e0c1e29fc96f4f07ac2465e24873d29f",
+        "state-end/ai.json": "dc33b1a7f24d8eee00330007fb37e7fd60a790a8519f2f83aaa9f2fa47b4778a",
+        "state-end/movement.json": "1dd4708fac7362ce5a9cd2356a4dbb3c372a8d70c5e2ef35d3d965edbebcc25a",
+        "state-end/construction-admissions.json": "3a2f26d86fe0f085677267b2a76c83311d6d96b00423f8b16fd293f98e422a94",
+        "state-end/construction.json": "fdbc6a8eccd7c781ab908a348245fef15f63400cbc8fb9c15090c66d100fd46c",
+        "state-end/projectiles.json": "ca941c6c12e4ae015f8909427d44486fd608c10d7a2b8dc3c94d51442276e6a2"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".glow-octaves.rgba16f": "78ff7a32d6fc8ddf98384312ff2b9cc1d1ab42028335d93633e60bcfd90d2144",
+        ".glow.rgba16f": "ff46be37943f0c54e4f036c16b3beb367702a05271359659d8ac0cfb8b453c02",
+        ".ground.png": "f584dee06b7364ac9f6ab74717f69e345b2da1d09fcc6ca5e115415db6fbeb52",
+        ".instances.bin": "0982f5e4874879dc30c4557ef093d7b41fbbab0cbdebf32478ae2c55fc9339c2",
+        ".keys.png": "a7984c863db62d68815ba8dade68d8edff44b26ccb4ceaab7cbd577be553518b",
+        ".keys.png.rgba8": "61d8d31ff78cb44b165e8a94463dca1a72c34d8de762b266a88a7587de747793",
+        ".poses.bin": "f6c4ee6dbc147858a5bb2bdde87ae8b158aa61683d73fbb2ce38223dc86aa4c3",
+        ".shadow-body.png": "ceb113efca625945cd19cf9cf5cf13ef1de250c4cb623d5ee1620826798e6f56",
+        ".shadow-depth.f32": "41a4338d6a7fe419cf216f810ebb35af4d99110d02c27e9aa8b01e87fc28bea5",
+        ".shadow-mask.r8": "f68d2ea17b7b291d901c7cee5865e1d8d7006228565880e1d50ba93d1be241e5",
+        ".slots.bin": "f6a0642329ef48c518c27aefe5611b9b2747a916d0827f2774aaa7512a130fc3",
+        ".source.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".world.rgba16f": "5eb94593bab1348b81f5188bb3edc07ff3d45155a69c63e8d1d18738857dcfd8"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 190744.93333333332,
+      "mallocs_per_draw": 1557.7388888888888
+    },
+    {
+      "name": "owned-ahead-field3000",
+      "path": "/tmp/nanolathe-owned-ahead-field3000",
+      "scene": "field3000",
+      "asynchronous_uploads": true,
+      "prepare_ahead": true,
+      "timings": {
+        "CallbackMS": {
+          "samples": 719,
+          "mean_ms": 11.486259272600835,
+          "p50_ms": 9.072292,
+          "p95_ms": 21.3125,
+          "p99_ms": 22.596,
+          "max_ms": 24.255542
+        },
+        "SourceMS": {
+          "samples": 720,
+          "mean_ms": 7.624472526388889,
+          "p50_ms": 4.282291,
+          "p95_ms": 19.104541,
+          "p99_ms": 20.597792,
+          "max_ms": 22.348708
+        },
+        "EncodeMS": {
+          "samples": 720,
+          "mean_ms": 2.492081134722222,
+          "p50_ms": 2.3445,
+          "p95_ms": 3.17275,
+          "p99_ms": 3.613208,
+          "max_ms": 6.708959
+        },
+        "CompletionWaitMS": {
+          "samples": 720,
+          "mean_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "max_ms": 0
+        },
+        "JoinMS": {
+          "samples": 720,
+          "mean_ms": 5.214044452777777,
+          "p50_ms": 3.354375,
+          "p95_ms": 18.134333,
+          "p99_ms": 19.643542,
+          "max_ms": 21.516917
+        }
+      },
+      "callback_hz": 87.06054567176507,
+      "unique_tick_alpha": 720,
+      "unique_prior_submission_indices": 720,
+      "completed_at_close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "run_error": null,
+      "model_counts": {
+        "Draws": 1377,
+        "Dispatches": 1,
+        "Instances": 784,
+        "Pieces": 7301,
+        "Triangles": 68512,
+        "UploadBytes": 3161760
+      },
+      "png_sha256": "581a67c1b7619d8910799b57358b98aa5e2c4e0df2bbe09799820bea87dc1fdb",
+      "reference_png_equal": true,
+      "state_sha256": {
+        "state-end/units.jsonl": "f125cef3e3dc04079eaff3fa4caeca47cf515cf32412b5e304bda263db757acb",
+        "state-end/session.json": "f24b9e8af08636e0c1b6962d3df59bf35afcea72c422a4950f1e46529f235310",
+        "state-end/features.json": "9082cc5c8488a9cb74346c0d86e8e413e0c1e29fc96f4f07ac2465e24873d29f",
+        "state-end/ai.json": "dc33b1a7f24d8eee00330007fb37e7fd60a790a8519f2f83aaa9f2fa47b4778a",
+        "state-end/movement.json": "1dd4708fac7362ce5a9cd2356a4dbb3c372a8d70c5e2ef35d3d965edbebcc25a",
+        "state-end/construction-admissions.json": "3a2f26d86fe0f085677267b2a76c83311d6d96b00423f8b16fd293f98e422a94",
+        "state-end/construction.json": "fdbc6a8eccd7c781ab908a348245fef15f63400cbc8fb9c15090c66d100fd46c",
+        "state-end/projectiles.json": "ca941c6c12e4ae015f8909427d44486fd608c10d7a2b8dc3c94d51442276e6a2"
+      },
+      "reference_state_equal": true,
+      "raw_sidecar_sha256": {
+        ".color.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".glow-octaves.rgba16f": "78ff7a32d6fc8ddf98384312ff2b9cc1d1ab42028335d93633e60bcfd90d2144",
+        ".glow.rgba16f": "ff46be37943f0c54e4f036c16b3beb367702a05271359659d8ac0cfb8b453c02",
+        ".ground.png": "f584dee06b7364ac9f6ab74717f69e345b2da1d09fcc6ca5e115415db6fbeb52",
+        ".instances.bin": "0982f5e4874879dc30c4557ef093d7b41fbbab0cbdebf32478ae2c55fc9339c2",
+        ".keys.png": "a7984c863db62d68815ba8dade68d8edff44b26ccb4ceaab7cbd577be553518b",
+        ".keys.png.rgba8": "61d8d31ff78cb44b165e8a94463dca1a72c34d8de762b266a88a7587de747793",
+        ".poses.bin": "f6c4ee6dbc147858a5bb2bdde87ae8b158aa61683d73fbb2ce38223dc86aa4c3",
+        ".shadow-body.png": "ceb113efca625945cd19cf9cf5cf13ef1de250c4cb623d5ee1620826798e6f56",
+        ".shadow-depth.f32": "41a4338d6a7fe419cf216f810ebb35af4d99110d02c27e9aa8b01e87fc28bea5",
+        ".shadow-mask.r8": "f68d2ea17b7b291d901c7cee5865e1d8d7006228565880e1d50ba93d1be241e5",
+        ".slots.bin": "f6a0642329ef48c518c27aefe5611b9b2747a916d0827f2774aaa7512a130fc3",
+        ".source.png": "4210d6fb4e0796d40f4b08980abef379950d6cff6bec0d439b9204d2c469151f",
+        ".world.rgba16f": "5eb94593bab1348b81f5188bb3edc07ff3d45155a69c63e8d1d18738857dcfd8"
+      },
+      "raw_control_equal": true,
+      "alloc_bytes_per_draw": 191321.8777777778,
+      "mallocs_per_draw": 1557.5
+    }
+  ],
+  "excluded_attempts": [
+    {
+      "path": "/tmp/nanolathe-owned-sync-coast",
+      "reason": "earlier CPU staging cap rejected a valid >64MiB atlas; no timing samples; experiment partial-constructor access panic fixed forward"
+    },
+    {
+      "path": "/tmp/nanolathe-owned-sync-coast2",
+      "reason": "owned texture placeholder retired before first submit; no timing samples; Metal pending texture references implemented forward"
+    },
+    {
+      "path": "/tmp/nanolathe-owned-interactive-field3000",
+      "reason": "ordinary edge scroll moved the staged scene out of view; invalid dense-model performance proof",
+      "measured_model_instances_min": 0,
+      "measured_model_instances_max": 876,
+      "measured_model_instances_median": 0.0,
+      "zero_model_frames": 608,
+      "measured_frames": 720,
+      "positive_model_frames": 112,
+      "final_camera": [
+        704,
+        476,
+        1
+      ]
+    }
+  ]
+}

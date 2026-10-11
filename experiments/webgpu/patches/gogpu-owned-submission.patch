@@ -1,0 +1,351 @@
+--- a/app.go
++++ b/app.go
+@@ -368 +368 @@
+-func (a *App) Run() error {
++func (a *App) Run() (runErr error) {
+@@ -390 +390,6 @@
+-	defer a.shutdown(platWindow)
++	defer func() {
++		a.shutdown(platWindow)
++		if runErr == nil && a.renderer != nil {
++			runErr = a.renderer.submissionError
++		}
++	}()
+@@ -403 +408 @@
+-	return nil
++	return a.renderer.submissionError
+@@ -436,0 +442 @@
++	var completionErr error
+@@ -438 +444,7 @@
+-		a.renderer.WaitForGPU()
++		if a.renderer.device != nil {
++			completionErr = a.renderer.tracker.waitAll(a.renderer.device)
++			if completionErr != nil {
++				a.renderer.recordSubmissionError(completionErr)
++				return
++			}
++		}
+@@ -446,0 +459,5 @@
++	if completionErr != nil {
++		failedAppTeardowns.Store(a, a)
++		a.renderLoop.Stop()
++		return // No user/resource/platform destruction without a completed barrier.
++	}
+@@ -449,0 +467,5 @@
++	if _, failed := failedRendererTeardowns.Load(a.renderer); failed {
++		failedAppTeardowns.Store(a, a)
++		a.renderLoop.Stop()
++		return
++	}
+@@ -1066,0 +1089,3 @@
++	if a.renderer.submissionError != nil {
++		a.Quit()
++	}
+@@ -1155,0 +1181,5 @@
++		if a.renderer.submissionError != nil {
++			ws.resetLazyState()
++			a.renderer.currentSurface = nil
++			return
++		}
+--- a/context_command_encoder_test.go
++++ b/context_command_encoder_test.go
+@@ -228,0 +229,3 @@
++	if target.renderer.submissionError == nil {
++		t.Fatal("Finish failure was hidden")
++	}
+--- a/renderer.go
++++ b/renderer.go
+@@ -205 +205,2 @@
+-	tracker submissionTracker
++	tracker         submissionTracker
++	submissionError error
+@@ -711,0 +713,10 @@
++	if r.submissionError != nil {
++		ws.discardFrameEncoder()
++		if ws.surface != nil {
++			ws.surface.DiscardTexture()
++		}
++		ws.releaseFrame()
++		ws.resetLazyState()
++		r.endFrameStats(true)
++		return false
++	}
+@@ -747,0 +759,9 @@
++	if r.submissionError != nil {
++		if ws.surface != nil {
++			ws.surface.DiscardTexture()
++		}
++		ws.releaseFrame()
++		ws.resetLazyState()
++		r.endFrameStats(true)
++		return false // Do not present or count a failed encoder/submission.
++	}
+@@ -1005,0 +1026,2 @@
++		r.recordSubmissionError(fmt.Errorf("gogpu: finish shared frame encoder: %w", err))
++		// Finish already discards unsubmitted native ownership on failure.
+@@ -1295,0 +1318 @@
++		r.recordSubmissionError(fmt.Errorf("gogpu: finish clear encoder: %w", err))
+@@ -1299,2 +1322 @@
+-	r.submitTracked(commands)
+-	return true
++	return r.submitTracked(commands) == nil
+@@ -1306 +1328 @@
+-func (r *Renderer) submitTracked(commands *wgpu.CommandBuffer) {
++func (r *Renderer) submitTracked(commands *wgpu.CommandBuffer) error {
+@@ -1310 +1332,8 @@
+-		return
++		r.recordSubmissionError(fmt.Errorf("gogpu: submit: %w", err))
++		var unknown interface{ CompletionUnknown() bool }
++		if errors.As(err, &unknown) && unknown.CompletionUnknown() {
++			failedCommandBatches.Store(commands, commands)
++		} else {
++			commands.Release()
++		}
++		return r.submissionError
+@@ -1312,0 +1342 @@
++	return nil
+@@ -1433,3 +1463 @@
+-	r.submitTracked(commands)
+-
+-	return nil
++	return r.submitTracked(commands)
+@@ -1730 +1758,3 @@
+-	r.submitTracked(commands)
++	if err := r.submitTracked(commands); err != nil {
++		return err
++	}
+@@ -1856 +1886,3 @@
+-	r.submitTracked(cmds)
++	if err := r.submitTracked(cmds); err != nil {
++		return nil, err
++	}
+@@ -1908 +1940,3 @@
+-	r.tracker.waitAll(r.device)
++	if err := r.tracker.waitAll(r.device); err != nil {
++		r.recordSubmissionError(err)
++	}
+@@ -1941 +1974,0 @@
+-	// Wait for all GPU work to complete before destroying resources.
+@@ -1943,7 +1976,5 @@
+-		_ = r.device.WaitIdle()
+-	}
+-
+-	// Wait for all tracked submissions and free their command buffers. A
+-	// partially initialized headless renderer may not have a device yet.
+-	if r.device != nil {
+-		r.tracker.waitAll(r.device)
++		if err := r.tracker.waitAll(r.device); err != nil {
++			r.recordSubmissionError(err)
++			failedRendererTeardowns.Store(r, r)
++			return
++		}
+@@ -2009,0 +2041,7 @@
++		if contract, ok := any(r.device).(interface{ CompletionError() error }); ok {
++			if err := contract.CompletionError(); err != nil {
++				r.recordSubmissionError(err)
++				failedRendererTeardowns.Store(r, r)
++				return
++			}
++		}
+@@ -2025,0 +2064,3 @@
++	if _, failed := failedRendererTeardowns.Load(r); failed {
++		return // Native graph and platform remain quarantined.
++	}
+--- /dev/null
++++ b/submission_failure.go
+@@ -0,0 +1,29 @@
++// Copyright 2026 The Nanolathe Authors
++// SPDX-License-Identifier: MIT
++package gogpu
++
++import "sync"
++
++// Render-thread owned. App checks it after the serialized render callback.
++func (r *Renderer) recordSubmissionError(err error) {
++	if err != nil && r.submissionError == nil {
++		r.submissionError = err
++	}
++}
++
++// Completion unknown is terminal and must preserve the entire native graph.
++// These quarantines are not a loss recovery implementation.
++var failedAppTeardowns sync.Map
++var failedRendererTeardowns sync.Map
++
++// SubmissionFailuresReturned identifies the diagnostic host error contract.
++func (a *App) SubmissionFailuresReturned() bool { return true }
++
++var failedCommandBatches sync.Map
++
++// AbortFrame propagates a callback-owned failure before submission/presentation.
++func (a *App) AbortFrame(err error) {
++	if a.renderer != nil {
++		a.renderer.recordSubmissionError(err)
++	}
++}
+--- /dev/null
++++ b/submission_failure_test.go
+@@ -0,0 +1,152 @@
++package gogpu
++
++import (
++	"errors"
++	"github.com/gogpu/gputypes"
++	"github.com/gogpu/wgpu"
++	"github.com/gogpu/wgpu/hal"
++	"github.com/gogpu/wgpu/hal/noop"
++	"testing"
++)
++
++type rejectedFrameQueue struct {
++	noop.Queue
++	err     error
++	submits int
++}
++
++func (q *rejectedFrameQueue) Submit([]hal.CommandBuffer) (uint64, error) {
++	q.submits++
++	return 0, q.err
++}
++
++type unknownFrameDevice struct {
++	noop.Device
++	err error
++}
++
++func (d *unknownFrameDevice) WaitIdle() error { return d.err }
++func TestOwnedFrameSubmissionFailurePropagatesAndReleases(t *testing.T) {
++	sentinel := errors.New("frame rejected")
++	queue := &rejectedFrameQueue{err: sentinel}
++	device, err := wgpu.NewDeviceFromHAL(&noop.Device{}, queue, 0, gputypes.DefaultLimits(), "failed-frame")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer device.Release()
++	encoder, err := device.CreateCommandEncoder(&wgpu.CommandEncoderDescriptor{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	commands, err := encoder.Finish()
++	if err != nil {
++		t.Fatal(err)
++	}
++	renderer := &Renderer{device: device}
++	renderer.submitTracked(commands)
++	if !errors.Is(renderer.submissionError, sentinel) || renderer.tracker.activeCount() != 0 || queue.submits != 1 {
++		t.Fatal("failure was hidden or tracked as a success")
++	}
++	if _, err := device.Queue().Submit(commands); err == nil || queue.submits != 1 {
++		t.Fatal("failed command ownership was leaked")
++	}
++	renderer.recordSubmissionError(errors.New("later"))
++	if !errors.Is(renderer.submissionError, sentinel) {
++		t.Fatal("first failure overwritten")
++	}
++}
++func TestOwnedTrackerDoesNotFreeUnknownWork(t *testing.T) {
++	sentinel := errors.New("unknown completion")
++	raw := &unknownFrameDevice{err: sentinel}
++	device, err := wgpu.NewDeviceFromHAL(raw, &countingSubmitQueue{}, 0, gputypes.DefaultLimits(), "unknown-frame")
++	if err != nil {
++		t.Fatal(err)
++	}
++	encoder, _ := device.CreateCommandEncoder(&wgpu.CommandEncoderDescriptor{})
++	commands, err := encoder.Finish()
++	if err != nil {
++		t.Fatal(err)
++	}
++	var tracker submissionTracker
++	tracker.track(7, commands)
++	if err := tracker.waitAll(device); !errors.Is(err, sentinel) || tracker.activeCount() != 1 {
++		t.Fatal("failed wait recycled unknown command")
++	}
++	raw.err = nil
++	if err := tracker.waitAll(device); err != nil || tracker.activeCount() != 0 {
++		t.Fatal("confirmed wait failed to release commands")
++	}
++	device.Release()
++}
++
++func TestOwnedHeadlessReadbackRejectedSubmitReturnsFailure(t *testing.T) {
++	sentinel := errors.New("readback rejected")
++	queue := &rejectedFrameQueue{err: sentinel}
++	device, err := wgpu.NewDeviceFromHAL(&noop.Device{}, queue, 0, gputypes.DefaultLimits(), "failed-readback")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer device.Release()
++	texture, err := device.CreateTexture(&wgpu.TextureDescriptor{Size: wgpu.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: wgpu.TextureFormatRGBA8Unorm, Usage: wgpu.TextureUsageCopySrc})
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer texture.Release()
++	renderer := &Renderer{device: device}
++	image, err := renderer.renderToImageReadback(texture, wgpu.TextureFormatRGBA8Unorm, 1, 1)
++	if image != nil || !errors.Is(err, sentinel) || queue.submits != 1 {
++		t.Fatalf("readback falsely succeeded: %v", err)
++	}
++}
++func TestOwnedFailedFinishDoesNotCountFrame(t *testing.T) {
++	ctx, target, queue := newSharedEncoderTestContext(t)
++	ctx.CommandEncoder().CopyBufferToBuffer(nil, 0, nil, 0, 1)
++	target.renderer.endFrameForSurface(target)
++	if target.renderer.submissionError == nil || target.frameNumber != 0 || queue.submits != 0 {
++		t.Fatal("failed frame counted or submitted")
++	}
++}
++
++func (q *rejectedFrameQueue) SubmitErrorsBeforeCommit() bool { return true }
++
++type ownedFinalWaitFailure struct {
++	noop.Device
++	calls int
++	err   error
++}
++
++func (d *ownedFinalWaitFailure) WaitIdle() error {
++	d.calls++
++	if d.calls == 2 {
++		return d.err
++	}
++	return nil
++}
++func TestOwnedFinalReleaseWaitFailurePropagates(t *testing.T) {
++	sentinel := errors.New("final release completion unknown")
++	raw := &ownedFinalWaitFailure{err: sentinel}
++	device, err := wgpu.NewDeviceFromHAL(raw, &countingSubmitQueue{}, 0, gputypes.DefaultLimits(), "final-release-test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	renderer := &Renderer{device: device}
++	renderer.Destroy()
++	if !errors.Is(renderer.submissionError, sentinel) || renderer.device != device {
++		t.Fatal("final release failure hidden or device graph discarded")
++	}
++	if _, kept := failedRendererTeardowns.Load(renderer); !kept {
++		t.Fatal("failed renderer not quarantined")
++	}
++}
++
++func TestOwnedCallbackErrorAbortsBeforeSubmission(t *testing.T) {
++	ctx, target, queue := newSharedEncoderTestContext(t)
++	ctx.CommandEncoder()
++	sentinel := errors.New("callback failed")
++	app := &App{renderer: target.renderer}
++	app.AbortFrame(sentinel)
++	target.renderer.endFrameForSurface(target)
++	if !errors.Is(target.renderer.submissionError, sentinel) || target.frameNumber != 0 || queue.submits != 0 || target.frameEncoder != nil {
++		t.Fatal("failed callback submitted or counted")
++	}
++}
+--- a/submission_tracker.go
++++ b/submission_tracker.go
+@@ -57,2 +57,4 @@
+-func (t *submissionTracker) waitAll(device *wgpu.Device) {
+-	_ = device.WaitIdle()
++func (t *submissionTracker) waitAll(device *wgpu.Device) error {
++	if err := device.WaitIdle(); err != nil {
++		return err
++	}
+@@ -59,0 +62 @@
++	return nil

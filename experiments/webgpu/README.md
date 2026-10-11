@@ -383,3 +383,16 @@ but changes raster edges, so remains a diagnostic. `tools/build-play OUT
 --metal-cache` builds a private exact-v0.34.2 cache patch for macOS arm64 ABI
 investigation; ordinary builds use unchanged pins. These experiments do not
 establish steady120Hz or qualify the real game on Linux, Windows or browser.
+
+
+Owned-upload follow-up: `tools/build-play NEW_EXTERNAL_DIR --owned-submission
+[--metal-cache]` creates guarded private dependencies. `NANOLATHE_WEBGPU_ASYNC_UPLOADS=1`
+removes per-draw completion only with both reviewed contracts and reviewed Metal;
+resize/capture/shutdown still check completion. See FOLLOWUP_REPORT.md and
+OWNED_UPLOAD_MEASUREMENTS.json. Matched Coast improved100.92→115.99 callback Hz,
+and source-ahead reached119.53Hz with identical final image/state/GPU fields.
+Dense fixed Field3000 reached87.06Hz; steady120FPS remains unproven. Public buffer
+writes were already staged: the repairs cover mutable texture staging, pending
+copy lifetime, truthful completion and propagated/quarantined failures. One
+renderer can use queue-owned staging; a second application buffer ring is not
+intrinsically needed. Browser threading is deferred per user preference.

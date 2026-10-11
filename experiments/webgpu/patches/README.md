@@ -50,3 +50,21 @@ microbenchmark and whole-game allocation/timing/pixel evidence.
 The saved cache patch uses zero-context hunks to avoid whitespace-only blank
 context lines. The helper verifies the exact pinned ObjC source SHA256 before
 applying it with `git apply --unidiff-zero`; version metadata alone is insufficient.
+
+
+`wgpu-owned-submission.patch` and `gogpu-owned-submission.patch` are separate
+MIT diagnostics of the exact wgpu/gogpu pins. Modified upstream files retain
+GoGPU copyright/license; the independently authored additions carry their
+source notices. They stage mutable Metal texture writes, retain copy destination
+refs, reject before commit on completion-allocation failure, preserve unknown
+submission/teardown graphs, and return host submission/callback/wait errors.
+`owned-patch-manifest.json` verifies every modified original file SHA256 and
+absence of added files before guarded zero-context patch application.
+
+Use `tools/build-play NEW_EXTERNAL_DIR --owned-submission [--metal-cache]` and
+`NANOLATHE_WEBGPU_ASYNC_UPLOADS=1` only for this native diagnostic. The preparation
+tool is restricted to macOS arm64; other target builds establish compilation,
+not runtime qualification. Tests named TestOwned cover fault/lifetime/row/chunk
+cases; run focused race tests with the existing CGO-enabled test tooling only.
+No device-loss recovery, tracker rollback/retry, all-platform120FPS, shipping
+fork adoption or upstream release is implied.

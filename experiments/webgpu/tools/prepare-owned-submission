@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Copy exact cached dependencies and apply owned-upload/completion diagnostics."""
+import hashlib,json,os,pathlib,platform,shutil,subprocess,sys
+exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
+if len(sys.argv)!=2:sys.exit('usage: tools/prepare-owned-submission NEW_EXTERNAL_DIRECTORY')
+if platform.system()!='Darwin' or platform.machine()!='arm64':sys.exit('native diagnostic currently qualified only on macOS arm64')
+out=pathlib.Path(sys.argv[1]).resolve()
+if out.is_relative_to(repo) or out.exists():sys.exit('output must be new and outside repository')
+out.mkdir(parents=True)
+env=dict(os.environ,GOWORK='off',GOPROXY='off')
+manifest=json.loads((exp/'patches/owned-patch-manifest.json').read_text())
+pins={'wgpu':'v0.34.2','gogpu':'v0.54.1-0.20260901095536-12620c9d5007'}
+for name,pin in pins.items():
+ module=json.loads(subprocess.check_output(['go','list','-m','-json','github.com/gogpu/'+name],cwd=exp,env=env,text=True))
+ if module.get('Version')!=pin or module.get('Replace'):sys.exit('requires exact unmodified '+name+' '+pin)
+ source=pathlib.Path(module['Dir']);target=out/name
+ for rel,digest in manifest[name]['original_sha256'].items():
+  if hashlib.sha256((source/rel).read_bytes()).hexdigest()!=digest:sys.exit('unexpected source digest: '+name+'/'+rel)
+ for rel in manifest[name]['added_files']:
+  if (source/rel).exists():sys.exit('added file conflict: '+name+'/'+rel)
+ shutil.copytree(source,target)
+ for p in [target,*target.rglob('*')]:p.chmod(0o755 if p.is_dir() else 0o644)
+ patch=exp/'patches'/(name+'-owned-submission.patch')
+ subprocess.run(['git','apply','--check','--unidiff-zero',str(patch)],cwd=target,check=True)
+ subprocess.run(['git','apply','--unidiff-zero',str(patch)],cwd=target,check=True)
+print(json.dumps({name:str(out/name) for name in pins}))

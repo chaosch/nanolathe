@@ -45,6 +45,7 @@ type drawRow struct {
 	SourceMS, EncodeMS, CallbackMS, PaceMS, CompletionWaitMS float64
 	JoinMS                                                   float64
 	PreparedAhead                                            bool
+	PreviousSubmission, CompletedSubmission                  uint64
 	Counters                                                 Counters
 	Missing                                                  map[string]int
 }
@@ -74,6 +75,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	period := time.Second / time.Duration(fps)
 	cfg := gogpu.DefaultConfig().WithTitle("Nanolathe — WebGPU prototype").WithSize(opts.Width/2, opts.Height/2).WithResizable(false).WithContinuousRender(true).WithVSync(opts.VSync)
 	app := gogpu.NewApp(cfg)
+	asyncUploads := os.Getenv("NANOLATHE_WEBGPU_ASYNC_UPLOADS") == "1"
+	if asyncUploads {
+		contract, ok := any(app).(interface{ SubmissionFailuresReturned() bool })
+		if !ok || !contract.SubmissionFailuresReturned() {
+			return nil, fmt.Errorf("asynchronous uploads require the reviewed GoGPU submission error patch")
+		}
+	}
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 	go func() { <-signalContext.Done(); app.Quit() }()
@@ -129,6 +137,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var debugCapture *modelDebugCapture
 	var capturePending bool
 	var nativeDevice *wgpu.Device
+	var submittedAtClose, completedAtClose uint64
 	var live meshscene.LiveFrame
 	disableStateCache := os.Getenv("NANOLATHE_WEBGPU_DISABLE_STATE_CACHE") == "1"
 	disableModelBatching := os.Getenv("NANOLATHE_WEBGPU_DISABLE_MODEL_BATCHING") == "1"
@@ -198,6 +207,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			// The pinned multi-thread host can panic while quitting after a
 			// callback error. Preserve the actual renderer failure first.
 			if failure != nil && !callbackFailureLogged {
+				if abort, ok := any(app).(interface{ AbortFrame(error) }); ok {
+					abort.AbortFrame(failure)
+				}
 				fmt.Fprintf(os.Stderr, "nanolathe: WebGPU callback failed: logical path presentation/battle, providers searched [pinned GoGPU native host], expected a completed draw: %v\n", failure)
 				callbackFailureLogged = true
 			}
@@ -219,7 +231,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				return
 			}
 			renderer, failure = New(p.Device(), p.Queue(), p.SurfaceFormat(), scene)
-			if renderer != nil {
+			if renderer != nil && failure == nil {
 				renderer.omitSeabed = omitSeabed
 				renderer.paintState.disabled = disableStateCache
 				renderer.models.SetSourceBatching(!disableModelBatching)
@@ -228,6 +240,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			coldMS = float64(time.Since(coldStart).Nanoseconds()) / 1e6
 			if failure != nil {
+				renderer = nil // Constructor already retired its partial renderer.
 				app.Quit()
 				return
 			}
@@ -264,6 +277,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				return
 			}
 			if opts.OutputDir != "" {
+				// Capture owns a separate, checked completion boundary before any
+				// extra untimed upload or encoding reuses the mutable renderer.
+				if failure = nativeDevice.WaitIdle(); failure != nil {
+					app.Quit()
+					return
+				}
 				data, err := json.MarshalIndent(map[string]any{"tick": live.Tick, "alpha": live.Alpha, "camera": live.Camera, "water": live.Water, "distortions": live.Distortions, "model_groups": len(live.Composition.Groups), "feature_sprites": live.Composition.FeatureSprites, "composition": live.Composition, "shadows": map[string]any{"subjects": live.Shadows.Subjects, "body_draws": len(live.Shadows.BodyDraws), "projected_draws": len(live.Shadows.ProjectedDraws), "atlas": []int{live.Shadows.AtlasWidth, live.Shadows.AtlasHeight}}, "water_sources": len(live.WaterSources), "water_object_scales": live.WaterObjectScales, "world_format": renderer.format}, "", "  ")
 				if err == nil {
 					err = os.WriteFile(filepath.Join(opts.OutputDir, "final-fields.json"), data, 0644)
@@ -390,12 +409,22 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			debugWritten = true
 		}
-		completionStart := time.Now()
-		if failure = nativeDevice.WaitIdle(); failure != nil {
-			app.Quit()
-			return
+		completionMS := 0.0
+		if !asyncUploads {
+			completionStart := time.Now()
+			if failure = nativeDevice.WaitIdle(); failure != nil {
+				app.Quit()
+				return
+			}
+			completionMS = float64(time.Since(completionStart).Nanoseconds()) / 1e6
+		} else {
+			contract, ok := any(nativeDevice).(interface{ CompletionSafeUploads() bool })
+			if !ok || !contract.CompletionSafeUploads() {
+				failure = fmt.Errorf("asynchronous uploads require the reviewed wgpu ownership/completion patch")
+				app.Quit()
+				return
+			}
 		}
-		completionMS := float64(time.Since(completionStart).Nanoseconds()) / 1e6
 		encodeStart := time.Now()
 		// Current diagnostics consumed the packet above. Renderer preparation
 		// owns every later command operand before this callback starts Next.
@@ -422,7 +451,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if !last.IsZero() {
 			callbackMS = float64(start.Sub(last).Nanoseconds()) / 1e6
 		}
-		row := drawRow{Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, Counters: c, Missing: renderer.Missing()}
+		row := drawRow{Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, PreviousSubmission: nativeDevice.Queue().LastSubmissionIndex(), CompletedSubmission: nativeDevice.Queue().Poll(), Counters: c, Missing: renderer.Missing()}
 		if len(rows) >= 8192 {
 			rows[draw%len(rows)] = row
 		} else {
@@ -445,9 +474,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			failure = e
 		}
 		if nativeDevice != nil {
-			if e := nativeDevice.WaitIdle(); failure == nil {
-				failure = e
+			if e := nativeDevice.WaitIdle(); e != nil {
+				if failure == nil {
+					failure = e
+				}
+				return // No capture/renderer destruction with completion unknown.
 			}
+			submittedAtClose = nativeDevice.Queue().LastSubmissionIndex()
+			completedAtClose = nativeDevice.Queue().Poll()
 		}
 		if debugCapture != nil {
 			debugCapture.close()
@@ -462,6 +496,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 	})
 	runErr := app.Run()
+	// Quarantined native shutdown skips OnClose. CPU-only source/profiling
+	// cleanup must still finish before collecting the result.
+	if e := preparer.close(); failure == nil {
+		failure = e
+	}
+	if e := stopMeasure(); failure == nil {
+		failure = e
+	}
 	if failure == nil {
 		failure = runErr
 	}
@@ -471,6 +513,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		rows = append(ordered, rows[:at]...)
 	}
 	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": prepareAhead, "source_ownership": "one serial worker; next source starts after all Prepare CPU reads/uploads and copied paint records, before command encoding; measurement boundaries and final capture stop preparation", "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "optional source preparation overlaps host submission/pacing; per-frame GPU completion still protects mutable-resource replacement", "hardware model triangles approximate production integer span coverage; doubled hardware outline lines lack whole-native-pixel row blocks", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"compact_slot_packing": compactSlotPacking, "authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens, "controlled_direct_light_stock_replacement": probeDirectLight, "controlled_direct_light_off": directLightFixture.disabled}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "model_batching": disableModelBatching, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
+	report["asynchronous_uploads"] = asyncUploads
+	report["submission_failure_contract"] = "stock dependencies log deferred failures; reviewed host patch returns first failure from Run"
+	report["submission_indices_at_close"] = map[string]uint64{"submitted": submittedAtClose, "completed": completedAtClose}
+	if asyncUploads {
+		report["submission_failure_contract"] = "reviewed host returns first Finish/Submit/wait failure; completion unknown preserves native graph"
+		report["upload_ownership"] = "one renderer; immutable staged writes retain destinations until real queue completion; no per-draw whole-device drain"
+	}
 	report["retained_descriptor_snapshots"] = retainedDescriptors
 	if failure != nil {
 		report["run_error"] = failure.Error()
