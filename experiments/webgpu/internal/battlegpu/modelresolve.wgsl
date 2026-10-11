@@ -1,13 +1,18 @@
 struct Uniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,shadow:vec4<f32>}
 struct Slot {screen:vec4<f32>,atlas:vec4<f32>,params:vec4<f32>}
-struct Shadow {screen:vec4<f32>,bodyScreen:vec4<f32>,bodyAtlas:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,atlas:vec4<f32>}
-@group(0) @binding(0) var<storage,read> slots:array<Slot>;
-@group(0) @binding(1) var<storage,read> shadows:array<Shadow>;
+struct ModelShadowUniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,tint:vec4<f32>,water:vec4<f32>}
+struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,order:vec4<u32>}
+// Both world commit modules declare the complete union, including globals
+// unused here: pinned Metal assigns dense slots across all declarations.
+@group(0) @binding(0) var<storage,read> slots:array<Slot,__SLOTS__>;
+@group(0) @binding(1) var<storage,read> subjects:array<ModelShadowSubject,1>;
 @group(0) @binding(2) var<uniform> u:Uniforms;
 @group(0) @binding(3) var bodies:texture_2d<f32>;
-@group(0) @binding(4) var silhouettes:texture_2d<f32>;
-@group(0) @binding(5) var nearestSampler:sampler;
-@group(0) @binding(6) var sourceBodies:texture_2d<f32>;
+@group(0) @binding(4) var<uniform> shadowU:ModelShadowUniforms;
+@group(0) @binding(5) var body:texture_2d<f32>;
+@group(0) @binding(6) var keys:texture_depth_2d;
+@group(0) @binding(7) var mask:texture_2d<f32>;
+@group(0) @binding(8) var liquid:texture_2d<f32>;
 // Store the guarded corner load before arithmetic: the pinned Metal writer
 // otherwise scales only the robust-access fallback in its conditional.
 const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
