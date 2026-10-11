@@ -11,7 +11,7 @@ The downloaded pin has the RAF/visibility loop and borrowed context encoder
 specified in plan §3. Device creation requests no optional features.
 
 Initial builds: Darwin arm64 Go/Rust and js/wasm pass with `CGO_ENABLED=0`.
-Windows/Linux amd64 Go cross-builds pass; neither has hardware runtime evidence.
+Windows/Linux amd64 Go and Rust-tag cross-builds pass; neither has hardware runtime evidence.
 Native Go on Apple M3 Pro and Chrome 153/macOS 26.6.2 run the identical
 64-invocation compute shader (four exact integer readbacks) and textured indexed
 triangle. Controlled invalid WGSL and undersized binding return native errors;
@@ -182,7 +182,9 @@ essential gates. Following the requested dependency order, the Go/Rust/browser
 performance matrices were stopped. No 120 Hz WebGPU success or CPU/GPU budget
 pass is claimed, and no M1–M5 work or landing was started.
 
-All changes are isolated to this nested module and the plan's pin/progress.
+Implementation changes this session are isolated to this nested module and the
+plan's pin/progress. The plan branch already contained the explanatory link in
+docs/DESIGN_METAL_RENDERER.md; that inherited change was left intact.
 The branch is webgpu-p0-p4, created from the plan-containing commit afe0c4254
 and integrated with main at 1430571dc before editing. Bounded commits include
 9415015c0 (pin/probes), 30b0b1845/98dd5fdff (fixture/oracle),
@@ -346,6 +348,14 @@ Independent read-only reviews covered P0/P1, P2/P3 and P4; their telemetry and
 clock-label findings were fixed forward with separate commits. Experiment
 checks and root architecture/docs guards passed on the earlier P4 candidate;
 final checks are recorded in experiment-check-final.log/root-guards-final.log.
-Root tools/check passed. The short retail gate is still running at this report
-write; do not infer success from its intermediate package output. This branch
-is retained for review and has not been landed.
+Root tools/check and the short tools/check-retail gate passed, including the
+Rosetta amd64 and Wasm fingerprint locks, Wasm relay, real-device GPU fixtures
+and Metal device test. Logs are root-check.log and root-check-retail.log. Final
+Windows/Linux Go and Rust-tag cross-builds also passed. These repository gates
+do not turn the failed/incomplete prototype runtime gates into passes.
+
+The final artifact inventory is evidence-index.json under the artifact root,
+with relative paths, sizes and SHA-256 hashes. Final unrun matrices are in
+unrun-final-{go,rust,browser}; older inventories are retained as earlier source
+snapshots. modules-p4.txt records the final nested graph. This branch is retained
+for review and has not been landed.
