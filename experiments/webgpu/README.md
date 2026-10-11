@@ -80,3 +80,39 @@ Open localhost port 8766 in Chrome; Run smoke, Resize, Invalid shader/binding,
 Stop and Destroy device exercise the authored harness. `-frames=120` is a bounded
 native smoke; `-frames=0` keeps it open. Runtime tests are separate from check.
 The Rust command is a reproduction of the documented failure, not a passing path.
+
+## P1 fixture/oracle — 2026-10-10
+
+`fixture.New` accepts only 64/1000/3000/5000 instances, 200/500 triangles and
+animated/static/camera modes. Every mesh has exactly the selected triangle
+count across three pieces. Geometry includes subdivided top surfaces, true
+bevel faces, sides, bottoms and two independently authored nose triangles.
+UVs have face seams and one mesh mirrors U. Material identities are 1–3.
+The 64-instance scene intentionally overlaps subjects 1 and 2; benchmark grids
+have no inter-model occlusion. Every benchmark instance's full envelope fits
+its cell. Body radius ≤sqrt(.642²+.6²), height .4, scale .44 cell, translation
+±.015 cell and centering .16 scale bound the body envelope below half a cell;
+articulated pieces remain inside that envelope. The smallest projected body
+span exceeds half a cell. CPU tests sweep all submitted instances at four
+animation phases; GPU visibility IDs still must establish actual coverage.
+
+The sheared camera's world width is 16, height is 16×physical-height/width,
+zoom is physical-width/16, with a 32-physical-pixel margin. Columns use the
+plan's floating-point aspect ratio; rows use integer ceiling. Scale is baked
+into immutable vertices and local piece translations. Pose bases are rigid
+unit bases with one final world-Z reflection; interpolation cannot discard a
+model scale accidentally. Sample generation is pure and allocating; its real
+CPU/allocation cost must be measured without hiding it behind GPU time.
+
+The independent float64 oracle locks exact endpoints, either-hidden admission,
+metadata, equal bases, near-identical rotations and the 170°→−170° short arc.
+Tests freeze primary workload mesh/texture/configuration/endpoints hashes.
+Before GPU implementation, static diagnostic pixels (100,100), (116,105),
+(80,120), (115,145), (280,115), (460,100) have frozen ID/RGBA/depth expectations.
+These test atlas quadrants, transparent background, mirrored mesh placement and
+world projection; further animated interior samples use independent barycentric
+projection. GPU pose tolerance starts at absolute 1e-4.
+
+Adding the existing root scene types selects x/sys **v0.48.0** by MVS, with a
+local root replace. Root go.mod/go.sum remain unchanged; the final graph is
+recorded separately from the initial P0 graph.
