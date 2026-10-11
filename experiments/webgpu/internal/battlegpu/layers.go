@@ -72,7 +72,7 @@ type Layers struct {
 	owned                                                                                       []func()
 	closed                                                                                      bool
 	uniform                                                                                     *wgpu.Buffer
-	terrain, sprite, fog                                                                        *wgpu.RenderPipeline
+	terrain, sprite, feature, fog                                                               *wgpu.RenderPipeline
 	overlay                                                                                     [2]*wgpu.RenderPipeline
 	fx                                                                                          [3]*wgpu.RenderPipeline
 	geometry, ground, trail, smoke                                                              *wgpu.RenderPipeline
@@ -90,6 +90,11 @@ type Layers struct {
 	fogAtlasReady                                                                               bool
 	counts                                                                                      LayerCounters
 	spriteBands                                                                                 [2][2]uint32
+	spriteRemap                                                                                 []uint32 // original source -> packed instance plus one; zero means filtered
+	featureSources, featureDrawn                                                                []bool
+	looseSpriteRuns                                                                             [2][]layerDraw
+	featurePaintOrder                                                                           bool
+	featurePaintCount                                                                           int
 	overlayRuns                                                                                 []layerDraw
 	effectLayers                                                                                [][]layerDraw
 	overlayVersion, effectVersion, fogGeneration                                                uint64
@@ -409,6 +414,12 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err != nil {
 		return
 	}
+	// A feature's production paint entry owns its coverage; scene depth must
+	// not replace that order (GPU design C-G3, C-G5; Metal design §4).
+	l.feature, err = l.layerPipeline(shader, pl, "layer_sprite_vertex", "layer_sprite_fragment", 0, 1)
+	if err != nil {
+		return
+	}
 	l.fogLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, false), layerTextureEntry(3, false)})
 	if err != nil {
 		return
@@ -517,8 +528,9 @@ func layerRuns(quads []meshscene.OverlayQuad, kind uint32) []layerDraw {
 	return out
 }
 
-func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32) {
+func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32, []uint32) {
 	var out []meshscene.Sprite
+	remap := make([]uint32, len(f.Sprites))
 	type layerSpriteEntry struct {
 		index int
 		depth float32
@@ -531,6 +543,7 @@ func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32)
 			continue
 		}
 		if s.Current[3] > .5 {
+			remap[i] = uint32(len(out)) + 1
 			out = append(out, s)
 			continue
 		}
@@ -543,9 +556,65 @@ func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32)
 	ground := uint32(len(out))
 	slices.SortStableFunc(upper, func(a, b layerSpriteEntry) int { return cmp.Compare(b.depth, a.depth) })
 	for _, e := range upper {
+		remap[e.index] = uint32(len(out)) + 1
 		out = append(out, f.Sprites[e.index])
 	}
-	return out, [2][2]uint32{{0, ground}, {ground, uint32(len(out)) - ground}}
+	return out, [2][2]uint32{{0, ground}, {ground, uint32(len(out)) - ground}}, remap
+}
+
+// Source identities stay in publication coordinates, including original source
+// zero. The loose spans index the packed array and exclude every retained paint
+// reference, even when a body/shadow pair was separated by depth sorting.
+func layerFeatureLayout(remap []uint32, bands [2][2]uint32, paint []meshscene.FeatureSpritePaint) ([]bool, [2][]layerDraw) {
+	features := make([]bool, len(remap))
+	packedFeatures := make([]bool, bands[0][1]+bands[1][1])
+	for _, p := range paint {
+		if uint64(p.Source) >= uint64(len(remap)) || remap[p.Source] == 0 {
+			continue
+		}
+		features[p.Source] = true
+		packedFeatures[remap[p.Source]-1] = true
+	}
+	var runs [2][]layerDraw
+	for phase, band := range bands {
+		for at, end := band[0], band[0]+band[1]; at < end; {
+			if packedFeatures[at] {
+				at++
+				continue
+			}
+			first := at
+			for at < end && !packedFeatures[at] {
+				at++
+			}
+			runs[phase] = append(runs[phase], layerDraw{first: first, count: at - first})
+		}
+	}
+	return features, runs
+}
+
+// SetFeaturePaintOrder opts into the coordinator's Phase/Rank paint walk.
+// Configure it before the frame's first draw. DrawSprites then draws only loose
+// art; DrawFeature supplies each production feature body/shadow at its barrier.
+// The bulk fallback keeps its explicit painter-order limitation by default.
+func (l *Layers) SetFeaturePaintOrder(enabled bool) {
+	l.featurePaintOrder = enabled
+	if enabled {
+		delete(l.missing, "feature_subject_painter_order")
+	} else if l.featurePaintCount > 0 {
+		l.missing["feature_subject_painter_order"] = l.featurePaintCount
+	}
+}
+
+func (l *Layers) layerTakeFeatureSource(originalSource uint32) (uint32, bool) {
+	if !l.featurePaintOrder || uint64(originalSource) >= uint64(len(l.spriteRemap)) || !l.featureSources[originalSource] || l.featureDrawn[originalSource] {
+		return 0, false
+	}
+	packed := l.spriteRemap[originalSource]
+	if packed == 0 {
+		return 0, false
+	}
+	l.featureDrawn[originalSource] = true
+	return packed - 1, true
 }
 
 func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
@@ -576,8 +645,16 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		binary.LittleEndian.PutUint32(l.uniformBytes[88:], 1)
 	}
 	layerVec(l.uniformBytes[:], 96, [4]float32{float32(l.waterStep), drawlist.ScorchFadeStartTicks, drawlist.ScorchLifeTicks, f.Alpha})
-	sprites, bands := layerOrderSprites(f)
+	sprites, bands, remap := layerOrderSprites(f)
 	l.spriteBands = bands
+	l.spriteRemap = remap
+	l.featureSources, l.looseSpriteRuns = layerFeatureLayout(remap, bands, f.Composition.FeatureSprites)
+	l.featureDrawn = slices.Grow(l.featureDrawn[:0], len(remap))[:len(remap)]
+	clear(l.featureDrawn)
+	l.featurePaintCount = 0
+	if f.Composed {
+		l.featurePaintCount = len(f.Composition.FeatureSprites)
+	}
 	data := make([]byte, len(sprites)*96)
 	for i, s := range sprites {
 		for j, v := range [][4]float32{s.Previous, s.Current, s.Rect, s.UV, s.Color, s.Params} {
@@ -641,11 +718,8 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if len(f.Distortions) > 0 {
 		l.missing["enhanced_distortion"] = len(f.Distortions)
 	}
-	if f.Composed && len(f.Composition.FeatureSprites) > 0 {
-		// TODO(question): consume the producer's per-subject feature paint
-		// references; the prototype's two sprite bands retain a depth-order
-		// approximation until Models and Layers share those draw barriers.
-		l.missing["feature_subject_painter_order"] = len(f.Composition.FeatureSprites)
+	if !l.featurePaintOrder && l.featurePaintCount > 0 {
+		l.missing["feature_subject_painter_order"] = l.featurePaintCount
 	}
 	if f.Water.Mask[3] > .5 && f.Water.Controls[3] > .5 {
 		l.missing["water_surface_reflections"] = 1
@@ -873,6 +947,10 @@ func (l *Layers) DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if l.closed || phase > 1 {
 		return
 	}
+	if l.featurePaintOrder {
+		l.DrawLooseSprites(pass, phase)
+		return
+	}
 	s := l.spriteBands[phase]
 	if s[1] == 0 {
 		return
@@ -882,6 +960,42 @@ func (l *Layers) DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: s[1], FirstInstance: s[0]})
 	l.counts.Draws++
 	l.counts.Sprites += int(s[1])
+}
+
+// DrawFeature accepts an ORIGINAL publication source, never a private packed
+// index. The coordinator calls it in FeatureSpritePaint.Phase/Rank order,
+// shadow before body; source filtering/reordering cannot change that identity.
+// False means the source is absent, not a feature paint, already drawn, or the
+// explicit feature paint mode is disabled.
+func (l *Layers) DrawFeature(pass *wgpu.RenderPassEncoder, originalSource uint32) bool {
+	if l.closed || pass == nil {
+		return false
+	}
+	packed, ok := l.layerTakeFeatureSource(originalSource)
+	if !ok {
+		return false
+	}
+	pass.SetPipeline(l.feature)
+	pass.SetBindGroup(0, l.spriteGroup, nil)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: packed})
+	l.counts.Draws++
+	l.counts.Sprites++
+	return true
+}
+
+// DrawLooseSprites uses the original two bands (0 short, 1 upper), excluding
+// all valid FeatureSprites references so the coordinator paints them once.
+func (l *Layers) DrawLooseSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
+	if l.closed || pass == nil || phase > 1 {
+		return
+	}
+	pass.SetPipeline(l.sprite)
+	pass.SetBindGroup(0, l.spriteGroup, nil)
+	for _, span := range l.looseSpriteRuns[phase] {
+		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: span.count, FirstInstance: span.first})
+		l.counts.Draws++
+		l.counts.Sprites += int(span.count)
+	}
 }
 
 // DrawEffects replays a production barrier layer (0..4), preserving spans and

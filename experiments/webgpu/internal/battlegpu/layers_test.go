@@ -40,7 +40,7 @@ func TestLayerSpriteBandsSkipReplacedEffectsWithoutMutatingPublication(t *testin
 		{Current: [4]float32{4, 0, 20, 0}},
 	}
 	f := meshscene.LiveFrame{Sprites: sprites, Alpha: 1, StockEffects: &meshscene.StockFrame{}, Composition: meshscene.ModelComposition{SpriteSources: []meshscene.SpriteSource{{Kind: meshscene.SpriteSourceFeatureBody}, {Kind: meshscene.SpriteSourceFeatureBody}, {Kind: meshscene.SpriteSourceFallbackEffect}, {Kind: meshscene.SpriteSourceFeatureBody}}}}
-	got, bands := layerOrderSprites(f)
+	got, bands, _ := layerOrderSprites(f)
 	if len(got) != 3 || bands != [2][2]uint32{{0, 1}, {1, 2}} || got[0].Current[0] != 2 || got[1].Current[0] != 4 || got[2].Current[0] != 1 {
 		t.Fatal(got, bands)
 	}
@@ -48,6 +48,92 @@ func TestLayerSpriteBandsSkipReplacedEffectsWithoutMutatingPublication(t *testin
 		if x.Current[0] != float32(i+1) {
 			t.Fatal("publication reordered in place")
 		}
+	}
+}
+
+func TestLayerFeaturePaintRemapsOriginalSourcesAndExcludesLooseDuplicates(t *testing.T) {
+	sprites := []meshscene.Sprite{
+		{Current: [4]float32{1, 0, 30, 0}}, // original source zero remains a valid body
+		{Current: [4]float32{2, 0, 0, 0}},  // replaced fallback effect
+		{Current: [4]float32{3, 0, 0, 1}},  // short feature
+		{Current: [4]float32{4, 0, 0, 1}},  // loose short art
+		{Current: [4]float32{5, 0, 10, 0}}, // loose upper art
+		{Current: [4]float32{6, 0, 20, 0}}, // shadow, separated from body by depth sorting
+	}
+	paint := []meshscene.FeatureSpritePaint{
+		{Source: 5, Rank: 4, Phase: meshscene.ModelPhaseGround, Shadow: true},
+		{Source: 0, Rank: 4, Phase: meshscene.ModelPhaseGround},
+		{Source: 2, Phase: meshscene.ModelPhaseShortFeatures},
+		{Source: 1}, // filtered sources do not name a packed instance
+		{Source: math.MaxUint32},
+	}
+	f := meshscene.LiveFrame{Sprites: sprites, Alpha: 1, StockEffects: &meshscene.StockFrame{}, Composition: meshscene.ModelComposition{FeatureSprites: paint, SpriteSources: make([]meshscene.SpriteSource, len(sprites))}}
+	f.Composition.SpriteSources[1].Kind = meshscene.SpriteSourceFallbackEffect
+	packed, bands, remap := layerOrderSprites(f)
+	wantRemap := []uint32{5, 0, 1, 2, 3, 4}
+	for i, x := range remap {
+		if x != wantRemap[i] {
+			t.Fatal("original identity changed", remap)
+		}
+	}
+	features, loose := layerFeatureLayout(remap, bands, paint)
+	l := Layers{spriteRemap: remap, featureSources: features, featureDrawn: make([]bool, len(remap)), featurePaintOrder: true}
+	if len(loose[0]) != 1 || loose[0][0].first != 1 || loose[0][0].count != 1 || len(loose[1]) != 1 || loose[1][0].first != 2 || loose[1][0].count != 1 {
+		t.Fatal(loose)
+	}
+	draws := make([]int, len(packed))
+	for _, phase := range loose {
+		for _, span := range phase {
+			for at := span.first; at < span.first+span.count; at++ {
+				draws[at]++
+			}
+		}
+	}
+	for i, source := range []uint32{5, 0, 2} {
+		at, ok := l.layerTakeFeatureSource(source)
+		if !ok || at != []uint32{3, 4, 0}[i] {
+			t.Fatal("paint order/source remap changed", source, at, ok)
+		}
+		draws[at]++
+	}
+	for _, n := range draws {
+		if n != 1 {
+			t.Fatal("packed source omitted or drawn twice", draws)
+		}
+	}
+	for _, source := range []uint32{0, 1, 4, math.MaxUint32} {
+		if _, ok := l.layerTakeFeatureSource(source); ok {
+			t.Fatal("duplicate/filtered/loose/invalid source admitted", source)
+		}
+	}
+	for i, s := range sprites {
+		if s.Current[0] != float32(i+1) {
+			t.Fatal("publication mutated")
+		}
+	}
+}
+
+func TestLayerFeaturePaintModeKeepsFallbackLimitationUntilEnabled(t *testing.T) {
+	l := Layers{spriteRemap: []uint32{1}, featureSources: []bool{true}, featureDrawn: []bool{false}, featurePaintCount: 2, missing: map[string]int{"feature_subject_painter_order": 2}}
+	if _, ok := l.layerTakeFeatureSource(0); ok {
+		t.Fatal("feature mode enabled implicitly")
+	}
+	if l.Missing()["feature_subject_painter_order"] != 2 {
+		t.Fatal("fallback limitation disappeared")
+	}
+	l.SetFeaturePaintOrder(true)
+	if _, ok := l.Missing()["feature_subject_painter_order"]; ok {
+		t.Fatal("explicit seam still reports fallback ordering")
+	}
+	if l.DrawFeature(nil, 0) {
+		t.Fatal("nil pass accepted")
+	}
+	if at, ok := l.layerTakeFeatureSource(0); !ok || at != 0 {
+		t.Fatal("source zero or nil-pass handling changed", at, ok)
+	}
+	l.SetFeaturePaintOrder(false)
+	if l.Missing()["feature_subject_painter_order"] != 2 {
+		t.Fatal("disabling seam hid fallback limitation")
 	}
 }
 
