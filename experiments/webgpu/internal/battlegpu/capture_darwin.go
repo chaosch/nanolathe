@@ -106,3 +106,25 @@ func (c *battleCapture) close() {
 		c.t.Release()
 	}
 }
+
+// Key/coverage planes are data, not premultiplied colors. Preserve every byte
+// in both an NRGBA PNG and tightly packed raw diagnostic sidecar.
+func (c *battleCapture) saveMetadata(path string, data []byte) error {
+	im := image.NewNRGBA(image.Rect(0, 0, c.w, c.h))
+	for y := range c.h {
+		copy(im.Pix[y*im.Stride:y*im.Stride+c.w*4], data[y*c.row:y*c.row+c.w*4])
+	}
+	if err := os.WriteFile(path+".rgba8", im.Pix, 0644); err != nil {
+		return err
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	err = png.Encode(f, im)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
+}

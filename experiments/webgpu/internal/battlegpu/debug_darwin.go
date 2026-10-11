@@ -6,6 +6,7 @@ import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"os"
+	"strings"
 )
 
 type modelDebugCapture struct {
@@ -98,7 +99,10 @@ func (c *modelDebugCapture) finish() error {
 		if !ready {
 			return modelError("completed diagnostic map")
 		}
-		if c.png[i] {
+		if strings.HasSuffix(c.paths[i], ".keys.png") {
+			// Metadata is unassociated data: zero alpha must not erase its key.
+			err = r.saveMetadata(c.paths[i], data)
+		} else if c.png[i] {
 			err = r.save(c.paths[i], data)
 		} else {
 			err = os.WriteFile(c.paths[i], data, 0644)
