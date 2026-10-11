@@ -3,6 +3,7 @@ package battlegpu
 import (
 	"encoding/binary"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/gogpu/gputypes"
@@ -134,6 +135,58 @@ func TestLayerFeaturePaintModeKeepsFallbackLimitationUntilEnabled(t *testing.T) 
 	l.SetFeaturePaintOrder(false)
 	if l.Missing()["feature_subject_painter_order"] != 2 {
 		t.Fatal("disabling seam hid fallback limitation")
+	}
+}
+
+func TestLayerAnnotationRangesPreservePhysicalRectsColorsAndSlotOrder(t *testing.T) {
+	in := []meshscene.Annotation{
+		{Slot: 3, Rect: [4]float32{31.5, 41.25, 7.5, 2.5}, Color: [4]float32{.25, .5, .75, .5}},
+		{Slot: 0, Rect: [4]float32{100, 100, 100, 100}},
+		{Slot: 1, Rect: [4]float32{11.5, 12.25, .5, 1.5}, Color: [4]float32{.75, .25, .5, .25}},
+		{Slot: 3, Rect: [4]float32{32.5, 42.25, 8.5, 3.5}, Color: [4]float32{.5, .75, .25, .75}},
+		{Slot: math.MaxUint32},
+		{Slot: 5},
+	}
+	before := slices.Clone(in)
+	data, ranges := layerPackAnnotations(in, 4)
+	want := [][2]uint32{{0, 1}, {}, {1, 2}, {}}
+	if !slices.Equal(ranges, want) || len(data) != 3*64 {
+		t.Fatal("annotation ranges changed", ranges, len(data))
+	}
+	for packed, original := range []int{2, 0, 3} {
+		for _, lane := range []struct {
+			at    int
+			value [4]float32
+		}{{0, in[original].Rect}, {32, in[original].Color}} {
+			for component, x := range lane.value {
+				at := packed*64 + lane.at + component*4
+				if got := math.Float32frombits(binary.LittleEndian.Uint32(data[at:])); got != x {
+					t.Fatalf("annotation %d lane %d/%d: %g != %g", packed, lane.at, component, got, x)
+				}
+			}
+		}
+		for _, at := range []int{16, 20, 24, 28, 48, 52, 56, 60} {
+			if binary.LittleEndian.Uint32(data[packed*64+at:]) != 0 {
+				t.Fatal("annotation gained texture/blend operands")
+			}
+		}
+	}
+	if !slices.Equal(in, before) {
+		t.Fatal("annotation publication mutated")
+	}
+}
+
+func TestLayerAnnotationEmptySlotsAndAbsentPassDoNotDraw(t *testing.T) {
+	data, ranges := layerPackAnnotations([]meshscene.Annotation{{Slot: 0}, {Slot: 2}}, 1)
+	if len(data) != 0 || !slices.Equal(ranges, [][2]uint32{{}}) {
+		t.Fatal("invalid annotation slot admitted", ranges, len(data))
+	}
+	l := Layers{annotationRanges: [][2]uint32{{0, 1}}}
+	for _, slot := range []uint32{0, 1, 2, math.MaxUint32} {
+		l.DrawAnnotations(nil, slot)
+	}
+	if l.counts.Draws != 0 {
+		t.Fatal("annotations drawn without a pass")
 	}
 }
 

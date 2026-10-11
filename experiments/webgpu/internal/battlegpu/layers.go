@@ -72,15 +72,16 @@ type Layers struct {
 	owned                                                                                       []func()
 	closed                                                                                      bool
 	uniform                                                                                     *wgpu.Buffer
-	terrain, sprite, feature, fog                                                               *wgpu.RenderPipeline
+	terrain, sprite, feature, annotation, fog                                                   *wgpu.RenderPipeline
 	overlay                                                                                     [2]*wgpu.RenderPipeline
 	fx                                                                                          [3]*wgpu.RenderPipeline
 	geometry, ground, trail, smoke                                                              *wgpu.RenderPipeline
-	terrainLayout, spriteLayout, fogLayout, overlayLayout                                       *wgpu.BindGroupLayout
-	terrainGroup, spriteGroup, fogGroup, overlayGroup, effectGroup                              *wgpu.BindGroup
+	terrainLayout, spriteLayout, annotationLayout, fogLayout, overlayLayout                     *wgpu.BindGroupLayout
+	terrainGroup, spriteGroup, annotationGroup, fogGroup, overlayGroup, effectGroup             *wgpu.BindGroup
 	terrainImage, tileAtlas, tileDetail, lookup, spriteAtlas, spriteDetail, fogAtlas, waterMask layerTexture
 	overlayAtlas, effectAtlas, fogGrid                                                          layerTexture
 	sprites, overlayQuads, effectQuads, effectVertices, effectGround, effectSmoke, lights       layerBuffer
+	annotations                                                                                 layerBuffer
 	world                                                                                       *wgpu.TextureView // borrowed; never released by Layers
 	uniformBytes                                                                                [layerUniformSize]byte
 	rect                                                                                        [4]float32
@@ -95,6 +96,7 @@ type Layers struct {
 	looseSpriteRuns                                                                             [2][]layerDraw
 	featurePaintOrder                                                                           bool
 	featurePaintCount                                                                           int
+	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
 	overlayRuns                                                                                 []layerDraw
 	effectLayers                                                                                [][]layerDraw
 	overlayVersion, effectVersion, fogGeneration                                                uint64
@@ -121,6 +123,31 @@ func layerPackQuad(dst []byte, q meshscene.OverlayQuad, scale float32) {
 	layerVec(dst, 16, q.UV)
 	layerVec(dst, 32, q.Color)
 	layerVec(dst, 48, q.Params)
+}
+
+// Production annotations already contain physical rectangles and straight RGBA.
+// Only their storage order changes: stable slot grouping leaves each slot's
+// authored sequence intact (Metal composition annotation ranges, GPU C-G5).
+func layerPackAnnotations(in []meshscene.Annotation, slotCount int) ([]byte, [][2]uint32) {
+	order := slices.Clone(in)
+	slices.SortStableFunc(order, func(a, b meshscene.Annotation) int { return cmp.Compare(a.Slot, b.Slot) })
+	ranges := make([][2]uint32, slotCount)
+	data := make([]byte, 0, len(in)*64)
+	for _, a := range order {
+		if a.Slot == 0 || uint64(a.Slot) > uint64(slotCount) {
+			continue
+		}
+		r := &ranges[a.Slot-1]
+		if r[1] == 0 {
+			r[0] = uint32(len(data) / 64)
+		}
+		r[1]++
+		first := len(data)
+		data = append(data, make([]byte, 64)...)
+		layerVec(data, first, a.Rect)
+		layerVec(data, first+32, a.Color)
+	}
+	return data, ranges
 }
 
 func layerValidateTexture(t meshscene.Texture) error {
@@ -380,7 +407,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	for _, b := range []struct {
 		dst *layerBuffer
 		n   int
-	}{{&l.sprites, 96}, {&l.overlayQuads, 64}, {&l.effectQuads, 64}, {&l.effectVertices, 48}, {&l.effectGround, 80}, {&l.effectSmoke, layerSmokeStride}, {&l.lights, 64}} {
+	}{{&l.sprites, 96}, {&l.annotations, 64}, {&l.overlayQuads, 64}, {&l.effectQuads, 64}, {&l.effectVertices, 48}, {&l.effectGround, 80}, {&l.effectSmoke, layerSmokeStride}, {&l.lights, 64}} {
 		_, err = l.layerUpload(b.dst, nil, b.n)
 		if err != nil {
 			return
@@ -476,11 +503,23 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err != nil {
 		return
 	}
+	l.annotationLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{layerBufferEntry(0, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeUniform, layerUniformSize), layerBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 64)})
+	if err != nil {
+		return
+	}
+	l.annotation, err = l.layerPipeline(shader, pl, "layer_annotation_vertex", "layer_annotation_fragment", 0, 1)
+	if err != nil {
+		return
+	}
 	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}})
 	if err != nil {
 		return
 	}
 	err = l.layerBindSprites()
+	if err != nil {
+		return
+	}
+	err = l.layerBindAnnotations()
 	if err != nil {
 		return
 	}
@@ -495,6 +534,9 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 
 func (l *Layers) layerBindSprites() error {
 	return l.layerGroup(&l.spriteGroup, l.spriteLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, Buffer: l.sprites.b}, {Binding: 2, TextureView: l.spriteAtlas.v}, {Binding: 3, TextureView: l.spriteDetail.v}})
+}
+func (l *Layers) layerBindAnnotations() error {
+	return l.layerGroup(&l.annotationGroup, l.annotationLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, Buffer: l.annotations.b}})
 }
 func (l *Layers) layerBindOverlay(effects bool) error {
 	quads, atlas, dst := l.overlayQuads.b, l.overlayAtlas.v, &l.overlayGroup
@@ -667,6 +709,16 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	if changed {
 		if err = l.layerBindSprites(); err != nil {
+			return err
+		}
+	}
+	data, l.annotationRanges = layerPackAnnotations(f.Annotations, len(f.Composition.Slots))
+	changed, err = l.layerUpload(&l.annotations, data, 64)
+	if err != nil {
+		return err
+	}
+	if changed {
+		if err = l.layerBindAnnotations(); err != nil {
 			return err
 		}
 	}
@@ -998,6 +1050,23 @@ func (l *Layers) DrawLooseSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	}
 }
 
+// DrawAnnotations consumes the producer's one-based slot records verbatim.
+// The coordinator calls it after that slot's shadow, immediately before its
+// model body, so annotation coverage follows the composition paint order.
+func (l *Layers) DrawAnnotations(pass *wgpu.RenderPassEncoder, originalSlot uint32) {
+	if l.closed || pass == nil || originalSlot == 0 || uint64(originalSlot) > uint64(len(l.annotationRanges)) {
+		return
+	}
+	r := l.annotationRanges[originalSlot-1]
+	if r[1] == 0 {
+		return
+	}
+	pass.SetPipeline(l.annotation)
+	pass.SetBindGroup(0, l.annotationGroup, nil)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: r[1], FirstInstance: r[0]})
+	l.counts.Draws++
+}
+
 // DrawEffects replays a production barrier layer (0..4), preserving spans and
 // blend stream order. Unsupported snapshot/model operations appear in Missing.
 func (l *Layers) DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) {
@@ -1069,12 +1138,12 @@ func (l *Layers) Close() {
 		return
 	}
 	l.closed = true
-	for _, g := range []*wgpu.BindGroup{l.terrainGroup, l.spriteGroup, l.fogGroup, l.overlayGroup, l.effectGroup} {
+	for _, g := range []*wgpu.BindGroup{l.terrainGroup, l.spriteGroup, l.annotationGroup, l.fogGroup, l.overlayGroup, l.effectGroup} {
 		if g != nil {
 			g.Release()
 		}
 	}
-	for _, b := range []*layerBuffer{&l.sprites, &l.overlayQuads, &l.effectQuads, &l.effectVertices, &l.effectGround, &l.effectSmoke, &l.lights} {
+	for _, b := range []*layerBuffer{&l.sprites, &l.annotations, &l.overlayQuads, &l.effectQuads, &l.effectVertices, &l.effectGround, &l.effectSmoke, &l.lights} {
 		b.close()
 	}
 	for _, t := range []*layerTexture{&l.terrainImage, &l.tileAtlas, &l.tileDetail, &l.lookup, &l.spriteAtlas, &l.spriteDetail, &l.fogAtlas, &l.waterMask, &l.overlayAtlas, &l.effectAtlas, &l.fogGrid} {

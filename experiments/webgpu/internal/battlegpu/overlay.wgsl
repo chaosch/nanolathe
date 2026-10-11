@@ -21,6 +21,13 @@ fn layerCorner(v:u32)->vec2<f32> {
  let c=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));return c[v];
 }
 fn layerPosition(p:vec2<f32>)->vec4<f32> {return vec4<f32>(p.x/layerU.viewport.x*2-1,1-p.y/layerU.viewport.y*2,0,1);}
+struct LayerAnnotationOut {@builtin(position) position:vec4<f32>,@location(0) color:vec4<f32>}
+@vertex fn layer_annotation_vertex(@builtin(vertex_index) v:u32,@builtin(instance_index) iid:u32)->LayerAnnotationOut {
+ let q=layerQuads[iid];var o:LayerAnnotationOut;o.position=layerPosition(q.rect.xy+layerCorner(v)*q.rect.zw);o.color=q.color;return o;
+}
+@fragment fn layer_annotation_fragment(in:LayerAnnotationOut)->@location(0) vec4<f32> {
+ return vec4<f32>(in.color.rgb*in.color.a,in.color.a);
+}
 fn layerTexel(tex:texture_2d<f32>,uv:vec2<f32>)->vec4<f32> {
  let size=textureDimensions(tex);return textureLoad(tex,clamp(vec2<i32>(floor(uv*vec2<f32>(size))),vec2<i32>(0),vec2<i32>(size)-1),0);
 }
