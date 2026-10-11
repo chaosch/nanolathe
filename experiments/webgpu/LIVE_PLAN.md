@@ -99,7 +99,21 @@ source patch, release substitution or root module change is adopted.
 
 The first live capture verified terrain/features/fog/HUD but exposed missing
 model body pixels despite submitted topology. Shader compilation and counters
-were insufficient evidence. Actual frame and native pixel diagnosis are required
-before the play command is qualified. Benchmark timing and public Native GPU
+were insufficient evidence. A narrow quad-load rewrite corrected pinned Naga
+Metal output; actual model color/shadow/pose readbacks and later real captures
+verify body pixels. A subsequent real-combat glow binding failure stopped that
+path; separated source/blur modules then produced actual source/blur/terrain-light
+pixels. See LIVE_REPORT.md for the failed and corrected evidence. Benchmark timing and public Native GPU
 timing remain separate: callback/source/encode/completion CPU measurements do
 not establish GPU duration or presentation cadence.
+
+## Completed windowed handoff
+
+One-command Great Divide play, real Modern AI growth, native keyboard/mouse
+selection/orders/Solar Collector construction and graceful close were observed.
+Matching coastal/field benchmark state snapshots and final captures were retained.
+A local effect-barrier pipeline cache improved cadence while preserving every
+WebGPU final capture pixel. Fullscreen, loss, Rust and browser dependency gates
+remain stopped; root checks fail at the documented nested-module source scan.
+No guard or production file was changed. LIVE_REPORT.md owns the final evidence,
+fidelity boundaries and recommendation; keep this worktree, no main merge.

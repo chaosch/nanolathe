@@ -1,7 +1,12 @@
 # Isolated WebGPU evaluation
 
-P0–P4 only, per [the plan](../../docs/PLAN_WEBGPU_RENDERER.md). No production
+Frozen P0–P4 result, per [the plan](../../docs/PLAN_WEBGPU_RENDERER.md). No production
 renderer, defaults or root module changes. Use `GOWORK=off` throughout.
+
+The later user-authorized overnight real-battle experiment is described in
+[LIVE_REPORT.md](LIVE_REPORT.md), including its one-command play test, matched
+measurements, fidelity gaps and failed gates. It preserves the P0–P4 dependency
+verdict below and does not start the production migration.
 
 ## Dependency qualification — 2026-10-10
 
