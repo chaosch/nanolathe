@@ -1,6 +1,7 @@
 package battlegpu
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,34 @@ import (
 	"github.com/gogpu/naga/msl"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
+
+func TestModelOutlineSubmissionMatchesShaderDiscard(t *testing.T) {
+	for _, tc := range []struct {
+		name                          string
+		state, visualAlpha, ruleAlpha float32
+		ruled, want                   bool
+	}{
+		{"ordinary zero alpha", 1, 0, 1, false, false},
+		{"ordinary outline", 1, 1, 0, false, true},
+		{"rule erases visual outline", 1, 1, 0, true, false},
+		{"rule supplies outline", 1, 0, 1, true, true},
+		{"inactive construction", 0, 1, 1, true, false},
+		{"negative state", -1, 1, 1, true, false},
+		{"negative alpha", 1, -1, 1, false, false},
+		// The shader's ordered comparisons do not discard NaN. Do not broaden
+		// the CPU optimization to a positive-only predicate that changes this.
+		{"unordered state retained", float32(math.NaN()), 1, 0, false, true},
+		{"unordered alpha retained", 1, float32(math.NaN()), 0, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			visual := meshscene.ModelVisual{State: [4]float32{0, 1, tc.state}, Outline: [4]float32{0, 0, 0, tc.visualAlpha}}
+			rule := meshscene.ModelRules{Outline: [4]float32{0, 0, 0, tc.ruleAlpha}}
+			if got := modelOutlineNeeded(visual, rule, tc.ruled); got != tc.want {
+				t.Fatalf("submitted=%v want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 	ast, e := naga.Parse(modelResolveShader)

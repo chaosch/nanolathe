@@ -50,6 +50,7 @@ type modelMesh struct {
 type modelDraw struct {
 	mesh     int
 	instance uint32
+	outline  bool
 	shadow   int
 }
 type modelPaint struct{ slot, phase uint32 }
@@ -757,6 +758,16 @@ func modelGroupSourceRule(own meshscene.ModelRules, operand [4]int32) meshscene.
 	return own
 }
 
+func modelOutlineNeeded(visual meshscene.ModelVisual, rule meshscene.ModelRules, ruled bool) bool {
+	alpha := visual.Outline[3]
+	if ruled {
+		alpha = rule.Outline[3]
+	}
+	// Match outline_fragment's discard gates, including its comparison order.
+	// This removes work with no color, metadata or depth side effects.
+	return !(visual.State[2] <= 0 || alpha <= 0)
+}
+
 func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if m == nil || m.closed {
 		return modelError("open model component")
@@ -875,7 +886,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			}
 			binary.LittleEndian.PutUint32(m.instanceBytes[at+304:], n)
 			binary.LittleEndian.PutUint32(m.instanceBytes[at+308:], 1)
-			m.draws = append(m.draws, modelDraw{in.Mesh, uint32(i), 0})
+			m.draws = append(m.draws, modelDraw{mesh: in.Mesh, instance: uint32(i), outline: modelOutlineNeeded(visual, rule, len(f.ModelRules) > 0)})
 			m.counters.Triangles += int(m.meshes[in.Mesh].count) / 3
 		}
 		binary.LittleEndian.PutUint32(m.instanceBytes[at+312:], uint32(len(f.ModelRules)))
@@ -950,7 +961,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		modelVec(m.instanceBytes, ia+336, s.Params)
 		modelVec(m.instanceBytes, ia+352, s.Placement)
 		modelVec(m.instanceBytes, ia+368, s.Screen)
-		m.shadowDraws = append(m.shadowDraws, modelDraw{f.Instances[i].Mesh, uint32(ia / modelInstanceStride), si})
+		m.shadowDraws = append(m.shadowDraws, modelDraw{mesh: f.Instances[i].Mesh, instance: uint32(ia / modelInstanceStride), shadow: si})
 		m.shadowPaint = append(m.shadowPaint, modelShadowPaint{slot, uint32(si)})
 	}
 	// Shadow regions use the world viewport directly. Their union coverage is
@@ -1115,7 +1126,7 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		if mesh.count == 0 {
 			continue
 		}
-		if mesh.edgeCount > 0 {
+		if mesh.edgeCount > 0 && d.outline {
 			pass.SetPipeline(m.outlinePipeline)
 			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: d.instance})
 			m.counters.Draws++
