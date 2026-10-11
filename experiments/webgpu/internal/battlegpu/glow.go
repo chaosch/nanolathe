@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
@@ -50,6 +52,9 @@ type Glow struct {
 	vertexCapacity            int
 	uniform, vertexBuffer     *wgpu.Buffer
 	source                    *wgpu.RenderPipeline
+	sourceModule              *wgpu.ShaderModule
+	sourcePipelineLayout      *wgpu.PipelineLayout
+	sourceCapacity            int
 	kernels                   [3]*wgpu.ComputePipeline
 	sourceLayout, blurLayout  *wgpu.BindGroupLayout
 	sourceGroup               *wgpu.BindGroup
@@ -159,30 +164,18 @@ func NewGlow(d *wgpu.Device, q *wgpu.Queue, scene *meshscene.Scene) (g *Glow, er
 		return
 	}
 	g.owned = append(g.owned, g.uniform.Release)
-	shader, err := d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowShader})
-	if err != nil {
-		return
-	}
-	g.owned = append(g.owned, shader.Release)
 	var pl *wgpu.PipelineLayout
-	g.sourceLayout, pl, err = g.glowLayout([]gputypes.BindGroupLayoutEntry{
+	g.sourceLayout, g.sourcePipelineLayout, err = g.glowLayout([]gputypes.BindGroupLayoutEntry{
 		glowBufferEntry(0, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeUniform, glowUniformSize),
-		glowBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, glowVertexSize),
+		glowBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		glowTextureEntry(2, wgpu.ShaderStageFragment), glowTextureEntry(3, wgpu.ShaderStageFragment),
 	})
 	if err != nil {
 		return
 	}
-	add := gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOne, Operation: gputypes.BlendOperationAdd}
-	g.source, err = d.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{Label: "glow-source", Layout: pl,
-		Vertex:    wgpu.VertexState{Module: shader, EntryPoint: "glow_source_vertex"},
-		Fragment:  &wgpu.FragmentState{Module: shader, EntryPoint: "glow_source_fragment", Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA16Float, Blend: &gputypes.BlendState{Color: add, Alpha: add}, WriteMask: gputypes.ColorWriteMaskAll}}},
-		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff},
-	})
-	if err != nil {
+	if err = g.glowPrepareSourcePipeline(); err != nil {
 		return
 	}
-	g.owned = append(g.owned, g.source.Release)
 	g.blurLayout, pl, err = g.glowLayout([]gputypes.BindGroupLayoutEntry{
 		glowBufferEntry(0, wgpu.ShaderStageCompute, gputypes.BufferBindingTypeUniform, glowUniformSize), glowTextureEntry(4, wgpu.ShaderStageCompute),
 		{Binding: 5, Visibility: wgpu.ShaderStageCompute, StorageTexture: &gputypes.StorageTextureBindingLayout{Access: gputypes.StorageTextureAccessWriteOnly, Format: gputypes.TextureFormatRGBA16Float, ViewDimension: gputypes.TextureViewDimension2D}},
@@ -343,6 +336,9 @@ func (g *Glow) Prepare(f meshscene.LiveFrame, width, height int) error {
 		g.vertexBuffer, g.vertexCapacity = b, capacity
 		changed = true
 	}
+	if err := g.glowPrepareSourcePipeline(); err != nil {
+		return err
+	}
 	if err := g.q.WriteBuffer(g.vertexBuffer, 0, data); err != nil {
 		return err
 	}
@@ -426,6 +422,14 @@ func (g *Glow) Close() {
 		return
 	}
 	g.closed = true
+	if g.source != nil {
+		g.source.Release()
+		g.source = nil
+	}
+	if g.sourceModule != nil {
+		g.sourceModule.Release()
+		g.sourceModule = nil
+	}
 	for _, b := range append(g.blurGroups[:], g.sourceGroup) {
 		if b != nil {
 			b.Release()
@@ -442,4 +446,39 @@ func (g *Glow) Close() {
 	}
 	g.owned = nil
 	g.completed = nil
+}
+
+// Render HAL does not bind runtime size metadata. Fixed capacities follow the
+// current uploaded tier; completion precedes Prepare and pipeline replacement.
+func glowSourceShader(capacity int) string {
+	return strings.Replace(glowShader, "array<GlowVertex,1>", "array<GlowVertex,"+strconv.Itoa(max(capacity, 1))+">", 1)
+}
+func (g *Glow) glowPrepareSourcePipeline() error {
+	capacity := max(g.vertexCapacity/glowVertexSize, 1)
+	if g.source != nil && g.sourceCapacity == capacity {
+		return nil
+	}
+	shader, err := g.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowSourceShader(capacity)})
+	if err != nil {
+		return err
+	}
+	add := gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOne, Operation: gputypes.BlendOperationAdd}
+	pipeline, err := g.d.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{Label: "glow-source", Layout: g.sourcePipelineLayout,
+		Vertex:    wgpu.VertexState{Module: shader, EntryPoint: "glow_source_vertex"},
+		Fragment:  &wgpu.FragmentState{Module: shader, EntryPoint: "glow_source_fragment", Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA16Float, Blend: &gputypes.BlendState{Color: add, Alpha: add}, WriteMask: gputypes.ColorWriteMaskAll}}},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff},
+	})
+	if err != nil {
+		if pipeline != nil {
+			pipeline.Release()
+		}
+		shader.Release()
+		return err
+	}
+	if g.source != nil {
+		g.source.Release()
+		g.sourceModule.Release()
+	}
+	g.source, g.sourceModule, g.sourceCapacity = pipeline, shader, capacity
+	return nil
 }

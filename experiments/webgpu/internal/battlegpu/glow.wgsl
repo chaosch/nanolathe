@@ -3,7 +3,7 @@
 struct GlowUniform {weights0:vec4<f32>,weights1:vec4<f32>,blur:vec4<f32>,size:vec4<f32>,octaves:vec4<u32>}
 struct GlowVertex {positionUV:vec4<f32>,color:vec4<f32>,params:vec4<f32>}
 @group(0) @binding(0) var<uniform> glowU:GlowUniform;
-@group(0) @binding(1) var<storage,read> glowVertices:array<GlowVertex>;
+@group(0) @binding(1) var<storage,read> glowVertices:array<GlowVertex,1>;
 @group(0) @binding(2) var glowAtlas:texture_2d<f32>;
 @group(0) @binding(3) var glowCompleted:texture_2d<f32>;
 struct GlowOut {@builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) color:vec4<f32>,@location(2) params:vec4<f32>}
