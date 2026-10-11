@@ -121,7 +121,8 @@ func TestModelGroupAllowsAdmittedChildrenWithoutParentSource(t *testing.T) {
 }
 
 // Authored pixel oracle for native qualification. Widening to int64 here
-// independently represents [03 R-REN-03A §4]'s compare-before-byte-store law;
+// independently represents current Modern/Metal §22.4 saturation, rather than
+// the retail widened-compare/byte-store law;
 // the shader's extreme-delta branches are checked in emitted Metal below.
 type modelGroupPixel struct {
 	key             uint8
@@ -138,7 +139,7 @@ func modelGroupPixelOracle(pixels []modelGroupPixel, keyed, holes bool) (uint8, 
 		if !keyed {
 			delta = 0
 		}
-		shifted := int64(p.key) + delta
+		shifted := min(max(int64(p.key)+delta, 0), 255)
 		hole := keyed && holes && p.covered && int64(key) < shifted
 		visible := p.color != 0 && (!keyed || int64(key) <= shifted)
 		if p.parent || hole || visible {
@@ -161,10 +162,10 @@ func TestModelGroupByteStoreCoverageAndMemberOrder(t *testing.T) {
 		{"ordinary erased higher key blocks sibling", []modelGroupPixel{{key: 50, color: 1, parent: true}, {key: 80, covered: true}, {key: 75, color: 3}}, true, true, 80, 0},
 		{"construction hole preserves carrier and sibling", []modelGroupPixel{{key: 50, color: 1, parent: true}, {key: 80, covered: true}, {key: 75, color: 3}}, true, false, 75, 3},
 		{"untouched higher key is not an erased pixel", []modelGroupPixel{{key: 50, color: 1, parent: true}, {key: 80}}, true, true, 50, 1},
-		{"positive wrap admits before storing", []modelGroupPixel{{key: 250, color: 1, parent: true}, {key: 250, color: 2, delta: 16}}, true, true, 10, 2},
-		{"later child sees wrapped prior", []modelGroupPixel{{key: 250, color: 1, parent: true}, {key: 250, color: 2, delta: 16}, {key: 20, color: 3}}, true, true, 20, 3},
-		{"negative wrap cannot admit", []modelGroupPixel{{key: 1, color: 1, parent: true}, {key: 5, color: 2, delta: -10}}, true, true, 1, 1},
-		{"largest signed delta does not overflow", []modelGroupPixel{{key: 255, color: 1, parent: true}, {key: 255, color: 2, delta: math.MaxInt32}}, true, true, 254, 2},
+		{"positive shifted key saturates before storing", []modelGroupPixel{{key: 250, color: 1, parent: true}, {key: 250, color: 2, delta: 16}}, true, true, 255, 2},
+		{"later child sees saturated prior", []modelGroupPixel{{key: 250, color: 1, parent: true}, {key: 250, color: 2, delta: 16}, {key: 20, color: 3}}, true, true, 255, 2},
+		{"negative shifted key saturates below prior", []modelGroupPixel{{key: 1, color: 1, parent: true}, {key: 5, color: 2, delta: -10}}, true, true, 1, 1},
+		{"largest signed delta does not overflow", []modelGroupPixel{{key: 255, color: 1, parent: true}, {key: 255, color: 2, delta: math.MaxInt32}}, true, true, 255, 2},
 		{"smallest signed delta rejects", []modelGroupPixel{{key: 1, color: 1, parent: true}, {key: 255, color: 2, delta: math.MinInt32}}, true, true, 1, 1},
 		{"parent erased seed retains its key", []modelGroupPixel{{key: 80, covered: true, parent: true}, {key: 75, color: 2}}, true, false, 80, 0},
 		{"keyless child ignores delta and parent key", []modelGroupPixel{{key: 80, color: 1, parent: true}, {key: 1, color: 2, delta: math.MinInt32}, {key: 255, covered: true}}, false, true, 1, 2},
@@ -224,8 +225,8 @@ func TestModelGroupCoreShaderABIAndEmittedMerge(t *testing.T) {
 	}
 	for _, pattern := range []string{
 		`if \(delta[_0-9]* >= 256\)`, `if \(delta[_0-9]* <= -256\)`,
-		`static_cast<int>\(prior[_0-9]*\) < sum[_0-9]*`, `static_cast<int>\(prior[_0-9]*\) <= sum[_0-9]*`,
-		`\(key[_0-9]* \+ as_type<uint>\(delta[_0-9]*\)\) & 255u`,
+		`prior[_0-9]* < shifted[_0-9]*`, `prior[_0-9]* <= shifted[_0-9]*`,
+		`metal::clamp\(`,
 		`metadata[_0-9]*\.y > 0\.5`, `nextColor[_0-9]*\.w > 0\.0`,
 		`k[_0-9]* <= clip[_0-9]*\.y`, `k[_0-9]* <= clip[_0-9]*\.w`,
 	} {

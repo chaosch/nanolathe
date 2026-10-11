@@ -25,14 +25,17 @@ fn modelGroupVertex(slot:Slot,corner:vec2<f32>,index:u32)->Out {
  var slot=slots[iid];var corner=corners[vid];return modelGroupVertex(slot,corner,iid);
 }
 fn modelGroupLocal(slot:Slot,screen:vec2<f32>)->vec2<f32> {return (screen-slot.screen.xy)*(slot.atlas.zw/slot.screen.zw);}
-// [03 R-REN-03A §4]: compare the widened signed sum, then store its low byte.
-// Extreme deltas are decided without overflowing i32; the key itself is a byte.
-fn modelGroupAdmit(prior:u32,key:u32,delta:i32,strict:bool)->bool {
- if delta>=256{return true;}if delta<=-256{return false;}
- let sum=i32(key)+delta;
- if strict{return i32(prior)<sum;}return i32(prior)<=sum;
+// Current Modern/Metal retained groups saturate shifted keys before admission
+// and storage (GPU design §22.4). This presentation contract differs from the
+// retail widened-compare/byte-store law; source keys still retain their own wrap.
+fn modelGroupStored(key:u32,delta:i32)->u32 {
+ if delta>=256{return 255u;}if delta<=-256{return 0u;}
+ return u32(clamp(i32(key)+delta,0,255));
 }
-fn modelGroupStored(key:u32,delta:i32)->u32 {return (key+bitcast<u32>(delta))&255u;}
+fn modelGroupAdmit(prior:u32,key:u32,delta:i32,strict:bool)->bool {
+ let shifted=modelGroupStored(key,delta);
+ if strict{return prior<shifted;}return prior<=shifted;
+}
 @fragment fn copy_fragment(input:Out)->@location(0) vec4<f32> {
  var slot=slots[input.index];let local=modelGroupLocal(slot,input.screen);let at=vec2<i32>(slot.atlas.xy+floor(local));
  return textureLoad(sourceColor,at,0);
