@@ -104,6 +104,7 @@ type Layers struct {
 	looseSpriteRuns                                                                             [2][]layerDraw
 	featurePaintOrder                                                                           bool
 	projectilePaintOrder                                                                        bool
+	lensPaintOrder                                                                              bool
 	featurePaintCount                                                                           int
 	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
 	overlayRuns                                                                                 []layerDraw
@@ -1047,8 +1048,14 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				case meshscene.EffectOpSmoke:
 					ops = append(ops, layerDraw{kind: op.Kind, first: uint32(sbase + op.First), count: uint32(op.Count)})
 				case meshscene.EffectOpLens:
-					ops = append(ops, layerDraw{kind: op.Kind})
-					l.missing["lens_snapshot"] += op.Count
+					if l.lensPaintOrder {
+						for i := op.First; i < op.First+op.Count; i++ {
+							ops = append(ops, layerDraw{kind: op.Kind, first: uint32(i), count: 1})
+						}
+					} else {
+						ops = append(ops, layerDraw{kind: op.Kind})
+						l.missing["lens_snapshot"] += op.Count
+					}
 				case meshscene.EffectOpRetainedModel:
 					if !l.projectilePaintOrder {
 						ops = append(ops, layerDraw{kind: op.Kind})
@@ -1192,11 +1199,31 @@ func (l *Layers) DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) {
 // The parent marker commits its combined retained slot once. The header-child
 // marker consumes its identity without a second body commit [03 §5.4].
 func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, model func(uint32)) {
+	_, _ = l.drawEffectsReplay(pass, layer, model, nil)
+}
+
+// A lens replaces the encoder at its snapshot barrier. Every subsequent
+// operation consumes the resumed pass, preserving the stock painter order.
+func (l *Layers) drawEffectsReplay(pass *wgpu.RenderPassEncoder, layer uint32, model func(uint32), lens func(uint32) (*wgpu.RenderPassEncoder, error)) (*wgpu.RenderPassEncoder, error) {
 	if l.closed || int(layer) >= len(l.effectLayers) {
-		return
+		return pass, nil
 	}
 
 	for _, op := range l.effectLayers[layer] {
+		if op.kind == meshscene.EffectOpLens {
+			if op.count != 0 {
+				if lens == nil {
+					l.missing["lens_snapshot"]++
+				} else {
+					next, err := lens(op.first)
+					if err != nil {
+						return pass, err
+					}
+					pass = next
+				}
+			}
+			continue
+		}
 		if op.kind == meshscene.EffectOpRetainedModel {
 			if op.mode == 0 && op.first != 0 && op.count != 0 {
 				if model == nil {
@@ -1230,6 +1257,7 @@ func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, 
 		pass.Draw(args)
 		l.counts.Draws++
 	}
+	return pass, nil
 }
 func (l *Layers) DrawFog(pass *wgpu.RenderPassEncoder) {
 	if l.closed || l.fogGroup == nil {

@@ -17,6 +17,7 @@ type Renderer struct {
 	glow                 *Glow
 	groundLight          *GroundLight
 	distortions          *Distortions
+	lenses               *Lenses
 	world, depth         *wgpu.Texture
 	worldView, depthView *wgpu.TextureView
 	width, height        int
@@ -29,6 +30,7 @@ type Counters struct {
 	Glow        GlowCounters
 	GroundLight GroundLightCounters
 	Distortions DistortionCounters
+	Lenses      LensCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
@@ -47,6 +49,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	if err == nil {
 		r.layers.SetFeaturePaintOrder(true)
 		r.layers.projectilePaintOrder = true
+		r.layers.lensPaintOrder = true
 		r.layers.state = &r.paintState
 		r.models.state = &r.paintState
 	}
@@ -58,6 +61,9 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	}
 	if err == nil {
 		r.distortions, err = NewDistortions(d, q, format, layerFogShader)
+	}
+	if err == nil {
+		r.lenses, err = NewLenses(d, q, worldFormat)
 	}
 	return
 }
@@ -133,13 +139,19 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	delete(r.layers.missing, "enhanced_distortion")
+	if e := r.lenses.Prepare(f, width, height); e != nil {
+		return Counters{}, e
+	}
 	if e := r.models.Compute(enc); e != nil {
 		return Counters{}, e
 	}
 	if e := r.groundLight.Encode(enc); e != nil {
 		return Counters{}, e
 	}
-	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	beginWorld := func(load gputypes.LoadOp) (*wgpu.RenderPassEncoder, error) {
+		return enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: load, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: load, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	}
+	pass, e := beginWorld(gputypes.LoadOpClear)
 	if e != nil {
 		return Counters{}, e
 	}
@@ -161,22 +173,49 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		}
 	}
 	r.layers.DrawTerrain(pass)
-	drawEffects := func(layer uint32) {
-		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) })
+	drawEffects := func(layer uint32) error {
+		next, err := r.layers.drawEffectsReplay(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) }, func(index uint32) (*wgpu.RenderPassEncoder, error) {
+			if err := pass.End(); err != nil {
+				return pass, err
+			}
+			if err := r.lenses.Snapshot(enc, r.world, layer, index); err != nil {
+				return pass, err
+			}
+			resumed, err := beginWorld(gputypes.LoadOpLoad)
+			if err != nil {
+				return pass, err
+			}
+			pass = resumed
+			r.lenses.Draw(pass, layer, index)
+			r.paintState.reset(pass)
+			return pass, nil
+		})
+		pass = next
+		return err
 	}
-	drawEffects(0)
+	if e := drawEffects(0); e != nil {
+		return Counters{}, e
+	}
 	r.layers.DrawLooseSprites(pass, 0)
 	paintPhase(meshscene.ModelPhaseShortFeatures)
-	drawEffects(1)
+	if e := drawEffects(1); e != nil {
+		return Counters{}, e
+	}
 	paintPhase(meshscene.ModelPhaseGround)
 	r.layers.DrawLooseSprites(pass, 1)
 	// Unrecorded fallback subjects retain their ordinary effects phase.
 	// Stock projectile subjects commit at their original effect markers.
 	paintPhase(meshscene.ModelPhaseEffects)
-	drawEffects(2)
+	if e := drawEffects(2); e != nil {
+		return Counters{}, e
+	}
 	paintPhase(meshscene.ModelPhaseAir)
-	drawEffects(3)
-	drawEffects(4)
+	if e := drawEffects(3); e != nil {
+		return Counters{}, e
+	}
+	if e := drawEffects(4); e != nil {
+		return Counters{}, e
+	}
 	if e := pass.End(); e != nil {
 		return Counters{}, e
 	}
@@ -194,7 +233,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := final.End(); e != nil {
 		return Counters{}, e
 	}
-	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters()}, nil
+	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {
@@ -232,6 +271,10 @@ func (r *Renderer) closeTargets() {
 func (r *Renderer) Close() {
 	if r == nil {
 		return
+	}
+	if r.lenses != nil {
+		r.lenses.Close()
+		r.lenses = nil
 	}
 	if r.distortions != nil {
 		r.distortions.Close()
