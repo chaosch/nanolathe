@@ -68,7 +68,7 @@ type layerDraw struct{ kind, first, count, mode uint32 }
 type Layers struct {
 	d                                                                                           *wgpu.Device
 	q                                                                                           *wgpu.Queue
-	format                                                                                      gputypes.TextureFormat
+	format, outputFormat                                                                        gputypes.TextureFormat
 	owned                                                                                       []func()
 	closed                                                                                      bool
 	uniform                                                                                     *wgpu.Buffer
@@ -270,7 +270,11 @@ func layerBlend(mode int) *gputypes.BlendState {
 }
 
 func (l *Layers) layerPipeline(s *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, blend int, depth int) (*wgpu.RenderPipeline, error) {
-	d := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: s, EntryPoint: vertex}, Fragment: &wgpu.FragmentState{Module: s, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{{Format: l.format, Blend: layerBlend(blend), WriteMask: gputypes.ColorWriteMaskAll}}}, Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}}
+	format := l.format
+	if depth == 0 {
+		format = l.outputFormat
+	}
+	d := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: s, EntryPoint: vertex}, Fragment: &wgpu.FragmentState{Module: s, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{{Format: format, Blend: layerBlend(blend), WriteMask: gputypes.ColorWriteMaskAll}}}, Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}}
 	if depth != 0 {
 		compare := gputypes.CompareFunctionAlways
 		if depth == 2 {
@@ -331,8 +335,11 @@ func (l *Layers) layerUpload(dst *layerBuffer, data []byte, minimum int) (bool, 
 	return changed, nil
 }
 
-func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (l *Layers, err error) {
-	l = &Layers{d: d, q: q, format: format, missing: make(map[string]int)}
+func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (*Layers, error) {
+	return newLayersFormats(d, q, format, format, scene)
+}
+func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputypes.TextureFormat, scene *meshscene.Scene) (l *Layers, err error) {
+	l = &Layers{d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
 	defer func() {
 		if err != nil {
 			l.Close()
@@ -911,9 +918,8 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 		for layerIndex, src := range stock.Layers {
 			qbase, gbase, sbase := len(qb)/64, len(gb)/80, len(sb)/layerSmokeStride
 			for _, q := range src.Quads {
-				// The frozen prototype world attachment uses the surface format.
-				// Production uses HDR storage for these streams; its extra range
-				// cannot be retained by a normalized attachment (GPU design §13.3).
+				// A normalized fallback cannot retain production HDR stream range
+				// (GPU design §13.3). The combined renderer owns an RGBA16F world.
 				if l.format != gputypes.TextureFormatRGBA16Float && (q.Params[1] == 2 || q.Params[2] > .5) {
 					l.missing["normalized_effect_accumulation"]++
 				}
@@ -1042,6 +1048,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 						}
 						marker := layerDraw{kind: op.Kind, count: 1, mode: identity.Member}
 						if src.RetainedModels[i].ShadowOnly {
+							l.missing["retained_projectile_shadow_marker"]++
 							marker.mode = 2
 						} else {
 							if bodySlot >= len(f.Composition.ProjectileSlots) {

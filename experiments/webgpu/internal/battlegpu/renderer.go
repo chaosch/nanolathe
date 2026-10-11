@@ -29,16 +29,18 @@ type Counters struct {
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
-	r = &Renderer{d: d, format: format}
+	// Production keeps effect accumulation in HDR until final fog/gain resolve.
+	worldFormat := gputypes.TextureFormatRGBA16Float
+	r = &Renderer{d: d, format: worldFormat}
 	defer func() {
 		if err != nil {
 			r.Close()
 		}
 	}()
-	if r.models, err = NewModels(d, q, format, scene); err != nil {
+	if r.models, err = NewModels(d, q, worldFormat, scene); err != nil {
 		return
 	}
-	r.layers, err = NewLayers(d, q, format, scene)
+	r.layers, err = newLayersFormats(d, q, worldFormat, format, scene)
 	if err == nil {
 		r.layers.SetFeaturePaintOrder(true)
 		r.layers.projectilePaintOrder = true
