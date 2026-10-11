@@ -41,22 +41,35 @@ fn layerGlowPixel(p:vec2<f32>)->vec3<f32> {
  let lo=vec2<i32>(0);let hi=size-1;
  return mix(mix(textureLoad(layerGlow,clamp(a,lo,hi),0).rgb,textureLoad(layerGlow,clamp(a+vec2<i32>(1,0),lo,hi),0).rgb,f.x),mix(textureLoad(layerGlow,clamp(a+vec2<i32>(0,1),lo,hi),0).rgb,textureLoad(layerGlow,clamp(a+vec2<i32>(1,1),lo,hi),0).rgb,f.x),f.y);
 }
-@fragment fn layer_fog_fragment(@builtin(position) pixel:vec4<f32>)->@location(0) vec4<f32> {
- var color=textureLoad(layerWorld,vec2<i32>(pixel.xy),0).rgb;
+fn layerWorldPixel(p:vec2<f32>)->vec3<f32> {
+ let q=p-0.5;let a=vec2<i32>(floor(q));let f=fract(q);let size=vec2<i32>(textureDimensions(layerWorld));
+ let lo=vec2<i32>(0);let hi=size-1;
+ let first=textureLoad(layerWorld,clamp(a,lo,hi),0).rgb;
+ if(all(f==vec2<f32>(0))){return first;}
+ return mix(mix(first,textureLoad(layerWorld,clamp(a+vec2<i32>(1,0),lo,hi),0).rgb,f.x),mix(textureLoad(layerWorld,clamp(a+vec2<i32>(0,1),lo,hi),0).rgb,textureLoad(layerWorld,clamp(a+vec2<i32>(1,1),lo,hi),0).rgb,f.x),f.y);
+}
+// Distortion samples completed world/glow at a shifted position. Fog and map
+// admission retain the destination pixel (GPU design §25/27/28).
+fn layerFinalWorld(samplePixel:vec2<f32>,destinationPixel:vec2<f32>)->vec4<f32> {
+ var color=layerWorldPixel(samplePixel);
  // Production screens the retained octaves before fog, map clip and gain.
  if(layerU.glow.z>0.5){
-  let p=pixel.xy/4;let quarter=ceil(layerU.viewport.x/4);
+  let p=samplePixel/4;let quarter=ceil(layerU.viewport.x/4);
   let near=clamp(layerGlowPixel(p+vec2<f32>(1))*layerU.glow.x,vec3<f32>(0),vec3<f32>(1));
   let far=clamp(layerGlowPixel(p/2+vec2<f32>(quarter+2,1))*layerU.glow.y,vec3<f32>(0),vec3<f32>(1));
   let glow=near+far-near*far;color=glow+color*(1-glow);
  }
- let projected=(pixel.xy-layerU.viewport.xy*0.5)/layerU.camera.z+layerU.camera.xy;
+ let projected=(destinationPixel-layerU.viewport.xy*0.5)/layerU.camera.z+layerU.camera.xy;
  if(layerU.flags.z!=0u){
   let origin=floor(layerU.camera.xy-layerU.viewport.xy/(2*layerU.camera.z));
-  let checker=(i32(floor(pixel.x)+floor(pixel.y)+origin.x+origin.y)&1);
+  let checker=(i32(floor(destinationPixel.x)+floor(destinationPixel.y)+origin.x+origin.y)&1);
   color=layerApplyFog(color,projected,checker);
  }
  if(layerU.rect.z>layerU.rect.x && layerU.rect.w>layerU.rect.y && (projected.x<layerU.rect.x || projected.y<layerU.rect.y || projected.x>=layerU.rect.z || projected.y>=layerU.rect.w)){color=vec3<f32>(0);}
  if(layerU.viewport.z>0){color=min(color*layerU.viewport.z,vec3<f32>(1));}
  return vec4<f32>(color,1);
+}
+
+@fragment fn layer_fog_fragment(@builtin(position) pixel:vec4<f32>)->@location(0) vec4<f32> {
+ return layerFinalWorld(pixel.xy,pixel.xy);
 }
