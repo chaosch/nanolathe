@@ -1107,6 +1107,7 @@ func (l *Layers) DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) {
 		return
 	}
 	pass.SetBindGroup(0, l.effectGroup, nil)
+	var selected *wgpu.RenderPipeline
 	for _, op := range l.effectLayers[layer] {
 		if op.count == 0 {
 			continue
@@ -1123,7 +1124,11 @@ func (l *Layers) DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) {
 		case meshscene.EffectOpSmoke:
 			p = l.smoke
 		}
-		pass.SetPipeline(p)
+		// Cache only inside this barrier; intervening painters own their state.
+		if selected != p {
+			pass.SetPipeline(p)
+			selected = p
+		}
 		args := gputypes.DrawArgs{VertexCount: 6, InstanceCount: op.count, FirstInstance: op.first}
 		if op.kind == meshscene.EffectOpGeometry {
 			args = gputypes.DrawArgs{VertexCount: op.count, InstanceCount: 1, FirstVertex: op.first}
