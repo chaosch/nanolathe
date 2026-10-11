@@ -52,9 +52,37 @@ type modelBuffer struct {
 	buffer *wgpu.Buffer
 	size   uint64
 }
+type modelAtlasResources struct {
+	color, depth, shadow             *wgpu.Texture
+	colorView, depthView, shadowView *wgpu.TextureView
+	group                            *wgpu.BindGroup
+	width, height                    int
+}
+
+func (a *modelAtlasResources) modelReleaseGroup() {
+	if a.group != nil {
+		a.group.Release()
+		a.group = nil
+	}
+}
+func (a *modelAtlasResources) modelClose() {
+	a.modelReleaseGroup()
+	for _, v := range []*wgpu.TextureView{a.shadowView, a.depthView, a.colorView} {
+		if v != nil {
+			v.Release()
+		}
+	}
+	for _, t := range []*wgpu.Texture{a.shadow, a.depth, a.color} {
+		if t != nil {
+			t.Release()
+		}
+	}
+	*a = modelAtlasResources{}
+}
 
 // Models borrows detached meshscene frames only during Prepare. Compute borrows
-// an encoder; Draw borrows a pass. The host establishes completion before Close.
+// an encoder; Draw borrows a pass. The host establishes completion before each
+// Prepare and Close, so replaced atlas resources can be released immediately.
 // Geometry stays resident; endpoint, rule and material records grow as needed.
 type Models struct {
 	d                                                                                     *wgpu.Device
@@ -73,10 +101,8 @@ type Models struct {
 	poseLayout, bodyLayout, resolveLayout                                                 *wgpu.BindGroupLayout
 	posePipeline                                                                          *wgpu.ComputePipeline
 	bodyPipeline, outlinePipeline, shadowPipeline, resolvePipeline, shadowResolvePipeline *wgpu.RenderPipeline
-	poseGroup, bodyGroup, resolveGroup                                                    *wgpu.BindGroup
-	colorView, depthView, shadowView                                                      *wgpu.TextureView
-	colorTexture, shadowTexture                                                           *wgpu.Texture
-	atlasWidth, atlasHeight                                                               int
+	poseGroup, bodyGroup                                                                  *wgpu.BindGroup
+	atlas                                                                                 modelAtlasResources
 	width, height, pieceCount                                                             int
 	generation                                                                            uint64
 	poseBytes, instanceBytes, selectedBytes, lightBytes, slotBytes, shadowBytes           []byte
@@ -139,8 +165,8 @@ func (m *Models) modelGrow(b *modelBuffer, label string, n int, usage gputypes.B
 		return false, e
 	}
 	b.buffer, b.size = v, size
-	// Keep replaced resources alive until the host's completion boundary. A
-	// queued frame may still reference them; Close releases every growth tier.
+	// Geometric capacity bounds all retained tiers to less than twice the
+	// current buffer capacity; Close releases them and their old bind groups.
 	return true, nil
 }
 func modelBufferEntry(binding uint32, stage gputypes.ShaderStages, kind gputypes.BufferBindingType, size uint64) gputypes.BindGroupLayoutEntry {
@@ -168,7 +194,7 @@ func (m *Models) modelModule(source string) (*wgpu.ShaderModule, error) {
 	}
 	return s, e
 }
-func (m *Models) modelTexture(label string, w, h int, format gputypes.TextureFormat, usage gputypes.TextureUsage) (*wgpu.Texture, *wgpu.TextureView, error) {
+func (m *Models) modelCreateTexture(label string, w, h int, format gputypes.TextureFormat, usage gputypes.TextureUsage) (*wgpu.Texture, *wgpu.TextureView, error) {
 	if w < 1 || h < 1 || w > 8192 || h > 8192 {
 		return nil, nil, modelError("textures within default core 8192 dimensions")
 	}
@@ -176,12 +202,54 @@ func (m *Models) modelTexture(label string, w, h int, format gputypes.TextureFor
 	if e != nil {
 		return nil, nil, e
 	}
-	m.modelRetain(t.Release)
 	v, e := m.d.CreateTextureView(t, nil)
+	if e != nil {
+		t.Release()
+		return nil, nil, e
+	}
+	return t, v, nil
+}
+func (m *Models) modelTexture(label string, w, h int, format gputypes.TextureFormat, usage gputypes.TextureUsage) (*wgpu.Texture, *wgpu.TextureView, error) {
+	t, v, e := m.modelCreateTexture(label, w, h, format, usage)
 	if e == nil {
+		m.modelRetain(t.Release)
 		m.modelRetain(v.Release)
 	}
 	return t, v, e
+}
+
+func modelAtlasExtent(need, current int) int {
+	size := max(64, current)
+	for size < need {
+		size *= 2
+	}
+	return size
+}
+func (m *Models) modelResizeAtlas(width, height int) (err error) {
+	if width <= m.atlas.width && height <= m.atlas.height && m.atlas.colorView != nil {
+		return nil
+	}
+	next := modelAtlasResources{width: modelAtlasExtent(width, m.atlas.width), height: modelAtlasExtent(height, m.atlas.height)}
+	defer func() {
+		if err != nil {
+			next.modelClose()
+		}
+	}()
+	usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageCopySrc
+	if next.color, next.colorView, err = m.modelCreateTexture("battle-model-subject-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+		return err
+	}
+	if next.depth, next.depthView, err = m.modelCreateTexture("battle-model-subject-depth", next.width, next.height, wgpu.TextureFormatDepth32Float, wgpu.TextureUsageRenderAttachment); err != nil {
+		return err
+	}
+	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+		return err
+	}
+	// Prepare follows host completion. Release the old group before its views
+	// and textures; atlas resources never enter the static/growth-tier owner.
+	m.atlas.modelClose()
+	m.atlas = next
+	return nil
 }
 func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView, error) {
 	if t.Width < 1 || t.Height < 1 || len(t.RGBA) != t.Width*t.Height*4 {
@@ -701,21 +769,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	for _, d := range m.shadowDraws {
 		modelVec(m.instanceBytes, int(d.instance)*modelInstanceStride+320, packed[d.shadow].Atlas)
 	}
-	if aw > m.atlasWidth || ah > m.atlasHeight || m.colorView == nil {
-		m.atlasWidth, m.atlasHeight = max(aw, m.atlasWidth), max(ah, m.atlasHeight)
-		m.colorTexture, m.colorView, e = m.modelTexture("battle-model-subject-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment|wgpu.TextureUsageCopySrc)
-		if e != nil {
-			return e
-		}
-		_, m.depthView, e = m.modelTexture("battle-model-subject-depth", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatDepth32Float, wgpu.TextureUsageRenderAttachment)
-		if e != nil {
-			return e
-		}
-		m.shadowTexture, m.shadowView, e = m.modelTexture("battle-model-shadow-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment|wgpu.TextureUsageCopySrc)
-		if e != nil {
-			return e
-		}
-		m.resolveGroup = nil
+	if e = m.modelResizeAtlas(aw, ah); e != nil {
+		return e
 	}
 	changed := false
 	for _, u := range []struct {
@@ -731,7 +786,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		changed = changed || grow
 	}
 	if changed {
-		m.poseGroup, m.bodyGroup, m.resolveGroup = nil, nil, nil
+		m.poseGroup, m.bodyGroup = nil, nil
+		m.atlas.modelReleaseGroup()
 	}
 	if m.generation != f.Generation || f.Generation == 0 || len(m.poseBytes) != len(f.Current)*modelPoseStride*2 {
 		m.poseBytes = modelBytes(m.poseBytes, len(f.Current)*modelPoseStride*2)
@@ -772,7 +828,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	var ub [modelUniformSize]byte
 	modelVec(ub[:], 0, [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], f.Alpha})
-	modelVec(ub[:], 16, [4]float32{float32(width), float32(height), float32(m.atlasWidth), float32(m.atlasHeight)})
+	modelVec(ub[:], 16, [4]float32{float32(width), float32(height), float32(m.atlas.width), float32(m.atlas.height)})
 	modelVec(ub[:], 32, [4]float32{float32(len(f.Current)), float32(len(f.Lighting.Lights)), float32(f.LightControls), float32(len(f.ModelRules))})
 	modelVec(ub[:], 48, f.ModelProjections.View)
 	modelVec(ub[:], 64, f.Shadows.Tint)
@@ -797,8 +853,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return e
 		}
 	}
-	if m.resolveGroup == nil {
-		m.resolveGroup, e = m.modelGroup(m.resolveLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 3, TextureView: m.colorView}, {Binding: 4, TextureView: m.shadowView}, {Binding: 5, Sampler: m.sampler}})
+	if m.atlas.group == nil {
+		m.atlas.group, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.resolveLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 3, TextureView: m.atlas.colorView}, {Binding: 4, TextureView: m.atlas.shadowView}, {Binding: 5, Sampler: m.sampler}}})
 		if e != nil {
 			return e
 		}
@@ -826,7 +882,7 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		}
 		m.counters.Dispatches++
 	}
-	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
 	if e != nil {
 		return e
 	}
@@ -850,7 +906,7 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	if e != nil {
 		return e
 	}
-	pass, e = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.shadowView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
+	pass, e = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.shadowView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
 	if e != nil {
 		return e
 	}
@@ -871,7 +927,7 @@ func (m *Models) Draw(pass *wgpu.RenderPassEncoder, phase uint32) {
 		return
 	}
 	pass.SetPipeline(m.resolvePipeline)
-	pass.SetBindGroup(0, m.resolveGroup, nil)
+	pass.SetBindGroup(0, m.atlas.group, nil)
 	for _, p := range m.paint {
 		wanted := p.phase == phase+1 || phase == meshscene.PhaseGround && p.phase == meshscene.ModelPhaseShortFeatures
 		if !wanted {
@@ -886,7 +942,7 @@ func (m *Models) DrawShadows(pass *wgpu.RenderPassEncoder) {
 		return
 	}
 	pass.SetPipeline(m.shadowResolvePipeline)
-	pass.SetBindGroup(0, m.resolveGroup, nil)
+	pass.SetBindGroup(0, m.atlas.group, nil)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount)})
 	m.counters.Draws++
 }
@@ -899,7 +955,7 @@ func (m *Models) DrawSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 		return
 	}
 	pass.SetPipeline(m.resolvePipeline)
-	pass.SetBindGroup(0, m.resolveGroup, nil)
+	pass.SetBindGroup(0, m.atlas.group, nil)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
 	m.counters.Draws++
 }
@@ -908,7 +964,7 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 		return
 	}
 	pass.SetPipeline(m.shadowResolvePipeline)
-	pass.SetBindGroup(0, m.resolveGroup, nil)
+	pass.SetBindGroup(0, m.atlas.group, nil)
 	for _, p := range m.shadowPaint {
 		if p.slot != slot {
 			continue
@@ -932,7 +988,7 @@ func (m *Models) DebugResources() (color, shadow *wgpu.Texture, poses *wgpu.Buff
 	if m == nil || m.closed || !m.prepared {
 		return
 	}
-	return m.colorTexture, m.shadowTexture, m.poses.buffer, m.atlasWidth, m.atlasHeight, m.pieceCount
+	return m.atlas.color, m.atlas.shadow, m.poses.buffer, m.atlas.width, m.atlas.height, m.pieceCount
 }
 
 // DebugPacking returns detached copies of the 384-byte instance and 48-byte
@@ -948,6 +1004,7 @@ func (m *Models) Close() {
 		return
 	}
 	m.closed = true
+	m.atlas.modelClose()
 	for i := len(m.owned) - 1; i >= 0; i-- {
 		m.owned[i]()
 	}
