@@ -5,7 +5,7 @@ struct LayerUniform {
 }
 struct LayerSprite {previous:vec4<f32>,current:vec4<f32>,rect:vec4<f32>,uv:vec4<f32>,color:vec4<f32>,params:vec4<f32>}
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
-@group(0) @binding(1) var<storage,read> layerSprites:array<LayerSprite>;
+@group(0) @binding(1) var<storage,read> layerSprites:array<LayerSprite,1>;
 @group(0) @binding(2) var layerAtlas:texture_2d<f32>;
 @group(0) @binding(3) var layerDetail:texture_2d<f32>;
 struct LayerSpriteOut {
