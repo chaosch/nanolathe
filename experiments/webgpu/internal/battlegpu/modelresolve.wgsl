@@ -1,8 +1,12 @@
 struct Uniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,shadow:vec4<f32>}
 struct Slot {screen:vec4<f32>,atlas:vec4<f32>,params:vec4<f32>}
 struct Shadow {screen:vec4<f32>,bodyScreen:vec4<f32>,bodyAtlas:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,atlas:vec4<f32>}
-@group(0) @binding(0) var<storage,read> slots:array<Slot>;
-@group(0) @binding(1) var<storage,read> shadows:array<Shadow>;
+// Render pipelines in the pinned Metal HAL do not bind runtime-array size
+// metadata. A fixed capacity makes bounds guards depend on the actual buffer
+// tier instead of an unbound native size argument. The unused legacy shadow
+// declaration is fixed too: Naga counts runtime arrays even when not read.
+@group(0) @binding(0) var<storage,read> slots:array<Slot,__SLOTS__>;
+@group(0) @binding(1) var<storage,read> shadows:array<Shadow,1>;
 @group(0) @binding(2) var<uniform> u:Uniforms;
 @group(0) @binding(3) var bodies:texture_2d<f32>;
 @group(0) @binding(4) var silhouettes:texture_2d<f32>;
