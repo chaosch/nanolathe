@@ -50,38 +50,34 @@ func (a *modelShadowAtlas) modelClose() {
 }
 
 type modelShadowWork struct {
-	atlas                           modelShadowAtlas
-	dummy                           modelShadowAtlas
-	dummyInitialized                bool
-	uniform                         *wgpu.Buffer
-	waterView                       *wgpu.TextureView
-	hasWater                        bool
-	vertices, indices               *wgpu.Buffer
-	vertexCount                     int
-	meshes                          []modelMesh
-	projected                       []modelDraw
-	projectLayout                   *wgpu.BindGroupLayout
-	projectPipelineLayout           *wgpu.PipelineLayout
-	bodyPipeline, outlinePipeline   *wgpu.RenderPipeline
-	projectPipeline, commitPipeline *wgpu.RenderPipeline
-	projectModule, commitModule     *wgpu.ShaderModule
-	capacities                      [4]int
+	atlas                         modelShadowAtlas
+	dummy                         modelShadowAtlas
+	dummyInitialized              bool
+	uniform                       *wgpu.Buffer
+	waterView                     *wgpu.TextureView
+	hasWater                      bool
+	vertices, indices             *wgpu.Buffer
+	vertexCount                   int
+	meshes                        []modelMesh
+	projected                     []modelDraw
+	projectLayout                 *wgpu.BindGroupLayout
+	projectPipelineLayout         *wgpu.PipelineLayout
+	bodyPipeline, outlinePipeline *wgpu.RenderPipeline
+	projectPipeline               *wgpu.RenderPipeline
+	projectModule                 *wgpu.ShaderModule
+	capacities                    [4]int
 }
 
 func (p *modelShadowWork) modelClose() {
 	p.atlas.modelClose()
 	p.dummy.modelClose()
-	for _, pipeline := range []*wgpu.RenderPipeline{p.commitPipeline, p.projectPipeline} {
-		if pipeline != nil {
-			pipeline.Release()
-		}
+	if p.projectPipeline != nil {
+		p.projectPipeline.Release()
 	}
-	for _, module := range []*wgpu.ShaderModule{p.commitModule, p.projectModule} {
-		if module != nil {
-			module.Release()
-		}
+	if p.projectModule != nil {
+		p.projectModule.Release()
 	}
-	p.projectModule, p.commitModule, p.projectPipeline, p.commitPipeline = nil, nil, nil, nil
+	p.projectModule, p.projectPipeline = nil, nil
 }
 
 // The source topology is the producer's immutable authored polygon mesh, not
@@ -383,47 +379,25 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 		if e != nil {
 			return e
 		}
-		commitModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowCommitShaderSource(capacities)})
+		// Projection keeps its independent source pipeline and authored winding.
+		project, e := m.d.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
+			Layout:      p.projectPipelineLayout,
+			Vertex:      wgpu.VertexState{Module: projectModule, EntryPoint: "model_shadow_project_vertex"},
+			Primitive:   gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCW, CullMode: gputypes.CullModeBack},
+			Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff},
+			Fragment:    &wgpu.FragmentState{Module: projectModule, EntryPoint: "model_shadow_project_fragment", Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatR8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+		})
 		if e != nil {
 			projectModule.Release()
 			return e
 		}
-		create := func(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth, blend bool) (*wgpu.RenderPipeline, error) {
-			target := gputypes.ColorTargetState{Format: format, WriteMask: gputypes.ColorWriteMaskAll}
-			if blend {
-				target.Blend = &gputypes.BlendState{Color: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}, Alpha: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}}
-			}
-			desc := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: module, EntryPoint: vertex}, Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCW, CullMode: gputypes.CullModeBack}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}, Fragment: &wgpu.FragmentState{Module: module, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{target}}}
-			if depth {
-				desc.Primitive.CullMode = gputypes.CullModeNone
-				desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthCompare: gputypes.CompareFunctionAlways}
-			}
-			return m.d.CreateRenderPipeline(desc)
+		if p.projectPipeline != nil {
+			p.projectPipeline.Release()
 		}
-		project, e := create(projectModule, p.projectPipelineLayout, "model_shadow_project_vertex", "model_shadow_project_fragment", gputypes.TextureFormatR8Unorm, false, false)
-		if e != nil {
-			commitModule.Release()
-			projectModule.Release()
-			return e
+		if p.projectModule != nil {
+			p.projectModule.Release()
 		}
-		commit, e := create(commitModule, m.resolvePipelineLayout, "model_shadow_commit_vertex", "model_shadow_commit_fragment", m.format, true, true)
-		if e != nil {
-			project.Release()
-			commitModule.Release()
-			projectModule.Release()
-			return e
-		}
-		for _, old := range []*wgpu.RenderPipeline{p.commitPipeline, p.projectPipeline} {
-			if old != nil {
-				old.Release()
-			}
-		}
-		for _, old := range []*wgpu.ShaderModule{p.commitModule, p.projectModule} {
-			if old != nil {
-				old.Release()
-			}
-		}
-		p.projectModule, p.commitModule, p.projectPipeline, p.commitPipeline, p.capacities = projectModule, commitModule, project, commit, capacities
+		p.projectModule, p.projectPipeline, p.capacities = projectModule, project, capacities
 	}
 	var uniforms [modelUniformSize]byte
 	modelVec(uniforms[:], 0, [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], f.Alpha})
