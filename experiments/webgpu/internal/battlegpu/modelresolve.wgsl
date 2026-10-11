@@ -7,6 +7,7 @@ struct Shadow {screen:vec4<f32>,bodyScreen:vec4<f32>,bodyAtlas:vec4<f32>,params:
 @group(0) @binding(3) var bodies:texture_2d<f32>;
 @group(0) @binding(4) var silhouettes:texture_2d<f32>;
 @group(0) @binding(5) var nearestSampler:sampler;
+@group(0) @binding(6) var sourceBodies:texture_2d<f32>;
 // Store the guarded corner load before arithmetic: the pinned Metal writer
 // otherwise scales only the robust-access fallback in its conditional.
 const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
@@ -21,6 +22,6 @@ fn mask(s:Shadow,pixel:vec2<f32>)->f32 {let at=vec2<i32>(floor((pixel-s.screen.x
  // silhouette treatment is an explicit prototype approximation.
  if s.params.x>2.5&&s.params.z>0.0 {let r=s.params.z*0.5;alpha*=0.25;alpha+=(mask(s,input.position.xy+vec2<f32>(r,0.0))+mask(s,input.position.xy-vec2<f32>(r,0.0))+mask(s,input.position.xy+vec2<f32>(0.0,r))+mask(s,input.position.xy-vec2<f32>(0.0,r)))*0.125;alpha+=(mask(s,input.position.xy+vec2<f32>(r,r))+mask(s,input.position.xy+vec2<f32>(-r,r))+mask(s,input.position.xy+vec2<f32>(r,-r))+mask(s,input.position.xy-vec2<f32>(r,r)))*0.0625;}
  let bodyPixel=(input.position.xy-s.bodyScreen.xy)*(s.bodyAtlas.zw/s.bodyScreen.zw)+s.bodyAtlas.xy;
- if all(bodyPixel>=s.bodyAtlas.xy)&&all(bodyPixel<s.bodyAtlas.xy+s.bodyAtlas.zw){alpha*=1.0-textureLoad(bodies,vec2<i32>(floor(bodyPixel)),0).a;}
+ if all(bodyPixel>=s.bodyAtlas.xy)&&all(bodyPixel<s.bodyAtlas.xy+s.bodyAtlas.zw){alpha*=1.0-textureLoad(sourceBodies,vec2<i32>(floor(bodyPixel)),0).a;}
  alpha*=0.5;if alpha<0.001{discard;}return vec4<f32>(u.shadow.rgb*alpha,alpha);
 }

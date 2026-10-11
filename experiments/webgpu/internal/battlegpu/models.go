@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
@@ -22,10 +24,15 @@ var modelBodyShader string
 //go:embed modelresolve.wgsl
 var modelResolveShader string
 
+//go:embed modelgroups.wgsl
+var modelGroupsShader string
+
 const (
 	modelVertexStride    = 80
 	modelPoseStride      = 80
-	modelInstanceStride  = 384
+	modelInstanceStride  = 416
+	modelGroupStride     = 48
+	modelMemberStride    = 16
 	modelUniformSize     = 256
 	modelSlotStride      = 48
 	modelShadowStride    = 96
@@ -55,6 +62,9 @@ type modelBuffer struct {
 type modelAtlasResources struct {
 	color, depth, shadow             *wgpu.Texture
 	colorView, depthView, shadowView *wgpu.TextureView
+	metadata, merged                 *wgpu.Texture
+	metadataView, mergedView         *wgpu.TextureView
+	mergeGroup                       *wgpu.BindGroup
 	group                            *wgpu.BindGroup
 	width, height                    int
 }
@@ -64,15 +74,19 @@ func (a *modelAtlasResources) modelReleaseGroup() {
 		a.group.Release()
 		a.group = nil
 	}
+	if a.mergeGroup != nil {
+		a.mergeGroup.Release()
+		a.mergeGroup = nil
+	}
 }
 func (a *modelAtlasResources) modelClose() {
 	a.modelReleaseGroup()
-	for _, v := range []*wgpu.TextureView{a.shadowView, a.depthView, a.colorView} {
+	for _, v := range []*wgpu.TextureView{a.mergedView, a.metadataView, a.shadowView, a.depthView, a.colorView} {
 		if v != nil {
 			v.Release()
 		}
 	}
-	for _, t := range []*wgpu.Texture{a.shadow, a.depth, a.color} {
+	for _, t := range []*wgpu.Texture{a.merged, a.metadata, a.shadow, a.depth, a.color} {
 		if t != nil {
 			t.Release()
 		}
@@ -95,13 +109,20 @@ type Models struct {
 	frames                                                                                [][4]float32
 	vertices, indices, materialData, frameData, centers                                   *wgpu.Buffer
 	endpoints, poses, instances, selected, lights, slots, shadowRecords                   modelBuffer
+	groups, members                                                                       modelBuffer
 	uniform                                                                               *wgpu.Buffer
 	textureView, paletteView                                                              *wgpu.TextureView
 	sampler                                                                               *wgpu.Sampler
 	poseLayout, bodyLayout, resolveLayout                                                 *wgpu.BindGroupLayout
+	mergeLayout                                                                           *wgpu.BindGroupLayout
+	mergePipelineLayout                                                                   *wgpu.PipelineLayout
 	posePipeline                                                                          *wgpu.ComputePipeline
 	bodyPipeline, outlinePipeline, shadowPipeline, resolvePipeline, shadowResolvePipeline *wgpu.RenderPipeline
 	poseGroup, bodyGroup                                                                  *wgpu.BindGroup
+	mergePipeline, copyPipeline                                                           *wgpu.RenderPipeline
+	mergeCapacities                                                                       [3]int
+	groupWork                                                                             modelGroupWork
+	copySlots                                                                             []uint32
 	atlas                                                                                 modelAtlasResources
 	width, height, pieceCount                                                             int
 	generation                                                                            uint64
@@ -245,10 +266,30 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
 		return err
 	}
+	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+		return err
+	}
+	if m.groupWork.count > 0 || m.atlas.merged != nil {
+		if next.merged, next.mergedView, err = m.modelCreateTexture("battle-model-merged-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+			return err
+		}
+	}
 	// Prepare follows host completion. Release the old group before its views
 	// and textures; atlas resources never enter the static/growth-tier owner.
 	m.atlas.modelClose()
 	m.atlas = next
+	return nil
+}
+func (m *Models) modelPrepareMergedAtlas() error {
+	if m.groupWork.count == 0 || m.atlas.merged != nil {
+		return nil
+	}
+	usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageCopySrc
+	t, v, e := m.modelCreateTexture("battle-model-merged-atlas", m.atlas.width, m.atlas.height, wgpu.TextureFormatRGBA8Unorm, usage)
+	if e != nil {
+		return e
+	}
+	m.atlas.merged, m.atlas.mergedView = t, v
 	return nil
 }
 func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView, error) {
@@ -268,6 +309,9 @@ func (m *Models) modelPipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineL
 		target.Blend = &gputypes.BlendState{Color: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}, Alpha: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}}
 	}
 	desc := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: module, EntryPoint: vertex}, Primitive: gputypes.PrimitiveState{Topology: topology, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}, Fragment: &wgpu.FragmentState{Module: module, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{target}}}
+	if fragment == "model_fragment" || fragment == "outline_fragment" {
+		desc.Fragment.Targets = append(desc.Fragment.Targets, gputypes.ColorTargetState{Format: wgpu.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll})
+	}
 	if depth == 1 {
 		desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionLessEqual}
 	}
@@ -433,7 +477,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if m.shadowPipeline, err = m.modelPipeline(module, layout, "shadow_vertex", "shadow_fragment", wgpu.TextureFormatRGBA8Unorm, 0, false, gputypes.PrimitiveTopologyTriangleList); err != nil {
 		return
 	}
-	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 48), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}}
+	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 48), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelTextureEntry(6)}
 	if m.resolveLayout, layout, err = m.modelLayout(entries); err != nil {
 		return
 	}
@@ -444,6 +488,10 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return
 	}
 	if m.shadowResolvePipeline, err = m.modelPipeline(module, layout, "shadow_resolve_vertex", "shadow_resolve_fragment", format, 2, true, gputypes.PrimitiveTopologyTriangleList); err != nil {
+		return
+	}
+	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
+	if m.mergeLayout, m.mergePipelineLayout, err = m.modelLayout(entries); err != nil {
 		return
 	}
 	return
@@ -561,6 +609,154 @@ func modelSelectLights(lights []meshscene.RetainedLight, screen [4]float32) ([8]
 	return ids, count
 }
 
+type modelGroupWork struct {
+	groups, members []byte
+	operands        [][4]int32
+	clips           [][4]float32
+	roles           []uint8 // 1 immutable source, 2 reserved final
+	count           int
+}
+
+func (p *modelGroupWork) modelPrepare(f meshscene.LiveFrame) error {
+	c := f.Composition
+	p.count = 0
+	p.operands = slices.Grow(p.operands[:0], len(f.Instances))[:len(f.Instances)]
+	p.clips = slices.Grow(p.clips[:0], len(f.Instances))[:len(f.Instances)]
+	p.roles = slices.Grow(p.roles[:0], len(c.Slots))[:len(c.Slots)]
+	clear(p.operands)
+	clear(p.clips)
+	clear(p.roles)
+	p.groups = modelBytes(p.groups, max(modelGroupStride, len(c.Groups)*modelGroupStride))
+	p.members = p.members[:0]
+	if !f.Composed || len(c.Groups) == 0 {
+		if f.Composed {
+			for _, group := range c.MemberGroup {
+				if group != 0 {
+					return modelError("group membership backed by exported groups")
+				}
+			}
+		}
+		p.members = modelBytes(p.members, modelMemberStride)
+		return nil
+	}
+	if len(c.MemberGroup) != len(f.Instances) || len(c.InstanceSlots) != len(f.Instances) {
+		return modelError("complete source selectors and group membership")
+	}
+	validSlot := func(slot uint32) bool { return slot > 0 && int(slot) <= len(c.Slots) }
+	for gi, group := range c.Groups {
+		if int(group.ParentInstance) >= len(f.Instances) || !validSlot(group.FinalSlot) || len(group.Members) == 0 || (group.ParentSlot != 0 && !validSlot(group.ParentSlot)) || p.roles[group.FinalSlot-1] != 0 {
+			return modelError("valid ordered groups and unique reserved final slots")
+		}
+		p.roles[group.FinalSlot-1] = 2
+		at := gi * modelGroupStride
+		for j, value := range [4]uint32{group.ParentInstance, group.ParentSlot, group.FinalSlot, uint32(len(p.members) / modelMemberStride)} {
+			binary.LittleEndian.PutUint32(p.groups[at+j*4:], value)
+		}
+		binary.LittleEndian.PutUint32(p.groups[at+16:], uint32(len(group.Members)))
+		if group.PreserveHoles {
+			binary.LittleEndian.PutUint32(p.groups[at+20:], 1)
+		}
+		if group.Keyed {
+			binary.LittleEndian.PutUint32(p.groups[at+24:], 1)
+		}
+		var clip [4]float32
+		if len(f.ModelRules) > 0 {
+			if len(f.ModelRules) != len(f.Instances) {
+				return modelError("group parent rules aligned to instances")
+			}
+			clip = f.ModelRules[group.ParentInstance].Clip
+			binary.LittleEndian.PutUint32(p.groups[at+28:], 1)
+		}
+		modelVec(p.groups, at+32, clip)
+		for mi, member := range group.Members {
+			if int(member.Instance) >= len(f.Instances) || !validSlot(member.Slot) || p.roles[member.Slot-1] != 0 || c.InstanceSlots[member.Instance] != member.Slot || c.MemberGroup[member.Instance] != uint32(gi+1) || p.operands[member.Instance][0] != 0 {
+				return modelError("unique immutable source slots and matching group members")
+			}
+			if member.Instance == group.ParentInstance && (mi != 0 || member.Slot != group.ParentSlot || member.KeyDelta != 0) {
+				return modelError("parent seed first with unchanged key")
+			}
+			p.roles[member.Slot-1] = 1
+			policy := int32(0)
+			if !group.Keyed {
+				policy = 2
+			} else if member.Instance != group.ParentInstance {
+				policy = 1
+			}
+			p.operands[member.Instance] = [4]int32{int32(gi + 1), policy, member.KeyDelta, int32(group.ParentInstance)}
+			p.clips[member.Instance] = clip
+			base := len(p.members)
+			p.members = slices.Grow(p.members, modelMemberStride)[:base+modelMemberStride]
+			for j, value := range [4]uint32{member.Instance, member.Slot, uint32(member.KeyDelta), 0} {
+				binary.LittleEndian.PutUint32(p.members[base+j*4:], value)
+			}
+		}
+	}
+	for i, group := range c.MemberGroup {
+		if group > uint32(len(c.Groups)) || (group != 0 && p.operands[i][0] != int32(group)) {
+			return modelError("complete group membership sidecar")
+		}
+	}
+	for i, slot := range c.InstanceSlots {
+		if slot != 0 && (!validSlot(slot) || p.roles[slot-1] == 2 || p.roles[slot-1] == 1 && c.MemberGroup[i] == 0) {
+			return modelError("instances targeting their immutable source or standalone slot")
+		}
+	}
+	for _, paint := range c.Paint {
+		if !validSlot(paint.Slot) || p.roles[paint.Slot-1] == 1 {
+			return modelError("painting only final group slots")
+		}
+	}
+	p.count = len(c.Groups)
+	return nil
+}
+
+func modelGroupShaderSource(capacities [3]int) string {
+	return strings.NewReplacer("__GROUPS__", strconv.Itoa(capacities[0]), "__MEMBERS__", strconv.Itoa(capacities[1]), "__SLOTS__", strconv.Itoa(capacities[2])).Replace(modelGroupsShader)
+}
+func (m *Models) modelPrepareMergePipeline() error {
+	if m.groupWork.count == 0 {
+		return nil
+	}
+	capacities := [3]int{int(m.groups.size / modelGroupStride), int(m.members.size / modelMemberStride), int(m.slots.size / modelSlotStride)}
+	if capacities == m.mergeCapacities && m.mergePipeline != nil {
+		return nil
+	}
+	// Fixed arrays match geometric buffer capacities. The pinned render compiler
+	// does not bind runtime-array size metadata; this stage never needs it.
+	module, e := m.modelModule(modelGroupShaderSource(capacities))
+	if e != nil {
+		return e
+	}
+	merge, e := m.modelPipeline(module, m.mergePipelineLayout, "group_vertex", "group_fragment", wgpu.TextureFormatRGBA8Unorm, 0, false, gputypes.PrimitiveTopologyTriangleList)
+	if e != nil {
+		return e
+	}
+	copy, e := m.modelPipeline(module, m.mergePipelineLayout, "copy_vertex", "copy_fragment", wgpu.TextureFormatRGBA8Unorm, 0, false, gputypes.PrimitiveTopologyTriangleList)
+	if e != nil {
+		return e
+	}
+	m.mergePipeline, m.copyPipeline, m.mergeCapacities = merge, copy, capacities
+	return nil
+}
+func (m *Models) modelBodyView() *wgpu.TextureView {
+	if m.groupWork.count > 0 {
+		return m.atlas.mergedView
+	}
+	return m.atlas.colorView
+}
+
+func modelGroupSourceRule(own meshscene.ModelRules, operand [4]int32) meshscene.ModelRules {
+	if operand[0] != 0 && operand[1] != 2 {
+		if operand[1] == 1 {
+			own.Reveal[3] = 1
+		}
+		// A member's reveal remains its own. Carrier water/Digger erasure
+		// follows the ordered merge; BLUE is selected before source shading.
+		own.Clip[0], own.Clip[2] = 0, 0
+	}
+	return own
+}
+
 func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if m == nil || m.closed {
 		return modelError("open model component")
@@ -575,6 +771,13 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	if f.Composed && len(f.Composition.InstanceSlots) != len(f.Instances) {
 		return modelError("composed slot selectors aligned to original instances")
+	}
+	priorGroups := m.groupWork.count
+	if e := m.groupWork.modelPrepare(f); e != nil {
+		return e
+	}
+	if (priorGroups == 0) != (m.groupWork.count == 0) {
+		m.atlas.modelReleaseGroup()
 	}
 	m.width, m.height, m.pieceCount = width, height, len(f.Current)
 	m.draws, m.shadowDraws, m.paint = m.draws[:0], m.shadowDraws[:0], m.paint[:0]
@@ -591,10 +794,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			inputSlots[i] = meshscene.ModelSlot{Screen: [4]float32{0, 0, float32(width), float32(height)}, Params: [4]float32{opacity, float32(in.Phase + 1)}}
 		}
 	}
-	// Grouped members rasterize into the final union region, sharing its key
-	// test. TODO(question): full cached/live solo-source chronology and erased
-	// hole propagation require the staged group compute port; this prototype
-	// preserves parent rules and signed wrapped child-key shifts only.
+	// TODO(question): the producer exports no raw/resized cached-plane seed or
+	// cached→outline→live chronology. Immutable source rasters and ordered group
+	// merges below preserve only the coverage this retained mesh pass can supply.
 	slots, aw, ah, e := modelPackSlots(inputSlots)
 	if e != nil {
 		return e
@@ -642,28 +844,14 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 		slot := uint32(i + 1)
 		if f.Composed {
-			slot = f.Composition.FinalSlotForInstance(i)
-			if i < len(f.Composition.MemberGroup) && f.Composition.MemberGroup[i] > 0 {
-				gi := f.Composition.MemberGroup[i] - 1
-				if int(gi) >= len(f.Composition.Groups) {
-					return modelError("valid production model group")
-				}
-				g := f.Composition.Groups[gi]
-				if int(g.ParentInstance) >= len(f.Instances) {
-					return modelError("valid group parent")
-				}
-				if g.Keyed && len(f.ModelRules) > 0 {
-					parent := f.ModelRules[g.ParentInstance]
-					rule.Reveal, rule.Below, rule.Band, rule.Above, rule.Clip = parent.Reveal, parent.Below, parent.Band, parent.Above, parent.Clip
-					for _, member := range g.Members {
-						if member.Instance == uint32(i) {
-							binary.LittleEndian.PutUint32(m.instanceBytes[at+316:], uint32(member.KeyDelta))
-							break
-						}
-					}
-				}
-			}
+			slot = f.Composition.InstanceSlots[i]
 		}
+		operand := m.groupWork.operands[i]
+		for j, value := range operand {
+			binary.LittleEndian.PutUint32(m.instanceBytes[at+384+j*4:], uint32(value))
+		}
+		modelVec(m.instanceBytes, at+400, m.groupWork.clips[i])
+		rule = modelGroupSourceRule(rule, operand)
 		for j, v := range [][4]float32{rule.Reveal, rule.Below, rule.Band, rule.Above, rule.Clip, rule.Shadow, rule.Outline} {
 			modelVec(m.instanceBytes, at+80+j*16, v)
 		}
@@ -707,6 +895,14 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			m.paint = append(m.paint, modelPaint{uint32(i + 1), in.Phase + 1})
 		}
 	}
+	m.copySlots = m.copySlots[:0]
+	if m.groupWork.count > 0 {
+		for _, p := range m.paint {
+			if m.groupWork.roles[p.slot-1] == 0 {
+				m.copySlots = append(m.copySlots, p.slot)
+			}
+		}
+	}
 	// A separate projected silhouette atlas collapses each subject's overlapping
 	// triangles before darkening the world once (GPU design §13.3). The source
 	// body's alpha punches the shadow at its unshifted screen coordinates.
@@ -726,17 +922,31 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		if s.Params[0] < .5 {
 			continue
 		}
+		sourceSlot := f.Composition.InstanceSlots[i]
+		if sourceSlot == 0 || int(sourceSlot) > len(slots) {
+			continue
+		}
 		m.shadowCount = max(m.shadowCount, si+1)
 		at := si * 96
 		modelVec(m.shadowBytes, at, s.Screen)
-		modelVec(m.shadowBytes, at+16, slots[slot-1].Screen)
-		modelVec(m.shadowBytes, at+32, slots[slot-1].Atlas)
+		modelVec(m.shadowBytes, at+16, slots[sourceSlot-1].Screen)
+		modelVec(m.shadowBytes, at+32, slots[sourceSlot-1].Atlas)
 		modelVec(m.shadowBytes, at+48, s.Params)
 		modelVec(m.shadowBytes, at+64, s.Placement)
-		// Use one shadow per original instance. Group shadow sources can include
-		// children; their independent solo masks are an explicit remaining gap.
+		// TODO(question): Shadow BodyDraws/BodyRuleSlots need their separate solo
+		// raster before grouped shadow masks are exact. Retain one projected
+		// silhouette per original subject, punching against its source here.
 		ia := len(m.instanceBytes)
 		m.instanceBytes = append(m.instanceBytes, m.instanceBytes[i*modelInstanceStride:(i+1)*modelInstanceStride]...)
+		clear(m.instanceBytes[ia+384 : ia+modelInstanceStride])
+		// Source staging defers carrier clipping. Shadow silhouettes retain
+		// their own rules and punch against the immutable solo body source.
+		if len(f.ModelRules) > 0 {
+			rule := f.ModelRules[i]
+			for j, v := range [][4]float32{rule.Reveal, rule.Below, rule.Band, rule.Above, rule.Clip, rule.Shadow, rule.Outline} {
+				modelVec(m.instanceBytes, ia+80+j*16, v)
+			}
+		}
 		modelVec(m.instanceBytes, ia+336, s.Params)
 		modelVec(m.instanceBytes, ia+352, s.Placement)
 		modelVec(m.instanceBytes, ia+368, s.Screen)
@@ -772,13 +982,16 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelResizeAtlas(aw, ah); e != nil {
 		return e
 	}
+	if e = m.modelPrepareMergedAtlas(); e != nil {
+		return e
+	}
 	changed := false
 	for _, u := range []struct {
 		b     *modelBuffer
 		label string
 		n     int
 		usage gputypes.BufferUsage
-	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", len(m.shadowBytes), wgpu.BufferUsageStorage}} {
+	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", len(m.shadowBytes), wgpu.BufferUsageStorage}, {&m.groups, "battle-model-groups", len(m.groupWork.groups), wgpu.BufferUsageStorage}, {&m.members, "battle-model-group-members", len(m.groupWork.members), wgpu.BufferUsageStorage}} {
 		grow, err := m.modelGrow(u.b, u.label, u.n, u.usage)
 		if err != nil {
 			return err
@@ -788,6 +1001,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if changed {
 		m.poseGroup, m.bodyGroup = nil, nil
 		m.atlas.modelReleaseGroup()
+	}
+	if e = m.modelPrepareMergePipeline(); e != nil {
+		return e
 	}
 	if m.generation != f.Generation || f.Generation == 0 || len(m.poseBytes) != len(f.Current)*modelPoseStride*2 {
 		m.poseBytes = modelBytes(m.poseBytes, len(f.Current)*modelPoseStride*2)
@@ -835,7 +1051,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	for _, u := range []struct {
 		b    *wgpu.Buffer
 		data []byte
-	}{{m.instances.buffer, m.instanceBytes}, {m.selected.buffer, m.selectedBytes}, {m.lights.buffer, m.lightBytes}, {m.slots.buffer, m.slotBytes}, {m.shadowRecords.buffer, m.shadowBytes}, {m.uniform, ub[:]}} {
+	}{{m.instances.buffer, m.instanceBytes}, {m.selected.buffer, m.selectedBytes}, {m.lights.buffer, m.lightBytes}, {m.slots.buffer, m.slotBytes}, {m.shadowRecords.buffer, m.shadowBytes}, {m.groups.buffer, m.groupWork.groups}, {m.members.buffer, m.groupWork.members}, {m.uniform, ub[:]}} {
 		if e = m.q.WriteBuffer(u.b, 0, u.data); e != nil {
 			return e
 		}
@@ -854,7 +1070,13 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 	}
 	if m.atlas.group == nil {
-		m.atlas.group, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.resolveLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 3, TextureView: m.atlas.colorView}, {Binding: 4, TextureView: m.atlas.shadowView}, {Binding: 5, Sampler: m.sampler}}})
+		m.atlas.group, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.resolveLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 3, TextureView: m.modelBodyView()}, {Binding: 4, TextureView: m.atlas.shadowView}, {Binding: 5, Sampler: m.sampler}, {Binding: 6, TextureView: m.atlas.colorView}}})
+		if e != nil {
+			return e
+		}
+	}
+	if m.groupWork.count > 0 && m.atlas.mergeGroup == nil {
+		m.atlas.mergeGroup, e = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: m.mergeLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.groups.buffer}, {Binding: 1, Buffer: m.members.buffer}, {Binding: 2, Buffer: m.slots.buffer}, {Binding: 3, Buffer: m.uniform, Size: modelUniformSize}, {Binding: 4, TextureView: m.atlas.colorView}, {Binding: 5, TextureView: m.atlas.metadataView}}})
 		if e != nil {
 			return e
 		}
@@ -882,7 +1104,7 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		}
 		m.counters.Dispatches++
 	}
-	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}, {View: m.atlas.metadataView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
 	if e != nil {
 		return e
 	}
@@ -905,6 +1127,24 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	e = pass.End()
 	if e != nil {
 		return e
+	}
+	if m.groupWork.count > 0 {
+		pass, e = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.mergedView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
+		if e != nil {
+			return e
+		}
+		pass.SetBindGroup(0, m.atlas.mergeGroup, nil)
+		pass.SetPipeline(m.copyPipeline)
+		for _, slot := range m.copySlots {
+			pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
+			m.counters.Draws++
+		}
+		pass.SetPipeline(m.mergePipeline)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.groupWork.count)})
+		m.counters.Draws++
+		if e = pass.End(); e != nil {
+			return e
+		}
 	}
 	pass, e = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.shadowView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
 	if e != nil {
@@ -988,10 +1228,14 @@ func (m *Models) DebugResources() (color, shadow *wgpu.Texture, poses *wgpu.Buff
 	if m == nil || m.closed || !m.prepared {
 		return
 	}
-	return m.atlas.color, m.atlas.shadow, m.poses.buffer, m.atlas.width, m.atlas.height, m.pieceCount
+	color = m.atlas.color
+	if m.groupWork.count > 0 {
+		color = m.atlas.merged
+	}
+	return color, m.atlas.shadow, m.poses.buffer, m.atlas.width, m.atlas.height, m.pieceCount
 }
 
-// DebugPacking returns detached copies of the 384-byte instance and 48-byte
+// DebugPacking returns detached copies of the 416-byte instance and 48-byte
 // slot records uploaded by the last successful Prepare.
 func (m *Models) DebugPacking() (instances, slots []byte) {
 	if m == nil || m.closed || !m.prepared {
