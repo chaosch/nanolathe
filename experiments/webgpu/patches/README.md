@@ -46,3 +46,7 @@ nofakecgo -run TestPointerCache ./hal/metal` for testing only. All published
 prototype builds remain pureGo/CGO0. Other architectures, full loss/shutdown
 failure paths and adoption remain unqualified. See FOLLOWUP_REPORT.md for
 microbenchmark and whole-game allocation/timing/pixel evidence.
+
+The saved cache patch uses zero-context hunks to avoid whitespace-only blank
+context lines. The helper verifies the exact pinned ObjC source SHA256 before
+applying it with `git apply --unidiff-zero`; version metadata alone is insufficient.

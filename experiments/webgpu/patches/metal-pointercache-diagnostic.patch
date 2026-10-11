@@ -1,29 +1,17 @@
 --- a/hal/metal/objc.go
 +++ b/hal/metal/objc.go
-@@ -408,17 +408,20 @@
- // for Go↔ObjC bridges without CGO; Rust wgpu-hal/metal uses the same approach
- // via the objc crate's msg_send! macro which also ignores void returns.
- func MsgSend(obj ID, sel SEL, args ...uintptr) ID {
+@@ -411 +411,2 @@
 -	return msgSendID(obj, sel, pointerArgs(args)...)
 +	value, _ := msgSendPointersCached(obj, sel, types.PointerTypeDescriptor, args)
 +	return ID(value)
- }
- 
- // MsgSendUint calls a method and returns a uint result.
- func MsgSendUint(obj ID, sel SEL, args ...uintptr) uint {
+@@ -416 +417,2 @@
 -	return msgSendUint(obj, sel, pointerArgs(args)...)
 +	value, _ := msgSendPointersCached(obj, sel, types.UInt64TypeDescriptor, args)
 +	return uint(value)
- }
- 
- // MsgSendBool calls a method and returns a bool result.
- func MsgSendBool(obj ID, sel SEL, args ...uintptr) bool {
+@@ -421 +423,2 @@
 -	return msgSendBool(obj, sel, pointerArgs(args)...)
 +	value, _ := msgSendPointersCached(obj, sel, types.UInt8TypeDescriptor, args)
 +	return uint8(value) != 0
- }
- 
- // Retain increments the reference count of an object.
 --- /dev/null
 +++ b/hal/metal/objc_pointercache.go
 @@ -0,0 +1,88 @@
