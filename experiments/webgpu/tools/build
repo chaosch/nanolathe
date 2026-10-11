@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""Build the three pinned paths. No floating tools, asset access or runtime tests."""
+import os, pathlib, shutil, subprocess, sys
+root=pathlib.Path(__file__).resolve().parents[1]
+if len(sys.argv)!=2: sys.exit('usage: tools/build NEW_OUTPUT_DIRECTORY')
+out=pathlib.Path(sys.argv[1]).resolve()
+if out.is_relative_to(root.parent.parent): sys.exit('artifacts must be outside the repository')
+out.mkdir(exist_ok=False,parents=True)
+env=dict(os.environ,GOWORK='off',CGO_ENABLED='0',GOMAXPROCS='2')
+for name,target,tags in [('probe-go',{},[]),('probe-rust',{},['-tags','rust']),('probe.wasm',{'GOOS':'js','GOARCH':'wasm'},[])]:
+ cmd=['go','build','-p','2','-trimpath',*tags,'-o',str(out/name),'./cmd/webgpu-probe']
+ print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=root,env=env|target,check=True)
+for source in (root/'web').iterdir(): shutil.copy2(source,out/source.name)
+goroot=subprocess.check_output(['go','env','GOROOT'],text=True).strip()
+shutil.copy2(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js',out/'wasm_exec.js')
+(out/'modules.txt').write_bytes(subprocess.check_output(['go','list','-m','all'],cwd=root,env=env))

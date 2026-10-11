@@ -1,0 +1,21 @@
+{
+  "release": "v29.0.0.0",
+  "assets": [
+    {
+      "name": "wgpu-linux-x86_64-release.zip",
+      "digest": "sha256:cf614af80f23c6364a13f6569e7ae4ca7367ebf6062e3d3d6e80e205264636b4",
+      "browser_download_url": "https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.0.0/wgpu-linux-x86_64-release.zip"
+    },
+    {
+      "name": "wgpu-macos-aarch64-release.zip",
+      "digest": "sha256:e3e3f6144f9b197b8199681e956391631cfc6d1cef057a1e8c5a1c6aedef5054",
+      "browser_download_url": "https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.0.0/wgpu-macos-aarch64-release.zip"
+    },
+    {
+      "name": "wgpu-windows-x86_64-msvc-release.zip",
+      "digest": "sha256:6ec736b6e7c7259ee5d13cdd06eac4407d1f38539b2e555cbe7040e6098f9dd9",
+      "browser_download_url": "https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.0.0/wgpu-windows-x86_64-msvc-release.zip"
+    }
+  ],
+  "macos_dylib_sha256": "db82d285ec0317cb44d23981c1a42c038fcafd9b0b56c8a1e502e28fb0bf9f71"
+}

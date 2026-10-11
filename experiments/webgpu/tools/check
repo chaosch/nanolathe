@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+export GOWORK=off CGO_ENABLED=0 GOMAXPROCS=2
+bad=$(gofmt -l cmd internal)
+[ -z "$bad" ] || { echo "$bad"; exit 1; }
+go test -p 2 ./...
+go vet -p 2 ./...
+output=$(mktemp -d)
+trap 'rm -rf "$output"' EXIT HUP INT TERM
+go build -p 2 -trimpath -o "$output/probe" ./cmd/webgpu-probe
+go build -p 2 -trimpath -tags rust -o "$output/rust" ./cmd/webgpu-probe
+GOOS=js GOARCH=wasm go build -p 2 -trimpath -o "$output/probe.wasm" ./cmd/webgpu-probe

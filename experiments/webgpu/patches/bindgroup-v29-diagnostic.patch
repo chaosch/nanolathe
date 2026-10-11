@@ -1,0 +1,5 @@
+--- a/wgpu/bindgroup.go
++++ b/wgpu/bindgroup.go
+@@ -105,0 +106,2 @@
++	BindingArraySize uint32
++	_arrayPadding [4]byte

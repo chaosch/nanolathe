@@ -91,6 +91,7 @@ armies of up to 1,000 units, excluding commanders; it is not an exact
 
 Use `github.com/gogpu/gogpu` commit
 `12620c9d50073b8591f075c97ba0c6f3b6ad92f7` as the initial experiment pin.
+P0 resolved it as `v0.54.1-0.20260901095536-12620c9d5007`.
 Resolve its canonical Go pseudo-version during P0, commit that version and
 checksums, and record the resolved module graph. Do not use `@latest`.
 
@@ -733,3 +734,9 @@ Suggested handoff message:
   source review. Dependency gaps and proposed budgets are documented. No
   GoGPU dependencies, prototype code, GPU runs or performance results were
   produced by this planning task.
+
+- 2026-10-10: P0 implementation started in `webgpu-p0-p4`, from
+  `webgpu-implementation-plan`, with main integrated. Exact source pin resolved;
+  native Go/browser compute+indexed-texture smoke executed. Rust runtime aborts
+  at the pinned binding/native API boundary; see experimental README. No
+  production change or adoption is implied.
