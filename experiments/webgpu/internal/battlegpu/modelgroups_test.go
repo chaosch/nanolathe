@@ -26,6 +26,67 @@ func modelGroupFixture() meshscene.LiveFrame {
 	return f
 }
 
+func TestModelGroupDoubledSourceFinalAlignment(t *testing.T) {
+	f := modelGroupFixture()
+	// Final, standalone, parent and two child rectangles use integer physical
+	// bounds, as exported by ModelComposer. Child origins need not match final.
+	for i, rect := range [][4]float32{{7, 9, 7, 6}, {20, 30, 1, 1}, {7, 9, 5, 4}, {9, 10, 3, 3}, {6, 8, 1, 1}} {
+		f.Composition.Slots[i].Screen = rect
+	}
+	slots, _, _, err := modelPackSlots(f.Composition.Slots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var group modelGroupWork
+	if err := group.modelPrepare(f); err != nil {
+		t.Fatal(err)
+	}
+	final := slots[f.Composition.Groups[0].FinalSlot-1]
+	if final.Atlas[2] != 14 || final.Atlas[3] != 12 {
+		t.Fatalf("final image is not doubled: %v", final)
+	}
+	for _, member := range f.Composition.Groups[0].Members {
+		source := slots[member.Slot-1]
+		if source.Atlas[2]/source.Screen[2] != 2 || source.Atlas[3]/source.Screen[3] != 2 {
+			t.Fatalf("source uses a different group scale: %v", source)
+		}
+		for row := 0; row < int(final.Atlas[3]); row++ {
+			for col := 0; col < int(final.Atlas[2]); col++ {
+				// The final texel centre maps to the same source sample at a
+				// translated 2x integer coordinate (§22.4), never a native mean.
+				x := final.Screen[0] + (float32(col)+.5)*final.Screen[2]/final.Atlas[2]
+				y := final.Screen[1] + (float32(row)+.5)*final.Screen[3]/final.Atlas[3]
+				localX := (x - source.Screen[0]) * source.Atlas[2] / source.Screen[2]
+				localY := (y - source.Screen[1]) * source.Atlas[3] / source.Screen[3]
+				wantX := col + 2*int(final.Screen[0]-source.Screen[0])
+				wantY := row + 2*int(final.Screen[1]-source.Screen[1])
+				if int(math.Floor(float64(localX))) != wantX || int(math.Floor(float64(localY))) != wantY {
+					t.Fatal("doubled group member sampling lost source/final alignment")
+				}
+			}
+		}
+	}
+}
+
+func TestModelGroupChoosesPerSampleBeforeCoverageResolve(t *testing.T) {
+	// Alternating parent keys admit a visible child in only two doubled texels.
+	// Resolving keys first would reject the child across the entire native pixel.
+	var samples [4][4]float32
+	for i, key := range []uint8{200, 0, 200, 0} {
+		_, color := modelGroupPixelOracle([]modelGroupPixel{{key: key, color: 1, parent: true}, {key: 50, color: 2}}, true, true)
+		samples[i] = [4]float32{1, 0, 0, 1}
+		if color == 2 {
+			samples[i] = [4]float32{0, 0, 1, 1}
+		}
+	}
+	if got := modelCoverageReference(samples, true, 1); got != [4]float32{.5, 0, .5, 1} {
+		t.Fatalf("group coverage resolve=%v", got)
+	}
+	if got := modelCoverageReference(samples, false, 1); got != [4]float32{1, 0, 0, 1} {
+		t.Fatalf("group top-left resolve=%v", got)
+	}
+}
+
 func TestModelGroupPackingImmutableSelectorsAndSignedDelta(t *testing.T) {
 	f := modelGroupFixture()
 	before, _ := json.Marshal(f)

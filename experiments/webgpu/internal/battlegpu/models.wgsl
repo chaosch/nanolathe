@@ -1,6 +1,10 @@
 // Presentation-only port of Nanolathe's MIT retained Metal model equations.
 // Hardware triangles approximate the authored two-chain span raster. Each
 // subject has an isolated height-key plane and one ordered world commit.
+// TODO(question): ordinary body hardware outline lines occupy one atlas texel,
+// now half a native pixel at 2x. Native row endpoints must replace this path
+// to preserve production whole pixel blocks; authored rings/projection permit
+// a separate bounded row unit. Independent shadow packing keeps its own scale.
 struct Uniforms { camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,shadow:vec4<f32> }
 struct Vertex { position:vec4<f32>,normal:vec4<f32>,uv:vec2<f32>,piece:u32,material:u32,color:vec4<f32>,shadeNormal:vec4<f32> }
 struct Pose { matrix:mat4x4<f32>,flags:vec4<u32> }

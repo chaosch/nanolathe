@@ -194,7 +194,10 @@ func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 		t.Fatal(e)
 	}
 	loads, screenScales, atlasScales := 0, 0, 0
-	for _, line := range strings.Split(code, "\n") {
+	// Only the vertex scales the loaded corner. The fragment also scales a
+	// block coordinate in atlas space when selecting the four 2x samples.
+	vertexCode := strings.Split(code, "fragment resolve_fragmentOutput")[0]
+	for _, line := range strings.Split(vertexCode, "\n") {
 		if strings.Contains(line, "corners.inner[") {
 			loads++
 			// The pinned writer does not parenthesize a robust array-read
