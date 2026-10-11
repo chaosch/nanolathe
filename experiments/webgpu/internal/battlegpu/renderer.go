@@ -53,7 +53,7 @@ func (r *Renderer) targets(width, height int) error {
 		texture **wgpu.Texture
 		view    **wgpu.TextureView
 	}{{"battle-world", r.format, &r.world, &r.worldView}, {"battle-depth", wgpu.TextureFormatDepth32Float, &r.depth, &r.depthView}} {
-		t, e := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: v.name, Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: v.format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding})
+		t, e := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: v.name, Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: v.format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopySrc})
 		if e != nil {
 			return e
 		}
@@ -100,6 +100,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 				r.layers.DrawFeature(pass, p.source)
 			} else {
 				r.models.DrawShadowSlot(pass, p.slot)
+				r.layers.DrawAnnotations(pass, p.slot)
 				r.models.DrawSlot(pass, p.slot)
 			}
 		}

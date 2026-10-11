@@ -114,11 +114,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var renderer *Renderer
 	var failure error
 	var capture *battleCapture
+	var debugCapture *modelDebugCapture
 	var capturePending bool
 	var nativeDevice *wgpu.Device
 	var live meshscene.LiveFrame
 	debugWritten := false
-	var last, next, timeStart time.Time
+	var last, next, timeStart, lastReturn time.Time
 	var rows []drawRow
 	var input []meshscene.NativeEvent
 	var before, after runtime.MemStats
@@ -147,6 +148,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	app.OnDraw(func(ctx *gogpu.Context) {
 		entry := time.Now()
+		defer func() { lastReturn = time.Now() }()
 		if failure != nil {
 			app.Quit()
 			return
@@ -172,6 +174,15 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			return
 		}
 		if capturePending {
+			if debugCapture != nil {
+				failure = debugCapture.finish()
+				debugCapture.close()
+				debugCapture = nil
+				if failure != nil {
+					app.Quit()
+					return
+				}
+			}
 			data, ready, e := capture.poll()
 			if e != nil {
 				failure = e
@@ -199,6 +210,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				}
 				if failure == nil {
 					capture.encode(ctx.CommandEncoder())
+					if path := os.Getenv("NANOLATHE_WEBGPU_DEBUG_FRAME"); path != "" {
+						debugCapture, failure = captureModelDebug(nativeDevice, ctx.CommandEncoder(), renderer.models, path, renderer.world, w, h)
+						if failure != nil {
+							app.Quit()
+							return
+						}
+					}
 					capturePending = true
 					return
 				}
@@ -243,6 +261,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			runtime.ReadMemStats(&before)
 			startedMeasure = true
+			// Setup and the warmup-to-measurement interval are outside timing.
+			start = time.Now()
+			next = start.Add(period)
+			last = time.Time{}
 		}
 		input = queue.drain(input)
 		sourceStart := time.Now()
@@ -281,19 +303,22 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		c, e := renderer.Encode(ctx.CommandEncoder(), ctx.SurfaceView(), w, h, live)
 		failure = e
 		encodeMS := float64(time.Since(encodeStart).Nanoseconds()) / 1e6
+		outsideMS := 0.0
+		if !last.IsZero() && !lastReturn.IsZero() {
+			outsideMS = float64(entry.Sub(lastReturn).Nanoseconds()) / 1e6
+		}
 		callbackMS := 0.0
 		if !last.IsZero() {
 			callbackMS = float64(start.Sub(last).Nanoseconds()) / 1e6
 		}
 		row := drawRow{draw, draw < opts.Warmup, live.Tick, live.Alpha, sourceMS, encodeMS, callbackMS, paceMS, completionMS, c, renderer.Missing()}
 		if len(rows) >= 8192 {
-			copy(rows, rows[1:])
-			rows[len(rows)-1] = row
+			rows[draw%len(rows)] = row
 		} else {
 			rows = append(rows, row)
 		}
 		if draw >= opts.Warmup && opts.Benchmark != nil && opts.Benchmark.AfterFrame != nil {
-			opts.Benchmark.AfterFrame(BenchmarkFrame{Frame: draw, CadenceValid: !last.IsZero(), PaceWait: paceMS, Cadence: callbackMS, DrawWork: float64(time.Since(start).Nanoseconds()) / 1e6, Source: sourceMS, Submit: encodeMS})
+			opts.Benchmark.AfterFrame(BenchmarkFrame{Frame: draw, CadenceValid: !last.IsZero(), PaceWait: paceMS, OutsideDraw: outsideMS, Cadence: callbackMS, DrawWork: float64(time.Since(start).Nanoseconds()) / 1e6, Source: sourceMS, Submit: encodeMS})
 		}
 		last = start
 		draw++
@@ -310,6 +335,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				failure = e
 			}
 		}
+		if debugCapture != nil {
+			debugCapture.close()
+		}
 		if capture != nil {
 			capture.close()
 		}
@@ -321,13 +349,23 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if failure == nil {
 		failure = runErr
 	}
+	if draw > len(rows) && len(rows) > 0 {
+		at := draw % len(rows)
+		ordered := append([]drawRow(nil), rows[at:]...)
+		rows = append(ordered, rows[:at]...)
+	}
 	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": false, "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "relative pointer capture and double-click count not yet forwarded", "synchronous source preparation and completion before mutable-resource replacement; exact pass limitations in component report"}, "input_overflow": queue.overflow}
 	if failure != nil {
 		report["run_error"] = failure.Error()
 	}
 	if opts.OutputDir != "" {
-		data, _ := json.MarshalIndent(report, "", "  ")
-		os.WriteFile(filepath.Join(opts.OutputDir, "webgpu-report.json"), append(data, '\n'), 0644)
+		data, reportErr := json.MarshalIndent(report, "", "  ")
+		if reportErr == nil {
+			reportErr = os.WriteFile(filepath.Join(opts.OutputDir, "webgpu-report.json"), append(data, '\n'), 0644)
+		}
+		if failure == nil {
+			failure = reportErr
+		}
 		if e := writeRows(filepath.Join(opts.OutputDir, "webgpu-frames.csv"), rows); failure == nil {
 			failure = e
 		}
