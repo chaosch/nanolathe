@@ -12,6 +12,11 @@ if not binary.exists():
  if cache.exists():sys.exit('Incomplete previous build at '+str(cache)+'; use tools/build-play with a fresh output directory.')
  subprocess.run([str(exp/'tools/build-play'),str(cache)],check=True)
 env=dict(os.environ,GOWORK='off',GOMAXPROCS=os.environ.get('GOMAXPROCS','2'))
-args=[str(binary),'--webgpu','--root',str(pathlib.Path.home()/'TotalAnnihilation'),'--map','Great Divide','--mod','none','--gameplay','modern','--renderer','modern','--ai-player','2=modern','--webgpu-size','1920x1080',*sys.argv[1:]]
+report_args=[]
+if not any(a=='--webgpu-report' or a.startswith('--webgpu-report=') for a in sys.argv[1:]):
+ report=pathlib.Path(tempfile.mkdtemp(prefix='nanolathe-webgpu-playtest-'))/'report'
+ report_args=['--webgpu-report',str(report)]
+ print('Play-test report:',report,flush=True)
+args=[str(binary),'--webgpu','--root',str(pathlib.Path.home()/'TotalAnnihilation'),'--map','Great Divide','--mod','none','--gameplay','modern','--renderer','modern','--ai-player','2=modern','--webgpu-size','1920x1080',*report_args,*sys.argv[1:]]
 print('WebGPU prototype:',binary,flush=True)
 os.execve(str(binary),args,env)

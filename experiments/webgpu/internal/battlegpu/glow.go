@@ -245,11 +245,11 @@ func (g *Glow) glowPreparePlanes(width, height int) error {
 		dst  *glowTexture
 		w, h int
 	}{{&g.emission, width, height}, {&g.quarter, int(s[0]), int(s[1])}, {&g.across, int(s[0] + s[2]), int(s[1])}, {&g.octaves, int(s[0] + s[2] + 3), int(s[1] + 2)}} {
-		usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding
+		usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding | wgpu.TextureUsageCopySrc
 		if item.dst == &g.emission {
 			usage = wgpu.TextureUsageTextureBinding | wgpu.TextureUsageRenderAttachment
 		}
-		n, err := g.glowTexture(item.w, item.h, gputypes.TextureFormatRGBA16Float, usage)
+		n, err := g.glowTexture(item.w, item.h, gputypes.TextureFormatRGBA16Float, usage|wgpu.TextureUsageCopySrc)
 		if err != nil {
 			return err
 		}

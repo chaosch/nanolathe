@@ -217,7 +217,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				if failure == nil {
 					capture.encode(ctx.CommandEncoder())
 					if path := os.Getenv("NANOLATHE_WEBGPU_DEBUG_FRAME"); path != "" {
-						debugCapture, failure = captureModelDebug(nativeDevice, ctx.CommandEncoder(), renderer.models, path, renderer.world, w, h)
+						debugCapture, failure = captureModelDebug(nativeDevice, ctx.CommandEncoder(), renderer, path)
 						if failure != nil {
 							app.Quit()
 							return
