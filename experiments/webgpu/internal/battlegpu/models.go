@@ -118,8 +118,7 @@ type Models struct {
 	mergePipelineLayout                                                         *wgpu.PipelineLayout
 	posePipeline                                                                *wgpu.ComputePipeline
 	bodyPipeline, outlinePipeline, resolvePipeline                              *wgpu.RenderPipeline
-	resolveModule                                                               *wgpu.ShaderModule
-	resolveCapacity                                                             int
+	commitWork                                                                  modelCommitPipeline
 	poseGroup, bodyGroup                                                        *wgpu.BindGroup
 	commitGroup                                                                 *wgpu.BindGroup
 	commitViews                                                                 [5]*wgpu.TextureView
@@ -176,7 +175,7 @@ func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
 	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
 	return []gputypes.BindGroupLayoutEntry{
 		// Both fixed arrays grow after New; validate their current capacities
-		// against the actual buffers when each commit pipeline is selected.
+		// against the actual buffers when the common pipeline is selected.
 		modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80),
@@ -414,30 +413,6 @@ func modelResolveCapacity(bytes uint64) int {
 	return max(1, int(bytes/modelSlotStride))
 }
 
-func (m *Models) modelPrepareResolvePipeline() error {
-	capacity := modelResolveCapacity(m.slots.size)
-	if capacity == m.resolveCapacity {
-		return nil
-	}
-	module, err := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelResolveShaderSource(capacity)})
-	if err != nil {
-		return err
-	}
-	pipeline, err := m.modelCreatePipeline(module, m.resolvePipelineLayout, "resolve_vertex", "resolve_fragment", m.format, 2, true, gputypes.PrimitiveTopologyTriangleList)
-	if err != nil {
-		module.Release()
-		return err
-	}
-	// Completion precedes Prepare. A failed replacement keeps the old pair;
-	// successful growth retains only the current fixed-capacity resolver.
-	if m.resolvePipeline != nil {
-		m.resolvePipeline.Release()
-		m.resolveModule.Release()
-	}
-	m.resolveModule, m.resolvePipeline, m.resolveCapacity = module, pipeline, capacity
-	return nil
-}
-
 func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (m *Models, err error) {
 	if d == nil || q == nil || scene == nil {
 		return nil, modelError("device, queue and retained scene")
@@ -585,7 +560,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if m.resolveLayout, m.resolvePipelineLayout, err = m.modelLayout(modelCommitLayoutEntries()); err != nil {
 		return
 	}
-	if err = m.modelPrepareResolvePipeline(); err != nil {
+	if err = m.modelPrepareCommitPipeline(); err != nil {
 		return
 	}
 	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
@@ -1029,12 +1004,14 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return e
 	}
 	changed := false
+	// A common entry statically reads both record families. Even with no active
+	// shadow, its one-record fixed declaration needs a full zeroed subject.
 	for _, u := range []struct {
 		b     *modelBuffer
 		label string
 		n     int
 		usage gputypes.BufferUsage
-	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", len(m.shadowBytes), wgpu.BufferUsageStorage}, {&m.groups, "battle-model-groups", len(m.groupWork.groups), wgpu.BufferUsageStorage}, {&m.members, "battle-model-group-members", len(m.groupWork.members), wgpu.BufferUsageStorage}} {
+	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", max(modelShadowStride, len(m.shadowBytes)), wgpu.BufferUsageStorage}, {&m.groups, "battle-model-groups", len(m.groupWork.groups), wgpu.BufferUsageStorage}, {&m.members, "battle-model-group-members", len(m.groupWork.members), wgpu.BufferUsageStorage}} {
 		grow, err := m.modelGrow(u.b, u.label, u.n, u.usage)
 		if err != nil {
 			return err
@@ -1049,7 +1026,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareBodyPipelines(); e != nil {
 		return e
 	}
-	if e = m.modelPrepareResolvePipeline(); e != nil {
+	if e = m.modelPrepareCommitPipeline(); e != nil {
 		return e
 	}
 	if e = m.modelPrepareMergePipeline(); e != nil {
@@ -1224,8 +1201,8 @@ func (m *Models) DrawShadows(pass *wgpu.RenderPassEncoder) {
 	if m == nil || m.closed || !m.prepared || pass == nil || m.shadowCount == 0 {
 		return
 	}
-	m.state.selectResources(pass, m.shadowWork.commitPipeline, m.commitGroup)
-	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount)})
+	m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount), FirstInstance: modelCommitShadowIndex(m.commitWork.capacities[0], 0)})
 	m.counters.Draws++
 }
 
@@ -1248,8 +1225,8 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 		if p.slot != slot {
 			continue
 		}
-		m.state.selectResources(pass, m.shadowWork.commitPipeline, m.commitGroup)
-		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: p.subject})
+		m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: modelCommitShadowIndex(m.commitWork.capacities[0], p.subject)})
 		m.counters.Draws++
 	}
 }
@@ -1296,11 +1273,8 @@ func (m *Models) Close() {
 	m.shadowWork.bodyPipeline, m.shadowWork.outlinePipeline = nil, nil
 	m.shadowWork.modelClose()
 	m.atlas.modelClose()
-	if m.resolvePipeline != nil {
-		m.resolvePipeline.Release()
-		m.resolveModule.Release()
-		m.resolvePipeline, m.resolveModule = nil, nil
-	}
+	m.commitWork.modelClose()
+	m.resolvePipeline = nil
 	for i := len(m.owned) - 1; i >= 0; i-- {
 		m.owned[i]()
 	}
