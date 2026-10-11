@@ -13,7 +13,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
 
-func TestGlowShaderLowersToCoreSPIRVAndMSLWithPackedABI(t *testing.T) {
+func TestGlowSourceShaderLowersToCoreSPIRVAndMSLWithPackedABI(t *testing.T) {
 	if _, err := naga.Compile(glowShader); err != nil {
 		t.Fatal(err)
 	}
@@ -54,9 +54,19 @@ func TestGlowShaderLowersToCoreSPIRVAndMSLWithPackedABI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"glow_source_vertex", "glow_source_fragment", "glow_shrink", "glow_across", "glow_down"} {
+	for _, name := range []string{"glow_source_vertex", "glow_source_fragment"} {
 		if info.EntryPointNames[name] == "" {
 			t.Fatal("missing shader entry point", name)
+		}
+	}
+	if len(info.EntryPointNames) != 2 {
+		t.Fatal("compute entry point reached source resource map", info.EntryPointNames)
+	}
+	// Match native render's default, per-type resource numbering: the layout
+	// has uniform/vertices and atlas/completed in precisely these slots.
+	for _, binding := range []string{"glowU [[buffer(0)]]", "glowVertices [[buffer(1)]]", "glowAtlas [[texture(0)]]", "glowCompleted [[texture(1)]]"} {
+		if !strings.Contains(source, binding) {
+			t.Fatal("native source binding moved", binding)
 		}
 	}
 	// The pinned compiler's bounds-check conditional has insufficient
@@ -65,6 +75,58 @@ func TestGlowShaderLowersToCoreSPIRVAndMSLWithPackedABI(t *testing.T) {
 	for _, line := range strings.Split(source, "\n") {
 		if strings.Contains(line, ".position =") && strings.Contains(line, "?") {
 			t.Fatal("indexed conditional reached position arithmetic", line)
+		}
+	}
+}
+
+func TestGlowBlurNativeMSLResourceMapContainsOnlyComputeBindings(t *testing.T) {
+	if _, err := naga.Compile(glowBlurShader); err != nil {
+		t.Fatal(err)
+	}
+	ast, err := naga.Parse(glowBlurShader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := naga.Lower(ast)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Native compute binds a sizes buffer after the layout's one uniform
+	// only when the module has runtime arrays. Source globals in this module
+	// previously collided at buffer 1 and shifted input/output to textures
+	// 2/3 even though the compute encoder bound its two textures at 0/1.
+	if len(module.GlobalVariables) != 3 {
+		t.Fatal("unrelated globals reached compute resource map", module.GlobalVariables)
+	}
+	for _, typ := range module.Types {
+		if array, ok := typ.Inner.(ir.ArrayType); ok && array.Size.Constant == nil {
+			t.Fatal("source runtime array reached compute module")
+		}
+		if typ.Name == "GlowUniform" {
+			structure, ok := typ.Inner.(ir.StructType)
+			if !ok || structure.Span != glowUniformSize {
+				t.Fatal("compute uniform ABI changed", structure)
+			}
+		}
+	}
+	source, info, err := msl.Compile(module, msl.DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.RequiresSizesBuffer || strings.Contains(source, "_mslBufferSizes") || strings.Contains(source, "_buffer_sizes") {
+		t.Fatal("compute requested unrelated runtime-array metadata")
+	}
+	if strings.Contains(source, "glow_source_vertex") || strings.Contains(source, "glow_source_fragment") || len(info.EntryPointNames) != 3 {
+		t.Fatal("source entry point reached compute resource map", info.EntryPointNames)
+	}
+	for _, name := range []string{"glow_shrink", "glow_across", "glow_down"} {
+		if info.EntryPointNames[name] == "" {
+			t.Fatal("missing compute entry point", name)
+		}
+	}
+	for _, binding := range []string{"glowU [[buffer(0)]]", "glowInput [[texture(0)]]", "glowDestination [[texture(1)]]"} {
+		if !strings.Contains(source, binding) {
+			t.Fatal("native compute binding differs from its group", binding)
 		}
 	}
 }
