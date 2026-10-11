@@ -121,6 +121,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		})
 	}
 	var renderer *Renderer
+	var retainedDescriptors [2]map[string]any
 	var failure error
 	var capture *battleCapture
 	var debugCapture *modelDebugCapture
@@ -416,7 +417,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			capture.close()
 		}
 		if renderer != nil {
+			retainedDescriptors[0] = renderer.resourceDescriptors()
 			renderer.Close()
+			retainedDescriptors[1] = renderer.resourceDescriptors()
 		}
 	})
 	runErr := app.Run()
@@ -429,6 +432,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		rows = append(ordered, rows[:at]...)
 	}
 	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": false, "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "synchronous source preparation and per-frame completion before mutable-resource replacement", "hardware model triangles approximate production integer span coverage", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
+	report["retained_descriptor_snapshots"] = retainedDescriptors
 	if failure != nil {
 		report["run_error"] = failure.Error()
 	}
