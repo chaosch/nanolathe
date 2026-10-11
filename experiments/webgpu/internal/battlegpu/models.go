@@ -116,10 +116,13 @@ type Models struct {
 	textureView, paletteView                                                    *wgpu.TextureView
 	sampler                                                                     *wgpu.Sampler
 	poseLayout, bodyLayout, resolveLayout                                       *wgpu.BindGroupLayout
+	resolvePipelineLayout                                                       *wgpu.PipelineLayout
 	mergeLayout                                                                 *wgpu.BindGroupLayout
 	mergePipelineLayout                                                         *wgpu.PipelineLayout
 	posePipeline                                                                *wgpu.ComputePipeline
 	bodyPipeline, outlinePipeline, resolvePipeline                              *wgpu.RenderPipeline
+	resolveModule                                                               *wgpu.ShaderModule
+	resolveCapacity                                                             int
 	poseGroup, bodyGroup                                                        *wgpu.BindGroup
 	mergePipeline, copyPipeline                                                 *wgpu.RenderPipeline
 	mergeCapacities                                                             [3]int
@@ -313,7 +316,7 @@ func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView,
 	e = m.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: b}, t.RGBA, &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(t.Height)}, &wgpu.Extent3D{Width: uint32(t.Width), Height: uint32(t.Height), DepthOrArrayLayers: 1})
 	return v, e
 }
-func (m *Models) modelPipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth int, blend bool, topology gputypes.PrimitiveTopology) (*wgpu.RenderPipeline, error) {
+func (m *Models) modelCreatePipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth int, blend bool, topology gputypes.PrimitiveTopology) (*wgpu.RenderPipeline, error) {
 	target := gputypes.ColorTargetState{Format: format, WriteMask: gputypes.ColorWriteMaskAll}
 	if blend {
 		target.Blend = &gputypes.BlendState{Color: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}, Alpha: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}}
@@ -331,11 +334,47 @@ func (m *Models) modelPipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineL
 	if depth == 2 {
 		desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthCompare: gputypes.CompareFunctionAlways}
 	}
-	p, e := m.d.CreateRenderPipeline(desc)
+	return m.d.CreateRenderPipeline(desc)
+}
+
+func (m *Models) modelPipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth int, blend bool, topology gputypes.PrimitiveTopology) (*wgpu.RenderPipeline, error) {
+	p, e := m.modelCreatePipeline(module, layout, vertex, fragment, format, depth, blend, topology)
 	if e == nil {
 		m.modelRetain(p.Release)
 	}
 	return p, e
+}
+
+func modelResolveShaderSource(capacity int) string {
+	return strings.ReplaceAll(modelResolveShader, "__SLOTS__", strconv.Itoa(capacity))
+}
+
+func modelResolveCapacity(bytes uint64) int {
+	return max(1, int(bytes/modelSlotStride))
+}
+
+func (m *Models) modelPrepareResolvePipeline() error {
+	capacity := modelResolveCapacity(m.slots.size)
+	if capacity == m.resolveCapacity {
+		return nil
+	}
+	module, err := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelResolveShaderSource(capacity)})
+	if err != nil {
+		return err
+	}
+	pipeline, err := m.modelCreatePipeline(module, m.resolvePipelineLayout, "resolve_vertex", "resolve_fragment", m.format, 2, true, gputypes.PrimitiveTopologyTriangleList)
+	if err != nil {
+		module.Release()
+		return err
+	}
+	// Completion precedes Prepare. A failed replacement keeps the old pair;
+	// successful growth retains only the current fixed-capacity resolver.
+	if m.resolvePipeline != nil {
+		m.resolvePipeline.Release()
+		m.resolveModule.Release()
+	}
+	m.resolveModule, m.resolvePipeline, m.resolveCapacity = module, pipeline, capacity
+	return nil
 }
 
 func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (m *Models, err error) {
@@ -490,14 +529,13 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err = m.modelInitShadows(scene, module, layout); err != nil {
 		return
 	}
-	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 48), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelTextureEntry(6)}
-	if m.resolveLayout, layout, err = m.modelLayout(entries); err != nil {
+	// A fixed slot array is specialized after growth; its required binding size
+	// is checked against the current group rather than a constant layout size.
+	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelTextureEntry(6)}
+	if m.resolveLayout, m.resolvePipelineLayout, err = m.modelLayout(entries); err != nil {
 		return
 	}
-	if module, err = m.modelModule(modelResolveShader); err != nil {
-		return
-	}
-	if m.resolvePipeline, err = m.modelPipeline(module, layout, "resolve_vertex", "resolve_fragment", format, 2, true, gputypes.PrimitiveTopologyTriangleList); err != nil {
+	if err = m.modelPrepareResolvePipeline(); err != nil {
 		return
 	}
 	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
@@ -954,6 +992,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		m.poseGroup, m.bodyGroup = nil, nil
 		m.atlas.modelReleaseGroup()
 	}
+	if e = m.modelPrepareResolvePipeline(); e != nil {
+		return e
+	}
 	if e = m.modelPrepareMergePipeline(); e != nil {
 		return e
 	}
@@ -1197,6 +1238,11 @@ func (m *Models) Close() {
 	m.closed = true
 	m.shadowWork.modelClose()
 	m.atlas.modelClose()
+	if m.resolvePipeline != nil {
+		m.resolvePipeline.Release()
+		m.resolveModule.Release()
+		m.resolvePipeline, m.resolveModule = nil, nil
+	}
 	for i := len(m.owned) - 1; i >= 0; i-- {
 		m.owned[i]()
 	}

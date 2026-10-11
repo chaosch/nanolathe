@@ -3,6 +3,8 @@ package battlegpu
 import (
 	"math"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -11,6 +13,55 @@ import (
 	"github.com/gogpu/naga/msl"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
+
+func TestModelResolveFixedCapacityMetalABI(t *testing.T) {
+	compile := func(source string) (string, msl.TranslationInfo) {
+		t.Helper()
+		ast, err := naga.Parse(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		module, err := naga.LowerWithCapabilities(ast, source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		code, info, err := msl.Compile(module, msl.DefaultOptions())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return code, info
+	}
+	// Reproduce the preexisting ABI: render HAL compilation uses default MSL
+	// options and does not supply compute's runtime-array size argument. The
+	// hidden argument has no explicit native buffer slot. Declared slots,
+	// shadow records and uniforms still bind at native buffer slots 0, 1 and 2.
+	runtimeSource := strings.NewReplacer("array<Slot,__SLOTS__>", "array<Slot>", "array<Shadow,1>", "array<Shadow>").Replace(modelResolveShader)
+	oldCode, oldInfo := compile(runtimeSource)
+	if !oldInfo.RequiresSizesBuffer || !regexp.MustCompile(`constant _mslBufferSizes& _buffer_sizes\s*\n`).MatchString(oldCode) || strings.Contains(oldCode, "_buffer_sizes [[buffer(") {
+		t.Fatal("runtime resolve no longer reproduces the pinned hidden-size ABI")
+	}
+	for _, bytes := range []uint64{0, 64, 128, 512, 32768} {
+		capacity := modelResolveCapacity(bytes)
+		if bytes != 0 && (uint64(capacity)*modelSlotStride > bytes || uint64(capacity+1)*modelSlotStride <= bytes) {
+			t.Fatalf("capacity %d does not fit buffer tier %d", capacity, bytes)
+		}
+		code, info := compile(modelResolveShaderSource(capacity))
+		if info.RequiresSizesBuffer || strings.Contains(code, "_mslBufferSizes") || strings.Contains(code, "_buffer_sizes") {
+			t.Fatalf("capacity %d retains a hidden size argument", capacity)
+		}
+		// Fixed-array guarded loads admit every full record in the tier and use
+		// the declared capacity directly, without a runtime size operand.
+		guard := `uint\([^)]+\) < ` + strconv.Itoa(capacity) + ` \? slots\.inner\[`
+		if len(regexp.MustCompile(guard).FindAllString(code, -1)) != 2 {
+			t.Fatalf("capacity %d missing vertex/fragment slot guards", capacity)
+		}
+		for _, binding := range []string{`slots \[\[buffer\(0\)\]\]`, `u \[\[buffer\(2\)\]\]`, `bodies \[\[texture\(0\)\]\]`} {
+			if !regexp.MustCompile(binding).MatchString(code) {
+				t.Fatalf("capacity %d changed an existing resource position: %s", capacity, binding)
+			}
+		}
+	}
+}
 
 func TestModelOutlineSubmissionMatchesShaderDiscard(t *testing.T) {
 	for _, tc := range []struct {
@@ -41,11 +92,11 @@ func TestModelOutlineSubmissionMatchesShaderDiscard(t *testing.T) {
 }
 
 func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
-	ast, e := naga.Parse(modelResolveShader)
+	ast, e := naga.Parse(modelResolveShaderSource(8))
 	if e != nil {
 		t.Fatal(e)
 	}
-	module, e := naga.LowerWithCapabilities(ast, modelResolveShader, 0)
+	module, e := naga.LowerWithCapabilities(ast, modelResolveShaderSource(8), 0)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -77,7 +128,7 @@ func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 }
 
 func TestModelShadersParseAndLower(t *testing.T) {
-	for name, source := range map[string]string{"poses": modelPoseShader, "models": modelBodyShader, "resolve": modelResolveShader} {
+	for name, source := range map[string]string{"poses": modelPoseShader, "models": modelBodyShader, "resolve": modelResolveShaderSource(8)} {
 		t.Run(name, func(t *testing.T) {
 			ast, e := naga.Parse(source)
 			if e != nil {
