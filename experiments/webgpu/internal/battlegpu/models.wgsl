@@ -9,7 +9,8 @@ struct Instance {
  reveal:vec4<f32>,below:vec4<f32>,band:vec4<f32>,above:vec4<f32>,clip:vec4<f32>,shadow:vec4<f32>,ruleOutline:vec4<f32>,
  origin:vec4<f32>,anchors:vec4<f32>,control:vec4<f32>,screen:vec4<f32>,atlas:vec4<f32>,
  lightIDs0:vec4<u32>,lightIDs1:vec4<u32>,counts:vec4<u32>,
- shadowAtlas:vec4<f32>,shadowParams:vec4<f32>,shadowPlacement:vec4<f32>,shadowScreen:vec4<f32>
+ shadowAtlas:vec4<f32>,shadowParams:vec4<f32>,shadowPlacement:vec4<f32>,shadowScreen:vec4<f32>,
+ groupOperand:vec4<i32>,groupClip:vec4<f32>
 }
 struct Material { first:u32,count:u32,kind:u32,local:u32 }
 struct Selected { uv:vec4<f32>,color:vec4<f32>,params:vec4<f32> }
@@ -72,7 +73,7 @@ fn admitted(i:Instance,material:u32,m:mat4x4<f32>,flags:u32)->bool {
  let world=(m*vec4<f32>(v.position.xyz,1.0)).xyz;let mat=modelMaterial(v,i);if mat.params.x<0.5{return out;}if v.material!=0u&&!admitted(i,v.material,m,p.flags.x){return out;}
  let screen=projection(world,i,p.flags.x);let pixel=(screen-i.screen.xy)*(i.atlas.zw/i.screen.zw)+i.atlas.xy;
  out.position=vec4<f32>(pixel.x/u.extent.z*2.0-1.0,1.0-pixel.y/u.extent.w*2.0,0.5,1.0);out.uv=mat.uv.xy;out.color=mat.color.rgb;out.params=mat.params;
- let origin=select(i.bounds.w,m[1].w,m[2].w>0.5);out.key=floor(world.y-origin)+i.clip.w+f32(bitcast<i32>(i.counts.w));
+ let origin=select(i.bounds.w,m[1].w,m[2].w>0.5);out.key=floor(world.y-origin)+i.clip.w;
  let shadeNormal=(m*vec4<f32>(v.shadeNormal.xyz,0.0)).xyz*vec3<f32>(1.0,1.0,-1.0);var row=u32(i32(dot(shadeNormal,vec3<f32>(-0.8,1.0,0.25))*5.0))&31u;
  if m[0].w>1.5{row=15u;}out.shade=select(f32(row),-1.0,m[0].w>0.5&&m[0].w<1.5);
  let normal=normalize((m*vec4<f32>(v.normal.xyz,0.0)).xyz);out.faceNormal=normal.xzy;
@@ -86,6 +87,13 @@ fn texel(uv:vec2<f32>,blue:bool)->vec4<f32> {
  let index=i32(round(tex.r*255.0));return vec4<f32>(textureLoad(palette,vec2<i32>(index,select(0,1,blue)),0).rgb,tex.a);
 }
 fn clipped(i:Instance,key:f32)->bool {return (i.clip.x>0.5&&i.clip.x<1.5&&key<=i.clip.y)||(i.clip.z>0.5&&key<=i.clip.w);}
+fn modelBlue(i:Instance,key:f32)->bool {
+ if i.groupOperand.x!=0 && i.groupOperand.y!=2 {
+  let stored=(u32(key)+bitcast<u32>(i.groupOperand.z))&255u;
+  return i.counts.z>0u&&i.groupClip.x>1.5&&f32(stored)<=i.groupClip.y;
+ }
+ return i.counts.z>0u&&i.clip.x>1.5&&key<=i.clip.y;
+}
 fn lobe(x:f32)->f32 {var a=clamp(x,0.0,1.0);a*=a;a*=a;a*=a;a*=a;a*=a;return a;}
 fn finish(source:vec3<f32>,input:vec3<f32>,kind:u32,normal:vec3<f32>)->vec3<f32> {
  if (u32(u.timing.z)&2u)==0u||kind==0u||kind>2u{return input;}
@@ -96,23 +104,27 @@ fn glint(source:vec3<f32>,lit:vec3<f32>,strength:f32,normal:vec3<f32>)->vec3<f32
  if (u32(u.timing.z)&4u)==0u{return lit;}let over=lobe(0.9246621);let g=max(lobe(dot(normal,vec3<f32>(-0.35,-0.15,0.9246621)))-over,0.0)/(1.0-over);let amount=floor(clamp(g*strength,0.0,1.0)*255.0+0.5);if amount<0.5{return lit;}
  let peak=max(source.x,max(source.y,source.z));let low=min(source.x,min(source.y,source.z));let saturation=(peak-low)/max(peak,0.001);let mask=smoothstep(0.12,0.35,peak)*(1.0-smoothstep(0.2,0.65,saturation));return min(lit+mix(vec3<f32>(1.0),source,0.65)*(amount/255.0)*0.48*mask,vec3<f32>(1.0));
 }
-struct Fragment { @location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32 }
+// Red carries an exact byte key; green distinguishes erased covered pixels
+// from untouched atlas space. Staged source erasure retains this plane and
+// depth, as production shadeModel does (GPU design §22.4).
+struct Fragment { @location(0) color:vec4<f32>,@location(1) metadata:vec4<f32>,@builtin(frag_depth) depth:f32 }
 @fragment fn model_fragment(input:Out)->Fragment {
- let i=instances[input.instance];let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=ruled&&i.clip.x>1.5&&key<=i.clip.y;
+ let i=instances[input.instance];let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=modelBlue(i,key);
  if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
- let tex=texel(input.uv,blue);if tex.a<0.02||ruled&&clipped(i,key){discard;}
- var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);if rule.w< -1.5{discard;}}
+ let tex=texel(input.uv,blue);var erased=tex.a<0.02||ruled&&clipped(i,key);
+ var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);erased=erased||rule.w< -1.5;}
+ if erased&&i.groupOperand.x==0{discard;}
  var source=tex.rgb*input.color;if blue&&input.params.x>1.5{source=textureLoad(palette,vec2<i32>(i32(input.params.w),1),0).rgb;}
  let shade=select(min(0.06875*floor(input.shade),2.0),1.0,input.shade<0.0);var color=source*shade;
  if (u32(u.timing.z)&1u)!=0u{if any(input.irradiance!=vec3<f32>(0.0)){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
  if rule.w<0.0{color=finish(source,color,u32(input.params.y),input.faceNormal);color=glint(source,color,input.params.z,input.faceNormal);}else{color=rule.rgb;if blue{color=textureLoad(palette,vec2<i32>(i32(rule.w),1),0).rgb;}}
  let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
- var out:Fragment;out.color=vec4<f32>(color*tex.a,tex.a);out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
+ var out:Fragment;out.color=select(vec4<f32>(color*tex.a,tex.a),vec4<f32>(0.0),erased);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
 }
 @fragment fn outline_fragment(input:Out)->Fragment {
  let i=instances[input.instance];let outline=select(i.outline,i.ruleOutline,i.counts.z>0u);if i.state.z<=0.0||outline.a<=0.0{discard;}
  if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
- let key=wrappedKey(input.key);var out:Fragment;out.color=vec4<f32>(outline.rgb*outline.a,outline.a);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
+ let key=wrappedKey(input.key);var out:Fragment;out.color=vec4<f32>(outline.rgb*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
 }
 @vertex fn shadow_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
  let v=vertices[vid];let i=instances[iid];let p=poses[i.ids.x+v.piece];let m=p.matrix;var out:Out;out.instance=iid;out.position=vec4<f32>(2.0,2.0,2.0,1.0);
