@@ -25,15 +25,19 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		if i == 2 {
 			readW, readH = worldW, worldH
 		}
-		read := &battleCapture{d: d, w: readW, h: readH, row: (readW*4 + 255) &^ 255, format: wgpu.TextureFormatRGBA8Unorm}
+		bytes, format, suffix, png := 4, wgpu.TextureFormatRGBA8Unorm, []string{".color.png", ".shadow.png", ".world.png"}[i], true
 		if i == 2 {
-			read.format = m.format
+			format = renderer.format
+			if format == gputypes.TextureFormatRGBA16Float {
+				bytes, suffix, png = 8, ".world.rgba16f", false
+			}
 		}
+		read := &battleCapture{d: d, w: readW, h: readH, row: (readW*bytes + 255) &^ 255, format: format}
 		read.size = uint64(read.row * readH)
 		read.b, err = d.CreateBuffer(&wgpu.BufferDescriptor{Label: "diagnostic-atlas-readback", Size: read.size, Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst})
 		c.reads = append(c.reads, read)
-		c.paths = append(c.paths, path+[]string{".color.png", ".shadow.png", ".world.png"}[i])
-		c.png = append(c.png, true)
+		c.paths = append(c.paths, path+suffix)
+		c.png = append(c.png, png)
 		if err != nil {
 			return
 		}
