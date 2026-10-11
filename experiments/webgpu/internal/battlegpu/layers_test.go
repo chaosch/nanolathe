@@ -285,3 +285,24 @@ func TestLayerTextureValidationRejectsTruncatedAndBeyondCore(t *testing.T) {
 		}
 	}
 }
+
+func TestLayerCoalescingPreservesOrderedBlendAndSnapshotBarriers(t *testing.T) {
+	quads := make([]meshscene.OverlayQuad, 4)
+	quads[3].Params[1] = 1
+	out := layerRunsInto(nil, quads[:2], meshscene.EffectOpQuads, 5)
+	out = layerRunsInto(out, quads[2:], meshscene.EffectOpQuads, 7)
+	if len(out) != 2 || out[0].first != 5 || out[0].count != 3 || out[1].mode != 1 {
+		t.Fatal(out)
+	}
+	for _, barrier := range []uint32{meshscene.EffectOpLens, meshscene.EffectOpRetainedModel} {
+		blocked := []layerDraw{{kind: meshscene.EffectOpQuads, first: 0, count: 1}, {kind: barrier}}
+		blocked = layerRunsInto(blocked, quads[:1], meshscene.EffectOpQuads, 1)
+		if len(blocked) != 3 {
+			t.Fatal("crossed snapshot/model barrier", blocked)
+		}
+	}
+	separated := layerRunsInto([]layerDraw{{kind: meshscene.EffectOpQuads, first: 0, count: 1}}, quads[:1], meshscene.EffectOpQuads, 2)
+	if len(separated) != 2 {
+		t.Fatal("joined noncontiguous instances", separated)
+	}
+}

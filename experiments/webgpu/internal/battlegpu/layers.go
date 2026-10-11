@@ -101,6 +101,9 @@ type Layers struct {
 	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
 	overlayRuns                                                                                 []layerDraw
 	effectLayers                                                                                [][]layerDraw
+	effectBytes                                                                                 [5][]byte
+	geometrySpans                                                                               []layerDraw
+	spriteBytes, overlayBytes                                                                   []byte
 	overlayVersion, effectVersion, fogGeneration                                                uint64
 	missing                                                                                     map[string]int
 }
@@ -586,18 +589,37 @@ func (l *Layers) layerGlowTexture() *wgpu.TextureView {
 	return l.terrainImage.v
 }
 
-func layerRuns(quads []meshscene.OverlayQuad, kind uint32) []layerDraw {
-	var out []layerDraw
+// Adjacent instances can share one draw only within the same ordered stream.
+// Snapshot and retained-model sentinels remain barriers even when not drawn.
+func layerAppendDraw(out []layerDraw, run layerDraw) []layerDraw {
+	if len(out) > 0 && run.count > 0 {
+		previous := &out[len(out)-1]
+		if previous.count > 0 && previous.kind == run.kind && previous.mode == run.mode && previous.first+previous.count == run.first {
+			previous.count += run.count
+			return out
+		}
+	}
+	return append(out, run)
+}
+func layerRunsInto(out []layerDraw, quads []meshscene.OverlayQuad, kind, base uint32) []layerDraw {
 	for at := 0; at < len(quads); {
 		mode := uint32(quads[at].Params[1])
 		end := at + 1
 		for end < len(quads) && uint32(quads[end].Params[1]) == mode {
 			end++
 		}
-		out = append(out, layerDraw{kind: kind, first: uint32(at), count: uint32(end - at), mode: mode})
+		out = layerAppendDraw(out, layerDraw{kind: kind, first: base + uint32(at), count: uint32(end - at), mode: mode})
 		at = end
 	}
 	return out
+}
+func layerRuns(quads []meshscene.OverlayQuad, kind uint32) []layerDraw {
+	return layerRunsInto(nil, quads, kind, 0)
+}
+func layerBytes(dst []byte, size int) []byte {
+	dst = slices.Grow(dst[:0], size)[:size]
+	clear(dst)
+	return dst
 }
 
 func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32, []uint32) {
@@ -730,7 +752,8 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if f.Composed {
 		l.featurePaintCount = len(f.Composition.FeatureSprites)
 	}
-	data := make([]byte, len(sprites)*96)
+	l.spriteBytes = layerBytes(l.spriteBytes, len(sprites)*96)
+	data := l.spriteBytes
 	for i, s := range sprites {
 		for j, v := range [][4]float32{s.Previous, s.Current, s.Rect, s.UV, s.Color, s.Params} {
 			layerVec(data, i*96+j*16, v)
@@ -769,11 +792,12 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return err
 		}
 	}
-	data = make([]byte, len(f.Overlay)*64)
+	l.overlayBytes = layerBytes(l.overlayBytes, len(f.Overlay)*64)
+	data = l.overlayBytes
 	for i, q := range f.Overlay {
 		layerPackQuad(data[i*64:], q, 1)
 	}
-	l.overlayRuns = layerRuns(f.Overlay, meshscene.EffectOpQuads)
+	l.overlayRuns = layerRunsInto(l.overlayRuns[:0], f.Overlay, meshscene.EffectOpQuads, 0)
 	changed, err = l.layerUpload(&l.overlayQuads, data, 64)
 	if err != nil {
 		return err
@@ -854,8 +878,8 @@ func layerSelectSmoke(lights []meshscene.RetainedLight, center [2]float32, exten
 }
 
 func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err error) {
-	l.effectLayers = l.effectLayers[:0]
-	var qb, vb, gb, sb, lb []byte
+	qb, vb, gb, sb, lb := l.effectBytes[0][:0], l.effectBytes[1][:0], l.effectBytes[2][:0], l.effectBytes[3][:0], l.effectBytes[4][:0]
+	defer func() { l.effectBytes = [5][]byte{qb, vb, gb, sb, lb} }()
 	if len(f.Lighting.Lights) > 64 {
 		return false, layerError("production lighting exceeds shared 64-source budget")
 	}
@@ -882,7 +906,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 		if len(stock.Glow.Vertices) > 0 && l.glowValues[2] == 0 {
 			l.missing["enhanced_glow"] = len(stock.Glow.Vertices) / 3
 		}
-		for _, src := range stock.Layers {
+		for layerIndex, src := range stock.Layers {
 			qbase, gbase, sbase := len(qb)/64, len(gb)/80, len(sb)/layerSmokeStride
 			for _, q := range src.Quads {
 				// The frozen prototype world attachment uses the surface format.
@@ -895,7 +919,9 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				qb = append(qb, make([]byte, 64)...)
 				layerPackQuad(qb[at:], q, scale)
 			}
-			spans := make([]layerDraw, len(src.Models))
+			l.geometrySpans = slices.Grow(l.geometrySpans[:0], len(src.Models))[:len(src.Models)]
+			clear(l.geometrySpans)
+			spans := l.geometrySpans
 			for i, m := range src.Models {
 				if m.Suppressed != "" {
 					l.missing["source_suppressed_geometry"]++
@@ -954,7 +980,10 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				}
 				binary.LittleEndian.PutUint32(sb[at+128:], count)
 			}
-			var ops []layerDraw
+			if layerIndex >= len(l.effectLayers) {
+				l.effectLayers = append(l.effectLayers, nil)
+			}
+			ops := l.effectLayers[layerIndex][:0]
 			l.missing["source_unsupported_effects"] += src.Counts.Unsupported
 			for _, op := range src.Ops {
 				bound := 0
@@ -979,10 +1008,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				}
 				switch op.Kind {
 				case meshscene.EffectOpQuads:
-					for _, run := range layerRuns(src.Quads[op.First:op.First+op.Count], op.Kind) {
-						run.first += uint32(qbase + op.First)
-						ops = append(ops, run)
-					}
+					ops = layerRunsInto(ops, src.Quads[op.First:op.First+op.Count], op.Kind, uint32(qbase+op.First))
 				case meshscene.EffectOpGeometry:
 					ops = append(ops, spans[op.First:op.First+op.Count]...)
 				case meshscene.EffectOpGround:
@@ -996,13 +1022,20 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				case meshscene.EffectOpSmoke:
 					ops = append(ops, layerDraw{kind: op.Kind, first: uint32(sbase + op.First), count: uint32(op.Count)})
 				case meshscene.EffectOpLens:
+					ops = append(ops, layerDraw{kind: op.Kind})
 					l.missing["lens_snapshot"] += op.Count
 				case meshscene.EffectOpRetainedModel:
+					ops = append(ops, layerDraw{kind: op.Kind})
 					l.missing["retained_projectile_marker_order"] += op.Count
 				}
 			}
-			l.effectLayers = append(l.effectLayers, ops)
+			l.effectLayers[layerIndex] = ops
 		}
+	}
+	if stock == nil {
+		l.effectLayers = l.effectLayers[:0]
+	} else {
+		l.effectLayers = l.effectLayers[:len(stock.Layers)]
 	}
 	for _, item := range []struct {
 		dst  *layerBuffer

@@ -59,6 +59,7 @@ type Glow struct {
 	atlasVersion              uint64
 	completed                 *wgpu.TextureView // borrowed from Encode; never released
 	counts                    GlowCounters
+	vertexBytes               []byte
 }
 
 func glowError(expected string, args ...any) error {
@@ -89,6 +90,9 @@ func glowPackUniform(p meshscene.RetainedGlowParameters, width, height int) (out
 }
 
 func glowPackVertices(vertices []meshscene.RetainedGlowVertex) ([]byte, error) {
+	return glowPackVerticesInto(nil, vertices)
+}
+func glowPackVerticesInto(out []byte, vertices []meshscene.RetainedGlowVertex) ([]byte, error) {
 	// The host's metalVisuals adapter compacts the recorder's two triangles
 	// to corners 0,1,2,3 before publication. Preserve all four upload records;
 	// the vertex shader supplies their 0,1,2,1,2,3 draw topology.
@@ -107,7 +111,7 @@ func glowPackVertices(vertices []meshscene.RetainedGlowVertex) ([]byte, error) {
 	if unsupported > 0 {
 		return nil, glowError("solid/keyed/row-byte/halo operations, got %d unsupported source vertices", unsupported)
 	}
-	out := make([]byte, len(vertices)*glowVertexSize)
+	out = layerBytes(out, len(vertices)*glowVertexSize)
 	for i, v := range vertices {
 		for lane, value := range [3][4]float32{v.PositionUV, v.Color, v.Params} {
 			for j, x := range value {
@@ -311,7 +315,8 @@ func (g *Glow) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return nil
 	}
 	stock := f.StockEffects
-	data, err := glowPackVertices(stock.Glow.Vertices)
+	data, err := glowPackVerticesInto(g.vertexBytes, stock.Glow.Vertices)
+	g.vertexBytes = data
 	if err != nil {
 		return err
 	}
