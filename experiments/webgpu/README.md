@@ -128,3 +128,45 @@ Coplanar intentionally overlapping faces have no stable exact color contract at 
 Evidence: `/private/tmp/nanolathe-webgpu-20261010/qualify-go-{64,1000,3000,5000}.log` and `qualify-browser-{64,1000,3000,5000}.json`. Rust remains dependency-blocked; these results do not qualify it. Lifecycle and cadence remain P3/P4 gates.
 
 P2 review corrections: diagnostic readback now includes an untimed surface-format target through the same composite/overlay pipelines, exact background and cyan-overlay probes, and all unambiguous final interior colors. The extra diagnostic render is excluded from timing. Generation counters record one 400-byte-per-instance endpoint/instance upload followed by uniform-only 256-byte frames, with zero persistent creations. The resource tracker counts actual retain operations rather than assuming zero. Both hidden-endpoint directions and both tagging directions are exercised, and 170-to-minus-170 crosses the trigonometric slerp threshold. Native and Chrome alpha-.5 PNGs were visually reviewed: full grid, articulated tops/barrels, rotated/beveled textured boxes, first-cell overlap and cyan overlay are present; coplanar overlap and raster-edge differences remain explicitly outside exact-color comparisons. Captures are under `captures-go/` and `captures-browser/` beside the qualification logs.
+
+## P3 lifecycle (2026-10-10)
+
+Native Go and Chrome each completed ten 3k/200-triangle scene cycles at physical
+1920×1080. Real queue completion precedes Close. Each cycle returns the tracked
+32 objects / 26,724,848 bytes to zero. Native process RSS rose from 111.75 MB
+to 117.29 MB, Go live heap from about 3.63 to 3.72 MB; browser live Go heap
+from 3.175 to 3.187 MB. These short cycles do not prove a driver-memory plateau.
+Browser dedicated RSS is unavailable. Counts estimate renderer allocations,
+not device-wide memory. The browser queue observer measured at most two
+outstanding submits and zero completion handles after shutdown. Native fencing
+waits on the next callback after submission; browser fencing uses a microtask
+and the real onSubmittedWorkDone promise. Neither measures display time.
+
+Native resize to physical 1600×900 and focus loss/return passed with a reviewed
+capture. Fullscreen **failed**: at the exact GoGPU pin, the main-thread window
+method holds its mutex across the native fullscreen call. A synchronous resize
+delegate re-enters the same mutex and hangs. The preserved QUIT stack and
+pinned source establish this dependency failure. No source patch was adopted.
+The native P3 path stops here: DPI, minimize/restore and native loss remain
+unverified, and dependent native Go P4 timing is not run. Controls are serviced
+on the main-thread event source; an earlier render-callback UI misuse was fixed
+before this reproduction and is not attributed to the dependency.
+
+Browser resize visibly changed the canvas and rendering continued. The saved
+image named browser-fullscreen.png is **not** fullscreen evidence: it still
+shows the document chrome and small canvas. During subsequent hide/resume and
+zoom/stop checks, browser control became unavailable; reconnecting the owned
+tab also failed. Do not infer a GPU/browser deadlock from an automation failure.
+Fullscreen round trip, hide/resume, DPI and first-reflected-input timing for
+that interactive run remain unverified; no final report was recovered. Thus
+the browser P3 gate is incomplete and dependent P4 matrix timing stops too.
+P0 device.destroy/stop and fresh-session recreation, P2 captures and the
+separate ten-cycle completion report remain valid independent evidence.
+
+Artifacts: lifecycle-go.log, lifecycle-browser.json, lifecycle-ui-go.log,
+native-resize.png, browser-resize.png and browser-fullscreen.png under
+/private/tmp/nanolathe-webgpu-20261010. The screenshots were inspected; fixed
+fixture placement is cropped during resize rather than silently refitted.
+Interactive native: prebuilt probe-go -workload -frames=0 (R resize, F fullscreen,
+M minimize, Q close). Cycle checks: probe-go -workload -count=3000 -cycles=10
+-frames=0; browser ?workload=true&count=3000&cycles=10.

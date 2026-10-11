@@ -1,15 +1,16 @@
 "use strict";
-const report = {events:[], device:null, adapter:null, results:[], userAgent:navigator.userAgent, dpr:devicePixelRatio};
+const report = {events:[], device:null, adapter:null, results:[], submissions:[], maxOutstanding:0, completionHandles:0, userAgent:navigator.userAgent, dpr:devicePixelRatio};
 const completions = new Map(); let token = 0;
-let device;
+let device;let currentDraw=-1,currentInput=0,lastInput=null,outstanding=0;
 function log(kind, value){report.events.push({kind,value,at:performance.now()});document.querySelector('#report').textContent=JSON.stringify(report,null,2);}
 window.probeBridge = {
  lost:'', stop:false,
+ markEncoded(draw,input){currentDraw=draw;currentInput=input;},
  capture(name,data){const image=document.createElement('img');image.alt=name;image.src='data:image/png;base64,'+data;image.style.width='480px';document.querySelector('#captures').append(image);},
  beginCompletion(){const id=++token;device.queue.onSubmittedWorkDone().then(()=>completions.set(id,'done'),e=>completions.set(id,String(e)));return id;},
  beginFrameCompletion(){const id=++token;queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>completions.set(id,'done'),e=>completions.set(id,String(e))));return id;},
  completion(id){const value=completions.get(id);if(value!==undefined)completions.delete(id);return value;},
- publish(text){report.results.push(JSON.parse(text));log('finished',true);document.querySelector('#status').textContent='Smoke finished; inspect report.';},
+ publish(text){report.completionHandles=completions.size;report.results.push(JSON.parse(text));log('finished',true);document.querySelector('#status').textContent='Smoke finished; inspect report.';},
 };
 if(navigator.gpu){
  const request=navigator.gpu.requestAdapter.bind(navigator.gpu);
@@ -22,6 +23,8 @@ if(navigator.gpu){
    report.device={features:[...device.features],limits:Object.fromEntries(Object.getOwnPropertyNames(Object.getPrototypeOf(device.limits)).filter(k=>k!=='constructor').map(k=>[k,device.limits[k]]))};
    device.addEventListener('uncapturederror',e=>{probeBridge.lost='validation: '+e.error.message;log('uncaptured',e.error.message);});
    device.lost.then(info=>{probeBridge.lost=info.message||info.reason;log('device-lost',{reason:info.reason,message:info.message});});
+   const submit=device.queue.submit.bind(device.queue);
+   device.queue.submit=function(...args){const start=performance.now();submit(...args);const end=performance.now();const item={width:document.querySelector("canvas").width,height:document.querySelector("canvas").height,dpr:devicePixelRatio,draw:currentDraw,input:currentInput,submit_start_ms:start,submit_end_ms:end,submit_cpu_ms:end-start,completion_ms:null,input_to_submission_ms:lastInput&&currentInput>0?end-lastInput.timestamp:null};report.submissions.push(item);outstanding++;report.maxOutstanding=Math.max(report.maxOutstanding,outstanding);device.queue.onSubmittedWorkDone().then(()=>{item.completion_ms=performance.now();outstanding--;},e=>log('queue-completion-error',String(e)));};
    log('device-created',true);return device;
   };return adapter;
  };
@@ -34,7 +37,7 @@ document.querySelector('#resize').onclick=()=>{const c=document.querySelector('c
 document.querySelector('#loss').onclick=()=>device?.destroy();
 document.querySelector('#download').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));a.download='webgpu-browser-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0);};
 document.addEventListener('visibilitychange',()=>log('visibility',document.visibilityState));
-document.querySelector('canvas').addEventListener('keydown',e=>log('input',{key:e.key,timestamp:e.timeStamp}));
+document.querySelector('canvas').addEventListener('keydown',e=>{lastInput={key:e.key,timestamp:e.timeStamp};log('input',lastInput);});
 
 document.querySelector('#errors').onclick=async()=>{
  try{
@@ -51,3 +54,6 @@ document.querySelector('#errors').onclick=async()=>{
  }catch(e){log('diagnostics-error',String(e));}
 };
 document.querySelector('#stop').onclick=()=>{probeBridge.stop=true;};
+
+document.querySelector('#fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('canvas').requestFullscreen();log('fullscreen',!!document.fullscreenElement);}catch(e){log('fullscreen-error',String(e));}};
+document.addEventListener('fullscreenchange',()=>log('fullscreen-change',!!document.fullscreenElement));

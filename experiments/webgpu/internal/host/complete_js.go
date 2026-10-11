@@ -31,3 +31,7 @@ func Publish(report string) { js.Global().Get("probeBridge").Call("publish", rep
 func DeviceLost() string    { return js.Global().Get("probeBridge").Get("lost").String() }
 
 func StopRequested() bool { return js.Global().Get("probeBridge").Get("stop").Bool() }
+
+func MarkEncoded(draw int, input uint64) {
+	js.Global().Get("probeBridge").Call("markEncoded", draw, float64(input))
+}

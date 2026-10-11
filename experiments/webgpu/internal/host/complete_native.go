@@ -9,3 +9,5 @@ func Publish(report string)         {}
 func DeviceLost() string            { return "" }
 
 func StopRequested() bool { return false }
+
+func MarkEncoded(_ int, _ uint64) {}
