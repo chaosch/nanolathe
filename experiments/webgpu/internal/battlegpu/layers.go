@@ -111,6 +111,8 @@ type Layers struct {
 	effectBytes                                                                                 [5][]byte
 	geometrySpans                                                                               []layerDraw
 	spriteBytes, overlayBytes                                                                   []byte
+	orderedSprites                                                                              []meshscene.Sprite
+	upperSprites                                                                                []layerSpriteEntry
 	overlayVersion, effectVersion, fogGeneration                                                uint64
 	missing                                                                                     map[string]int
 }
@@ -636,14 +638,19 @@ func layerBytes(dst []byte, size int) []byte {
 	return dst
 }
 
+type layerSpriteEntry struct {
+	index int
+	depth float32
+}
+
 func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32, []uint32) {
-	var out []meshscene.Sprite
-	remap := make([]uint32, len(f.Sprites))
-	type layerSpriteEntry struct {
-		index int
-		depth float32
-	}
-	var upper []layerSpriteEntry
+	return new(Layers).layerOrderSprites(f)
+}
+func (l *Layers) layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32, []uint32) {
+	out := l.orderedSprites[:0]
+	remap := slices.Grow(l.spriteRemap[:0], len(f.Sprites))[:len(f.Sprites)]
+	clear(remap)
+	upper := l.upperSprites[:0]
 	for i, s := range f.Sprites {
 		// The stock recorder replaces fallback effects, rather than painting
 		// the older art adapter's approximation a second time.
@@ -667,6 +674,7 @@ func layerOrderSprites(f meshscene.LiveFrame) ([]meshscene.Sprite, [2][2]uint32,
 		remap[e.index] = uint32(len(out)) + 1
 		out = append(out, f.Sprites[e.index])
 	}
+	l.orderedSprites, l.upperSprites, l.spriteRemap = out, upper, remap
 	return out, [2][2]uint32{{0, ground}, {ground, uint32(len(out)) - ground}}, remap
 }
 
@@ -759,7 +767,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	for i, v := range [][4]float32{f.Water.Phase, f.Water.Mask, f.Water.Controls, f.Water.TerrainRect, f.Water.SampleRect} {
 		layerVec(l.uniformBytes[:], 160+i*16, v)
 	}
-	sprites, bands, remap := layerOrderSprites(f)
+	sprites, bands, remap := l.layerOrderSprites(f)
 	l.spriteBands = bands
 	l.spriteRemap = remap
 	l.featureSources, l.looseSpriteRuns = layerFeatureLayout(remap, bands, f.Composition.FeatureSprites)

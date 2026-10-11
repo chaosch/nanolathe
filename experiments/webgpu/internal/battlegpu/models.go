@@ -125,6 +125,7 @@ type Models struct {
 	mergeCapacities                                                                       [3]int
 	groupWork                                                                             modelGroupWork
 	copySlots                                                                             []uint32
+	packedSlots, shadowSlots, shadowPacked, inputSlots                                    []meshscene.ModelSlot
 	atlas                                                                                 modelAtlasResources
 	width, height, pieceCount                                                             int
 	generation                                                                            uint64
@@ -544,7 +545,10 @@ func (m *Models) modelGroup(layout *wgpu.BindGroupLayout, entries []wgpu.BindGro
 // modelPackSlots allocates every final subject independently, including Metal's
 // direct-slab slots. The experiment always resolves subjects in painter order.
 func modelPackSlots(input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
-	out := slices.Clone(input)
+	return modelPackSlotsInto(nil, input)
+}
+func modelPackSlotsInto(dst, input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
+	out := append(dst[:0], input...)
 	width := 2048
 	for _, s := range out {
 		if !modelFinite(s.Screen[0]+s.Screen[1]+s.Screen[2]+s.Screen[3]) || s.Screen[2] <= 0 || s.Screen[3] <= 0 || s.Screen[2] > 8192 || s.Screen[3] > 8192 {
@@ -797,7 +801,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	m.shadowCount = 0
 	inputSlots := f.Composition.Slots
 	if !f.Composed {
-		inputSlots = make([]meshscene.ModelSlot, len(f.Instances))
+		m.inputSlots = slices.Grow(m.inputSlots[:0], len(f.Instances))[:len(f.Instances)]
+		inputSlots = m.inputSlots
 		for i, in := range f.Instances {
 			opacity := in.Visual.State[1]
 			if in.Visual.State == [4]float32{} {
@@ -809,10 +814,11 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	// TODO(question): the producer exports no raw/resized cached-plane seed or
 	// cached→outline→live chronology. Immutable source rasters and ordered group
 	// merges below preserve only the coverage this retained mesh pass can supply.
-	slots, aw, ah, e := modelPackSlots(inputSlots)
+	slots, aw, ah, e := modelPackSlotsInto(m.packedSlots, inputSlots)
 	if e != nil {
 		return e
 	}
+	m.packedSlots = slots
 	m.slotBytes = modelBytes(m.slotBytes, max(modelSlotStride, len(slots)*modelSlotStride))
 	for i, s := range slots {
 		modelVec(m.slotBytes, i*48, s.Screen)
@@ -968,7 +974,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	// Shadow regions use the world viewport directly. Their union coverage is
 	// resolved per subject from a private vertical strip in the same page; this
 	// keeps ownership independent even when their world rectangles overlap.
-	shadowSlots := make([]meshscene.ModelSlot, len(f.Shadows.Subjects))
+	m.shadowSlots = slices.Grow(m.shadowSlots[:0], len(f.Shadows.Subjects))[:len(f.Shadows.Subjects)]
+	shadowSlots := m.shadowSlots
 	for i, s := range f.Shadows.Subjects {
 		r := s.Screen
 		if r[2] <= 0 || r[3] <= 0 {
@@ -976,10 +983,11 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 		shadowSlots[i] = meshscene.ModelSlot{Screen: r}
 	}
-	packed, sw, sh, e := modelPackSlots(shadowSlots)
+	packed, sw, sh, e := modelPackSlotsInto(m.shadowPacked, shadowSlots)
 	if e != nil {
 		return e
 	}
+	m.shadowPacked = packed
 	aw, ah = max(aw, sw), max(ah, sh)
 	for i, s := range packed {
 		if i < m.shadowCount {
