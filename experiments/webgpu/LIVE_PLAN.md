@@ -48,11 +48,16 @@ overlay.wgsl, layers_test.go only:
     (*Layers).Prepare(f meshscene.LiveFrame, width, height int) error
     (*Layers).DrawTerrain(pass *wgpu.RenderPassEncoder)
     (*Layers).DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32)
+    (*Layers).SetWorldTexture(view *wgpu.TextureView) // borrowed, rebind on resize
+    (*Layers).DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) // 0..4
+    (*Layers).Missing() map[string]int // explicit unsupported-operation counts
     (*Layers).DrawFog(pass *wgpu.RenderPassEncoder)
     (*Layers).DrawOverlay(pass *wgpu.RenderPassEncoder)
     (*Layers).Close()
     (*Layers).Counters() LayerCounters
 
+DrawFog renders a full-screen world copy with fog into a distinct output
+attachment, sampling the borrowed completed world texture; overlay follows.
 LayerCounters fields are Draws, Sprites, Overlay, UploadBytes int. Sprite phase
 0 means short ground features, 1 normal features/projectile effects. Preserve
 original terrain tile lookup/detail filtering, sprite color/alpha/additive,
