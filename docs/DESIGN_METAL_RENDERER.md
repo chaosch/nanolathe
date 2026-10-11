@@ -286,6 +286,11 @@ committed, so such a fixture needs an authored synthetic scene.
 
 ## 10. Limits and next work
 
+The [WebGPU implementation plan](PLAN_WEBGPU_RENDERER.md) stages an isolated
+GoGPU/WGSL prototype, quantitative acceptance and a later cross-platform host
+migration. Its first gate is evaluation only; it does not change this renderer's
+status or the production defaults.
+
 - **Becoming the macOS default** needs a host that owns the Mac window from
   launch: menus, the Nanolathe screen and unit viewer (which draw on
   Ebitengine images today), resizing and fullscreen, and more than one battle
