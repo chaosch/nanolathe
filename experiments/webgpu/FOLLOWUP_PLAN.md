@@ -169,3 +169,20 @@ build exactly. The prototype build-play tool now uses that qualified Go-only
 build configuration and records it in its external manifest. Metal remains an
 Apple native API reached through goffi; Go-only describes our binding/build,
 not a graphics driver implemented in Go. Production build/defaults are untouched.
+
+
+## Direct effects audit
+
+The direct-effect publisher reports QuadSpanFaces and SupersampleIgnored;
+the experimental fan executor now retains these exact omission counts. A
+two-chain mapper and a doubled subject raster remain executor units, using the
+original exported geometry. Whole-piece debris also lacks the BL2–BL4 local
+face-light response; source normals/heights are available, fragments have zero
+normals. The current Metal inspection lane shares this light gap, so it is a
+gap against the owning Modern design, not evidence of a regression from Metal.
+Suppressed subject-composition packets remain producer-limited.
+
+The former independent ground-decal seabed limitation was stale: current
+production promotes tagged static feature bodies/shadows, now implemented.
+Scorches/trails are dry-admitted or dry-clipped and wakes remain above water.
+No missing ground-decal promotion contract should be claimed.

@@ -959,6 +959,15 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				if len(m.Vertices)%3 != 0 {
 					return false, layerError("effect geometry must contain whole triangles")
 				}
+				// The retained direct-effect bridge explicitly reports these
+				// approximations (GPU design §11.2 and §17). Keep them visible
+				// until a subject raster and two-chain mapper consume the packet.
+				if m.QuadSpanFaces > 0 {
+					l.missing["direct_effect_quad_span_mapping"] += int(m.QuadSpanFaces)
+				}
+				if m.SupersampleIgnored {
+					l.missing["direct_effect_supersample"]++
+				}
 				spans[i] = layerDraw{kind: meshscene.EffectOpGeometry, first: uint32(len(vb) / 48), count: uint32(len(m.Vertices))}
 				for _, v := range m.Vertices {
 					v.PositionUV[0] *= scale
