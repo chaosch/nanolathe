@@ -116,7 +116,7 @@ func TestHashes(t *testing.T) {
 func TestInteriorColorUVAndDepthSamples(t *testing.T) {
 	w, _ := New(64, 200, 1920, 1080, "static")
 	r := Raster(w, w.Sample(0), 0)
-	for _, want := range []PixelSample{{100, 100, 1, [4]byte{255, 32, 16, 255}, .5000270356669128, true, false}, {116, 105, 1, [4]byte{255, 224, 32, 255}, .5000266190002461, true, false}, {80, 120, 1, [4]byte{255, 32, 16, 255}, .5000287716666211, true, false}, {115, 145, 1, [4]byte{255, 224, 32, 255}, .5000266883332879, true, false}, {280, 115, 0, [4]byte{0, 0, 0, 255}, 1, true, false}, {460, 100, 3, [4]byte{255, 224, 32, 255}, .5000270356669129, true, false}} {
+	for _, want := range []PixelSample{{747, 80, 5, [4]byte{16, 255, 64, 255}, .50003210499995454, true, false}, {753, 80, 5, [4]byte{255, 224, 32, 255}, .50003210499995454, true, false}, {777, 80, 5, [4]byte{255, 32, 16, 255}, .50003210499995443, true, false}, {786, 80, 5, [4]byte{32, 64, 255, 255}, .50003210499995443, true, false}, {100, 100, 1, [4]byte{255, 32, 16, 255}, .5000270356669128, true, false}, {116, 105, 1, [4]byte{255, 224, 32, 255}, .5000266190002461, true, false}, {80, 120, 1, [4]byte{255, 32, 16, 255}, .5000287716666211, true, false}, {115, 145, 1, [4]byte{255, 224, 32, 255}, .5000266883332879, true, false}, {280, 115, 0, [4]byte{0, 0, 0, 255}, 1, true, false}, {460, 100, 3, [4]byte{255, 224, 32, 255}, .5000270356669129, true, false}} {
 		got := r.Sample(want.X, want.Y)
 		if got.ID != want.ID || got.RGBA != want.RGBA || !got.Interior || math.Abs(got.Depth-want.Depth) > 1e-9 {
 			t.Fatalf("pixel got %+v want %+v", got, want)

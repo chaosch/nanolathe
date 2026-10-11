@@ -35,7 +35,7 @@ func New(count, detail, width, height int, mode string) (*Workload, error) {
 	if detail != 200 && detail != 500 {
 		return nil, fmt.Errorf("unsupported detail %d", detail)
 	}
-	if width < 64 || height < 64 {
+	if width <= 64 || height <= 64 {
 		return nil, fmt.Errorf("invalid physical extent")
 	}
 	if mode != "animated" && mode != "static" && mode != "camera" {

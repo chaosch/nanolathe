@@ -13,12 +13,12 @@ if(navigator.gpu){
  const request=navigator.gpu.requestAdapter.bind(navigator.gpu);
  navigator.gpu.requestAdapter=async function(...args){
   const adapter=await request(...args);if(!adapter)return adapter;
-  report.adapter={info:adapter.info,features:[...adapter.features]};
+  report.adapter={info:Object.fromEntries(["vendor","architecture","device","description","isFallbackAdapter"].map(k=>[k,adapter.info[k]])),features:[...adapter.features]};
   const create=adapter.requestDevice.bind(adapter);
   adapter.requestDevice=async function(...args){
    device=await create(...args);
    report.device={features:[...device.features],limits:Object.fromEntries(Object.getOwnPropertyNames(Object.getPrototypeOf(device.limits)).filter(k=>k!=='constructor').map(k=>[k,device.limits[k]]))};
-   device.addEventListener('uncapturederror',e=>log('uncaptured',e.error.message));
+   device.addEventListener('uncapturederror',e=>{probeBridge.lost='validation: '+e.error.message;log('uncaptured',e.error.message);});
    device.lost.then(info=>{probeBridge.lost=info.message||info.reason;log('device-lost',{reason:info.reason,message:info.message});});
    log('device-created',true);return device;
   };return adapter;
@@ -26,7 +26,7 @@ if(navigator.gpu){
 }else{document.querySelector('#status').textContent='WebGPU unavailable. Use a WebGPU-enabled desktop browser on localhost or HTTPS.';document.querySelector('#start').disabled=true;}
 document.querySelector('#start').onclick=async()=>{
  document.querySelector('#start').disabled=true;
- try{const go=new Go();go.argv=['webgpu-probe','-frames=0'];const result=await WebAssembly.instantiateStreaming(fetch('probe.wasm'),go.importObject);await go.run(result.instance);}catch(e){log('runtime-error',String(e));}
+ try{const go=new Go();const params=new URLSearchParams(location.search);go.argv=['webgpu-probe','-frames=0'];for(const key of ['workload','qualify','count','detail','frames','cycles','mode','width','height','measure'])if(params.has(key))go.argv.push('-'+key+'='+params.get(key));const result=await WebAssembly.instantiateStreaming(fetch('probe.wasm'),go.importObject);await go.run(result.instance);}catch(e){log('runtime-error',String(e));}
 };
 document.querySelector('#resize').onclick=()=>{const c=document.querySelector('canvas');c.style.width='480px';c.style.height='360px';window.dispatchEvent(new Event('resize'));log('resize-request',{css:[480,360]});};
 document.querySelector('#loss').onclick=()=>device?.destroy();

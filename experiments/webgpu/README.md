@@ -109,10 +109,20 @@ metadata, equal bases, near-identical rotations and the 170°→−170° short a
 Tests freeze primary workload mesh/texture/configuration/endpoints hashes.
 Before GPU implementation, static diagnostic pixels (100,100), (116,105),
 (80,120), (115,145), (280,115), (460,100) have frozen ID/RGBA/depth expectations.
-These test atlas quadrants, transparent background, mirrored mesh placement and
+These test atlas quadrants, opaque background, mirrored mesh placement and
 world projection; further animated interior samples use independent barycentric
 projection. GPU pose tolerance starts at absolute 1e-4.
 
 Adding the existing root scene types selects x/sys **v0.48.0** by MVS, with a
 local root replace. Root go.mod/go.sum remain unchanged; the final graph is
 recorded separately from the initial P0 graph.
+
+## P2 retained renderer (2026-10-10)
+
+The single embedded WGSL set implements 64-invocation rigid-pose compute, three indexed instanced mesh batches, nearest atlas/material shading, Depth32Float, two RGBA8 attachments, composite and overlay. Storage vertices are 48 bytes, poses 64, instances 16; uniforms have a 256-byte allocation with a 64-byte shader structure. Explicit groups fit the default core budget; no optional feature is requested. Encode borrows the host encoder/view and never finishes or submits it. Constructor static uploads and extent targets are separate; Close is idempotent and the host establishes completion first, including on partial construction failure.
+
+Native Go and Chrome 153 on this M3 Pro passed alpha 0/.25/.5/.75/1 readback at 64/1k/3k/5k and physical 1920x1080. The diagnostic adds equal bases, near-equal rotations, the 179-to-minus-179 short arc, either-endpoint hidden suppression, current shade, interpolated origin and both-tagged metadata. Maximum observed matrix error is below 1e-6 against the independently computed oracle (threshold 1e-4). Every large-workload identity has at least 110 pixels in these captures (required 16). The 64 fixture also checks more than 220 exact interior nearest colors and depth samples at each alpha.
+
+Coplanar intentionally overlapping faces have no stable exact color contract at float32 depth precision. The independent oracle identifies different-instance depth separations below 2e-7 and excludes those samples from exact color checks, preserving all unambiguous tests. This corrects a diagnostic-conditioning defect, not a shader or tolerance relaxation. The source contains a regression case and independently reviewed mirror samples. Native diagnostic copies require the public explicit texture-transition API; browser transitions are implicit. Depth-only attachments set stencil read-only so the pinned browser translation omits invalid stencil operations. The surface must be acquired before reading its final physical dimensions, because GoGPU updates browser DPR during lazy acquisition.
+
+Evidence: `/private/tmp/nanolathe-webgpu-20261010/qualify-go-{64,1000,3000,5000}.log` and `qualify-browser-{64,1000,3000,5000}.json`. Rust remains dependency-blocked; these results do not qualify it. Lifecycle and cadence remain P3/P4 gates.
