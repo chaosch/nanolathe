@@ -12,11 +12,12 @@ type RasterOracle struct {
 	texture []byte
 }
 type PixelSample struct {
-	X, Y     int
-	ID       uint32
-	RGBA     [4]byte
-	Depth    float64
-	Interior bool
+	X, Y           int
+	ID             uint32
+	RGBA           [4]byte
+	Depth          float64
+	Interior       bool
+	DepthAmbiguous bool
 }
 
 // Raster preprojects authored geometry. Barycentric sampling is independent of GPU packing.
@@ -38,6 +39,11 @@ func Raster(w *Workload, s Snapshot, alpha float32) *RasterOracle {
 }
 func (r *RasterOracle) Sample(x, y int) PixelSample {
 	sample := PixelSample{X: x, Y: y, RGBA: [4]byte{0, 0, 0, 255}, Depth: 1, Interior: true}
+	type hit struct {
+		depth float64
+		id    uint32
+	}
+	var hits []hit
 	px, py := float64(x)+.5, float64(y)+.5
 	for _, f := range r.faces {
 		a, b, c := f.corners[0], f.corners[1], f.corners[2]
@@ -52,6 +58,7 @@ func (r *RasterOracle) Sample(x, y int) PixelSample {
 			continue
 		}
 		depth := u*a.depth + v*b.depth + q*c.depth
+		hits = append(hits, hit{depth, f.id})
 		if depth >= sample.Depth {
 			continue
 		}
@@ -61,6 +68,11 @@ func (r *RasterOracle) Sample(x, y int) PixelSample {
 		sample.ID = f.id
 		sample.Depth = depth
 		sample.Interior = min(u, v, q) > .015
+	}
+	for _, h := range hits {
+		if h.id != sample.ID && math.Abs(h.depth-sample.Depth) < 2e-7 {
+			sample.DepthAmbiguous = true
+		}
 	}
 	return sample
 }
