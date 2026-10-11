@@ -213,3 +213,57 @@ before any dependent coverage, underwater or pipeline consolidation claim.
 Direct-effect ordinary quad/ground/smoke entries have the same separate audit
 issue; they are not corrected by fixing direct vertices alone. No native
 implicit argument slot is established by these findings.
+
+
+## Qualified follow-up boundary — 42aabae98
+
+The body ABI correction 2c1990137 passed its native comparison against the
+corrected direct-light build: final pixels, all 16 captured files and all eight
+state files are unchanged; native log is clean. Glow ABI 19432d8b5 and layer
+ABI 031be2393 each passed their own subsequent identical comparisons. All
+reachable layer/glow entries now use counted allocated capacities; emitted MSL
+checks establish no hidden render size argument and unchanged native indices.
+
+Direct-light constructor 45422ae27 first failed its native gate: the initial
+48-byte buffer could not satisfy the new 64-byte layout. The forward fix
+106716315 aligns that initial allocation. A natural coastal frame had zero
+observable light difference, so an opt-in authored facing/back/zero-normal
+fixture 6849c71b8 qualifies activity independently. Facing changed all 256
+interior pixels, with expected packed RGB codes 22/44/87 and one destination
+half-ULP tolerance; disabled, back and zero-normal outputs are exact. The first
+oracle omitted the fixture's 2.5-pixel unsheared Y separation; preserve that
+failed oracle alongside the corrected BL2–BL4 semantic oracle. Renderer and
+captures were unchanged. All eight state files match and logs are clean.
+
+The eight authored native model coverage cases passed on actual Apple M3 Pro
+Metal before and after the common pipeline: ungrouped/grouped, resolve bit 8
+off/on and opacity 1/.5. Every logical source/final RGBA8 byte and HDR output
+half channel/padding matched; no framework errors. This qualifies doubled
+coverage resolve, not retail integer span coverage or outline row blocks.
+
+Atlas sharing 7bd79d564 passed unchanged native pixels/captured files/state.
+Layers owns the exact StockFrame.Atlas upload; Glow borrows its current view
+after Layers.Prepare, and never releases it. Selected current texture descriptor
+payloads decreased by 67,108,864 bytes, from 808,942,241 to 741,833,377. This
+inventory excludes other owners and driver caches, and is not actual GPU heap
+usage. Selected tracked owners are zero after Close; no whole-driver leak claim.
+
+Common body/shadow commit pipeline 42aabae98 passed its separate unchanged
+pixel/plane/state native gate. Capacity partitions FirstInstance before either
+record load; no arithmetic, ordering or draw count change. Empty shadow storage
+contains one full 96-byte subject, also exercised by the actual no-shadow
+authored fixture. Clean Coast/Field comparison and independent review follow.
+
+
+## Final bounded handoff
+
+Final rendering candidate 42aabae98 and wording 6c7587764. Sequential matching
+Coast/Field runs completed; state files match across renderers. Common pipeline
+reduces Coast bytes/objects by 18.4%/21.6% against the same-fidelity predecessor.
+One-command cgo-disabled Great Divide test completed a Solar Collector and
+closed normally; ordinary camera key/wheel events were exercised. Read-only
+review and complete experiment checks pass. Actual root fast/retail scripts
+fail the architecture export/allowlist guard because it counts nested-module
+sources; required landing gates stay failed. Keep production/root/defaults
+unchanged and preserve the failed host/Rust/browser paths. Report and next
+bounded recommendations are in FOLLOWUP_REPORT.md; no M1–M5 or main merge.

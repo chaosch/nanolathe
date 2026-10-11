@@ -3,6 +3,10 @@
 Frozen P0–P4 result, per [the plan](../../docs/PLAN_WEBGPU_RENDERER.md). No production
 renderer, defaults or root module changes. Use `GOWORK=off` throughout.
 
+The current parity/allocation follow-up is documented in
+[FOLLOWUP_REPORT.md](FOLLOWUP_REPORT.md). The original overnight result below is
+historical; its cgo restriction and performance/fidelity snapshot are superseded.
+
 The later user-authorized overnight real-battle experiment is described in
 [LIVE_REPORT.md](LIVE_REPORT.md), including its one-command play test, matched
 measurements, fidelity gaps and failed gates. It preserves the P0–P4 dependency

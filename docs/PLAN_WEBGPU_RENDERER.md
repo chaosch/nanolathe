@@ -751,3 +751,14 @@ Suggested handoff message:
   context rounds measured independently, with unmatched passes and failed cadence
   rounds disclosed. Verdict: Promising with limits; bounded dependency/lifecycle
   follow-up required. Production/root module/defaults unchanged. No M1–M5 or landing.
+
+- 2026-10-11: user-authorized parity/allocation follow-up remains isolated on
+  webgpu-p0-p4. Exact pin and zero-cgo combined host retained. Native authored
+  doubled-coverage and direct-light gates pass; render-array ABI fixes, shared
+  effect/glow atlas and common body/shadow commit pipeline preserve actual
+  captured pixels/state. Final matching Coast/Field CPU/Modern/WebGPU results,
+  bridge allocation attribution, failed attempts and remaining parity/host
+  dependencies are in experiments/webgpu/FOLLOWUP_REPORT.md. Verdict remains
+  Promising with limits. Whole-tree scripts fail the architecture export guard's
+  nested-module census; no production guard/allowlist adjustment or landing.
+  No M1–M5 migration is started.

@@ -1,5 +1,9 @@
 # Windowed real-battle prototype — 2026-10-11
 
+Historical overnight snapshot at 36943a8c7. Current parity, cgo-disabled builds,
+allocation results and remaining gates are in [FOLLOWUP_REPORT.md](FOLLOWUP_REPORT.md).
+The one-command play tool builds the current branch.
+
 **Verdict: ready for a windowed macOS play test; retain the shipping Modern
 renderer.** The isolated GoGPU/WGSL prototype runs a real Great Divide skirmish
 against the existing Modern AI with working selection, orders and construction.
@@ -70,9 +74,11 @@ private native renderer import to the experiment and adds experimental selectors
 The application borrows GoGPU's device/queue/encoder/surface; it does not add a
 second simulation, gameplay policy or renderer selection to production.
 
-The combined host requires **CGO_ENABLED=1**. Its CGO-disabled path stops at a
-GoFFI/purego duplicate `_cgo_init` link failure. The independent CGO-enabled
-path builds and runs. The small P0–P4 harness remains buildable without cgo.
+The original combined host used **CGO_ENABLED=1** after its cgo-disabled
+link failed on duplicate runtime shims. The follow-up resolved coexistence
+with exact-pinned goffi’s documented `nofakecgo` tag: the current play tool
+builds and runs with **CGO_ENABLED=0**, without dependency substitution. The
+earlier link failure stays recorded as a failed attempt.
 Build manifests record overlay hashes, full module graph, source revision and
 binary SHA-256. Files authored here use existing MIT implementation contracts;
 no executable analysis or retail asset bytes are committed.
