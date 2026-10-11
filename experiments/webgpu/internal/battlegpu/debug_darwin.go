@@ -53,6 +53,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		suffix      string
 		png         bool
 	}{
+		{renderer.lenses.snapshot, renderer.lenses.textureWidth, renderer.lenses.textureHeight, 8, gputypes.TextureFormatRGBA16Float, ".lens-snapshot.rgba16f", false},
 		{renderer.reflections.color.t, renderer.reflections.width, renderer.reflections.height, 4, wgpu.TextureFormatRGBA8Unorm, ".reflection-color.png", true},
 		{renderer.reflections.soft.t, renderer.reflections.width, renderer.reflections.height, 4, wgpu.TextureFormatRGBA8Unorm, ".reflection-soft.png", true},
 		{renderer.reflections.flags.t, (renderer.reflections.width + 63) / 64, (renderer.reflections.height + 63) / 64, 4, gputypes.TextureFormatR32Uint, ".reflection-flags.r32u", false},

@@ -152,8 +152,11 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	delete(r.layers.missing, "water_reflections_and_model_refraction")
+	if f.Water.Mask[0] > 0 && f.Water.Controls[3] >= .5 {
+		r.layers.missing["model_water_reflection_and_mixed_budget"] = 1
+	}
 	if f.Water.Mask[3] > .5 {
-		r.layers.missing["model_water_reflection_refraction_and_seabed_promotion"] = 1
+		r.layers.missing["model_water_refraction_and_seabed_promotion"] = 1
 	}
 	if e := r.lenses.Prepare(f, width, height); e != nil {
 		return Counters{}, e

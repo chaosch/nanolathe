@@ -220,7 +220,7 @@ func (r *Lenses) targets(width, height int) error {
 	if r.snapshot != nil && r.textureWidth == width && r.textureHeight == height {
 		return nil
 	}
-	t, err := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: "battle-stock-lens-snapshot", Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: r.format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding})
+	t, err := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: "battle-stock-lens-snapshot", Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: r.format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopySrc})
 	if err != nil {
 		return err
 	}
