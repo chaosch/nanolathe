@@ -186,3 +186,30 @@ The former independent ground-decal seabed limitation was stale: current
 production promotes tagged static feature bodies/shadows, now implemented.
 Scorches/trails are dry-admitted or dry-clipped and wakes remain above water.
 No missing ground-decal promotion contract should be claimed.
+
+
+## Doubled body and render ABI follow-up
+
+The 5a729b790 native coastal run changed 287,199 final pixels, with all eight
+end-state files unchanged and every independent shadow plane byte-identical.
+Actual body source/final extents grew from 2048×2048 to 2048×8192. This is
+activity and isolation evidence, not exact hardware triangle coverage. An
+authored native fixture checks quarter coverage, color mean, top-left selection,
+group-final resolve and opacity once through the real retained executor.
+Hardware outline lines currently occupy half a native pixel; production native
+row blocks remain an explicit unresolved executor contract.
+
+The direct vertex ABI prerequisite at 1c536c755 passed its real native gate:
+zero changed final pixels; all diagnostic planes and eight state files match
+5a729b790 exactly; clean native log. Direct face lighting at 45422ae27 awaits
+its separate real native active-light gate.
+
+The emitted-MSL audit additionally found an unbound hidden runtime-array size
+argument in every body/solo-shadow entry of models.wgsl. The group merge,
+shadow projection and shadow commit modules already specialize capacities and
+have no hidden size operand. Fix body arrays from their actual owned buffer
+tiers as a bounded ABI prerequisite, preserve arithmetic, and native-qualify
+before any dependent coverage, underwater or pipeline consolidation claim.
+Direct-effect ordinary quad/ground/smoke entries have the same separate audit
+issue; they are not corrected by fixing direct vertices alone. No native
+implicit argument slot is established by these findings.
