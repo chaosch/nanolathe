@@ -34,7 +34,7 @@ var layerOverlayShader string
 const layerUniformSize = 240
 const layerSmokeStride = 144
 
-type LayerCounters struct{ Draws, Sprites, Overlay, UploadBytes int }
+type LayerCounters struct{ Draws, Sprites, SeabedSprites, Overlay, UploadBytes int }
 
 type layerTexture struct {
 	t    *wgpu.Texture
@@ -98,6 +98,7 @@ type Layers struct {
 	waterStep                                                                                   int
 	fogAtlasReady                                                                               bool
 	counts                                                                                      LayerCounters
+	seabed                                                                                      layerSeabed
 	spriteBands                                                                                 [2][2]uint32
 	spriteRemap                                                                                 []uint32 // original source -> packed instance plus one; zero means filtered
 	featureSources, featureDrawn                                                                []bool
@@ -440,10 +441,11 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	uniform := layerBufferEntry(0, stages, gputypes.BufferBindingTypeUniform, layerUniformSize)
 	var pl *wgpu.PipelineLayout
 	var shader *wgpu.ShaderModule
-	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false), layerTextureEntry(5, false), layerTextureEntry(6, false)})
+	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false), layerTextureEntry(5, false), layerTextureEntry(6, false), layerTextureEntry(7, false)})
 	if err != nil {
 		return
 	}
+	l.seabed.layout = pl
 	shader, err = l.layerModule(layerTerrainShader)
 	if err != nil {
 		return
@@ -534,7 +536,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
-	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: l.terrainImage.v}, {Binding: 6, TextureView: l.waterMask.v}})
+	err = l.layerBindTerrain()
 	if err != nil {
 		return
 	}
@@ -593,10 +595,7 @@ func (l *Layers) SetFields(glow, ground *wgpu.TextureView, glowValues, rect, val
 	}
 	if l.groundLightView != ground {
 		l.groundLightView = ground
-		if ground == nil {
-			ground = l.terrainImage.v
-		}
-		return l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: ground}, {Binding: 6, TextureView: l.waterMask.v}})
+		return l.layerBindTerrain()
 	}
 	return nil
 }
@@ -775,6 +774,9 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	l.featureSources, l.looseSpriteRuns = layerFeatureLayout(remap, bands, f.Composition.FeatureSprites)
 	l.featureDrawn = slices.Grow(l.featureDrawn[:0], len(remap))[:len(remap)]
 	clear(l.featureDrawn)
+	if err := l.layerPrepareSeabed(f, width, height); err != nil {
+		return err
+	}
 	l.featurePaintCount = 0
 	if f.Composed {
 		l.featurePaintCount = len(f.Composition.FeatureSprites)
@@ -1134,6 +1136,15 @@ func (l *Layers) DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 		l.DrawLooseSprites(pass, phase)
 		return
 	}
+	if l.seabed.encoded {
+		l.state.selectResources(pass, l.sprite, l.spriteGroup)
+		for _, span := range l.seabed.remaining[phase] {
+			pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: span.count, FirstInstance: span.first})
+			l.counts.Draws++
+			l.counts.Sprites += int(span.count)
+		}
+		return
+	}
 	s := l.spriteBands[phase]
 	if s[1] == 0 {
 		return
@@ -1300,7 +1311,7 @@ func (l *Layers) Close() {
 		return
 	}
 	l.closed = true
-	for _, g := range []*wgpu.BindGroup{l.terrainGroup, l.spriteGroup, l.annotationGroup, l.fogGroup, l.overlayGroup, l.effectGroup} {
+	for _, g := range []*wgpu.BindGroup{l.terrainGroup, l.spriteGroup, l.annotationGroup, l.fogGroup, l.overlayGroup, l.effectGroup, l.seabed.rawGroup} {
 		if g != nil {
 			g.Release()
 		}
@@ -1308,7 +1319,7 @@ func (l *Layers) Close() {
 	for _, b := range []*layerBuffer{&l.sprites, &l.annotations, &l.overlayQuads, &l.effectQuads, &l.effectVertices, &l.effectGround, &l.effectSmoke, &l.lights} {
 		b.close()
 	}
-	for _, t := range []*layerTexture{&l.terrainImage, &l.tileAtlas, &l.tileDetail, &l.lookup, &l.spriteAtlas, &l.spriteDetail, &l.fogAtlas, &l.waterMask, &l.overlayAtlas, &l.effectAtlas, &l.fogGrid} {
+	for _, t := range []*layerTexture{&l.terrainImage, &l.tileAtlas, &l.tileDetail, &l.lookup, &l.spriteAtlas, &l.spriteDetail, &l.fogAtlas, &l.waterMask, &l.overlayAtlas, &l.effectAtlas, &l.fogGrid, &l.seabed.target} {
 		t.close()
 	}
 	for i := len(l.owned) - 1; i >= 0; i-- {
