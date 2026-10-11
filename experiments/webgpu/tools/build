@@ -12,7 +12,8 @@ for name,target,tags in [('probe-go',{},[]),('probe-rust',{},['-tags','rust']),(
  print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=root,env=env|target,check=True)
 if sys.platform=='darwin':
  subprocess.run(['go','build','-p','2','-trimpath','-o',str(out/'metal-probe'),'./cmd/webgpu-metal'],cwd=root,env=env,check=True)
-for source in (root/'web').iterdir(): shutil.copy2(source,out/source.name)
+for source in (root/'web').iterdir():
+ if source.suffix!='.cjs': shutil.copy2(source,out/source.name)
 goroot=subprocess.check_output(['go','env','GOROOT'],text=True).strip()
 shutil.copy2(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js',out/'wasm_exec.js')
 (out/'modules.txt').write_bytes(subprocess.check_output(['go','list','-m','all'],cwd=root,env=env))

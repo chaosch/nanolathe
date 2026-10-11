@@ -6,6 +6,11 @@ bad=$(gofmt -l cmd internal)
 [ -z "$bad" ] || { echo "$bad"; exit 1; }
 go test -p 2 ./...
 go vet -p 2 ./...
+if command -v node >/dev/null 2>&1; then
+ node web/telemetry_test.cjs
+else
+ echo "SKIPPED: browser bookkeeping regressions require Node.js"
+fi
 output=$(mktemp -d)
 trap 'rm -rf "$output"' EXIT HUP INT TERM
 go build -p 2 -trimpath -o "$output/probe" ./cmd/webgpu-probe
