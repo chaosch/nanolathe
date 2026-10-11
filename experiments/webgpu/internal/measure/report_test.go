@@ -34,3 +34,14 @@ func TestCannotSubstitutePartialCPUWorkOrPhysicalSize(t *testing.T) {
 		t.Fatal("accepted CSS dimensions")
 	}
 }
+
+func TestUnavailableRefreshDoesNotClaimZeroLongGaps(t *testing.T) {
+	s := Summary([]Frame{{Index: 240}, {Index: 241, CallbackInterval: Number(17)}}, nil, 0)
+	if s["gaps_over_1_5_refresh_periods"] != (*int)(nil) || s["refresh_availability_reason"] == "" {
+		t.Fatal(s)
+	}
+	s = Summary([]Frame{{Index: 240}, {Index: 241, CallbackInterval: Number(17)}}, nil, 120)
+	if *s["gaps_over_1_5_refresh_periods"].(*int) != 1 {
+		t.Fatal(s)
+	}
+}

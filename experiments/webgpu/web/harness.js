@@ -34,7 +34,7 @@ if(navigator.gpu){
 }else{document.querySelector('#status').textContent='WebGPU unavailable. Use a WebGPU-enabled desktop browser on localhost or HTTPS.';document.querySelector('#start').disabled=true;}
 document.querySelector('#start').onclick=async()=>{
  document.querySelector('#start').disabled=true;
- try{const go=new Go();const params=new URLSearchParams(location.search);go.argv=['webgpu-probe','-frames=0'];for(const key of ['workload','qualify','count','detail','frames','cycles','mode','width','height','measure','physical-width','physical-height'])if(params.has(key))go.argv.push('-'+key+'='+params.get(key));const result=await WebAssembly.instantiateStreaming(fetch('probe.wasm'),go.importObject);await go.run(result.instance);}catch(e){log('runtime-error',String(e));}
+ try{const go=new Go();const params=new URLSearchParams(location.search);go.argv=['webgpu-probe','-frames=0'];for(const key of ['workload','qualify','count','detail','frames','cycles','mode','width','height','measure','physical-width','physical-height','refresh'])if(params.has(key))go.argv.push('-'+key+'='+params.get(key));const result=await WebAssembly.instantiateStreaming(fetch('probe.wasm'),go.importObject);await go.run(result.instance);}catch(e){log('runtime-error',String(e));}
 };
 document.querySelector('#resize').onclick=()=>{const c=document.querySelector('canvas');c.style.width='480px';c.style.height='360px';window.dispatchEvent(new Event('resize'));log('resize-request',{css:[480,360]});};
 document.querySelector('#loss').onclick=()=>device?.destroy();

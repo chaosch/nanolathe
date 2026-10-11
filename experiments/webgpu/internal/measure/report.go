@@ -34,12 +34,12 @@ func (v Value) text() string {
 }
 
 type Frame struct {
-	Index                                                                                                int    `json:"index"`
-	Generation                                                                                           uint64 `json:"generation"`
-	Prepare, Pack, Encode, Submit, RingWait, GPU, Completion, CallbackInterval, Presented, InputToSubmit Value
-	Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes, EndpointBytes, PersistentCreations     int
-	LiveResources                                                                                        int
-	LiveBytes                                                                                            uint64
+	Index                                                                                                              int    `json:"index"`
+	Generation                                                                                                         uint64 `json:"generation"`
+	Prepare, Pack, Encode, Submit, RingWait, FencePollCPU, GPU, Completion, CallbackInterval, Presented, InputToSubmit Value
+	Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes, EndpointBytes, PersistentCreations                   int
+	LiveResources                                                                                                      int
+	LiveBytes                                                                                                          uint64
 }
 type Stats struct {
 	Available          bool   `json:"available"`
@@ -50,6 +50,9 @@ type Stats struct {
 
 func Statistics(values []float64, reason string) Stats {
 	if len(values) == 0 {
+		if reason == "" {
+			reason = "no observations in this run"
+		}
 		return Stats{Reason: reason}
 	}
 	sorted := append([]float64(nil), values...)
@@ -67,6 +70,7 @@ var metrics = []struct {
 	{"cpu_encode_ms", func(f Frame) Value { return f.Encode }},
 	{"cpu_submit_ms", func(f Frame) Value { return f.Submit }},
 	{"ring_wait_ms", func(f Frame) Value { return f.RingWait }},
+	{"fence_poll_cpu_ms", func(f Frame) Value { return f.FencePollCPU }},
 	{"gpu_ms", func(f Frame) Value { return f.GPU }},
 	{"queue_completion_latency_ms", func(f Frame) Value { return f.Completion }},
 	{"callback_interval_ms", func(f Frame) Value { return f.CallbackInterval }},
@@ -169,7 +173,18 @@ func Summary(rows []Frame, reasons map[string]string, refreshHz float64) map[str
 			fps = &x
 		}
 	}
-	return map[string]any{"measured_draws": count, "required_draws": Measured, "protocol_complete": count == Measured, "metrics": stats, "scheduling_elapsed_seconds": elapsed, "scheduling_frames_per_second": fps, "gaps_over_1_5_refresh_periods": gaps, "gaps_over_50_ms": long, "refresh_hz": refreshHz, "peak_renderer_resource_count": peakCount, "peak_renderer_estimated_bytes": peakBytes, "persistent_creations": creates, "endpoint_upload_bytes": uploads, "actual_display_timing": nil, "actual_display_reason": "not supplied by GoGPU public context at the pinned source", "clock_policy": "CPU and callback clocks are observations; queue completion is not GPU execution or display"}
+	var refreshGaps, longGaps *int
+	if stats["callback_interval_ms"].Samples > 0 {
+		longGaps = &long
+		if refreshHz > 0 {
+			refreshGaps = &gaps
+		}
+	}
+	refreshReason := ""
+	if refreshHz <= 0 {
+		refreshReason = "verified refresh unavailable"
+	}
+	return map[string]any{"refresh_availability_reason": refreshReason, "measured_draws": count, "required_draws": Measured, "protocol_complete": count == Measured, "metrics": stats, "scheduling_elapsed_seconds": elapsed, "scheduling_frames_per_second": fps, "gaps_over_1_5_refresh_periods": refreshGaps, "gaps_over_50_ms": longGaps, "refresh_hz": refreshHz, "peak_renderer_resource_count": peakCount, "peak_renderer_estimated_bytes": peakBytes, "persistent_creations": creates, "endpoint_upload_bytes": uploads, "actual_display_timing": nil, "actual_display_reason": "not supplied by GoGPU public context at the pinned source", "clock_policy": "CPU and callback clocks are observations; queue completion is not GPU execution or display"}
 }
 func ValidateDimensions(actualW, actualH, wantW, wantH int) error {
 	if actualW != wantW || actualH != wantH {

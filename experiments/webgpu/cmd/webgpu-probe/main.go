@@ -302,7 +302,7 @@ func main() {
 			encodeMS := float64(time.Since(encodeStart).Nanoseconds()) / 1e6
 			if *measurement && failure == nil {
 				r := retained.Resources()
-				observations = append(observations, measure.Frame{Index: draws, Generation: sample.Generation, Prepare: measure.Number(prepareMS), Encode: measure.Number(encodeMS), RingWait: measure.Number(waitMS), CallbackInterval: interval, Draws: counters.Draws, Dispatches: counters.Dispatches, Instances: counters.Instances, Pieces: counters.Pieces, Triangles: counters.Triangles, UploadBytes: counters.UploadBytes, EndpointBytes: counters.EndpointBytes, PersistentCreations: counters.PersistentCreations, LiveResources: r.Count, LiveBytes: r.Bytes})
+				observations = append(observations, measure.Frame{Index: draws, Generation: sample.Generation, Prepare: measure.Number(prepareMS), Encode: measure.Number(encodeMS), FencePollCPU: measure.Number(waitMS), CallbackInterval: interval, Draws: counters.Draws, Dispatches: counters.Dispatches, Instances: counters.Instances, Pieces: counters.Pieces, Triangles: counters.Triangles, UploadBytes: counters.UploadBytes, EndpointBytes: counters.EndpointBytes, PersistentCreations: counters.PersistentCreations, LiveResources: r.Count, LiveBytes: r.Bytes})
 			}
 			if *qualify && failure == nil {
 				qualificationCounters = append(qualificationCounters, counters)
@@ -379,7 +379,7 @@ func main() {
 		failure = e
 	}
 	if *measurement && authored != nil {
-		reasons := map[string]string{"cpu_pack_ms": "packing and upload are included in encode; no independent observation", "cpu_submit_ms": "public borrowed context provides no native submit hook; browser raw queue records it separately", "cpu_work_ms": "requires separate packing/submission observations", "gpu_ms": "optional timestamps unavailable at default requested features", "queue_completion_latency_ms": "native public context has no submit timestamp; browser raw observer is separate", "presented_ms": "GoGPU context exposes no actual display timestamp", "input_to_submit_ms": "native unavailable; browser raw first-reflected event is separate"}
+		reasons := map[string]string{"ring_wait_ms": "fence_poll_cpu_ms measures CPU call duration; elapsed asynchronous ring wait is not independently observed", "cpu_pack_ms": "packing and upload are included in encode; no independent observation", "cpu_submit_ms": "public borrowed context provides no native submit hook; browser raw queue records it separately", "cpu_work_ms": "requires separate packing/submission observations", "gpu_ms": "optional timestamps unavailable at default requested features", "queue_completion_latency_ms": "native public context has no submit timestamp; browser raw observer is separate", "presented_ms": "GoGPU context exposes no actual display timestamp", "input_to_submit_ms": "native unavailable; browser raw first-reflected event is separate"}
 		summary := measure.Summary(observations, reasons, *refresh)
 		summary["cold_fixture_pipeline_targets_ms"] = coldMS
 		summary["go_allocated_bytes"] = nil
