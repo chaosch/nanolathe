@@ -125,7 +125,8 @@ fn modelShade(input:Out)->Fragment {
 fn modelOutline(input:Out)->Fragment {
  let i=instances[input.instance];let outline=select(i.outline,i.ruleOutline,i.counts.z>0u);if i.state.z<=0.0||outline.a<=0.0{discard;}
  if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
- let key=wrappedKey(input.key);var out:Fragment;out.color=vec4<f32>(outline.rgb*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
+ let key=wrappedKey(input.key);var color=outline.rgb;if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}
+ var out:Fragment;out.color=vec4<f32>(color*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
 }
 
 @fragment fn model_fragment(input:Out)->Fragment {return modelShade(input);}

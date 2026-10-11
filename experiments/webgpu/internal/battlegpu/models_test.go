@@ -196,3 +196,10 @@ func TestModelRetainedLightSelection(t *testing.T) {
 		t.Fatalf("equal-score order=%v", ids)
 	}
 }
+
+func TestModelOutlineUsesSelectedBluePalette(t *testing.T) {
+	at := strings.Index(modelBodyShader, "fn modelOutline(")
+	if at < 0 || !strings.Contains(modelBodyShader[at:], "if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}") {
+		t.Fatal("retained BLUE outline does not select the rule's palette row")
+	}
+}
