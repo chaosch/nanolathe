@@ -643,8 +643,10 @@ func (m *Models) modelGroup(layout *wgpu.BindGroupLayout, entries []wgpu.BindGro
 	return g, e
 }
 
-// modelPackSlots allocates every final subject independently, including Metal's
-// direct-slab slots. The experiment always resolves subjects in painter order.
+// modelPackSlots allocates immutable body sources and final subjects at 2x,
+// including Metal's direct-slab slots. Even extents/origins keep each native
+// pixel's four samples inside one subject (§17). Shadows use their exported
+// independent slots directly and never pass through this body packer.
 func modelPackSlots(input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
 	return modelPackSlotsInto(nil, input)
 }
@@ -652,17 +654,17 @@ func modelPackSlotsInto(dst, input []meshscene.ModelSlot) ([]meshscene.ModelSlot
 	out := append(dst[:0], input...)
 	width := 2048
 	for _, s := range out {
-		if !modelFinite(s.Screen[0]+s.Screen[1]+s.Screen[2]+s.Screen[3]) || s.Screen[2] <= 0 || s.Screen[3] <= 0 || s.Screen[2] > 8192 || s.Screen[3] > 8192 {
-			return nil, 0, 0, modelError("finite positive subject rectangles within atlas dimensions")
+		if !modelFinite(s.Screen[0]+s.Screen[1]+s.Screen[2]+s.Screen[3]) || s.Screen[2] <= 0 || s.Screen[3] <= 0 || s.Screen[2] > 4096 || s.Screen[3] > 4096 {
+			return nil, 0, 0, modelError("finite positive body rectangles within doubled core atlas dimensions")
 		}
-		for width < int(math.Ceil(float64(s.Screen[2]))) {
+		for width < 2*int(math.Ceil(float64(s.Screen[2]))) {
 			width *= 2
 		}
 	}
 	for {
 		x, y, row := 0, 0, 0
 		for i := range out {
-			w, h := int(math.Ceil(float64(out[i].Screen[2]))), int(math.Ceil(float64(out[i].Screen[3])))
+			w, h := 2*int(math.Ceil(float64(out[i].Screen[2]))), 2*int(math.Ceil(float64(out[i].Screen[3])))
 			if x+w > width {
 				x, y, row = 0, y+row, 0
 			}
@@ -675,7 +677,7 @@ func modelPackSlotsInto(dst, input []meshscene.ModelSlot) ([]meshscene.ModelSlot
 			return out, width, height, nil
 		}
 		if width >= 8192 {
-			return nil, 0, 0, modelError("all isolated model slots fitting an 8192-square atlas")
+			return nil, 0, 0, modelError("all isolated doubled body slots fitting an 8192-square atlas")
 		}
 		width *= 2
 	}
