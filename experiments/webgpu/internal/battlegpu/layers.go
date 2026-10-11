@@ -15,7 +15,12 @@ import (
 )
 
 //go:embed terrain.wgsl
-var layerTerrainShader string
+var layerTerrainSource string
+
+//go:embed water.wgsl
+var layerWaterSource string
+
+var layerTerrainShader = layerTerrainSource + "\n" + layerWaterSource
 
 //go:embed sprites.wgsl
 var layerSpriteShader string
@@ -26,7 +31,7 @@ var layerFogShader string
 //go:embed overlay.wgsl
 var layerOverlayShader string
 
-const layerUniformSize = 160
+const layerUniformSize = 240
 const layerSmokeStride = 144
 
 type LayerCounters struct{ Draws, Sprites, Overlay, UploadBytes int }
@@ -430,7 +435,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	uniform := layerBufferEntry(0, stages, gputypes.BufferBindingTypeUniform, layerUniformSize)
 	var pl *wgpu.PipelineLayout
 	var shader *wgpu.ShaderModule
-	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false), layerTextureEntry(5, false)})
+	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false), layerTextureEntry(5, false), layerTextureEntry(6, false)})
 	if err != nil {
 		return
 	}
@@ -524,7 +529,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
-	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: l.terrainImage.v}})
+	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: l.terrainImage.v}, {Binding: 6, TextureView: l.waterMask.v}})
 	if err != nil {
 		return
 	}
@@ -586,7 +591,7 @@ func (l *Layers) SetFields(glow, ground *wgpu.TextureView, glowValues, rect, val
 		if ground == nil {
 			ground = l.terrainImage.v
 		}
-		return l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: ground}})
+		return l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: ground}, {Binding: 6, TextureView: l.waterMask.v}})
 	}
 	return nil
 }
@@ -750,6 +755,9 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	layerVec(l.uniformBytes[:], 112, l.glowValues)
 	layerVec(l.uniformBytes[:], 128, l.groundLightRect)
 	layerVec(l.uniformBytes[:], 144, l.groundLightValues)
+	for i, v := range [][4]float32{f.Water.Phase, f.Water.Mask, f.Water.Controls, f.Water.TerrainRect, f.Water.SampleRect} {
+		layerVec(l.uniformBytes[:], 160+i*16, v)
+	}
 	sprites, bands, remap := layerOrderSprites(f)
 	l.spriteBands = bands
 	l.spriteRemap = remap
@@ -839,7 +847,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		l.missing["feature_subject_painter_order"] = l.featurePaintCount
 	}
 	if f.Water.Mask[3] > .5 && f.Water.Controls[3] > .5 {
-		l.missing["water_surface_reflections"] = 1
+		l.missing["water_reflections_and_model_refraction"] = 1
 	}
 	for _, light := range f.Lighting.Lights {
 		if light.Flags[1] != 0 && light.ColorGroundGain[3] > 0 && l.groundLightValues[2] == 0 {

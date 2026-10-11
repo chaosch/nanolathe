@@ -201,7 +201,7 @@ func TestLayerQuadScaleLeavesArtAndBlendOperands(t *testing.T) {
 			}
 		}
 	}
-	if layerUniformSize != 10*16 || layerSmokeStride != 9*16 {
+	if layerUniformSize != 15*16 || layerSmokeStride != 9*16 {
 		t.Fatal("WGSL aligned vector strides changed")
 	}
 }

@@ -1,6 +1,7 @@
 struct LayerUniform {
  camera:vec4<f32>, viewport:vec4<f32>, rect:vec4<f32>, fogRect:vec4<f32>,
  tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>, glow:vec4<f32>, lightRect:vec4<f32>, lightValues:vec4<f32>,
+ waterPhase:vec4<f32>, waterMask:vec4<f32>, waterControls:vec4<f32>, waterTerrain:vec4<f32>, waterSample:vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
 @group(0) @binding(1) var layerWorld:texture_2d<f32>;
