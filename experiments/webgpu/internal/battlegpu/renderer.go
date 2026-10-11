@@ -21,6 +21,7 @@ type Renderer struct {
 	worldView, depthView *wgpu.TextureView
 	width, height        int
 	paint                []battlePaint
+	paintState           battleRenderState
 }
 type Counters struct {
 	Models      ModelCounters
@@ -46,6 +47,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	if err == nil {
 		r.layers.SetFeaturePaintOrder(true)
 		r.layers.projectilePaintOrder = true
+		r.layers.state = &r.paintState
 	}
 	if err == nil {
 		r.glow, err = NewGlow(d, q, scene)
@@ -140,6 +142,8 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e != nil {
 		return Counters{}, e
 	}
+	r.paintState.reset(pass)
+	defer r.paintState.reset(nil)
 	r.paint = battlePaintOrder(r.paint, f)
 	paintPhase := func(phase uint32) {
 		for _, p := range r.paint {
@@ -150,14 +154,16 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 				r.layers.DrawFeature(pass, p.source)
 			} else {
 				r.models.DrawShadowSlot(pass, p.slot)
+				r.paintState.reset(pass)
 				r.layers.DrawAnnotations(pass, p.slot)
 				r.models.DrawSlot(pass, p.slot)
+				r.paintState.reset(pass)
 			}
 		}
 	}
 	r.layers.DrawTerrain(pass)
 	drawEffects := func(layer uint32) {
-		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) })
+		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot); r.paintState.reset(pass) })
 	}
 	drawEffects(0)
 	r.layers.DrawLooseSprites(pass, 0)
@@ -184,6 +190,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	}
 	r.layers.DrawFog(final)
 	r.distortions.Draw(final)
+	r.paintState.reset(final)
 	r.layers.DrawOverlay(final)
 	if e := final.End(); e != nil {
 		return Counters{}, e

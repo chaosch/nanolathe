@@ -76,6 +76,7 @@ type Layers struct {
 	format, outputFormat                                                                        gputypes.TextureFormat
 	owned                                                                                       []func()
 	closed                                                                                      bool
+	state                                                                                       *battleRenderState
 	uniform                                                                                     *wgpu.Buffer
 	terrain, sprite, feature, annotation, fog                                                   *wgpu.RenderPipeline
 	overlay                                                                                     [2]*wgpu.RenderPipeline
@@ -1102,8 +1103,7 @@ func (l *Layers) DrawTerrain(pass *wgpu.RenderPassEncoder) {
 	if l.closed {
 		return
 	}
-	pass.SetPipeline(l.terrain)
-	pass.SetBindGroup(0, l.terrainGroup, nil)
+	l.state.selectResources(pass, l.terrain, l.terrainGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1})
 	l.counts.Draws++
 }
@@ -1119,8 +1119,7 @@ func (l *Layers) DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if s[1] == 0 {
 		return
 	}
-	pass.SetPipeline(l.sprite)
-	pass.SetBindGroup(0, l.spriteGroup, nil)
+	l.state.selectResources(pass, l.sprite, l.spriteGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: s[1], FirstInstance: s[0]})
 	l.counts.Draws++
 	l.counts.Sprites += int(s[1])
@@ -1139,8 +1138,7 @@ func (l *Layers) DrawFeature(pass *wgpu.RenderPassEncoder, originalSource uint32
 	if !ok {
 		return false
 	}
-	pass.SetPipeline(l.feature)
-	pass.SetBindGroup(0, l.spriteGroup, nil)
+	l.state.selectResources(pass, l.feature, l.spriteGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: packed})
 	l.counts.Draws++
 	l.counts.Sprites++
@@ -1153,8 +1151,7 @@ func (l *Layers) DrawLooseSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if l.closed || pass == nil || phase > 1 {
 		return
 	}
-	pass.SetPipeline(l.sprite)
-	pass.SetBindGroup(0, l.spriteGroup, nil)
+	l.state.selectResources(pass, l.sprite, l.spriteGroup)
 	for _, span := range l.looseSpriteRuns[phase] {
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: span.count, FirstInstance: span.first})
 		l.counts.Draws++
@@ -1173,8 +1170,7 @@ func (l *Layers) DrawAnnotations(pass *wgpu.RenderPassEncoder, originalSlot uint
 	if r[1] == 0 {
 		return
 	}
-	pass.SetPipeline(l.annotation)
-	pass.SetBindGroup(0, l.annotationGroup, nil)
+	l.state.selectResources(pass, l.annotation, l.annotationGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: r[1], FirstInstance: r[0]})
 	l.counts.Draws++
 }
@@ -1191,8 +1187,7 @@ func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, 
 	if l.closed || int(layer) >= len(l.effectLayers) {
 		return
 	}
-	pass.SetBindGroup(0, l.effectGroup, nil)
-	var selected *wgpu.RenderPipeline
+
 	for _, op := range l.effectLayers[layer] {
 		if op.kind == meshscene.EffectOpRetainedModel {
 			if op.mode == 0 && op.first != 0 && op.count != 0 {
@@ -1200,8 +1195,6 @@ func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, 
 					l.missing["retained_projectile_marker_order"]++
 				} else {
 					model(op.first)
-					selected = nil
-					pass.SetBindGroup(0, l.effectGroup, nil)
 				}
 			}
 			continue
@@ -1221,11 +1214,7 @@ func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, 
 		case meshscene.EffectOpSmoke:
 			p = l.smoke
 		}
-		// Cache only inside this barrier; intervening painters own their state.
-		if selected != p {
-			pass.SetPipeline(p)
-			selected = p
-		}
+		l.state.selectResources(pass, p, l.effectGroup)
 		args := gputypes.DrawArgs{VertexCount: 6, InstanceCount: op.count, FirstInstance: op.first}
 		if op.kind == meshscene.EffectOpGeometry {
 			args = gputypes.DrawArgs{VertexCount: op.count, InstanceCount: 1, FirstVertex: op.first}
@@ -1239,8 +1228,7 @@ func (l *Layers) DrawFog(pass *wgpu.RenderPassEncoder) {
 		l.missing["completed_world_texture"] = 1
 		return
 	}
-	pass.SetPipeline(l.fog)
-	pass.SetBindGroup(0, l.fogGroup, nil)
+	l.state.selectResources(pass, l.fog, l.fogGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
 	l.counts.Draws++
 }
@@ -1248,9 +1236,8 @@ func (l *Layers) DrawOverlay(pass *wgpu.RenderPassEncoder) {
 	if l.closed {
 		return
 	}
-	pass.SetBindGroup(0, l.overlayGroup, nil)
 	for _, op := range l.overlayRuns {
-		pass.SetPipeline(l.overlay[min(op.mode, 1)])
+		l.state.selectResources(pass, l.overlay[min(op.mode, 1)], l.overlayGroup)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: op.count, FirstInstance: op.first})
 		l.counts.Draws++
 		l.counts.Overlay += int(op.count)
