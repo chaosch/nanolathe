@@ -113,6 +113,8 @@ type Layers struct {
 	effectLayers                                                                                [][]layerDraw
 	effectBytes                                                                                 [5][]byte
 	geometrySpans                                                                               []layerDraw
+	directLayout                                                                                *wgpu.PipelineLayout
+	directCapacity                                                                              int
 	spriteBytes, overlayBytes                                                                   []byte
 	orderedSprites                                                                              []meshscene.Sprite
 	upperSprites                                                                                []layerSpriteEntry
@@ -484,7 +486,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
-	l.overlayLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerBufferEntry(1, stages, gputypes.BufferBindingTypeReadOnlyStorage, 64), layerBufferEntry(2, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 48), layerBufferEntry(3, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 80), layerBufferEntry(4, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, layerSmokeStride), layerBufferEntry(5, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 64), layerTextureEntry(6, false), layerTextureEntry(7, false), layerTextureEntry(8, false), layerTextureEntry(9, false)})
+	l.overlayLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerBufferEntry(1, stages, gputypes.BufferBindingTypeReadOnlyStorage, 64), layerBufferEntry(2, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, layerDirectVertexStride), layerBufferEntry(3, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 80), layerBufferEntry(4, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, layerSmokeStride), layerBufferEntry(5, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 64), layerTextureEntry(6, false), layerTextureEntry(7, false), layerTextureEntry(8, false), layerTextureEntry(9, false)})
 	if err != nil {
 		return
 	}
@@ -516,6 +518,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
+	l.directLayout, l.directCapacity = pl, 1
 	l.ground, err = l.layerPipeline(shader, pl, "layer_ground_vertex", "layer_ground_fragment", 0, 1)
 	if err != nil {
 		return
@@ -968,12 +971,12 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 				if m.SupersampleIgnored {
 					l.missing["direct_effect_supersample"]++
 				}
-				spans[i] = layerDraw{kind: meshscene.EffectOpGeometry, first: uint32(len(vb) / 48), count: uint32(len(m.Vertices))}
+				spans[i] = layerDraw{kind: meshscene.EffectOpGeometry, first: uint32(len(vb) / layerDirectVertexStride), count: uint32(len(m.Vertices))}
 				for _, v := range m.Vertices {
 					v.PositionUV[0] *= scale
 					v.PositionUV[1] *= scale
 					at := len(vb)
-					vb = append(vb, make([]byte, 48)...)
+					vb = append(vb, make([]byte, layerDirectVertexStride)...)
 					layerVec(vb, at, v.PositionUV)
 					layerVec(vb, at+16, v.Color)
 					layerVec(vb, at+32, v.Bounds)
@@ -1118,7 +1121,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 		dst  *layerBuffer
 		data []byte
 		min  int
-	}{{&l.effectQuads, qb, 64}, {&l.effectVertices, vb, 48}, {&l.effectGround, gb, 80}, {&l.effectSmoke, sb, layerSmokeStride}, {&l.lights, lb, 64}} {
+	}{{&l.effectQuads, qb, 64}, {&l.effectVertices, vb, layerDirectVertexStride}, {&l.effectGround, gb, 80}, {&l.effectSmoke, sb, layerSmokeStride}, {&l.lights, lb, 64}} {
 		var c bool
 		c, err = l.layerUpload(item.dst, item.data, item.min)
 		changed = changed || c
@@ -1126,6 +1129,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 			return
 		}
 	}
+	err = l.layerUpdateDirectPipeline()
 	return
 }
 
