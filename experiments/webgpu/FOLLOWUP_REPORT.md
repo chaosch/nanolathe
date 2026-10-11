@@ -402,3 +402,85 @@ Raw native captures, exact build manifests, profiles, state checks, failed and
 corrected oracles, commands and gate logs are preserved in the follow-up bundle.
 Retail debug source-art/topology JSON, retail instance/pose/slot arrays and
 binaries are excluded from the bundle. Only authored fixture arrays are included.
+
+
+## Continued optimization: resident-source batching (2026-10-11)
+
+The review found a local alternative to waiting for an upstream allocation
+fix. Main body/outline sources have separately packed, half-open atlas
+rectangles; they can be grouped by resident mesh without changing their final
+painter order. `modelbatch.go` rearranges whole original instance records after
+shadow cloning, retains group/pose/material identities and shadow suffixes,
+and makes one body and optional outline draw per mesh. Accepted aliased
+standalone source selectors fall back to the original source chronology.
+Carrier shadow bodies share slots: their sequence is retained, merging only
+adjacent same-mesh records with consecutive addresses. Standalone copy slots
+merge only consecutive selectors. Geometry, UVs, equations, endpoint cadence,
+world paint entries and resource lifetimes are unchanged. No optional GPU
+feature or additional binding is required.
+
+`NANOLATHE_WEBGPU_DISABLE_MODEL_BATCHING=1` supplies a matched reference.
+The authored native gate now verifies sixteen cases, including repeated meshes
+and per-instance translated poses. Both paths passed on Apple M3 Pro Metal:
+zero atlas/HDR mismatches; all 32 raw image files byte-identical. The real
+Coast runs, including a third run with render-state caching disabled, had
+byte-identical final PNG, source/key/merged atlas, world HDR, shadow body,
+height/depth, mask, pose and effect-field readbacks. Sixteen start/end state
+files and the intermediate fingerprint stream match. The original prefix
+intentionally changes physical order; the appended shadow-record suffix is
+byte-identical. This establishes equivalence to the current hardware-raster
+prototype, not retail integer-span parity.
+
+Matched runs are sequential, CGO_ENABLED=0, Go 1.27.1, GOMAXPROCS=2,
+Apple M3 Pro, macOS 26.6.2, seed 7, physical 1920×1080/DPR2,
+240 warmup + 720 measured draws and standard profiles. Coast uses v5 Expanded
+Confluence, pre-tick 300, final tick 540: 320 units/281 visible, 406 retained
+instances, 3692 pieces and 51551 triangles. Field uses Town & Country,
+pre-tick 1200, three 1000-unit armies; final tick 1440 has 2600 units/349 visible,
+784 retained instances, 7301 pieces and 68512 triangles. Cadence is callback
+start-to-start, excluding the first sample; quantiles select floor(p·(n−1)).
+It is not GPU execution or native presentation timing.
+
+| Case | Model draws in final frame | MB/draw | Objects/draw | Mean host draws/s | p50/p95/p99 cadence ms |
+|---|---:|---:|---:|---:|---|
+| Coast reference |1805|2.300|61634|100.34|8.90/14.42/15.61|
+| Coast batched |1102|2.023|55284|101.94|8.72/14.46/15.08|
+| Field,3000 initially staged, batched |1377|1.781|46806|74.97|10.27/24.13/25.70|
+
+Coast encode mean/p95 is 2.776/3.169 ms reference and 2.586/2.989 ms
+batched. Field source preparation mean/p95/p99 is 7.964/20.122/21.189 ms;
+encode 3.136/3.926/5.004 ms; completion wait 1.240/4.161/5.503 ms. Its CPU
+profile attributes 44.77% cumulative samples to `metalBenchmarkSource.Next`,
+19.31% to the simulation/viewer step and 14.39% to `metalVisuals.Prepare`;
+these overlap and are not sums. The source includes simulation, visual
+recording and packing: it is not GPU rendering time or an upstream blocker.
+
+The per-frame `driver_darwin.go` WaitIdle is a runtime boundary, not merely a
+qualification readback artifact. It precedes mutable buffer writes on every
+ordinary draw. On this pin, Metal Queue.WriteBuffer immediately copies into
+shared memory, and atlas/growing bind-group replacements release old resources
+at Prepare. Removing the wait without a completion-aware resource ring risks
+writes/releases while prior GPU work still reads those resources. Resize and
+final readback additionally require their own completion boundaries.
+
+A steady 120 Hz draw cadence is not established. The practical next architecture
+unit is a CPU source owner publishing detached committed frame packets plus a
+bounded GPU mutable-resource ring; draw-time alpha/pose interpolation must not
+block on authoritative simulation or overwrite in-flight records. Preserve
+ordered carrier/group/world composition and the current 30 Hz simulation
+contract. Resource ring depth and latest-packet reuse need separate lifecycle
+and timing qualification before the wait can be removed.
+
+The body batching code is portable Go/WGSL and keeps normalized UV attributes
+resident. The real-game command/host remains macOS-only. Linux/Vulkan,
+Windows/DX12 and browser WebGPU need host/input/lifecycle integration and real
+runtime qualification; cross-compilation alone does not deliver those hosts.
+Browser optional compute/indirect/bundles cannot become baseline assumptions.
+
+Evidence: `/private/tmp/nanolathe-modelbatch-coverage-native-{on,off}`,
+`nanolathe-modelbatch-coast-{off,on,nocache}`,
+`nanolathe-modelbatch-field3000-on`, matched `*-debug.json.*` native fields,
+and `/private/tmp/nanolathe-modelbatch-build/build-manifest.json`. The sandbox
+attempt selected Empty/software and is explicitly failed; only the native
+Metal gate counts as qualification. Root/default module and shipping renderer
+remain unchanged. No push, merge, deployment or upstream issue was performed.

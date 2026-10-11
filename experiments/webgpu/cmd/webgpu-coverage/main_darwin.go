@@ -29,6 +29,7 @@ type qualificationReport struct {
 	Completed       int                  `json:"completed_cases"`
 	Expected        int                  `json:"expected_cases"`
 	OutputSize      [2]int               `json:"output_size"`
+	SourceBatching  bool                 `json:"source_batching"`
 	WorldFormat     string               `json:"world_format"`
 	Backend         string               `json:"backend"`
 	Adapter         gputypes.AdapterInfo `json:"adapter"`
@@ -42,6 +43,7 @@ type qualificationReport struct {
 func main() {
 	runtime.LockOSThread()
 	out := flag.String("out", "", "new outside-repository directory for raw native pixels and result.json")
+	disableBatching := flag.Bool("disable-model-batching", false, "retain the original per-source draw sequence for native A/B qualification")
 	timeout := flag.Duration("timeout", 30*time.Second, "whole-process watchdog; stalled initialization/completion is a failure")
 	flag.Parse()
 	if *timeout <= 0 {
@@ -63,7 +65,7 @@ func main() {
 		os.Exit(1)
 	})
 	defer watchdog.Stop()
-	report, runError := runQualification(directory)
+	report, runError := runQualification(directory, !*disableBatching)
 	if runError != nil {
 		report.Failure = runError.Error()
 	}
@@ -130,8 +132,8 @@ func prepareOutput(path string) (string, error) {
 	return abs, nil
 }
 
-func runQualification(out string) (report qualificationReport, failure error) {
-	report = qualificationReport{Expected: len(coverageCases()), OutputSize: [2]int{fixtureWidth, fixtureHeight},
+func runQualification(out string, batching bool) (report qualificationReport, failure error) {
+	report = qualificationReport{SourceBatching: batching, Expected: len(coverageCases()), OutputSize: [2]int{fixtureWidth, fixtureHeight},
 		WorldFormat: "RGBA16Float", Scope: "authored native hardware raster and retained model resolve; no retail span-raster, timing or scanout claim"}
 	logErrors := &errorRecords{}
 	logger := slog.New(errorHandler{base: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}), errors: logErrors})
@@ -187,6 +189,7 @@ func runQualification(out string) (report qualificationReport, failure error) {
 			}
 			models, failure = battlegpu.NewModels(d, provider.Queue(), gputypes.TextureFormatRGBA16Float, coverageScene())
 			if failure == nil {
+				models.SetSourceBatching(batching)
 				target, failure = newFixtureTarget(d)
 			}
 			if failure != nil {

@@ -133,6 +133,8 @@ type Models struct {
 	generation                                                                  uint64
 	poseBytes, instanceBytes, selectedBytes, lightBytes, slotBytes, shadowBytes []byte
 	draws, shadowDraws                                                          []modelDraw
+	batchWork                                                                   modelBatchWork
+	disableModelBatching                                                        bool
 	paint                                                                       []modelPaint
 	shadowPaint                                                                 []modelShadowPaint
 	shadowCount                                                                 int
@@ -997,6 +999,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareShadowSources(f); e != nil {
 		return e
 	}
+	m.modelBatchSources(f)
 	if e = m.modelResizeAtlas(aw, ah); e != nil {
 		return e
 	}
@@ -1137,26 +1140,53 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	}
 	pass.SetBindGroup(0, m.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
-	var selected *wgpu.RenderPipeline
-	for _, d := range m.draws {
-		mesh := m.meshes[d.mesh]
-		if mesh.count == 0 {
-			continue
-		}
-		if mesh.edgeCount > 0 && d.outline {
-			if m.state == nil || m.state.disabled || selected != m.outlinePipeline {
-				pass.SetPipeline(m.outlinePipeline)
-				selected = m.outlinePipeline
+	if m.batchWork.independent {
+		for first := 0; first < len(m.draws); {
+			end := modelDrawRun(m.draws, first, false, true)
+			mesh := m.meshes[m.draws[first].mesh]
+			if mesh.count != 0 {
+				// Outlined records precede ordinary records within this mesh.
+				// Distinct half-open atlas rectangles make cross-source order
+				// immaterial, while each source still gets outline then body.
+				outlines := first
+				for outlines < end && m.draws[outlines].outline {
+					outlines++
+				}
+				if mesh.edgeCount > 0 && outlines > first {
+					pass.SetPipeline(m.outlinePipeline)
+					pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: uint32(outlines - first), FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: m.draws[first].instance})
+					m.counters.Draws++
+				}
+				pass.SetPipeline(m.bodyPipeline)
+				pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: m.draws[first].instance})
+				m.counters.Draws++
 			}
-			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: d.instance})
+			first = end
+		}
+	} else {
+		// Diagnostic unbatched mode and accepted aliased standalone sources
+		// retain their original outline/body chronology.
+		var selected *wgpu.RenderPipeline
+		for _, d := range m.draws {
+			mesh := m.meshes[d.mesh]
+			if mesh.count == 0 {
+				continue
+			}
+			if mesh.edgeCount > 0 && d.outline {
+				if m.state == nil || m.state.disabled || selected != m.outlinePipeline {
+					pass.SetPipeline(m.outlinePipeline)
+					selected = m.outlinePipeline
+				}
+				pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: d.instance})
+				m.counters.Draws++
+			}
+			if m.state == nil || m.state.disabled || selected != m.bodyPipeline {
+				pass.SetPipeline(m.bodyPipeline)
+				selected = m.bodyPipeline
+			}
+			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: d.instance})
 			m.counters.Draws++
 		}
-		if m.state == nil || m.state.disabled || selected != m.bodyPipeline {
-			pass.SetPipeline(m.bodyPipeline)
-			selected = m.bodyPipeline
-		}
-		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: d.instance})
-		m.counters.Draws++
 	}
 	e = pass.End()
 	if e != nil {
@@ -1169,9 +1199,11 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		}
 		pass.SetBindGroup(0, m.atlas.mergeGroup, nil)
 		pass.SetPipeline(m.copyPipeline)
-		for _, slot := range m.copySlots {
-			pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
+		for first := 0; first < len(m.copySlots); {
+			end := modelSlotRun(m.copySlots, first, !m.disableModelBatching)
+			pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(end - first), FirstInstance: m.copySlots[first] - 1})
 			m.counters.Draws++
+			first = end
 		}
 		pass.SetPipeline(m.mergePipeline)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.groupWork.count)})

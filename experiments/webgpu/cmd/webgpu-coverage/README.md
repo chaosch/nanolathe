@@ -35,7 +35,11 @@ strictly away from every authored triangle edge:
 | `(6,2)` | BR blue, other three clear | `(0,0,0.25,0.25)` | `(0,0,0,0)` |
 
 Values are premultiplied RGBA. Four source-only cases and four retained-group
-cases cover both switches and opacity one/one-half. A half-opacity case halves
+cases cover both switches and opacity one/one-half. Eight additional cases
+repeat mesh order A,B,A,A,B with separate translated poses and source slots,
+exercising actual instanced draws, nonzero first-instance and base-vertex
+offsets. The HDR output is 12×8. `-disable-model-batching` selects the original
+per-source path for native A/B qualification. A half-opacity case halves
 the world values once while every source/final atlas texel stays unchanged.
 Groups have independent immutable member source slots 4–6 and reserved final
 slots 1–3; only the three final slots are committed. `DebugResources` exposes
@@ -43,7 +47,7 @@ the source atlas without groups and the merged final atlas with groups.
 
 Each case submits through the framework, polls `host.FrameFence` in a later
 callback, maps both readbacks, and checks every logical atlas byte and every HDR
-channel including clear padding around the three world pixels. Only then may
+channel including clear padding around the three or five world pixels. Only then may
 the next case call `Prepare` or reuse render targets. Texture-to-buffer copies
 are the last texture uses in that encoder. The acquired surface is never read.
 The command never finishes or submits the borrowed encoder itself.

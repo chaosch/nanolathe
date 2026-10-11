@@ -67,7 +67,7 @@ func TestFixtureProjectionAndFinalOpacity(t *testing.T) {
 			}
 			if c.Grouped {
 				source := f.Composition.InstanceSlots[i]
-				if source != uint32(i+4) || f.Composition.Slots[source-1].Params[0] != 1 ||
+				if source != uint32(i+len(f.Instances)+1) || f.Composition.Slots[source-1].Params[0] != 1 ||
 					f.Composition.Groups[i].FinalSlot != uint32(i+1) || f.Composition.Paint[i].Slot != uint32(i+1) {
 					t.Fatal("source and final selectors or opacity are not independent")
 				}
@@ -79,7 +79,7 @@ func TestFixtureProjectionAndFinalOpacity(t *testing.T) {
 				colors[1] != [4]float32{c.Opacity / 2, 0, c.Opacity / 2, c.Opacity} {
 				t.Fatal("quarter coverage, red/blue mean or once-only opacity changed")
 			}
-		} else if colors[0] != [4]float32{c.Opacity, 0, 0, c.Opacity} || colors[2] != [4]float32{} {
+		} else if colors[0] != [4]float32{c.Opacity, 0, 0, c.Opacity} || !c.Repeated && colors[2] != [4]float32{} {
 			t.Fatal("supersample-off must read the top-left, not any covered texel")
 		}
 	}
@@ -91,7 +91,7 @@ func authoredPixels(c coverageCase) ([]slotRecord, []byte, []byte) {
 		slots[i] = slotRecord{Atlas: [4]float32{float32(i * 2), 0, 2, 2}}
 	}
 	atlas := make([]byte, 256*2)
-	for i, block := range atlasBlocks() {
+	for i, block := range c.blocks() {
 		for j, color := range block {
 			copy(atlas[(j/2)*256+(i*2+j%2)*4:], color[:])
 		}
@@ -111,7 +111,7 @@ func authoredPixels(c coverageCase) ([]slotRecord, []byte, []byte) {
 func TestPixelComparatorRejectsStaleEmptyAndWrongResolve(t *testing.T) {
 	for _, c := range coverageCases() {
 		slots, atlas, world := authoredPixels(c)
-		result, err := comparePixels(c, slots, atlas, 16, 2, 256, world, 256)
+		result, err := comparePixels(c, slots, atlas, 24, 2, 256, world, 256)
 		if err != nil || !result.Passed {
 			t.Fatalf("authored expected %s: %+v %v", c.Name, result, err)
 		}
@@ -127,7 +127,7 @@ func TestPixelComparatorRejectsStaleEmptyAndWrongResolve(t *testing.T) {
 			if bytes.Equal(a, atlas) && bytes.Equal(w, world) {
 				continue // opaque-off red already equals 1
 			}
-			if result, err := comparePixels(c, slots, a, 16, 2, 256, w, 256); err == nil || result.Passed {
+			if result, err := comparePixels(c, slots, a, 24, 2, 256, w, 256); err == nil || result.Passed {
 				t.Fatalf("%s accepted a missing, incorrect or nonfinite diagnostic", c.Name)
 			}
 		}
@@ -138,7 +138,7 @@ func TestNonfiniteSampleStillHasSerializableFailureEvidence(t *testing.T) {
 	c := coverageCases()[0]
 	slots, atlas, world := authoredPixels(c)
 	binary.LittleEndian.PutUint16(world[2*256+2*8:], 0x7e00)
-	result, err := comparePixels(c, slots, atlas, 16, 2, 256, world, 256)
+	result, err := comparePixels(c, slots, atlas, 24, 2, 256, world, 256)
 	if err == nil || result.Passed || result.Samples[0].Actual[0] != nil || result.Samples[0].ActualHalf[0] != 0x7e00 {
 		t.Fatal("nonfinite sample lost the failing status or exact source bits")
 	}

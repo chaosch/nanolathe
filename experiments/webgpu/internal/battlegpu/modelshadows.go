@@ -451,15 +451,22 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 	pass.SetBindGroup(0, p.atlas.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
 	pass.SetPipeline(p.bodyPipeline)
-	for _, draw := range m.shadowDraws {
+	for first := 0; first < len(m.shadowDraws); {
+		draw := m.shadowDraws[first]
+		end := modelDrawRun(m.shadowDraws, first, false, !m.disableModelBatching)
 		mesh := m.meshes[draw.mesh]
 		if mesh.count != 0 {
-			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
+			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
 			m.counters.Draws++
 		}
+		first = end
 	}
 	selected := false
-	for _, draw := range m.shadowDraws {
+	for first := 0; first < len(m.shadowDraws); {
+		draw := m.shadowDraws[first]
+		end := modelDrawRun(m.shadowDraws, first, true, !m.disableModelBatching)
+		count := uint32(end - first)
+		first = end
 		mesh := m.meshes[draw.mesh]
 		if !draw.outline || mesh.edgeCount == 0 {
 			continue
@@ -468,7 +475,7 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 			pass.SetPipeline(p.outlinePipeline)
 			selected = true
 		}
-		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: draw.instance})
+		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: count, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: draw.instance})
 		m.counters.Draws++
 	}
 	if err = pass.End(); err != nil {
@@ -481,12 +488,15 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 	pass.SetPipeline(p.projectPipeline)
 	pass.SetBindGroup(0, p.atlas.projectGroup, nil)
 	pass.SetIndexBuffer(p.indices, gputypes.IndexFormatUint32, 0)
-	for _, draw := range p.projected {
+	for first := 0; first < len(p.projected); {
+		draw := p.projected[first]
+		end := modelDrawRun(p.projected, first, false, !m.disableModelBatching)
 		mesh := p.meshes[draw.mesh]
 		if mesh.count != 0 {
-			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
+			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
 			m.counters.Draws++
 		}
+		first = end
 	}
 	return pass.End()
 }

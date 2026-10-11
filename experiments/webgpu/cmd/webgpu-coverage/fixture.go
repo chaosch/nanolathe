@@ -8,10 +8,11 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
 
-const fixtureWidth, fixtureHeight = 8, 8
+const fixtureWidth, fixtureHeight = 12, 8
 
 type coverageCase struct {
 	Name        string
+	Repeated    bool
 	Grouped     bool
 	Supersample bool
 	Opacity     float32
@@ -29,7 +30,19 @@ func coverageCases() []coverageCase {
 			}
 		}
 	}
+	for _, c := range append([]coverageCase(nil), cases...) {
+		c.Repeated = true
+		c.Name += "-repeated-meshes"
+		cases = append(cases, c)
+	}
 	return cases
+}
+
+func (c coverageCase) meshes() []int {
+	if c.Repeated {
+		return []int{0, 1, 0, 0, 1}
+	}
+	return []int{0, 1, 2}
 }
 
 // This is authored geometry, not a retail asset or a span-raster parity claim.
@@ -74,13 +87,17 @@ func (c coverageCase) frame() meshscene.LiveFrame {
 	// [3]=1 means unshaded; [15]=1 means visible. XYZ is an identity transform.
 	pose := meshscene.Mat4{1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 	f := meshscene.LiveFrame{Generation: 1, Camera: [3]float32{0, 0, 1},
-		Previous: []meshscene.Mat4{pose}, Current: []meshscene.Mat4{pose}, Composed: true}
+		Composed: true}
 	if c.Supersample {
 		f.LightControls = 8
 	}
-	f.ModelProjections = meshscene.ModelProjectionFrame{View: [4]float32{0, 0, 4, 4}, PieceFlags: []uint32{0}}
-	for i := range 3 {
-		f.Instances = append(f.Instances, meshscene.Instance{Mesh: i, PoseOffset: 0,
+	f.ModelProjections = meshscene.ModelProjectionFrame{View: [4]float32{0, 0, 4, 4}, PieceFlags: make([]uint32, len(c.meshes()))}
+	for i, mesh := range c.meshes() {
+		instancePose := pose
+		instancePose[12] = float32(2 * (i - mesh))
+		f.Previous = append(f.Previous, instancePose)
+		f.Current = append(f.Current, instancePose)
+		f.Instances = append(f.Instances, meshscene.Instance{Mesh: mesh, PoseOffset: i,
 			Visual: meshscene.ModelVisual{State: [4]float32{0, c.Opacity, 0, 0}}})
 		f.ModelProjections.Records = append(f.ModelProjections.Records, meshscene.ModelProjection{
 			Origin:  [4]float32{0, 0, 0, float32(meshscene.ModelProjectionKnown | meshscene.ModelProjectionDirectAll)},
@@ -92,15 +109,15 @@ func (c coverageCase) frame() meshscene.LiveFrame {
 			Slot: uint32(i + 1), Phase: meshscene.ModelPhaseGround, Rank: uint32(i), Kind: 1, ID: uint64(i + 1)})
 	}
 	if c.Grouped {
-		for i := range 3 {
+		for i := range len(f.Instances) {
 			source := f.Composition.Slots[i]
 			source.Params[0] = 1 // only the final slot applies subject opacity
 			f.Composition.Slots = append(f.Composition.Slots, source)
-			f.Composition.InstanceSlots[i] = uint32(i + 4)
+			f.Composition.InstanceSlots[i] = uint32(i + len(f.Instances) + 1)
 			f.Composition.MemberGroup = append(f.Composition.MemberGroup, uint32(i+1))
 			f.Composition.Groups = append(f.Composition.Groups, meshscene.ModelGroup{
-				ParentInstance: uint32(i), ParentSlot: uint32(i + 4), FinalSlot: uint32(i + 1),
-				Members: []meshscene.ModelGroupMember{{Instance: uint32(i), Slot: uint32(i + 4)}}})
+				ParentInstance: uint32(i), ParentSlot: uint32(i + len(f.Instances) + 1), FinalSlot: uint32(i + 1),
+				Members: []meshscene.ModelGroupMember{{Instance: uint32(i), Slot: uint32(i + len(f.Instances) + 1)}}})
 		}
 	}
 	return f
@@ -113,7 +130,7 @@ func atlasBlocks() [3][4][4]byte {
 	return [3][4][4]byte{{red, {}, {}, {}}, {red, blue, red, blue}, {{}, {}, {}, blue}}
 }
 
-func (c coverageCase) worldColors() [3][4]float32 {
+func (c coverageCase) worldColors() [][4]float32 {
 	colors := [3][4]float32{{1, 0, 0, 1}, {1, 0, 0, 1}, {}}
 	if c.Supersample {
 		colors = [3][4]float32{{.25, 0, 0, .25}, {.5, 0, .5, 1}, {0, 0, .25, .25}}
@@ -123,7 +140,20 @@ func (c coverageCase) worldColors() [3][4]float32 {
 			colors[i][j] *= c.Opacity
 		}
 	}
-	return colors
+	var result [][4]float32
+	for _, mesh := range c.meshes() {
+		result = append(result, colors[mesh])
+	}
+	return result
+}
+
+func (c coverageCase) blocks() [][4][4]byte {
+	base := atlasBlocks()
+	var result [][4][4]byte
+	for _, mesh := range c.meshes() {
+		result = append(result, base[mesh])
+	}
+	return result
 }
 
 type slotRecord struct {
@@ -183,12 +213,12 @@ func comparePixels(c coverageCase, slots []slotRecord, atlas []byte, aw, ah, ar 
 	if c.Grouped {
 		r.AtlasKind = "merged-final"
 	}
-	if aw < 1 || ah < 1 || ar < aw*4 || len(atlas) != ar*ah || wr < fixtureWidth*8 || len(world) != wr*fixtureHeight || len(slots) < 3 {
+	if aw < 1 || ah < 1 || ar < aw*4 || len(atlas) != ar*ah || wr < fixtureWidth*8 || len(world) != wr*fixtureHeight || len(slots) < len(c.meshes()) {
 		return r, fmt.Errorf("complete atlas/HDR readback and placement required")
 	}
-	blocks := atlasBlocks()
+	blocks := c.blocks()
 	wantAtlas := make([]byte, ar*ah)
-	for i := range 3 {
+	for i := range len(blocks) {
 		x, y := int(slots[i].Atlas[0]), int(slots[i].Atlas[1])
 		if x < 0 || y < 0 || x+2 > aw || y+2 > ah {
 			return r, fmt.Errorf("slot %d block inside actual atlas dimensions", i+1)
@@ -208,7 +238,7 @@ func comparePixels(c coverageCase, slots []slotRecord, atlas []byte, aw, ah, ar 
 	for y := range fixtureHeight {
 		for x := range fixtureWidth {
 			want := [4]float32{}
-			if y == 2 && x >= 2 && x <= 6 && x%2 == 0 {
+			if y == 2 && x >= 2 && x < 2+2*len(colors) && x%2 == 0 {
 				want = colors[(x-2)/2]
 			}
 			var actual [4]float32
@@ -223,14 +253,14 @@ func comparePixels(c coverageCase, slots []slotRecord, atlas []byte, aw, ah, ar 
 					r.WorldMismatches++
 				}
 			}
-			if y == 2 && x >= 2 && x <= 6 && x%2 == 0 {
+			if y == 2 && x >= 2 && x < 2+2*len(colors) && x%2 == 0 {
 				var finite [4]*float32
 				for i, value := range actual {
 					if !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0) {
 						finite[i] = &value
 					}
 				}
-				r.Samples = append(r.Samples, sampleComparison{Name: []string{"quarter-top-left", "red-blue-mean", "quarter-bottom-right"}[(x-2)/2],
+				r.Samples = append(r.Samples, sampleComparison{Name: []string{"quarter-top-left", "red-blue-mean", "quarter-bottom-right"}[c.meshes()[(x-2)/2]],
 					Pixel: [2]int{x, y}, Actual: finite, ActualHalf: actualHalf, Expected: want})
 			}
 		}

@@ -80,7 +80,8 @@ func (r *Renderer) targets(width, height int) error {
 		return nil
 	}
 	// Windowed prototype resize owns a completion boundary; no borrowed view
-	// can survive target destruction. Steady-state draws take no idle wait.
+	// can survive target destruction. The host also completes previous work
+	// before Prepare mutates shared buffers; this wait owns resize only.
 	if r.world != nil {
 		if err := r.d.WaitIdle(); err != nil {
 			return err
