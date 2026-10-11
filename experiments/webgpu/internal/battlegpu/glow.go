@@ -14,6 +14,9 @@ import (
 //go:embed glow.wgsl
 var glowShader string
 
+//go:embed glow_blur.wgsl
+var glowBlurShader string
+
 const glowUniformSize = 80
 const glowVertexSize = 48
 
@@ -183,8 +186,16 @@ func NewGlow(d *wgpu.Device, q *wgpu.Queue, scene *meshscene.Scene) (g *Glow, er
 	if err != nil {
 		return
 	}
+	// Native Metal compiles the whole module with the active pipeline's
+	// resource map. Source-only runtime-array metadata must not travel into
+	// the compute layout, which has no vertex storage or source textures.
+	blurShader, err := d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowBlurShader})
+	if err != nil {
+		return
+	}
+	g.owned = append(g.owned, blurShader.Release)
 	for i, name := range []string{"glow_shrink", "glow_across", "glow_down"} {
-		g.kernels[i], err = d.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{Label: name, Layout: pl, Module: shader, EntryPoint: name})
+		g.kernels[i], err = d.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{Label: name, Layout: pl, Module: blurShader, EntryPoint: name})
 		if err != nil {
 			return
 		}
