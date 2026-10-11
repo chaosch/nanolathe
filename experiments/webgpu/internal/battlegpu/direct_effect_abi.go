@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const layerDirectVertexStride = 48
+const layerDirectVertexStride = 64
 
 // The pinned render HAL leaves runtime-array size arguments unbound. Declare
 // this entry's exact uploaded buffer tier instead, as the model resolve does;
@@ -23,7 +23,7 @@ func (l *Layers) layerUpdateDirectPipeline() error {
 	if err != nil {
 		return err
 	}
-	pipeline, err := l.layerPipeline(shader, l.directLayout, "layer_triangle_vertex", "layer_quad_fragment", 0, 1)
+	pipeline, err := l.layerPipeline(shader, l.directLayout, "layer_triangle_vertex", "layer_geometry_fragment", 0, 1)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ struct LayerUniform {
  waterPhase:vec4<f32>, waterMask:vec4<f32>, waterControls:vec4<f32>, waterTerrain:vec4<f32>, waterSample:vec4<f32>,
 }
 struct LayerQuad {rect:vec4<f32>,uv:vec4<f32>,color:vec4<f32>,params:vec4<f32>}
-struct LayerVertex {positionUV:vec4<f32>,color:vec4<f32>,bounds:vec4<f32>}
+struct LayerVertex {positionUV:vec4<f32>,color:vec4<f32>,bounds:vec4<f32>,light:vec4<f32>}
 struct LayerGround {centreAxis:vec4<f32>,crossKind:vec4<f32>,values:vec4<f32>,mapping:vec4<f32>,clip:vec4<f32>}
 struct LayerSmoke {quad:LayerQuad,selection:vec4<f32>,bounds:vec4<f32>,indices0:vec4<u32>,indices1:vec4<u32>,meta:vec4<u32>}
 struct LayerLight {positionRadius:vec4<f32>,colorGroundGain:vec4<f32>,groundAgeFadeKind:vec4<f32>,flags:vec4<u32>}
@@ -41,7 +41,7 @@ struct LayerQuadOut {
  o.position=layerPosition(q.rect.xy+c*q.rect.zw);o.uv=mix(q.uv.xy,q.uv.zw,c);o.color=q.color;o.bounds=vec4<f32>(0,0,1,1);o.params=q.params;return o;
 }
 @vertex fn layer_triangle_vertex(@builtin(vertex_index) vid:u32)->LayerQuadOut {
- let v=layerVertices[vid];var o:LayerQuadOut;o.position=layerPosition(v.positionUV.xy);o.uv=v.positionUV.zw;o.color=v.color;o.bounds=v.bounds;o.params=vec4<f32>(0);return o;
+ let v=layerVertices[vid];var o:LayerQuadOut;o.position=layerPosition(v.positionUV.xy);o.uv=v.positionUV.zw;o.color=v.color;o.bounds=v.bounds;o.params=vec4<f32>(0,0,0,v.light.x);return o;
 }
 fn layerQuadTexel(in:LayerQuadOut)->vec4<f32> {
  if(in.params.x==1){return layerTexel(layerTerrain,in.uv);}if(in.params.x==2){return layerTexel(layerFog,in.uv);}return layerTexel(layerAtlas,in.uv);
@@ -51,6 +51,15 @@ fn layerQuadTexel(in:LayerQuadOut)->vec4<f32> {
  let tex=layerQuadTexel(in);
  if(in.params.x==2){return vec4<f32>(0,0,0,(1-tex.r)*in.color.a);}
  let a=tex.a*in.color.a;return vec4<f32>(tex.rgb*in.color.rgb*a,a);
+}
+// BL4 uses the same numeric base-128 code as the production model colour lane.
+// Zero light retains the original expression, including its HDR/alpha operands.
+@fragment fn layer_geometry_fragment(in:LayerQuadOut)->@location(0) vec4<f32> {
+ if(in.uv.x<in.bounds.x || in.uv.y<in.bounds.y || in.uv.x>=in.bounds.z || in.uv.y>=in.bounds.w){discard;}
+ let tex=layerTexel(layerAtlas,in.uv);let alpha=tex.a*in.color.a;let albedo=tex.rgb*in.color.rgb;
+ if(in.params.w<0.5){return vec4<f32>(albedo*alpha,alpha);}
+ let packed=u32(floor(in.params.w+0.5));let light=vec3<f32>(f32(packed&127u),f32((packed>>7u)&127u),f32(packed>>14u))/63.5;
+ return vec4<f32>(min(albedo+albedo*light,vec3<f32>(1))*alpha,alpha);
 }
 @fragment fn layer_multiply_fragment(in:LayerQuadOut)->@location(0) vec4<f32> {
  let tex=layerQuadTexel(in);let a=tex.a*in.color.a;var k=tex.rgb*in.color.rgb;
