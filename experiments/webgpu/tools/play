@@ -7,7 +7,7 @@ h=hashlib.sha256()
 for f in sorted(exp.rglob('*')):
  if f.is_file() and (f.suffix in ('.go','.wgsl','.mod','.sum') or f.name in ('build-play','play')):h.update(str(f.relative_to(exp)).encode());h.update(f.read_bytes())
 h.update(subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo))
-cache=pathlib.Path(tempfile.gettempdir())/('nanolathe-webgpu-play-'+h.hexdigest()[:16]);binary=cache/'nanolathe-webgpu'
+cache=pathlib.Path(tempfile.gettempdir())/('nanolathe-webgpu-play-'+h.hexdigest()[:16]);binary=cache/'Nanolathe WebGPU Prototype.app/Contents/MacOS/nanolathe-webgpu'
 if not binary.exists():
  if cache.exists():sys.exit('Incomplete previous build at '+str(cache)+'; use tools/build-play with a fresh output directory.')
  subprocess.run([str(exp/'tools/build-play'),str(cache)],check=True)

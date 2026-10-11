@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a real-battle WebGPU command with an explicit, external Go source overlay."""
-import hashlib, json, os, pathlib, subprocess, sys
+import hashlib, json, os, pathlib, plistlib, subprocess, sys
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
 if len(sys.argv)!=2:sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY')
 out=pathlib.Path(sys.argv[1]).resolve()
@@ -35,7 +35,7 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
     text=text.replace('native Metal renderer','isolated WebGPU prototype').replace('classic, modern or metal','classic, modern or webgpu')
    rewrites.append('experiment-only executor/flag spelling')
   if original.name in ('metal_host_darwin.go','metal_benchmark_darwin.go'):
-   text=text.replace('github.com/nanolathe-gg/nanolathe/internal/platform/metalrender','github.com/nanolathe-gg/nanolathe/experiments/webgpu/internal/battlegpu').replace('metalrender.','battlegpu.')
+   text=text.replace('github.com/nanolathe-gg/nanolathe/internal/platform/metalrender','github.com/nanolathe-gg/nanolathe/experiments/webgpu/internal/battlegpu').replace('metalrender.','battlegpu.').replace('nanolathe: Metal report:','nanolathe: WebGPU report:').replace('nanolathe: metal-','nanolathe: webgpu-')
    text=text.replace('"gpu_timing_available"] = true','"gpu_timing_available"] = false').replace('"present_timing_available"] = true','"present_timing_available"] = false').replace('"renderer": "metal"','"renderer": "webgpu"')
    text=text.replace('"native_scope"] = "retained Metal world with production foreground; native fidelity approximations remain in report.json"','"native_scope"] = "isolated WebGPU retained world and production foreground; prototype fidelity limits remain in report.json"')
    text=text.replace('"prepare_ahead"] = "all"','"prepare_ahead"] = "disabled: synchronous prototype host"')
@@ -49,5 +49,8 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
 env=dict(os.environ,GOWORK='off',CGO_ENABLED='1',GOMAXPROCS=os.environ.get('GOMAXPROCS','2'))
 cmd=['go','build','-mod=mod','-p','2','-trimpath','-overlay',str(out/'overlay.json'),'-o',str(out/'nanolathe-webgpu'),'./cmd/nanolathe']
 print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=work,env=env,check=True)
+bundle=out/'Nanolathe WebGPU Prototype.app';mac=bundle/'Contents/MacOS';mac.mkdir(parents=True)
+os.link(out/'nanolathe-webgpu',mac/'nanolathe-webgpu')
+(bundle/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier='gg.nanolathe.webgpu.prototype',CFBundleName='Nanolathe WebGPU Prototype',CFBundleDisplayName='Nanolathe WebGPU Prototype',CFBundleExecutable='nanolathe-webgpu',CFBundlePackageType='APPL',CFBundleVersion='1',NSHighResolutionCapable=True)))
 (out/'build-manifest.json').write_text(json.dumps(dict(repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,sources=sources,modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),scope='temporary command overlay only; root sources/module/defaults unchanged'),indent=2)+'\n')
 print(out/'nanolathe-webgpu')

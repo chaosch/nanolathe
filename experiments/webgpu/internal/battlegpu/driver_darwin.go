@@ -3,6 +3,7 @@
 package battlegpu
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -11,10 +12,12 @@ import (
 	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -69,6 +72,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	period := time.Second / time.Duration(fps)
 	cfg := gogpu.DefaultConfig().WithTitle("Nanolathe — WebGPU prototype").WithSize(opts.Width/2, opts.Height/2).WithResizable(false).WithContinuousRender(true).WithVSync(opts.VSync)
 	app := gogpu.NewApp(cfg)
+	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	go func() { <-signalContext.Done(); app.Quit() }()
 	queue := eventQueue{scale: 2}
 	events := app.EventSource()
 	events.OnKeyPress(func(k gpucontext.Key, m gpucontext.Modifiers) { queue.key(4, k, m) })
