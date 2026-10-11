@@ -1,9 +1,14 @@
-// Keep this pass in its own module: the pinned Metal backend numbers every
-// declared resource by type, including globals unused by an entry point.
+// Both world commit modules declare the complete union, including globals
+// unused here: pinned Metal assigns dense slots across all declarations.
+struct Uniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,shadow:vec4<f32>}
+struct Slot {screen:vec4<f32>,atlas:vec4<f32>,params:vec4<f32>}
 struct ModelShadowUniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,tint:vec4<f32>,water:vec4<f32>}
 struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,order:vec4<u32>}
-@group(0) @binding(3) var<uniform> u:ModelShadowUniforms;
-@group(0) @binding(4) var<storage,read> subjects:array<ModelShadowSubject,__SUBJECTS__>;
+@group(0) @binding(0) var<storage,read> slots:array<Slot,1>;
+@group(0) @binding(1) var<storage,read> subjects:array<ModelShadowSubject,__SUBJECTS__>;
+@group(0) @binding(2) var<uniform> mainU:Uniforms;
+@group(0) @binding(3) var bodies:texture_2d<f32>;
+@group(0) @binding(4) var<uniform> u:ModelShadowUniforms;
 @group(0) @binding(5) var body:texture_2d<f32>;
 @group(0) @binding(6) var keys:texture_depth_2d;
 @group(0) @binding(7) var mask:texture_2d<f32>;

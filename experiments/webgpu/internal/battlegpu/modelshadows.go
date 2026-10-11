@@ -20,19 +20,19 @@ var modelShadowCommitShader string
 const modelShadowVertexStride = 32
 
 type modelShadowAtlas struct {
-	body, depth, mask              *wgpu.Texture
-	bodyView, depthView, maskView  *wgpu.TextureView
-	group, bodyGroup, projectGroup *wgpu.BindGroup
-	width, height                  int
+	body, depth, mask             *wgpu.Texture
+	bodyView, depthView, maskView *wgpu.TextureView
+	bodyGroup, projectGroup       *wgpu.BindGroup
+	width, height                 int
 }
 
 func (a *modelShadowAtlas) modelReleaseGroups() {
-	for _, g := range []*wgpu.BindGroup{a.group, a.bodyGroup, a.projectGroup} {
+	for _, g := range []*wgpu.BindGroup{a.bodyGroup, a.projectGroup} {
 		if g != nil {
 			g.Release()
 		}
 	}
-	a.group, a.bodyGroup, a.projectGroup = nil, nil, nil
+	a.bodyGroup, a.projectGroup = nil, nil
 }
 func (a *modelShadowAtlas) modelClose() {
 	a.modelReleaseGroups()
@@ -51,6 +51,8 @@ func (a *modelShadowAtlas) modelClose() {
 
 type modelShadowWork struct {
 	atlas                           modelShadowAtlas
+	dummy                           modelShadowAtlas
+	dummyInitialized                bool
 	uniform                         *wgpu.Buffer
 	waterView                       *wgpu.TextureView
 	hasWater                        bool
@@ -58,8 +60,6 @@ type modelShadowWork struct {
 	vertexCount                     int
 	meshes                          []modelMesh
 	projected                       []modelDraw
-	layout                          *wgpu.BindGroupLayout
-	pipelineLayout                  *wgpu.PipelineLayout
 	projectLayout                   *wgpu.BindGroupLayout
 	projectPipelineLayout           *wgpu.PipelineLayout
 	bodyPipeline, outlinePipeline   *wgpu.RenderPipeline
@@ -70,6 +70,7 @@ type modelShadowWork struct {
 
 func (p *modelShadowWork) modelClose() {
 	p.atlas.modelClose()
+	p.dummy.modelClose()
 	for _, pipeline := range []*wgpu.RenderPipeline{p.commitPipeline, p.projectPipeline} {
 		if pipeline != nil {
 			pipeline.Release()
@@ -287,13 +288,22 @@ func (m *Models) modelInitShadows(scene *meshscene.Scene, module *wgpu.ShaderMod
 	if p.waterView, err = m.modelArt("battle-shadow-liquid-mask", water); err != nil {
 		return
 	}
+	// The common world layout is valid even before any subject is admitted.
+	// Compute clears these one-pixel planes before their first no-shadow use.
+	p.dummy.width, p.dummy.height = 1, 1
+	usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageRenderAttachment
+	if p.dummy.body, p.dummy.bodyView, err = m.modelCreateTexture("battle-shadow-empty-body", 1, 1, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+		return
+	}
+	if p.dummy.depth, p.dummy.depthView, err = m.modelCreateTexture("battle-shadow-empty-key", 1, 1, wgpu.TextureFormatDepth32Float, usage); err != nil {
+		return
+	}
+	if p.dummy.mask, p.dummy.maskView, err = m.modelCreateTexture("battle-shadow-empty-mask", 1, 1, gputypes.TextureFormatR8Unorm, usage); err != nil {
+		return
+	}
 	// Fixed-array capacities are chosen after growth in Prepare. Zero minimum
 	// binding sizes defer their size validation to the actual bound buffers.
 	p.projectLayout, p.projectPipelineLayout, err = m.modelLayout(modelShadowProjectLayoutEntries())
-	if err != nil {
-		return
-	}
-	p.layout, p.pipelineLayout, err = m.modelLayout(modelShadowCommitLayoutEntries())
 	return
 }
 
@@ -303,17 +313,6 @@ func modelShadowProjectLayoutEntries() []gputypes.BindGroupLayoutEntry {
 		modelBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(2, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(3, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeUniform, 96),
-	}
-}
-
-func modelShadowCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
-	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
-	return []gputypes.BindGroupLayoutEntry{
-		modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 96),
-		modelBufferEntry(4, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
-		modelTextureEntry(5),
-		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
-		modelTextureEntry(7), modelTextureEntry(8),
 	}
 }
 
@@ -348,6 +347,7 @@ func (m *Models) modelResizeShadows(width, height int) (err error) {
 	}
 	// The host waits for prior submissions before Prepare; only current atlases
 	// own these views/groups, so geometric growth releases every obsolete tier.
+	m.modelReleaseCommitGroup()
 	p.atlas.modelClose()
 	p.atlas = next
 	return
@@ -412,7 +412,7 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 			projectModule.Release()
 			return e
 		}
-		commit, e := create(commitModule, p.pipelineLayout, "model_shadow_commit_vertex", "model_shadow_commit_fragment", m.format, true, true)
+		commit, e := create(commitModule, m.resolvePipelineLayout, "model_shadow_commit_vertex", "model_shadow_commit_fragment", m.format, true, true)
 		if e != nil {
 			project.Release()
 			commitModule.Release()
@@ -452,17 +452,30 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 			return
 		}
 	}
-	if p.atlas.group == nil {
-		p.atlas.group, err = m.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: p.layout, Entries: []wgpu.BindGroupEntry{{Binding: 3, Buffer: p.uniform, Size: 96}, {Binding: 4, Buffer: m.shadowRecords.buffer}, {Binding: 5, TextureView: p.atlas.bodyView}, {Binding: 6, TextureView: p.atlas.depthView}, {Binding: 7, TextureView: p.atlas.maskView}, {Binding: 8, TextureView: p.waterView}}})
-	}
 	return
 }
 
 func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
+	p := &m.shadowWork
 	if m.shadowCount == 0 {
+		if !p.dummyInitialized {
+			pass, err := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{
+				ColorAttachments: []wgpu.RenderPassColorAttachment{
+					{View: p.dummy.bodyView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+					{View: p.dummy.maskView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+				},
+				DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: p.dummy.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true},
+			})
+			if err != nil {
+				return err
+			}
+			if err = pass.End(); err != nil {
+				return err
+			}
+			p.dummyInitialized = true
+		}
 		return nil
 	}
-	p := &m.shadowWork
 	pass, err := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: p.atlas.bodyView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: p.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
 	if err != nil {
 		return err

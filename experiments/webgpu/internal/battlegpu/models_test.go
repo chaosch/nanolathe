@@ -8,11 +8,100 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
+
+func TestModelCommitMetalUnionBindings(t *testing.T) {
+	ast, err := naga.Parse(modelResolveShaderSource(8))
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := naga.LowerWithCapabilities(ast, modelResolveShaderSource(8), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, err := msl.Compile(module, msl.DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout := modelCommitLayoutEntries()
+	if len(module.GlobalVariables) != len(layout) || strings.Contains(code, "_mslBufferSizes") {
+		t.Fatal("world union requires absent resources or runtime-size metadata")
+	}
+	// The resolve's unused subject buffer consumes buffer slot 1. Its main
+	// uniform must therefore occupy 2, while its color remains texture slot 0.
+	for _, pattern := range []string{`\bslots \[\[buffer\(0\)\]\]`, `\bu \[\[buffer\(2\)\]\]`, `\bbodies \[\[texture\(0\)\]\]`} {
+		if !regexp.MustCompile(pattern).MatchString(code) {
+			t.Fatalf("resolve does not match common Metal layout: %s", pattern)
+		}
+	}
+	storage, uniforms, textures := 0, 0, 0
+	for i, entry := range layout {
+		if entry.Binding != uint32(i) || module.GlobalVariables[i].Binding.Binding != entry.Binding {
+			t.Fatalf("union binding order differs at %d", i)
+		}
+		if entry.Texture != nil {
+			textures++
+		} else if entry.Buffer != nil && entry.Buffer.Type == gputypes.BufferBindingTypeUniform {
+			uniforms++
+		} else if entry.Buffer != nil && entry.Buffer.Type == gputypes.BufferBindingTypeReadOnlyStorage {
+			storage++
+		} else {
+			t.Fatalf("unexpected union resource at %d", i)
+		}
+	}
+	if storage != 2 || uniforms != 2 || textures != 5 {
+		t.Fatalf("core union resources: storage=%d uniforms=%d textures=%d", storage, uniforms, textures)
+	}
+}
+
+func TestModelCommitViewsAndReplacement(t *testing.T) {
+	m := &Models{}
+	m.atlas.colorView, m.atlas.mergedView = &wgpu.TextureView{}, &wgpu.TextureView{}
+	m.shadowWork.waterView = &wgpu.TextureView{}
+	for _, atlas := range []*modelShadowAtlas{&m.shadowWork.dummy, &m.shadowWork.atlas} {
+		atlas.bodyView, atlas.depthView, atlas.maskView = &wgpu.TextureView{}, &wgpu.TextureView{}, &wgpu.TextureView{}
+	}
+	views := m.modelCommitTextureViews()
+	if views != [5]*wgpu.TextureView{m.atlas.colorView, m.shadowWork.dummy.bodyView, m.shadowWork.dummy.depthView, m.shadowWork.dummy.maskView, m.shadowWork.waterView} {
+		t.Fatal("absent shadows do not bind independent dummy planes")
+	}
+	group := &wgpu.BindGroup{}
+	m.commitGroup, m.commitViews = group, views
+	if err := m.modelPrepareCommitGroup(); err != nil || m.commitGroup != group {
+		t.Fatal("unchanged resources rebuilt the union group")
+	}
+	for _, change := range []func(){
+		func() { m.shadowCount = 1 },
+		func() { m.groupWork.count = 1 },
+		func() { m.shadowWork.atlas.depthView = &wgpu.TextureView{} },
+		func() { m.shadowCount = 0 },
+	} {
+		m.commitGroup, m.commitViews = &wgpu.BindGroup{}, m.modelCommitTextureViews()
+		change()
+		m.modelSyncCommitViews(m.modelCommitTextureViews())
+		if m.commitGroup != nil || m.commitViews != [5]*wgpu.TextureView{} {
+			t.Fatal("changed atlas family retained a borrowed union group")
+		}
+	}
+	m.slots.buffer, m.shadowRecords.buffer, m.uniform, m.shadowWork.uniform = &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}
+	entries, layout := m.modelCommitEntries(m.modelCommitTextureViews()), modelCommitLayoutEntries()
+	for i, entry := range entries {
+		if entry.Binding != layout[i].Binding || (entry.Buffer != nil) != (layout[i].Buffer != nil) || (entry.TextureView != nil) != (layout[i].Texture != nil) {
+			t.Fatalf("native group resource order differs from union layout at %d", i)
+		}
+	}
+	if entries[0].Buffer != m.slots.buffer || entries[1].Buffer != m.shadowRecords.buffer || entries[2].Buffer != m.uniform || entries[4].Buffer != m.shadowWork.uniform || entries[2].Size != 80 || entries[4].Size != 96 {
+		t.Fatal("commit operands or uniform spans changed")
+	}
+	m.modelReleaseCommitGroup()
+	m.modelReleaseCommitGroup()
+}
 
 func TestModelResolveFixedCapacityMetalABI(t *testing.T) {
 	compile := func(source string) (string, msl.TranslationInfo) {

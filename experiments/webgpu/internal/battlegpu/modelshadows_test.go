@@ -87,9 +87,10 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 	for _, pass := range []struct {
 		name, source string
 		layout       []gputypes.BindGroupLayoutEntry
+		used         []uint32
 	}{
-		{"project", modelShadowShaderSource(capacities), modelShadowProjectLayoutEntries()},
-		{"commit", modelShadowCommitShaderSource(capacities), modelShadowCommitLayoutEntries()},
+		{"project", modelShadowShaderSource(capacities), modelShadowProjectLayoutEntries(), []uint32{0, 1, 2, 3}},
+		{"commit", modelShadowCommitShaderSource(capacities), modelCommitLayoutEntries(), []uint32{1, 4, 5, 6, 7, 8}},
 	} {
 		ast, err := naga.Parse(pass.source)
 		if err != nil {
@@ -148,7 +149,12 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 				bufferSlot++
 			}
 			pattern := fmt.Sprintf(`\b%s \[\[%s\(%d\)\]\]`, name, kind, slot)
-			if !regexp.MustCompile(pattern).MatchString(code) {
+			// Unused globals consume native slots but have no entry argument.
+			used := false
+			for _, binding := range pass.used {
+				used = used || binding == entry.Binding
+			}
+			if used && !regexp.MustCompile(pattern).MatchString(code) {
 				t.Fatalf("%s resource %s does not use layout %s slot %d", pass.name, name, kind, slot)
 			}
 		}
