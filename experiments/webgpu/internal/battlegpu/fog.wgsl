@@ -1,11 +1,12 @@
 struct LayerUniform {
  camera:vec4<f32>, viewport:vec4<f32>, rect:vec4<f32>, fogRect:vec4<f32>,
- tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>,
+ tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>, glow:vec4<f32>, lightRect:vec4<f32>, lightValues:vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
 @group(0) @binding(1) var layerWorld:texture_2d<f32>;
 @group(0) @binding(2) var layerGrid:texture_2d<f32>;
 @group(0) @binding(3) var layerMasks:texture_2d<f32>;
+@group(0) @binding(4) var layerGlow:texture_2d<f32>;
 @vertex fn layer_fog_vertex(@builtin(vertex_index) v:u32)->@builtin(position) vec4<f32> {
  let p=vec2<f32>(f32((v<<1u)&2u),f32(v&2u));return vec4<f32>(p*2-1,0,1);
 }
@@ -35,8 +36,20 @@ fn layerApplyFog(original:vec3<f32>,projected:vec2<f32>,checker:i32)->vec3<f32> 
   }
  }}return col;
 }
+fn layerGlowPixel(p:vec2<f32>)->vec3<f32> {
+ let q=p-0.5;let a=vec2<i32>(floor(q));let f=fract(q);let size=vec2<i32>(textureDimensions(layerGlow));
+ let lo=vec2<i32>(0);let hi=size-1;
+ return mix(mix(textureLoad(layerGlow,clamp(a,lo,hi),0).rgb,textureLoad(layerGlow,clamp(a+vec2<i32>(1,0),lo,hi),0).rgb,f.x),mix(textureLoad(layerGlow,clamp(a+vec2<i32>(0,1),lo,hi),0).rgb,textureLoad(layerGlow,clamp(a+vec2<i32>(1,1),lo,hi),0).rgb,f.x),f.y);
+}
 @fragment fn layer_fog_fragment(@builtin(position) pixel:vec4<f32>)->@location(0) vec4<f32> {
  var color=textureLoad(layerWorld,vec2<i32>(pixel.xy),0).rgb;
+ // Production screens the retained octaves before fog, map clip and gain.
+ if(layerU.glow.z>0.5){
+  let p=pixel.xy/4;let quarter=ceil(layerU.viewport.x/4);
+  let near=clamp(layerGlowPixel(p+vec2<f32>(1))*layerU.glow.x,vec3<f32>(0),vec3<f32>(1));
+  let far=clamp(layerGlowPixel(p/2+vec2<f32>(quarter+2,1))*layerU.glow.y,vec3<f32>(0),vec3<f32>(1));
+  let glow=near+far-near*far;color=glow+color*(1-glow);
+ }
  let projected=(pixel.xy-layerU.viewport.xy*0.5)/layerU.camera.z+layerU.camera.xy;
  if(layerU.flags.z!=0u){
   let origin=floor(layerU.camera.xy-layerU.viewport.xy/(2*layerU.camera.z));

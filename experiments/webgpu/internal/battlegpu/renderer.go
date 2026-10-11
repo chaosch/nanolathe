@@ -14,24 +14,39 @@ type Renderer struct {
 	format               gputypes.TextureFormat
 	models               *Models
 	layers               *Layers
+	glow                 *Glow
+	groundLight          *GroundLight
 	world, depth         *wgpu.Texture
 	worldView, depthView *wgpu.TextureView
 	width, height        int
 	paint                []battlePaint
 }
 type Counters struct {
-	Models ModelCounters
-	Layers LayerCounters
+	Models      ModelCounters
+	Layers      LayerCounters
+	Glow        GlowCounters
+	GroundLight GroundLightCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
 	r = &Renderer{d: d, format: format}
+	defer func() {
+		if err != nil {
+			r.Close()
+		}
+	}()
 	if r.models, err = NewModels(d, q, format, scene); err != nil {
 		return
 	}
 	r.layers, err = NewLayers(d, q, format, scene)
 	if err == nil {
 		r.layers.SetFeaturePaintOrder(true)
+	}
+	if err == nil {
+		r.glow, err = NewGlow(d, q, scene)
+		if err == nil {
+			r.groundLight, err = NewGroundLight(d, q, scene)
+		}
 	}
 	return
 }
@@ -80,10 +95,30 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := r.models.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
+	if e := r.glow.Prepare(f, width, height); e != nil {
+		return Counters{}, e
+	}
+	var glowValues [4]float32
+	if r.glow.Enabled() {
+		glowValues = [4]float32{f.StockEffects.Glow.Parameters.Blur[2], f.StockEffects.Glow.Parameters.Blur[3], 1, 0}
+	}
+	if e := r.groundLight.Prepare(f, width, height); e != nil {
+		return Counters{}, e
+	}
+	var lightValues [4]float32
+	if r.groundLight.Enabled() {
+		lightValues = [4]float32{float32((width + 1) / 2), float32((height + 1) / 2), 1, 0}
+	}
+	if e := r.layers.SetFields(r.glow.Output(), r.groundLight.Output(), glowValues, r.groundLight.Rect(), lightValues); e != nil {
+		return Counters{}, e
+	}
 	if e := r.layers.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
 	if e := r.models.Compute(enc); e != nil {
+		return Counters{}, e
+	}
+	if e := r.groundLight.Encode(enc); e != nil {
 		return Counters{}, e
 	}
 	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
@@ -119,21 +154,37 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	paintPhase(meshscene.ModelPhaseAir)
 	r.layers.DrawEffects(pass, 3)
 	r.layers.DrawEffects(pass, 4)
-	pass.End()
+	if e := pass.End(); e != nil {
+		return Counters{}, e
+	}
+	if e := r.glow.Encode(enc, r.worldView); e != nil {
+		return Counters{}, e
+	}
 	final, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: output, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}})
 	if e != nil {
 		return Counters{}, e
 	}
 	r.layers.DrawFog(final)
 	r.layers.DrawOverlay(final)
-	final.End()
-	return Counters{r.models.Counters(), r.layers.Counters()}, nil
+	if e := final.End(); e != nil {
+		return Counters{}, e
+	}
+	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {
 		return nil
 	}
-	return r.layers.Missing()
+	out := make(map[string]int)
+	for k, v := range r.layers.Missing() {
+		out[k] = v
+	}
+	if r.groundLight != nil {
+		for k, v := range r.groundLight.Missing() {
+			out[k] += v
+		}
+	}
+	return out
 }
 func (r *Renderer) closeTargets() {
 	if r.worldView != nil {
@@ -158,6 +209,14 @@ func (r *Renderer) Close() {
 		return
 	}
 	r.closeTargets()
+	if r.groundLight != nil {
+		r.groundLight.Close()
+		r.groundLight = nil
+	}
+	if r.glow != nil {
+		r.glow.Close()
+		r.glow = nil
+	}
 	if r.layers != nil {
 		r.layers.Close()
 		r.layers = nil

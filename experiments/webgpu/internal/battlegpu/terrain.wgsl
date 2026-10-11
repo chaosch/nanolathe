@@ -1,12 +1,13 @@
 struct LayerUniform {
  camera:vec4<f32>, viewport:vec4<f32>, rect:vec4<f32>, fogRect:vec4<f32>,
- tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>,
+ tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>, glow:vec4<f32>, lightRect:vec4<f32>, lightValues:vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
 @group(0) @binding(1) var layerTiles:texture_2d<f32>;
 @group(0) @binding(2) var layerLookup:texture_2d<u32>;
 @group(0) @binding(3) var layerDetail:texture_2d<f32>;
 @group(0) @binding(4) var layerFallback:texture_2d<f32>;
+@group(0) @binding(5) var layerGroundField:texture_2d<f32>;
 struct LayerTerrainOut {
  @builtin(position) position:vec4<f32>, @location(0) world:vec2<f32>, @location(1) uv:vec2<f32>,
 }
@@ -28,7 +29,7 @@ fn layerTileCell(tex:texture_2d<f32>,origin:vec2<u32>,local:vec2<f32>,side:u32,f
  // Clamp all four colour reads to this authored tile (GPU design §16.3).
  return mix(mix(layerTileTexel(tex,origin,p,side),layerTileTexel(tex,origin,p+vec2<i32>(1,0),side),f.x),mix(layerTileTexel(tex,origin,p+vec2<i32>(0,1),side),layerTileTexel(tex,origin,p+vec2<i32>(1,1),side),f.x),f.y);
 }
-@fragment fn layer_terrain_fragment(in:LayerTerrainOut)->@location(0) vec4<f32> {
+fn layerTerrainColor(in:LayerTerrainOut)->vec4<f32> {
  if(layerU.flags.y==0u){
   let size=textureDimensions(layerFallback);let at=clamp(vec2<i32>(floor(in.uv*vec2<f32>(size))),vec2<i32>(0),vec2<i32>(size)-1);
   return textureLoad(layerFallback,at,0);
@@ -42,4 +43,27 @@ fn layerTileCell(tex:texture_2d<f32>,origin:vec2<u32>,local:vec2<f32>,side:u32,f
  }
  let origin=vec2<u32>(cell%layerU.tiles.z,cell/layerU.tiles.z)*32u;
  return layerTileCell(layerTiles,origin,local,32u,filtered);
+}
+
+fn layerLinear(c:vec3<f32>)->vec3<f32> {
+ return select(c/12.92,pow((c+0.055)/1.055,vec3<f32>(2.4)),c>=vec3<f32>(0.04045));
+}
+fn layerDisplay(c:vec3<f32>)->vec3<f32> {
+ return select(c*12.92,1.055*pow(c,vec3<f32>(1.0/2.4))-0.055,c>=vec3<f32>(0.0031308));
+}
+fn layerGroundPixel(pixel:vec2<f32>)->vec3<f32> {
+ let q=pixel/2-0.5;let at=vec2<i32>(floor(q));let f=fract(q);
+ // Spare geometric capacity is never part of the field's visible extent.
+ let lo=vec2<i32>(0);let hi=vec2<i32>(layerU.lightValues.xy)-1;
+ return mix(mix(textureLoad(layerGroundField,clamp(at,lo,hi),0).rgb,textureLoad(layerGroundField,clamp(at+vec2<i32>(1,0),lo,hi),0).rgb,f.x),mix(textureLoad(layerGroundField,clamp(at+vec2<i32>(0,1),lo,hi),0).rgb,textureLoad(layerGroundField,clamp(at+vec2<i32>(1,1),lo,hi),0).rgb,f.x),f.y);
+}
+@fragment fn layer_terrain_fragment(in:LayerTerrainOut)->@location(0) vec4<f32> {
+ let original=layerTerrainColor(in);let pixel=in.position.xy;
+ if(layerU.lightValues.z<0.5 || pixel.x<layerU.lightRect.x || pixel.y<layerU.lightRect.y || pixel.x>=layerU.lightRect.x+layerU.lightRect.z || pixel.y>=layerU.lightRect.y+layerU.lightRect.w){return original;}
+ let field=layerGroundPixel(pixel);if(max(field.x,max(field.y,field.z))<=0){return original;}
+ // GPU design §31.8: bounded optical-density field resolves before objects.
+ let base=layerLinear(original.rgb/max(original.a,0.000001));
+ var reflected=mix(base,vec3<f32>(dot(base,vec3<f32>(0.2126,0.7152,0.0722))),0.25);
+ reflected*=2-reflected;
+ return vec4<f32>(layerDisplay(base+(1-base)*reflected*field)*original.a,original.a);
 }

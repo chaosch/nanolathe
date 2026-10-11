@@ -1,6 +1,6 @@
 struct LayerUniform {
  camera:vec4<f32>, viewport:vec4<f32>, rect:vec4<f32>, fogRect:vec4<f32>,
- tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>,
+ tiles:vec4<u32>, flags:vec4<u32>, ground:vec4<f32>, glow:vec4<f32>, lightRect:vec4<f32>, lightValues:vec4<f32>,
 }
 struct LayerQuad {rect:vec4<f32>,uv:vec4<f32>,color:vec4<f32>,params:vec4<f32>}
 struct LayerVertex {positionUV:vec4<f32>,color:vec4<f32>,bounds:vec4<f32>}

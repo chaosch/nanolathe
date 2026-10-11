@@ -26,7 +26,7 @@ var layerFogShader string
 //go:embed overlay.wgsl
 var layerOverlayShader string
 
-const layerUniformSize = 112
+const layerUniformSize = 160
 const layerSmokeStride = 144
 
 type LayerCounters struct{ Draws, Sprites, Overlay, UploadBytes int }
@@ -83,6 +83,8 @@ type Layers struct {
 	sprites, overlayQuads, effectQuads, effectVertices, effectGround, effectSmoke, lights       layerBuffer
 	annotations                                                                                 layerBuffer
 	world                                                                                       *wgpu.TextureView // borrowed; never released by Layers
+	glowView, groundLightView                                                                   *wgpu.TextureView // borrowed component outputs
+	glowValues, groundLightRect, groundLightValues                                              [4]float32
 	uniformBytes                                                                                [layerUniformSize]byte
 	rect                                                                                        [4]float32
 	tileInfo                                                                                    [4]uint32
@@ -417,7 +419,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	uniform := layerBufferEntry(0, stages, gputypes.BufferBindingTypeUniform, layerUniformSize)
 	var pl *wgpu.PipelineLayout
 	var shader *wgpu.ShaderModule
-	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false)})
+	l.terrainLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, true), layerTextureEntry(3, false), layerTextureEntry(4, false), layerTextureEntry(5, false)})
 	if err != nil {
 		return
 	}
@@ -447,7 +449,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err != nil {
 		return
 	}
-	l.fogLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, false), layerTextureEntry(3, false)})
+	l.fogLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{uniform, layerTextureEntry(1, false), layerTextureEntry(2, false), layerTextureEntry(3, false), layerTextureEntry(4, false)})
 	if err != nil {
 		return
 	}
@@ -511,7 +513,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err != nil {
 		return
 	}
-	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}})
+	err = l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: l.terrainImage.v}})
 	if err != nil {
 		return
 	}
@@ -553,7 +555,35 @@ func (l *Layers) SetWorldTexture(view *wgpu.TextureView) error {
 		return layerError("completed world texture required")
 	}
 	l.world = view
-	return l.layerGroup(&l.fogGroup, l.fogLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: view}, {Binding: 2, TextureView: l.fogGrid.v}, {Binding: 3, TextureView: l.fogAtlas.v}})
+	return l.layerGroup(&l.fogGroup, l.fogLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: view}, {Binding: 2, TextureView: l.fogGrid.v}, {Binding: 3, TextureView: l.fogAtlas.v}, {Binding: 4, TextureView: l.layerGlowTexture()}})
+}
+
+// SetFields borrows component outputs after the host completion boundary.
+// Only view replacement rebinds; frame flags/active extents live in uniforms.
+func (l *Layers) SetFields(glow, ground *wgpu.TextureView, glowValues, rect, values [4]float32) error {
+	l.glowValues, l.groundLightRect, l.groundLightValues = glowValues, rect, values
+	if l.glowView != glow {
+		l.glowView = glow
+		if l.world != nil {
+			if err := l.SetWorldTexture(l.world); err != nil {
+				return err
+			}
+		}
+	}
+	if l.groundLightView != ground {
+		l.groundLightView = ground
+		if ground == nil {
+			ground = l.terrainImage.v
+		}
+		return l.layerGroup(&l.terrainGroup, l.terrainLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: l.tileAtlas.v}, {Binding: 2, TextureView: l.lookup.v}, {Binding: 3, TextureView: l.tileDetail.v}, {Binding: 4, TextureView: l.terrainImage.v}, {Binding: 5, TextureView: ground}})
+	}
+	return nil
+}
+func (l *Layers) layerGlowTexture() *wgpu.TextureView {
+	if l.glowView != nil {
+		return l.glowView
+	}
+	return l.terrainImage.v
 }
 
 func layerRuns(quads []meshscene.OverlayQuad, kind uint32) []layerDraw {
@@ -687,6 +717,9 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		binary.LittleEndian.PutUint32(l.uniformBytes[88:], 1)
 	}
 	layerVec(l.uniformBytes[:], 96, [4]float32{float32(l.waterStep), drawlist.ScorchFadeStartTicks, drawlist.ScorchLifeTicks, f.Alpha})
+	layerVec(l.uniformBytes[:], 112, l.glowValues)
+	layerVec(l.uniformBytes[:], 128, l.groundLightRect)
+	layerVec(l.uniformBytes[:], 144, l.groundLightValues)
 	sprites, bands, remap := layerOrderSprites(f)
 	l.spriteBands = bands
 	l.spriteRemap = remap
@@ -777,7 +810,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		l.missing["water_surface_reflections"] = 1
 	}
 	for _, light := range f.Lighting.Lights {
-		if light.Flags[1] != 0 && light.ColorGroundGain[3] > 0 {
+		if light.Flags[1] != 0 && light.ColorGroundGain[3] > 0 && l.groundLightValues[2] == 0 {
 			l.missing["bounded_terrain_lighting"]++
 		}
 	}
@@ -846,7 +879,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 		if err != nil {
 			return
 		}
-		if len(stock.Glow.Vertices) > 0 {
+		if len(stock.Glow.Vertices) > 0 && l.glowValues[2] == 0 {
 			l.missing["enhanced_glow"] = len(stock.Glow.Vertices) / 3
 		}
 		for _, src := range stock.Layers {
