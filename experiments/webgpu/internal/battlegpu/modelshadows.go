@@ -269,14 +269,8 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 	return nil
 }
 
-func (m *Models) modelInitShadows(scene *meshscene.Scene, module *wgpu.ShaderModule, bodyLayout *wgpu.PipelineLayout) (err error) {
+func (m *Models) modelInitShadows(scene *meshscene.Scene) (err error) {
 	p := &m.shadowWork
-	if p.bodyPipeline, err = m.modelPipeline(module, bodyLayout, "model_vertex", "model_shadow_fragment", wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyTriangleList); err != nil {
-		return
-	}
-	if p.outlinePipeline, err = m.modelPipeline(module, bodyLayout, "model_vertex", "model_shadow_outline", wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyLineList); err != nil {
-		return
-	}
 	if p.uniform, err = m.modelBuffer("battle-shadow-uniforms", modelUniformSize, wgpu.BufferUsageUniform|wgpu.BufferUsageCopyDst, nil); err != nil {
 		return
 	}

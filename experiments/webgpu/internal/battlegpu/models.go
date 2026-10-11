@@ -111,6 +111,8 @@ type Models struct {
 	textureView, paletteView                                                    *wgpu.TextureView
 	sampler                                                                     *wgpu.Sampler
 	poseLayout, bodyLayout, resolveLayout                                       *wgpu.BindGroupLayout
+	bodyPipelineLayout                                                          *wgpu.PipelineLayout
+	bodyWork                                                                    modelBodyPipelines
 	resolvePipelineLayout                                                       *wgpu.PipelineLayout
 	mergeLayout                                                                 *wgpu.BindGroupLayout
 	mergePipelineLayout                                                         *wgpu.PipelineLayout
@@ -571,21 +573,13 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return
 	}
 	m.modelRetain(m.posePipeline.Release)
-	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
-	entries := []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 80), modelBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, modelPoseStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelInstanceStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5), modelBufferEntry(6, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 16), modelBufferEntry(7, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 16), modelBufferEntry(8, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 48), modelBufferEntry(9, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 64), {Binding: 10, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelBufferEntry(11, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 16)}
-	if m.bodyLayout, layout, err = m.modelLayout(entries); err != nil {
+	if m.bodyLayout, m.bodyPipelineLayout, err = m.modelLayout(modelBodyLayoutEntries()); err != nil {
 		return
 	}
-	if module, err = m.modelModule(modelBodyShader); err != nil {
+	if err = m.modelInitShadows(scene); err != nil {
 		return
 	}
-	if m.bodyPipeline, err = m.modelPipeline(module, layout, "model_vertex", "model_fragment", wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyTriangleList); err != nil {
-		return
-	}
-	if m.outlinePipeline, err = m.modelPipeline(module, layout, "model_vertex", "outline_fragment", wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyLineList); err != nil {
-		return
-	}
-	if err = m.modelInitShadows(scene, module, layout); err != nil {
+	if err = m.modelPrepareBodyPipelines(); err != nil {
 		return
 	}
 	if m.resolveLayout, m.resolvePipelineLayout, err = m.modelLayout(modelCommitLayoutEntries()); err != nil {
@@ -594,7 +588,8 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err = m.modelPrepareResolvePipeline(); err != nil {
 		return
 	}
-	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
+	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
+	entries := []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
 	if m.mergeLayout, m.mergePipelineLayout, err = m.modelLayout(entries); err != nil {
 		return
 	}
@@ -1051,6 +1046,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		m.modelReleaseCommitGroup()
 		m.atlas.modelReleaseGroup()
 	}
+	if e = m.modelPrepareBodyPipelines(); e != nil {
+		return e
+	}
 	if e = m.modelPrepareResolvePipeline(); e != nil {
 		return e
 	}
@@ -1293,6 +1291,9 @@ func (m *Models) Close() {
 	}
 	m.closed = true
 	m.modelReleaseCommitGroup()
+	m.bodyWork.modelClose()
+	m.bodyPipeline, m.outlinePipeline = nil, nil
+	m.shadowWork.bodyPipeline, m.shadowWork.outlinePipeline = nil, nil
 	m.shadowWork.modelClose()
 	m.atlas.modelClose()
 	if m.resolvePipeline != nil {

@@ -19,18 +19,20 @@ struct Instance {
 struct Material { first:u32,count:u32,kind:u32,local:u32 }
 struct Selected { uv:vec4<f32>,color:vec4<f32>,params:vec4<f32> }
 struct Light { position:vec4<f32>,color:vec4<f32>,age:vec4<f32>,flags:vec4<u32> }
-@group(0) @binding(0) var<storage,read> vertices:array<Vertex>;
-@group(0) @binding(1) var<storage,read> poses:array<Pose>;
-@group(0) @binding(2) var<storage,read> instances:array<Instance>;
+// Each named fixed array is specialized to its allocated buffer capacity.
+// The pinned render HAL does not supply runtime-array bounds metadata.
+@group(0) @binding(0) var<storage,read> vertices:array<Vertex,1>;
+@group(0) @binding(1) var<storage,read> poses:array<Pose,1>;
+@group(0) @binding(2) var<storage,read> instances:array<Instance,1>;
 @group(0) @binding(3) var<uniform> u:Uniforms;
 @group(0) @binding(4) var atlas:texture_2d<f32>;
 @group(0) @binding(5) var palette:texture_2d<f32>;
-@group(0) @binding(6) var<storage,read> materials:array<Material>;
-@group(0) @binding(7) var<storage,read> frames:array<vec4<f32>>;
-@group(0) @binding(8) var<storage,read> selected:array<Selected>;
-@group(0) @binding(9) var<storage,read> lights:array<Light>;
+@group(0) @binding(6) var<storage,read> materials:array<Material,1>;
+@group(0) @binding(7) var<storage,read> frames:array<vec4<f32>,1>;
+@group(0) @binding(8) var<storage,read> selected:array<Selected,1>;
+@group(0) @binding(9) var<storage,read> lights:array<Light,1>;
 @group(0) @binding(10) var nearestSampler:sampler;
-@group(0) @binding(11) var<storage,read> centers:array<vec4<f32>>;
+@group(0) @binding(11) var<storage,read> centers:array<vec4<f32>,1>;
 struct Out {
  @builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) color:vec3<f32>,
  @location(2) shade:f32,@location(3) key:f32,@location(4) @interpolate(flat) faceNormal:vec3<f32>,
