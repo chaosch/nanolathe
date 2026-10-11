@@ -302,7 +302,7 @@ func (r *StockReflections) reflectionResize(width, height int) error {
 	if r.color.v != nil && r.width == width && r.height == height {
 		return nil
 	}
-	usage := wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding
+	usage := wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopySrc
 	color, err := r.reflectionTexture(width, height, gputypes.TextureFormatRGBA8Unorm, usage)
 	if err != nil {
 		return err
