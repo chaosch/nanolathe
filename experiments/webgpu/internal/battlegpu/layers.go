@@ -97,6 +97,7 @@ type Layers struct {
 	featureSources, featureDrawn                                                                []bool
 	looseSpriteRuns                                                                             [2][]layerDraw
 	featurePaintOrder                                                                           bool
+	projectilePaintOrder                                                                        bool
 	featurePaintCount                                                                           int
 	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
 	overlayRuns                                                                                 []layerDraw
@@ -894,6 +895,7 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 		}
 	}
 	stock := f.StockEffects
+	bodySlot := 0
 	if stock != nil {
 		scale := stock.Scale
 		if !(scale > 0) || math.IsInf(float64(scale), 0) {
@@ -1025,12 +1027,41 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 					ops = append(ops, layerDraw{kind: op.Kind})
 					l.missing["lens_snapshot"] += op.Count
 				case meshscene.EffectOpRetainedModel:
-					ops = append(ops, layerDraw{kind: op.Kind})
-					l.missing["retained_projectile_marker_order"] += op.Count
+					if !l.projectilePaintOrder {
+						ops = append(ops, layerDraw{kind: op.Kind})
+						l.missing["retained_projectile_marker_order"] += op.Count
+						continue
+					}
+					if len(src.ProjectileOrder) != len(src.RetainedModels) {
+						return false, layerError("projectile identities aligned to retained markers")
+					}
+					for i := op.First; i < op.First+op.Count; i++ {
+						identity := src.ProjectileOrder[i]
+						if identity.ID == 0 || identity.Member > 1 {
+							return false, layerError("valid projectile identity/member")
+						}
+						marker := layerDraw{kind: op.Kind, count: 1, mode: identity.Member}
+						if src.RetainedModels[i].ShadowOnly {
+							marker.mode = 2
+						} else {
+							if bodySlot >= len(f.Composition.ProjectileSlots) {
+								return false, layerError("retained projectile body marker within composition slots")
+							}
+							marker.first = f.Composition.ProjectileSlots[bodySlot]
+							if int(marker.first) > len(f.Composition.Slots) {
+								return false, layerError("projectile body slot within final atlas")
+							}
+							bodySlot++
+						}
+						ops = append(ops, marker)
+					}
 				}
 			}
 			l.effectLayers[layerIndex] = ops
 		}
+	}
+	if stock != nil && l.projectilePaintOrder && bodySlot != len(f.Composition.ProjectileSlots) {
+		return false, layerError("all composed projectile body markers consumed")
 	}
 	if stock == nil {
 		l.effectLayers = l.effectLayers[:0]
@@ -1136,12 +1167,30 @@ func (l *Layers) DrawAnnotations(pass *wgpu.RenderPassEncoder, originalSlot uint
 // DrawEffects replays a production barrier layer (0..4), preserving spans and
 // blend stream order. Unsupported snapshot/model operations appear in Missing.
 func (l *Layers) DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) {
+	l.DrawEffectsOrdered(pass, layer, nil)
+}
+
+// The parent marker commits its combined retained slot once. The header-child
+// marker consumes its identity without a second body commit [03 §5.4].
+func (l *Layers) DrawEffectsOrdered(pass *wgpu.RenderPassEncoder, layer uint32, model func(uint32)) {
 	if l.closed || int(layer) >= len(l.effectLayers) {
 		return
 	}
 	pass.SetBindGroup(0, l.effectGroup, nil)
 	var selected *wgpu.RenderPipeline
 	for _, op := range l.effectLayers[layer] {
+		if op.kind == meshscene.EffectOpRetainedModel {
+			if op.mode == 0 && op.first != 0 && op.count != 0 {
+				if model == nil {
+					l.missing["retained_projectile_marker_order"]++
+				} else {
+					model(op.first)
+					selected = nil
+					pass.SetBindGroup(0, l.effectGroup, nil)
+				}
+			}
+			continue
+		}
 		if op.count == 0 {
 			continue
 		}

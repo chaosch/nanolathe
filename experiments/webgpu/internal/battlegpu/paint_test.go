@@ -15,3 +15,15 @@ func TestBattlePaintPreservesFeatureShadowAndBodyBetweenSubjects(t *testing.T) {
 		t.Fatalf("paint walk: %+v", got)
 	}
 }
+
+func TestBattlePaintDefersStockProjectileBodiesToTheirEffectMarkers(t *testing.T) {
+	f := meshscene.LiveFrame{StockEffects: &meshscene.StockFrame{}, Composition: meshscene.ModelComposition{Paint: []meshscene.ModelPaint{{Slot: 1, Kind: 3, Phase: 2}, {Slot: 2, Kind: 1, Phase: 1}}}}
+	got := battlePaintOrder(nil, f)
+	if len(got) != 1 || got[0].slot != 2 {
+		t.Fatal(got)
+	}
+	f.StockEffects = nil
+	if len(battlePaintOrder(nil, f)) != 2 {
+		t.Fatal("fallback projectile omitted")
+	}
+}

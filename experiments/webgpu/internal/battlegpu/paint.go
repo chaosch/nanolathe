@@ -17,6 +17,9 @@ type battlePaint struct {
 func battlePaintOrder(dst []battlePaint, f meshscene.LiveFrame) []battlePaint {
 	dst = dst[:0]
 	for _, p := range f.Composition.Paint {
+		if f.StockEffects != nil && p.Kind == 3 {
+			continue
+		}
 		dst = append(dst, battlePaint{slot: p.Slot, phase: p.Phase, rank: p.Rank})
 	}
 	for _, p := range f.Composition.FeatureSprites {

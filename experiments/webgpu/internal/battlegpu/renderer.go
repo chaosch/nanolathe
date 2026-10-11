@@ -41,6 +41,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	r.layers, err = NewLayers(d, q, format, scene)
 	if err == nil {
 		r.layers.SetFeaturePaintOrder(true)
+		r.layers.projectilePaintOrder = true
 	}
 	if err == nil {
 		r.glow, err = NewGlow(d, q, scene)
@@ -141,19 +142,22 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		}
 	}
 	r.layers.DrawTerrain(pass)
-	r.layers.DrawEffects(pass, 0)
+	drawEffects := func(layer uint32) {
+		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) })
+	}
+	drawEffects(0)
 	r.layers.DrawLooseSprites(pass, 0)
 	paintPhase(meshscene.ModelPhaseShortFeatures)
-	r.layers.DrawEffects(pass, 1)
+	drawEffects(1)
 	paintPhase(meshscene.ModelPhaseGround)
 	r.layers.DrawLooseSprites(pass, 1)
-	// Projectile body markers remain an explicitly reported approximation:
-	// their producer-owned individual effect barriers are not yet replayed.
+	// Unrecorded fallback subjects retain their ordinary effects phase.
+	// Stock projectile subjects commit at their original effect markers.
 	paintPhase(meshscene.ModelPhaseEffects)
-	r.layers.DrawEffects(pass, 2)
+	drawEffects(2)
 	paintPhase(meshscene.ModelPhaseAir)
-	r.layers.DrawEffects(pass, 3)
-	r.layers.DrawEffects(pass, 4)
+	drawEffects(3)
+	drawEffects(4)
 	if e := pass.End(); e != nil {
 		return Counters{}, e
 	}
