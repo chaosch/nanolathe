@@ -225,7 +225,7 @@ func TestModelGroupCoreShaderABIAndEmittedMerge(t *testing.T) {
 	}
 	for _, pattern := range []string{
 		`if \(delta[_0-9]* >= 256\)`, `if \(delta[_0-9]* <= -256\)`,
-		`prior[_0-9]* < shifted[_0-9]*`, `prior[_0-9]* <= shifted[_0-9]*`,
+		`prior[_0-9]* < _e[0-9]+`, `prior[_0-9]* <= _e[0-9]+`,
 		`metal::clamp\(`,
 		`metadata[_0-9]*\.y > 0\.5`, `nextColor[_0-9]*\.w > 0\.0`,
 		`k[_0-9]* <= clip[_0-9]*\.y`, `k[_0-9]* <= clip[_0-9]*\.w`,
