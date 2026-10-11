@@ -155,3 +155,17 @@ unchanged independent bindings, then qualify the shared group against the
 corrected baseline. No performance or pixel claim before actual native gates.
 The shader compiler numbers all declared resources by type, including unused
 globals; both commit modules must declare the full shared prefix.
+
+
+## Zero-cgo combined host qualification
+
+The old combined CGO_ENABLED=0 build failed with duplicate fakecgo symbols;
+that attempt remains recorded. Exact-pinned goffi v0.6.3 documents the
+`nofakecgo` build tag for coexistence with purego. No dependency replacement or
+module-cache patch is required. A b40b570c8 external combined build with
+CGO_ENABLED=0 and this tag ran the real coastal native path: final pixels, all
+eight diagnostic planes and all eight state files match its CGO_ENABLED=1
+build exactly. The prototype build-play tool now uses that qualified Go-only
+build configuration and records it in its external manifest. Metal remains an
+Apple native API reached through goffi; Go-only describes our binding/build,
+not a graphics driver implemented in Go. Production build/defaults are untouched.

@@ -46,11 +46,14 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
  overlay[str(virtual)]=str(source)
  sources.append(dict(path=str(relative),source_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),build_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),rewrites=rewrites))
 (out/'overlay.json').write_text(json.dumps(dict(Replace=overlay),indent=2)+'\n')
-env=dict(os.environ,GOWORK='off',CGO_ENABLED='1',GOMAXPROCS=os.environ.get('GOMAXPROCS','2'))
-cmd=['go','build','-mod=mod','-p','2','-trimpath','-overlay',str(out/'overlay.json'),'-o',str(out/'nanolathe-webgpu'),'./cmd/nanolathe']
+# Both GoGPU/goffi and Ebitengine/purego otherwise define fakecgo runtime
+# symbols when linked together. The exact pinned goffi documents nofakecgo:
+# use purego's runtime shim once, without a C compiler or dependency replacement.
+env=dict(os.environ,GOWORK='off',CGO_ENABLED='0',GOMAXPROCS=os.environ.get('GOMAXPROCS','2'))
+cmd=['go','build','-mod=mod','-p','2','-trimpath','-tags','nofakecgo','-overlay',str(out/'overlay.json'),'-o',str(out/'nanolathe-webgpu'),'./cmd/nanolathe']
 print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=work,env=env,check=True)
 bundle=out/'Nanolathe WebGPU Prototype.app';mac=bundle/'Contents/MacOS';mac.mkdir(parents=True)
 os.link(out/'nanolathe-webgpu',mac/'nanolathe-webgpu')
 (bundle/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier='gg.nanolathe.webgpu.prototype',CFBundleName='Nanolathe WebGPU Prototype',CFBundleDisplayName='Nanolathe WebGPU Prototype',CFBundleExecutable='nanolathe-webgpu',CFBundlePackageType='APPL',CFBundleVersion='1',NSHighResolutionCapable=True)))
-(out/'build-manifest.json').write_text(json.dumps(dict(repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,sources=sources,modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),scope='temporary command overlay only; root sources/module/defaults unchanged'),indent=2)+'\n')
+(out/'build-manifest.json').write_text(json.dumps(dict(repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOMAXPROCS=env['GOMAXPROCS']),sources=sources,modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),scope='temporary command overlay only; root sources/module/defaults unchanged'),indent=2)+'\n')
 print(out/'nanolathe-webgpu')
