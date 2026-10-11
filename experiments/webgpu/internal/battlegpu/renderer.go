@@ -16,6 +16,7 @@ type Renderer struct {
 	layers               *Layers
 	glow                 *Glow
 	groundLight          *GroundLight
+	distortions          *Distortions
 	world, depth         *wgpu.Texture
 	worldView, depthView *wgpu.TextureView
 	width, height        int
@@ -26,6 +27,7 @@ type Counters struct {
 	Layers      LayerCounters
 	Glow        GlowCounters
 	GroundLight GroundLightCounters
+	Distortions DistortionCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
@@ -50,6 +52,9 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		if err == nil {
 			r.groundLight, err = NewGroundLight(d, q, scene)
 		}
+	}
+	if err == nil {
+		r.distortions, err = NewDistortions(d, q, format, layerFogShader)
 	}
 	return
 }
@@ -118,6 +123,13 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := r.layers.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
+	if e := r.distortions.Prepare(f, width, height); e != nil {
+		return Counters{}, e
+	}
+	if e := r.distortions.SetInputs(r.layers.uniform, r.worldView, r.layers.fogGrid.v, r.layers.fogAtlas.v, r.layers.layerGlowTexture()); e != nil {
+		return Counters{}, e
+	}
+	delete(r.layers.missing, "enhanced_distortion")
 	if e := r.models.Compute(enc); e != nil {
 		return Counters{}, e
 	}
@@ -171,11 +183,12 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	r.layers.DrawFog(final)
+	r.distortions.Draw(final)
 	r.layers.DrawOverlay(final)
 	if e := final.End(); e != nil {
 		return Counters{}, e
 	}
-	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters()}, nil
+	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {
@@ -213,6 +226,10 @@ func (r *Renderer) closeTargets() {
 func (r *Renderer) Close() {
 	if r == nil {
 		return
+	}
+	if r.distortions != nil {
+		r.distortions.Close()
+		r.distortions = nil
 	}
 	r.closeTargets()
 	if r.groundLight != nil {
