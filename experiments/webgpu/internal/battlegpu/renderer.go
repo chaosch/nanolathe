@@ -24,6 +24,7 @@ type Renderer struct {
 	width, height        int
 	paint                []battlePaint
 	paintState           battleRenderState
+	omitSeabed           bool
 }
 type Counters struct {
 	Models      ModelCounters
@@ -156,7 +157,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		r.layers.missing["model_water_reflection_and_mixed_budget"] = 1
 	}
 	if f.Water.Mask[3] > .5 {
-		r.layers.missing["model_water_refraction_and_seabed_promotion"] = 1
+		r.layers.missing["model_water_refraction"] = 1
 	}
 	if e := r.lenses.Prepare(f, width, height); e != nil {
 		return Counters{}, e
@@ -169,6 +170,11 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	}
 	if e := r.reflections.Encode(enc); e != nil {
 		return Counters{}, e
+	}
+	if !r.omitSeabed {
+		if e := r.layers.EncodeSeabed(enc, r.depthView); e != nil {
+			return Counters{}, e
+		}
 	}
 	beginWorld := func(load gputypes.LoadOp) (*wgpu.RenderPassEncoder, error) {
 		return enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: load, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: load, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})

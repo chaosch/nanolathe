@@ -50,6 +50,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 	}
 	// Field copies prove native pixel output independently of submission counts.
 	shadowBody, shadowDepth, shadowMask, shadowW, shadowH := m.DebugShadowResources()
+	bed, bedW, bedH := renderer.layers.DebugSeabedResource()
 	for _, field := range []struct {
 		t           *wgpu.Texture
 		w, h, bytes int
@@ -57,6 +58,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		suffix      string
 		png         bool
 	}{
+		{bed, bedW, bedH, 8, gputypes.TextureFormatRGBA16Float, ".seabed.rgba16f", false},
 		{shadowBody, shadowW, shadowH, 4, gputypes.TextureFormatRGBA8Unorm, ".shadow-body.png", true},
 		{shadowDepth, shadowW, shadowH, 4, gputypes.TextureFormatDepth32Float, ".shadow-depth.f32", false},
 		{shadowMask, shadowW, shadowH, 1, gputypes.TextureFormatR8Unorm, ".shadow-mask.r8", false},
@@ -84,7 +86,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		if field.format == gputypes.TextureFormatDepth32Float {
 			aspect = gputypes.TextureAspectDepthOnly
 		}
-		e.TransitionTextures([]wgpu.TextureBarrier{{Texture: field.t, Range: wgpu.TextureRange{Aspect: gputypes.TextureAspectAll, MipLevelCount: 1, ArrayLayerCount: 1}, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageTextureBinding, NewUsage: wgpu.TextureUsageCopySrc}}})
+		e.TransitionTextures([]wgpu.TextureBarrier{{Texture: field.t, Range: wgpu.TextureRange{Aspect: aspect, MipLevelCount: 1, ArrayLayerCount: 1}, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageTextureBinding, NewUsage: wgpu.TextureUsageCopySrc}}})
 		e.CopyTextureToBuffer(field.t, read.b, []wgpu.BufferTextureCopy{{BufferLayout: wgpu.ImageDataLayout{BytesPerRow: uint32(read.row), RowsPerImage: uint32(read.h)}, TextureBase: wgpu.ImageCopyTexture{Texture: field.t, Aspect: aspect}, Size: wgpu.Extent3D{Width: uint32(read.w), Height: uint32(read.h), DepthOrArrayLayers: 1}}})
 	}
 	if n > 0 {
