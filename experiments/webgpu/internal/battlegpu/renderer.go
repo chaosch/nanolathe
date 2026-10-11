@@ -160,8 +160,8 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if f.Water.Mask[0] > 0 && f.Water.Controls[3] >= .5 {
 		r.layers.missing["model_water_reflection_and_mixed_budget"] = 1
 	}
-	// TODO(question): underwater commit requires marked BLUE metadata and
-	// production 2x body resolve before its padded area-weighted gather.
+	// TODO(question): underwater commit requires marked winning/final BLUE
+	// metadata before its padded area-weighted gather over the 2x body.
 	if f.Water.Mask[3] > .5 {
 		r.layers.missing["model_water_refraction"] = 1
 	}
