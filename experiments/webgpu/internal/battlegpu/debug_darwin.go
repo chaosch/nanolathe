@@ -50,6 +50,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 	}{
 		{renderer.groundLight.texture, renderer.groundLight.textureWidth, renderer.groundLight.textureHeight, 4, wgpu.TextureFormatRGBA8Unorm, ".ground.png", true},
 		{renderer.glow.emission.t, renderer.glow.emission.w, renderer.glow.emission.h, 8, gputypes.TextureFormatRGBA16Float, ".glow.rgba16f", false},
+		{renderer.glow.octaves.t, renderer.glow.octaves.w, renderer.glow.octaves.h, 8, gputypes.TextureFormatRGBA16Float, ".glow-octaves.rgba16f", false},
 	} {
 		if field.t == nil {
 			continue
