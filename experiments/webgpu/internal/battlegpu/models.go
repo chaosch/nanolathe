@@ -105,6 +105,7 @@ type Models struct {
 	format                                                                                gputypes.TextureFormat
 	owned                                                                                 []modelRelease
 	closed, prepared                                                                      bool
+	state                                                                                 *battleRenderState
 	meshes                                                                                []modelMesh
 	materials                                                                             []meshscene.Material
 	frames                                                                                [][4]float32
@@ -1121,17 +1122,24 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	}
 	pass.SetBindGroup(0, m.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
+	var selected *wgpu.RenderPipeline
 	for _, d := range m.draws {
 		mesh := m.meshes[d.mesh]
 		if mesh.count == 0 {
 			continue
 		}
 		if mesh.edgeCount > 0 && d.outline {
-			pass.SetPipeline(m.outlinePipeline)
+			if m.state == nil || m.state.disabled || selected != m.outlinePipeline {
+				pass.SetPipeline(m.outlinePipeline)
+				selected = m.outlinePipeline
+			}
 			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: d.instance})
 			m.counters.Draws++
 		}
-		pass.SetPipeline(m.bodyPipeline)
+		if m.state == nil || m.state.disabled || selected != m.bodyPipeline {
+			pass.SetPipeline(m.bodyPipeline)
+			selected = m.bodyPipeline
+		}
 		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: d.instance})
 		m.counters.Draws++
 	}
@@ -1177,8 +1185,7 @@ func (m *Models) Draw(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil {
 		return
 	}
-	pass.SetPipeline(m.resolvePipeline)
-	pass.SetBindGroup(0, m.atlas.group, nil)
+	m.state.selectResources(pass, m.resolvePipeline, m.atlas.group)
 	for _, p := range m.paint {
 		wanted := p.phase == phase+1 || phase == meshscene.PhaseGround && p.phase == meshscene.ModelPhaseShortFeatures
 		if !wanted {
@@ -1192,8 +1199,7 @@ func (m *Models) DrawShadows(pass *wgpu.RenderPassEncoder) {
 	if m == nil || m.closed || !m.prepared || pass == nil || m.shadowCount == 0 {
 		return
 	}
-	pass.SetPipeline(m.shadowResolvePipeline)
-	pass.SetBindGroup(0, m.atlas.group, nil)
+	m.state.selectResources(pass, m.shadowResolvePipeline, m.atlas.group)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount)})
 	m.counters.Draws++
 }
@@ -1205,8 +1211,7 @@ func (m *Models) DrawSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil || slot == 0 || int(slot) > len(m.slotBytes)/modelSlotStride {
 		return
 	}
-	pass.SetPipeline(m.resolvePipeline)
-	pass.SetBindGroup(0, m.atlas.group, nil)
+	m.state.selectResources(pass, m.resolvePipeline, m.atlas.group)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
 	m.counters.Draws++
 }
@@ -1214,12 +1219,11 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil {
 		return
 	}
-	pass.SetPipeline(m.shadowResolvePipeline)
-	pass.SetBindGroup(0, m.atlas.group, nil)
 	for _, p := range m.shadowPaint {
 		if p.slot != slot {
 			continue
 		}
+		m.state.selectResources(pass, m.shadowResolvePipeline, m.atlas.group)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: p.subject})
 		m.counters.Draws++
 	}

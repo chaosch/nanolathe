@@ -48,6 +48,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		r.layers.SetFeaturePaintOrder(true)
 		r.layers.projectilePaintOrder = true
 		r.layers.state = &r.paintState
+		r.models.state = &r.paintState
 	}
 	if err == nil {
 		r.glow, err = NewGlow(d, q, scene)
@@ -154,16 +155,14 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 				r.layers.DrawFeature(pass, p.source)
 			} else {
 				r.models.DrawShadowSlot(pass, p.slot)
-				r.paintState.reset(pass)
 				r.layers.DrawAnnotations(pass, p.slot)
 				r.models.DrawSlot(pass, p.slot)
-				r.paintState.reset(pass)
 			}
 		}
 	}
 	r.layers.DrawTerrain(pass)
 	drawEffects := func(layer uint32) {
-		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot); r.paintState.reset(pass) })
+		r.layers.DrawEffectsOrdered(pass, layer, func(slot uint32) { r.models.DrawSlot(pass, slot) })
 	}
 	drawEffects(0)
 	r.layers.DrawLooseSprites(pass, 0)

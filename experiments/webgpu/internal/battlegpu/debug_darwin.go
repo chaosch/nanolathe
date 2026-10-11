@@ -20,12 +20,12 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 	c = &modelDebugCapture{}
 	m, world, worldW, worldH := renderer.models, renderer.world, renderer.width, renderer.height
 	color, shadow, poses, w, h, n := m.DebugResources()
-	for i, t := range []*wgpu.Texture{color, shadow, world} {
+	for i, t := range []*wgpu.Texture{color, shadow, world, m.atlas.color, m.atlas.metadata} {
 		readW, readH := w, h
 		if i == 2 {
 			readW, readH = worldW, worldH
 		}
-		bytes, format, suffix, png := 4, wgpu.TextureFormatRGBA8Unorm, []string{".color.png", ".shadow.png", ".world.png"}[i], true
+		bytes, format, suffix, png := 4, wgpu.TextureFormatRGBA8Unorm, []string{".color.png", ".shadow.png", ".world.png", ".source.png", ".keys.png"}[i], true
 		if i == 2 {
 			format = renderer.format
 			if format == gputypes.TextureFormatRGBA16Float {
