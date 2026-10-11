@@ -147,6 +147,17 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			cpu.Close()
 			cpu = nil
 		}
+		if opts.OutputDir != "" {
+			// Flush sampled allocation stacks only after freezing exact counters
+			// and stopping CPU timing. Delta profiles include profiler bookkeeping;
+			// MemStats above remains the source for exact measured-window totals.
+			runtime.GC()
+			for _, profile := range []struct{ name, file string }{{"allocs", "alloc.pprof"}, {"heap", "heap.pprof"}} {
+				if e := writeBattleProfile(filepath.Join(opts.OutputDir, profile.file), profile.name); e != nil {
+					return e
+				}
+			}
+		}
 		if opts.Benchmark != nil && opts.Benchmark.AfterMeasure != nil {
 			return opts.Benchmark.AfterMeasure()
 		}
@@ -254,6 +265,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			runtime.GC()
 			if opts.OutputDir != "" {
+				if e := writeBattleProfile(filepath.Join(opts.OutputDir, "alloc-base.pprof"), "allocs"); e != nil {
+					failure = e
+					app.Quit()
+					return
+				}
 				var e error
 				cpu, e = os.Create(filepath.Join(opts.OutputDir, "cpu.pprof"))
 				if e == nil {
@@ -378,6 +394,19 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	return report, failure
 }
+func writeBattleProfile(path, name string) error {
+	f, e := os.Create(path)
+	if e != nil {
+		return e
+	}
+	e = pprof.Lookup(name).WriteTo(f, 0)
+	closed := f.Close()
+	if e != nil {
+		return e
+	}
+	return closed
+}
+
 func writeRows(path string, rows []drawRow) error {
 	f, e := os.Create(path)
 	if e != nil {
