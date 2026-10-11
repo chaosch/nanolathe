@@ -63,6 +63,8 @@ type Glow struct {
 	octaves, atlas            glowTexture
 	atlasVersion              uint64
 	completed                 *wgpu.TextureView // borrowed from Encode; never released
+	sharedAtlas               bool
+	sourceAtlas               *wgpu.TextureView // borrowed from Layers; never released
 	counts                    GlowCounters
 	vertexBytes               []byte
 }
@@ -230,7 +232,14 @@ func (g *Glow) glowBindSource() error {
 	if g.completed == nil {
 		return nil
 	}
-	return g.glowGroup(&g.sourceGroup, g.sourceLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: g.uniform, Size: glowUniformSize}, {Binding: 1, Buffer: g.vertexBuffer}, {Binding: 2, TextureView: g.atlas.v}, {Binding: 3, TextureView: g.completed}})
+	atlas := g.atlas.v
+	if g.sharedAtlas {
+		atlas = g.sourceAtlas
+	}
+	if atlas == nil {
+		return glowError("current source atlas after layer preparation")
+	}
+	return g.glowGroup(&g.sourceGroup, g.sourceLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: g.uniform, Size: glowUniformSize}, {Binding: 1, Buffer: g.vertexBuffer}, {Binding: 2, TextureView: atlas}, {Binding: 3, TextureView: g.completed}})
 }
 
 func (g *Glow) glowPreparePlanes(width, height int) error {
@@ -316,9 +325,12 @@ func (g *Glow) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if err := g.glowPreparePlanes(width, height); err != nil {
 		return err
 	}
-	changed, err := g.glowUploadAtlas(stock)
-	if err != nil {
-		return err
+	changed := false
+	if !g.sharedAtlas {
+		changed, err = g.glowUploadAtlas(stock)
+		if err != nil {
+			return err
+		}
 	}
 	if g.vertexBuffer == nil || g.vertexCapacity < len(data) {
 		capacity := glowVertexSize
@@ -446,6 +458,17 @@ func (g *Glow) Close() {
 	}
 	g.owned = nil
 	g.completed = nil
+	g.sourceAtlas = nil
+}
+
+// Layers uploads this exact StockFrame.Atlas/version/dirty rectangle. Borrow
+// its current view after Prepare; completion precedes replacement and Close.
+// The standalone Glow path retains its own source atlas.
+func (g *Glow) glowShareAtlas(view *wgpu.TextureView) {
+	if g.sourceAtlas != view {
+		g.sourceAtlas = view
+		g.completed = nil // Encode rebuilds the group against both current views.
+	}
 }
 
 // Render HAL does not bind runtime size metadata. Fixed capacities follow the

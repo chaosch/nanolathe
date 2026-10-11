@@ -60,6 +60,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	if err == nil {
 		r.glow, err = NewGlow(d, q, scene)
 		if err == nil {
+			r.glow.sharedAtlas = true
 			r.groundLight, err = NewGroundLight(d, q, scene)
 		}
 	}
@@ -139,6 +140,7 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := r.layers.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
+	r.glow.glowShareAtlas(r.layers.effectAtlas.v)
 	if e := r.distortions.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
