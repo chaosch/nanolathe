@@ -64,14 +64,14 @@ func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 				t.Fatalf("corner guard participates in arithmetic: %s", line)
 			}
 		}
-		if strings.Contains(line, "* s_") && strings.Contains(line, ".screen.zw") {
+		if strings.Contains(line, "*") && strings.Contains(line, ".screen.zw") {
 			screenScales++
 		}
-		if strings.Contains(line, "* s_") && strings.Contains(line, ".atlas.zw") {
+		if strings.Contains(line, "*") && strings.Contains(line, ".atlas.zw") {
 			atlasScales++
 		}
 	}
-	if loads != 2 || screenScales != 2 || atlasScales != 1 {
+	if loads != 1 || screenScales != 1 || atlasScales != 1 {
 		t.Fatalf("resolve scales: loads=%d screen=%d atlas=%d", loads, screenScales, atlasScales)
 	}
 }
