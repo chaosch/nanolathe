@@ -75,6 +75,7 @@ type Models struct {
 	bodyPipeline, outlinePipeline, shadowPipeline, resolvePipeline, shadowResolvePipeline *wgpu.RenderPipeline
 	poseGroup, bodyGroup, resolveGroup                                                    *wgpu.BindGroup
 	colorView, depthView, shadowView                                                      *wgpu.TextureView
+	colorTexture, shadowTexture                                                           *wgpu.Texture
 	atlasWidth, atlasHeight                                                               int
 	width, height, pieceCount                                                             int
 	generation                                                                            uint64
@@ -702,7 +703,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	if aw > m.atlasWidth || ah > m.atlasHeight || m.colorView == nil {
 		m.atlasWidth, m.atlasHeight = max(aw, m.atlasWidth), max(ah, m.atlasHeight)
-		_, m.colorView, e = m.modelTexture("battle-model-subject-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment)
+		m.colorTexture, m.colorView, e = m.modelTexture("battle-model-subject-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment|wgpu.TextureUsageCopySrc)
 		if e != nil {
 			return e
 		}
@@ -710,7 +711,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		if e != nil {
 			return e
 		}
-		_, m.shadowView, e = m.modelTexture("battle-model-shadow-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment)
+		m.shadowTexture, m.shadowView, e = m.modelTexture("battle-model-shadow-atlas", m.atlasWidth, m.atlasHeight, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageRenderAttachment|wgpu.TextureUsageCopySrc)
 		if e != nil {
 			return e
 		}
@@ -722,7 +723,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		label string
 		n     int
 		usage gputypes.BufferUsage
-	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", len(m.shadowBytes), wgpu.BufferUsageStorage}} {
+	}{{&m.endpoints, "battle-pose-endpoints", max(modelPoseStride, len(f.Current)*modelPoseStride*2), wgpu.BufferUsageStorage}, {&m.poses, "battle-rigid-poses", max(modelPoseStride, len(f.Current)*modelPoseStride), wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc}, {&m.instances, "battle-model-instances", len(m.instanceBytes), wgpu.BufferUsageStorage}, {&m.selected, "battle-selected-materials", len(m.selectedBytes), wgpu.BufferUsageStorage}, {&m.lights, "battle-retained-lights", max(64, len(f.Lighting.Lights)*64), wgpu.BufferUsageStorage}, {&m.slots, "battle-model-slots", len(m.slotBytes), wgpu.BufferUsageStorage}, {&m.shadowRecords, "battle-shadow-records", len(m.shadowBytes), wgpu.BufferUsageStorage}} {
 		grow, err := m.modelGrow(u.b, u.label, u.n, u.usage)
 		if err != nil {
 			return err
@@ -921,6 +922,26 @@ func (m *Models) Counters() ModelCounters {
 		return ModelCounters{}
 	}
 	return m.counters
+}
+
+// DebugResources exposes borrowed untimed readback sources. Pose stride
+// is 80 bytes: a column-major Mat4 followed by four flag words. The caller must
+// finish all copies/maps before the next Prepare or Close. Native texture reads
+// need an explicit transition from TextureBinding before CopyTextureToBuffer.
+func (m *Models) DebugResources() (color, shadow *wgpu.Texture, poses *wgpu.Buffer, width, height, pieceCount int) {
+	if m == nil || m.closed || !m.prepared {
+		return
+	}
+	return m.colorTexture, m.shadowTexture, m.poses.buffer, m.atlasWidth, m.atlasHeight, m.pieceCount
+}
+
+// DebugPacking returns detached copies of the 384-byte instance and 48-byte
+// slot records uploaded by the last successful Prepare.
+func (m *Models) DebugPacking() (instances, slots []byte) {
+	if m == nil || m.closed || !m.prepared {
+		return
+	}
+	return slices.Clone(m.instanceBytes), slices.Clone(m.slotBytes)
 }
 func (m *Models) Close() {
 	if m == nil || m.closed {
