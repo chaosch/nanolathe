@@ -9,11 +9,11 @@ struct LayerGround {centreAxis:vec4<f32>,crossKind:vec4<f32>,values:vec4<f32>,ma
 struct LayerSmoke {quad:LayerQuad,selection:vec4<f32>,bounds:vec4<f32>,indices0:vec4<u32>,indices1:vec4<u32>,meta:vec4<u32>}
 struct LayerLight {positionRadius:vec4<f32>,colorGroundGain:vec4<f32>,groundAgeFadeKind:vec4<f32>,flags:vec4<u32>}
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
-@group(0) @binding(1) var<storage,read> layerQuads:array<LayerQuad>;
+@group(0) @binding(1) var<storage,read> layerQuads:array<LayerQuad,1>;
 @group(0) @binding(2) var<storage,read> layerVertices:array<LayerVertex,1>;
-@group(0) @binding(3) var<storage,read> layerGrounds:array<LayerGround>;
-@group(0) @binding(4) var<storage,read> layerSmokes:array<LayerSmoke>;
-@group(0) @binding(5) var<storage,read> layerLights:array<LayerLight>;
+@group(0) @binding(3) var<storage,read> layerGrounds:array<LayerGround,1>;
+@group(0) @binding(4) var<storage,read> layerSmokes:array<LayerSmoke,1>;
+@group(0) @binding(5) var<storage,read> layerLights:array<LayerLight,1>;
 @group(0) @binding(6) var layerAtlas:texture_2d<f32>;
 @group(0) @binding(7) var layerTerrain:texture_2d<f32>;
 @group(0) @binding(8) var layerFog:texture_2d<f32>;

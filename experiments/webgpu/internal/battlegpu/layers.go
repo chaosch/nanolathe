@@ -113,8 +113,7 @@ type Layers struct {
 	effectLayers                                                                                [][]layerDraw
 	effectBytes                                                                                 [5][]byte
 	geometrySpans                                                                               []layerDraw
-	directLayout                                                                                *wgpu.PipelineLayout
-	directCapacity                                                                              int
+	layerABI                                                                                    layerABIFamilies
 	spriteBytes, overlayBytes                                                                   []byte
 	orderedSprites                                                                              []meshscene.Sprite
 	upperSprites                                                                                []layerSpriteEntry
@@ -287,6 +286,14 @@ func (l *Layers) layerPipeline(s *wgpu.ShaderModule, layout *wgpu.PipelineLayout
 	if depth == 0 {
 		format = l.outputFormat
 	}
+	p, e := l.layerCreatePipeline(s, layout, vertex, fragment, blend, depth, format)
+	if e == nil {
+		l.owned = append(l.owned, p.Release)
+	}
+	return p, e
+}
+
+func (l *Layers) layerCreatePipeline(s *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, blend, depth int, format gputypes.TextureFormat) (*wgpu.RenderPipeline, error) {
 	d := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: s, EntryPoint: vertex}, Fragment: &wgpu.FragmentState{Module: s, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{{Format: format, Blend: layerBlend(blend), WriteMask: gputypes.ColorWriteMaskAll}}}, Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}}
 	if depth != 0 {
 		compare := gputypes.CompareFunctionAlways
@@ -295,11 +302,7 @@ func (l *Layers) layerPipeline(s *wgpu.ShaderModule, layout *wgpu.PipelineLayout
 		}
 		d.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthCompare: compare, DepthWriteEnabled: false}
 	}
-	p, e := l.d.CreateRenderPipeline(d)
-	if e == nil {
-		l.owned = append(l.owned, p.Release)
-	}
-	return p, e
+	return l.d.CreateRenderPipeline(d)
 }
 func (l *Layers) layerModule(source string) (*wgpu.ShaderModule, error) {
 	s, e := l.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: source})
@@ -462,17 +465,8 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
-	shader, err = l.layerModule(layerSpriteShader)
-	if err != nil {
-		return
-	}
-	l.sprite, err = l.layerPipeline(shader, pl, "layer_sprite_vertex", "layer_sprite_fragment", 0, 2)
-	if err != nil {
-		return
-	}
-	// A feature's production paint entry owns its coverage; scene depth must
-	// not replace that order (GPU design C-G3, C-G5; Metal design §4).
-	l.feature, err = l.layerPipeline(shader, pl, "layer_sprite_vertex", "layer_sprite_fragment", 0, 1)
+	l.layerABI.spriteLayout = pl
+	err = l.layerUpdateSpritePipelines()
 	if err != nil {
 		return
 	}
@@ -492,52 +486,13 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 	if err != nil {
 		return
 	}
-	shader, err = l.layerModule(layerOverlayShader)
-	if err != nil {
-		return
-	}
-	for i := range l.overlay {
-		frag := "layer_quad_fragment"
-		if i == 1 {
-			frag = "layer_overlay_multiply_fragment"
-		}
-		l.overlay[i], err = l.layerPipeline(shader, pl, "layer_quad_vertex", frag, i, 0)
-		if err != nil {
-			return
-		}
-	}
-	for i := range l.fx {
-		frag := "layer_quad_fragment"
-		if i == 1 {
-			frag = "layer_multiply_fragment"
-		}
-		l.fx[i], err = l.layerPipeline(shader, pl, "layer_quad_vertex", frag, i, 1)
-		if err != nil {
-			return
-		}
-	}
-	l.geometry, err = l.layerPipeline(shader, pl, "layer_triangle_vertex", "layer_geometry_fragment", 0, 1)
-	if err != nil {
-		return
-	}
-	l.directLayout, l.directCapacity = pl, 1
-	l.ground, err = l.layerPipeline(shader, pl, "layer_ground_vertex", "layer_ground_fragment", 0, 1)
-	if err != nil {
-		return
-	}
-	l.trail, err = l.layerPipeline(shader, pl, "layer_ground_vertex", "layer_trail_fragment", 1, 1)
-	if err != nil {
-		return
-	}
-	l.smoke, err = l.layerPipeline(shader, pl, "layer_smoke_vertex", "layer_smoke_fragment", 0, 1)
-	if err != nil {
-		return
-	}
+	l.layerABI.overlayLayout = pl
 	l.annotationLayout, pl, err = l.layerLayout([]gputypes.BindGroupLayoutEntry{layerBufferEntry(0, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeUniform, layerUniformSize), layerBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 64)})
 	if err != nil {
 		return
 	}
-	l.annotation, err = l.layerPipeline(shader, pl, "layer_annotation_vertex", "layer_annotation_fragment", 0, 1)
+	l.layerABI.annotationLayout = pl
+	err = l.layerUpdateOverlayPipelines()
 	if err != nil {
 		return
 	}
@@ -779,9 +734,6 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	l.featureSources, l.looseSpriteRuns = layerFeatureLayout(remap, bands, f.Composition.FeatureSprites)
 	l.featureDrawn = slices.Grow(l.featureDrawn[:0], len(remap))[:len(remap)]
 	clear(l.featureDrawn)
-	if err := l.layerPrepareSeabed(f, width, height); err != nil {
-		return err
-	}
 	l.featurePaintCount = 0
 	if f.Composed {
 		l.featurePaintCount = len(f.Composition.FeatureSprites)
@@ -801,6 +753,12 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		if err = l.layerBindSprites(); err != nil {
 			return err
 		}
+	}
+	if err = l.layerPrepareSeabed(f, width, height); err != nil {
+		return err
+	}
+	if err = l.layerUpdateSpritePipelines(); err != nil {
+		return err
 	}
 	data, l.annotationRanges = layerPackAnnotations(f.Annotations, len(f.Composition.Slots))
 	changed, err = l.layerUpload(&l.annotations, data, 64)
@@ -839,6 +797,9 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	overlayChanged = overlayChanged || changed
 	effectChanged, err := l.layerPrepareEffects(f)
 	if err != nil {
+		return err
+	}
+	if err = l.layerUpdateOverlayPipelines(); err != nil {
 		return err
 	}
 	if fogChanged || effectChanged || overlayChanged {
@@ -1126,7 +1087,6 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 			return
 		}
 	}
-	err = l.layerUpdateDirectPipeline()
 	return
 }
 
@@ -1326,6 +1286,7 @@ func (l *Layers) Close() {
 			g.Release()
 		}
 	}
+	l.layerABI.close()
 	for _, b := range []*layerBuffer{&l.sprites, &l.annotations, &l.overlayQuads, &l.effectQuads, &l.effectVertices, &l.effectGround, &l.effectSmoke, &l.lights} {
 		b.close()
 	}

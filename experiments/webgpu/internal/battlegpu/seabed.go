@@ -52,14 +52,7 @@ func (l *Layers) layerBindTerrain() error {
 }
 
 func (l *Layers) layerSeabedPipeline(shader *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, blend int) (*wgpu.RenderPipeline, error) {
-	pipeline, err := l.d.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
-		Layout:       layout,
-		Vertex:       wgpu.VertexState{Module: shader, EntryPoint: vertex},
-		Fragment:     &wgpu.FragmentState{Module: shader, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA16Float, Blend: layerBlend(blend), WriteMask: gputypes.ColorWriteMaskAll}}},
-		Primitive:    gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone},
-		DepthStencil: &wgpu.DepthStencilState{Format: gputypes.TextureFormatDepth32Float, DepthCompare: gputypes.CompareFunctionAlways, DepthWriteEnabled: false},
-		Multisample:  gputypes.MultisampleState{Count: 1, Mask: 0xffffffff},
-	})
+	pipeline, err := l.layerCreatePipeline(shader, layout, vertex, fragment, blend, 1, gputypes.TextureFormatRGBA16Float)
 	if err == nil {
 		l.owned = append(l.owned, pipeline.Release)
 	}
@@ -87,22 +80,8 @@ func (l *Layers) layerPrepareSeabed(f meshscene.LiveFrame, width, height int) er
 			return err
 		}
 	}
-	if bed.sprite == nil {
-		shader, err := l.layerModule(layerSpriteShader)
-		if err != nil {
-			return err
-		}
-		// Reuse the identical sprite group layout, including packed instances.
-		layout, err := l.d.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{BindGroupLayouts: []*wgpu.BindGroupLayout{l.spriteLayout}})
-		if err != nil {
-			return err
-		}
-		l.owned = append(l.owned, layout.Release)
-		bed.sprite, err = l.layerSeabedPipeline(shader, layout, "layer_sprite_vertex", "layer_sprite_fragment", 0)
-		if err != nil {
-			return err
-		}
-	}
+	// Sprite upload and the ordinary/feature/bed family update run in Prepare
+	// before this target is encoded. A lazy bed uses the same allocated tier.
 	if bed.rawGroup == nil {
 		// Binding 7 must never alias this pass's bed attachment, even though
 		// the raw entry does not read it. The safe fallback shares group-0 ABI.
