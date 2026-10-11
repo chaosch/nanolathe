@@ -23,3 +23,15 @@ struct LensOut {
  // Preserve copied alpha and HDR values: stock lenses do no colour treatment.
  return color;
 }
+
+// The snapshot pass binds the completed world at the same texture binding.
+// Its fullscreen geometry is clipped to ReadRect by the host scissor. No
+// interpolation, filtering, keying, alpha conversion or HDR clamp occurs here.
+@vertex fn lens_snapshot_vertex(@builtin(vertex_index) vid:u32)->@builtin(position) vec4<f32> {
+ let corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+ var corner=corners[vid];
+ return vec4<f32>(corner.x*2-1,1-corner.y*2,0,1);
+}
+@fragment fn lens_snapshot_fragment(@builtin(position) pixel:vec4<f32>)->@location(0) vec4<f32> {
+ return textureLoad(lensSnapshot,vec2<i32>(floor(pixel.xy)),0);
+}
