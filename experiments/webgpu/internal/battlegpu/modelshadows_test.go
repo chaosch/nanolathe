@@ -2,11 +2,14 @@ package battlegpu
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
@@ -79,47 +82,84 @@ func TestModelShadowAuthoredProjectionTopology(t *testing.T) {
 }
 
 func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
-	source := modelShadowShaderSource([4]int{64, 32, 16, 8})
-	ast, err := naga.Parse(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	module, err := naga.LowerWithCapabilities(ast, source, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	capacities := [4]int{64, 32, 16, 8}
 	wants := map[string]uint32{"ModelShadowUniforms": 96, "ModelShadowVertex": 32, "ModelShadowPose": 80, "ModelShadowInstance": modelInstanceStride, "ModelShadowSubject": modelShadowStride}
-	for _, typ := range module.Types {
-		if want, ok := wants[typ.Name]; ok {
-			s, ok := typ.Inner.(ir.StructType)
-			if !ok || s.Span != want {
-				t.Fatalf("%s ABI=%v want %d", typ.Name, typ.Inner, want)
-			}
-			if typ.Name == "ModelShadowInstance" {
-				for _, member := range s.Members {
-					want, exists := map[string]uint32{"shadow": 160, "screen": 240, "atlas": 256}[member.Name]
-					if exists && member.Offset != want {
-						t.Fatalf("projection view %s offset=%d want %d", member.Name, member.Offset, want)
+	for _, pass := range []struct {
+		name, source string
+		layout       []gputypes.BindGroupLayoutEntry
+	}{
+		{"project", modelShadowShaderSource(capacities), modelShadowProjectLayoutEntries()},
+		{"commit", modelShadowCommitShaderSource(capacities), modelShadowCommitLayoutEntries()},
+	} {
+		ast, err := naga.Parse(pass.source)
+		if err != nil {
+			t.Fatalf("%s parse: %v", pass.name, err)
+		}
+		module, err := naga.LowerWithCapabilities(ast, pass.source, 0)
+		if err != nil {
+			t.Fatalf("%s lower: %v", pass.name, err)
+		}
+		for _, typ := range module.Types {
+			if want, ok := wants[typ.Name]; ok {
+				s, ok := typ.Inner.(ir.StructType)
+				if !ok || s.Span != want {
+					t.Fatalf("%s ABI=%v want %d", typ.Name, typ.Inner, want)
+				}
+				if typ.Name == "ModelShadowInstance" {
+					for _, member := range s.Members {
+						want, exists := map[string]uint32{"shadow": 160, "screen": 240, "atlas": 256}[member.Name]
+						if exists && member.Offset != want {
+							t.Fatalf("projection view %s offset=%d want %d", member.Name, member.Offset, want)
+						}
 					}
 				}
+				delete(wants, typ.Name)
 			}
-			delete(wants, typ.Name)
+		}
+		code, _, err := msl.Compile(module, msl.DefaultOptions())
+		if err != nil {
+			t.Fatalf("%s MSL: %v", pass.name, err)
+		}
+		if strings.Contains(code, "_mslBufferSizes") || strings.Contains(pass.source, "__") {
+			t.Fatal("shadow shaders require runtime-array size metadata or unexpanded capacities")
+		}
+		// Pinned Metal applyBindGroup binds resources sequentially by type in
+		// layout order. Naga numbers all module globals, even ones an entry does
+		// not read; a combined project/commit module silently misbinds commit.
+		if len(module.GlobalVariables) != len(pass.layout) {
+			t.Fatalf("%s declares resources absent from its pass layout", pass.name)
+		}
+		var bufferSlot, textureSlot int
+		for _, entry := range pass.layout {
+			name := ""
+			for _, global := range module.GlobalVariables {
+				if global.Binding != nil && global.Binding.Group == 0 && global.Binding.Binding == entry.Binding {
+					name = global.Name
+				}
+			}
+			if name == "" {
+				t.Fatalf("%s layout binding %d has no shader resource", pass.name, entry.Binding)
+			}
+			kind, slot := "buffer", bufferSlot
+			if entry.Texture != nil {
+				kind, slot = "texture", textureSlot
+				textureSlot++
+			} else {
+				bufferSlot++
+			}
+			pattern := fmt.Sprintf(`\b%s \[\[%s\(%d\)\]\]`, name, kind, slot)
+			if !regexp.MustCompile(pattern).MatchString(code) {
+				t.Fatalf("%s resource %s does not use layout %s slot %d", pass.name, name, kind, slot)
+			}
+		}
+		for _, line := range strings.Split(code, "\n") {
+			if strings.Contains(line, "modelShadowCorners.inner[") && strings.Contains(line, "*") {
+				t.Fatalf("guarded corner read participates in arithmetic: %s", line)
+			}
 		}
 	}
 	if len(wants) != 0 {
 		t.Fatalf("missing ABI types: %v", wants)
-	}
-	code, _, err := msl.Compile(module, msl.DefaultOptions())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(code, "_mslBufferSizes") || strings.Contains(source, "__") {
-		t.Fatal("shadow shaders require runtime-array size metadata or unexpanded capacities")
-	}
-	for _, line := range strings.Split(code, "\n") {
-		if strings.Contains(line, "modelShadowCorners.inner[") && strings.Contains(line, "*") {
-			t.Fatalf("guarded corner read participates in arithmetic: %s", line)
-		}
 	}
 }
 

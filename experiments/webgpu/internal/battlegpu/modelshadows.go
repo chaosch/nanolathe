@@ -14,6 +14,9 @@ import (
 //go:embed modelshadows.wgsl
 var modelShadowsShader string
 
+//go:embed modelshadowcommit.wgsl
+var modelShadowCommitShader string
+
 const modelShadowVertexStride = 32
 
 type modelShadowAtlas struct {
@@ -61,7 +64,7 @@ type modelShadowWork struct {
 	projectPipelineLayout           *wgpu.PipelineLayout
 	bodyPipeline, outlinePipeline   *wgpu.RenderPipeline
 	projectPipeline, commitPipeline *wgpu.RenderPipeline
-	module                          *wgpu.ShaderModule
+	projectModule, commitModule     *wgpu.ShaderModule
 	capacities                      [4]int
 }
 
@@ -72,10 +75,12 @@ func (p *modelShadowWork) modelClose() {
 			pipeline.Release()
 		}
 	}
-	if p.module != nil {
-		p.module.Release()
+	for _, module := range []*wgpu.ShaderModule{p.commitModule, p.projectModule} {
+		if module != nil {
+			module.Release()
+		}
 	}
-	p.module, p.projectPipeline, p.commitPipeline = nil, nil, nil
+	p.projectModule, p.commitModule, p.projectPipeline, p.commitPipeline = nil, nil, nil, nil
 }
 
 // The source topology is the producer's immutable authored polygon mesh, not
@@ -282,30 +287,42 @@ func (m *Models) modelInitShadows(scene *meshscene.Scene, module *wgpu.ShaderMod
 	if p.waterView, err = m.modelArt("battle-shadow-liquid-mask", water); err != nil {
 		return
 	}
-	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
 	// Fixed-array capacities are chosen after growth in Prepare. Zero minimum
 	// binding sizes defer their size validation to the actual bound buffers.
-	p.projectLayout, p.projectPipelineLayout, err = m.modelLayout([]gputypes.BindGroupLayoutEntry{
+	p.projectLayout, p.projectPipelineLayout, err = m.modelLayout(modelShadowProjectLayoutEntries())
+	if err != nil {
+		return
+	}
+	p.layout, p.pipelineLayout, err = m.modelLayout(modelShadowCommitLayoutEntries())
+	return
+}
+
+func modelShadowProjectLayoutEntries() []gputypes.BindGroupLayoutEntry {
+	return []gputypes.BindGroupLayoutEntry{
 		modelBufferEntry(0, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(1, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(2, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelBufferEntry(3, wgpu.ShaderStageVertex, gputypes.BufferBindingTypeUniform, 96),
-	})
-	if err != nil {
-		return
 	}
-	p.layout, p.pipelineLayout, err = m.modelLayout([]gputypes.BindGroupLayoutEntry{
+}
+
+func modelShadowCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
+	vf := wgpu.ShaderStageVertex | wgpu.ShaderStageFragment
+	return []gputypes.BindGroupLayoutEntry{
 		modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 96),
 		modelBufferEntry(4, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 		modelTextureEntry(5),
 		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
 		modelTextureEntry(7), modelTextureEntry(8),
-	})
-	return
+	}
 }
 
 func modelShadowShaderSource(capacities [4]int) string {
 	return strings.NewReplacer("__VERTICES__", strconv.Itoa(capacities[0]), "__POSES__", strconv.Itoa(capacities[1]), "__INSTANCES__", strconv.Itoa(capacities[2]), "__SUBJECTS__", strconv.Itoa(capacities[3])).Replace(modelShadowsShader)
+}
+
+func modelShadowCommitShaderSource(capacities [4]int) string {
+	return strings.ReplaceAll(modelShadowCommitShader, "__SUBJECTS__", strconv.Itoa(capacities[3]))
 }
 
 func (m *Models) modelResizeShadows(width, height int) (err error) {
@@ -368,11 +385,16 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 	}
 	capacities := [4]int{p.vertexCount, int(m.poses.size / modelPoseStride), int(m.instances.size / modelInstanceStride), int(m.shadowRecords.size / modelShadowStride)}
 	if capacities != p.capacities {
-		module, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities)})
+		projectModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities)})
 		if e != nil {
 			return e
 		}
-		create := func(layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth, blend bool) (*wgpu.RenderPipeline, error) {
+		commitModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowCommitShaderSource(capacities)})
+		if e != nil {
+			projectModule.Release()
+			return e
+		}
+		create := func(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth, blend bool) (*wgpu.RenderPipeline, error) {
 			target := gputypes.ColorTargetState{Format: format, WriteMask: gputypes.ColorWriteMaskAll}
 			if blend {
 				target.Blend = &gputypes.BlendState{Color: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}, Alpha: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}}
@@ -384,15 +406,17 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 			}
 			return m.d.CreateRenderPipeline(desc)
 		}
-		project, e := create(p.projectPipelineLayout, "model_shadow_project_vertex", "model_shadow_project_fragment", gputypes.TextureFormatR8Unorm, false, false)
+		project, e := create(projectModule, p.projectPipelineLayout, "model_shadow_project_vertex", "model_shadow_project_fragment", gputypes.TextureFormatR8Unorm, false, false)
 		if e != nil {
-			module.Release()
+			commitModule.Release()
+			projectModule.Release()
 			return e
 		}
-		commit, e := create(p.pipelineLayout, "model_shadow_commit_vertex", "model_shadow_commit_fragment", m.format, true, true)
+		commit, e := create(commitModule, p.pipelineLayout, "model_shadow_commit_vertex", "model_shadow_commit_fragment", m.format, true, true)
 		if e != nil {
 			project.Release()
-			module.Release()
+			commitModule.Release()
+			projectModule.Release()
 			return e
 		}
 		for _, old := range []*wgpu.RenderPipeline{p.commitPipeline, p.projectPipeline} {
@@ -400,10 +424,12 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 				old.Release()
 			}
 		}
-		if p.module != nil {
-			p.module.Release()
+		for _, old := range []*wgpu.ShaderModule{p.commitModule, p.projectModule} {
+			if old != nil {
+				old.Release()
+			}
 		}
-		p.module, p.projectPipeline, p.commitPipeline, p.capacities = module, project, commit, capacities
+		p.projectModule, p.commitModule, p.projectPipeline, p.commitPipeline, p.capacities = projectModule, commitModule, project, commit, capacities
 	}
 	var uniforms [modelUniformSize]byte
 	modelVec(uniforms[:], 0, [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], f.Alpha})
