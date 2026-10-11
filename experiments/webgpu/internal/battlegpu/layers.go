@@ -105,6 +105,7 @@ type Layers struct {
 	featurePaintOrder                                                                           bool
 	projectilePaintOrder                                                                        bool
 	lensPaintOrder                                                                              bool
+	coalesceEffects                                                                             bool
 	featurePaintCount                                                                           int
 	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
 	overlayRuns                                                                                 []layerDraw
@@ -1088,6 +1089,9 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 					}
 				}
 			}
+			if l.coalesceEffects {
+				ops = layerCoalesceEffects(ops)
+			}
 			l.effectLayers[layerIndex] = ops
 		}
 	}
@@ -1312,4 +1316,22 @@ func (l *Layers) Close() {
 	}
 	l.owned = nil
 	l.world = nil
+}
+
+// Consecutive records in one stream/pipeline preserve primitive order in a
+// single draw. Keep model/lens markers, blend modes and noncontiguous ranges as
+// barriers; never sort effects or combine across a layer boundary.
+func layerCoalesceEffects(ops []layerDraw) []layerDraw {
+	out := ops[:0]
+	for _, op := range ops {
+		if len(out) > 0 && op.count != 0 && op.kind != meshscene.EffectOpRetainedModel && op.kind != meshscene.EffectOpLens {
+			prior := &out[len(out)-1]
+			if prior.count != 0 && prior.kind == op.kind && prior.mode == op.mode && uint64(prior.first)+uint64(prior.count) == uint64(op.first) {
+				prior.count += op.count
+				continue
+			}
+		}
+		out = append(out, op)
+	}
+	return out
 }

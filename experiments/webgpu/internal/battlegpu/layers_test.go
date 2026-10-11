@@ -306,3 +306,18 @@ func TestLayerCoalescingPreservesOrderedBlendAndSnapshotBarriers(t *testing.T) {
 		t.Fatal("joined noncontiguous instances", separated)
 	}
 }
+
+func TestEffectStreamCoalescingKeepsPainterBarriers(t *testing.T) {
+	for _, kind := range []uint32{meshscene.EffectOpGeometry, meshscene.EffectOpGround, meshscene.EffectOpSmoke} {
+		out := layerCoalesceEffects([]layerDraw{{kind: kind, first: 3, count: 6}, {kind: kind, first: 9, count: 3}})
+		if len(out) != 1 || out[0].first != 3 || out[0].count != 9 {
+			t.Fatal("lost contiguous primitive order", out)
+		}
+		for _, barrier := range []layerDraw{{kind: meshscene.EffectOpLens}, {kind: meshscene.EffectOpRetainedModel}, {kind: kind, mode: 1, first: 9, count: 3}, {kind: kind, first: 12, count: 3}} {
+			out = layerCoalesceEffects([]layerDraw{{kind: kind, first: 3, count: 6}, barrier, {kind: kind, first: 9, count: 3}})
+			if len(out) != 3 {
+				t.Fatal("crossed painter barrier", out)
+			}
+		}
+	}
+}

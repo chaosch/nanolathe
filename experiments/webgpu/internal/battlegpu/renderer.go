@@ -50,6 +50,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		r.layers.SetFeaturePaintOrder(true)
 		r.layers.projectilePaintOrder = true
 		r.layers.lensPaintOrder = true
+		r.layers.coalesceEffects = true
 		r.layers.state = &r.paintState
 		r.models.state = &r.paintState
 	}
