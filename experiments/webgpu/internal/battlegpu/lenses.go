@@ -16,8 +16,9 @@ var lensShader string
 
 const lensSampleStride = 48
 
-// Samples counts submitted sample rectangles; Copies/Draws count encoded
-// operations. These counters do not establish GPU completion or pixel results.
+// Samples counts submitted sample rectangles. Copies counts cropped raster
+// snapshots, not DMA copies; Draws counts lens composites. These encoded
+// operations do not establish GPU completion or pixel results.
 type LensCounters struct{ Draws, Copies, Samples, UploadBytes int }
 
 type lensLayer struct{ first, count int }
@@ -36,13 +37,15 @@ type Lenses struct {
 	format                      gputypes.TextureFormat
 	owned                       []func()
 	layout                      *wgpu.BindGroupLayout
-	pipeline                    *wgpu.RenderPipeline
+	pipeline, snapshotPipeline  *wgpu.RenderPipeline
 	viewport, samples           *wgpu.Buffer
 	capacity                    uint64
 	snapshot                    *wgpu.Texture
-	snapshotUsage               gputypes.TextureUsage
 	view                        *wgpu.TextureView
 	group                       *wgpu.BindGroup
+	sourceWorld                 *wgpu.Texture // borrowed; only its view/group are owned
+	sourceView                  *wgpu.TextureView
+	sourceGroup                 *wgpu.BindGroup
 	textureWidth, textureHeight int
 	layers                      []lensLayer
 	lenses                      []lensSpan
@@ -180,7 +183,21 @@ func NewLenses(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat) (r 
 		return
 	}
 	r.owned = append(r.owned, r.pipeline.Release)
+	r.snapshotPipeline, err = d.CreateRenderPipeline(lensSnapshotPipeline(pl, module, format))
+	if err != nil {
+		return
+	}
+	r.owned = append(r.owned, r.snapshotPipeline.Release)
 	return
+}
+
+func lensSnapshotPipeline(layout *wgpu.PipelineLayout, module *wgpu.ShaderModule, format gputypes.TextureFormat) *wgpu.RenderPipelineDescriptor {
+	return &wgpu.RenderPipelineDescriptor{Label: "battle-stock-lens-raster-snapshot", Layout: layout,
+		Vertex:      wgpu.VertexState{Module: module, EntryPoint: "lens_snapshot_vertex"},
+		Fragment:    &wgpu.FragmentState{Module: module, EntryPoint: "lens_snapshot_fragment", Targets: []gputypes.ColorTargetState{{Format: format, WriteMask: gputypes.ColorWriteMaskAll}}},
+		Primitive:   gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, CullMode: gputypes.CullModeNone},
+		Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff},
+	}
 }
 
 func lensCapacity(current, need uint64) uint64 {
@@ -203,7 +220,7 @@ func (r *Lenses) targets(width, height int) error {
 	if r.snapshot != nil && r.textureWidth == width && r.textureHeight == height {
 		return nil
 	}
-	t, err := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: "battle-stock-lens-snapshot", Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: r.format, Usage: wgpu.TextureUsageCopyDst | wgpu.TextureUsageTextureBinding})
+	t, err := r.d.CreateTexture(&wgpu.TextureDescriptor{Label: "battle-stock-lens-snapshot", Size: wgpu.Extent3D{Width: uint32(width), Height: uint32(height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: r.format, Usage: wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding})
 	if err != nil {
 		return err
 	}
@@ -276,22 +293,32 @@ func (r *Lenses) span(layer, index uint32) (lensSpan, bool) {
 	return r.lenses[l.first+int(index)], true
 }
 
-func lensCopyRegion(world, snapshot *wgpu.Texture, read [4]uint32) wgpu.TextureCopy {
-	origin := wgpu.Origin3D{X: read[0], Y: read[1]}
-	return wgpu.TextureCopy{Source: wgpu.ImageCopyTexture{Texture: world, Origin: origin, Aspect: gputypes.TextureAspectAll}, Destination: wgpu.ImageCopyTexture{Texture: snapshot, Origin: origin, Aspect: gputypes.TextureAspectAll}, Size: wgpu.Extent3D{Width: read[2], Height: read[3], DepthOrArrayLayers: 1}}
+func lensSnapshotPass(view *wgpu.TextureView) *wgpu.RenderPassDescriptor {
+	// Only the scissored crop is written. Loading preserves the rest of the
+	// reusable snapshot; retained source coordinates stay absolute.
+	return &wgpu.RenderPassDescriptor{Label: "battle-stock-lens-raster-snapshot", ColorAttachments: []wgpu.RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpLoad, StoreOp: gputypes.StoreOpStore}}}
 }
 
-func lensCopyTransitions(world, snapshot *wgpu.Texture, previousSnapshot gputypes.TextureUsage) (before, after [2]wgpu.TextureBarrier) {
-	rangeAll := wgpu.TextureRange{Aspect: gputypes.TextureAspectAll, MipLevelCount: 1, ArrayLayerCount: 1}
-	before = [2]wgpu.TextureBarrier{
-		{Texture: world, Range: rangeAll, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageRenderAttachment, NewUsage: wgpu.TextureUsageCopySrc}},
-		{Texture: snapshot, Range: rangeAll, Usage: wgpu.TextureUsageTransition{OldUsage: previousSnapshot, NewUsage: wgpu.TextureUsageCopyDst}},
+func lensSnapshotScissor(read [4]uint32) gputypes.ScissorRect {
+	return gputypes.ScissorRect{X: read[0], Y: read[1], Width: read[2], Height: read[3]}
+}
+
+func (r *Lenses) source(world *wgpu.Texture) error {
+	if r.sourceWorld == world && r.sourceGroup != nil {
+		return nil
 	}
-	after = [2]wgpu.TextureBarrier{
-		{Texture: world, Range: rangeAll, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageCopySrc, NewUsage: wgpu.TextureUsageRenderAttachment}},
-		{Texture: snapshot, Range: rangeAll, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageCopyDst, NewUsage: wgpu.TextureUsageTextureBinding}},
+	v, err := r.d.CreateTextureView(world, nil)
+	if err != nil {
+		return err
 	}
-	return
+	g, err := r.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Label: "battle-stock-lens-completed-world", Layout: r.layout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: r.viewport, Size: 16}, {Binding: 1, TextureView: v}}})
+	if err != nil {
+		v.Release()
+		return err
+	}
+	r.closeSource()
+	r.sourceWorld, r.sourceView, r.sourceGroup = world, v, g
+	return nil
 }
 
 func (r *Lenses) Snapshot(enc *wgpu.CommandEncoder, world *wgpu.Texture, layer, index uint32) error {
@@ -299,7 +326,7 @@ func (r *Lenses) Snapshot(enc *wgpu.CommandEncoder, world *wgpu.Texture, layer, 
 		return lensError("prepared open component")
 	}
 	if r.ready {
-		return lensError("the preceding snapshot drawn before another lens copy")
+		return lensError("the preceding snapshot drawn before another lens snapshot")
 	}
 	span, ok := r.span(layer, index)
 	if !ok {
@@ -311,13 +338,25 @@ func (r *Lenses) Snapshot(enc *wgpu.CommandEncoder, world *wgpu.Texture, layer, 
 	if enc == nil || world == nil || r.snapshot == nil || world == r.snapshot || world.Format() != r.format {
 		return lensError("borrowed encoder and distinct same-format completed world texture")
 	}
-	// The pinned copy API defers encoding errors to Finish/Submit. The host
-	// owns those boundaries; this component never finishes or submits an encoder.
-	before, after := lensCopyTransitions(world, r.snapshot, r.snapshotUsage)
-	enc.TransitionTextures(before[:])
-	enc.CopyTextureToTexture(world, r.snapshot, []wgpu.TextureCopy{lensCopyRegion(world, r.snapshot, span.read)})
-	enc.TransitionTextures(after[:])
-	r.snapshotUsage = wgpu.TextureUsageTextureBinding
+	// Pinned native DMA transitions leave CopySrc in the command-buffer scope,
+	// so resuming world render use fails validation. The authorized raster
+	// snapshot reads integer texels into a distinct same-format target without
+	// blending or color treatment. It uses the existing sampled-world path;
+	// the host alone owns Finish/Submit and actual GPU qualification.
+	if err := r.source(world); err != nil {
+		return err
+	}
+	pass, err := enc.BeginRenderPass(lensSnapshotPass(r.view))
+	if err != nil {
+		return err
+	}
+	pass.SetPipeline(r.snapshotPipeline)
+	pass.SetBindGroup(0, r.sourceGroup, nil)
+	pass.SetScissorRect(lensSnapshotScissor(span.read))
+	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1})
+	if err := pass.End(); err != nil {
+		return err
+	}
 	r.ready, r.readyLayer, r.readyIndex = true, layer, index
 	r.counts.Copies++
 	return nil
@@ -360,7 +399,18 @@ func (r *Lenses) closeSnapshot() {
 		r.snapshot.Release()
 		r.snapshot = nil
 	}
-	r.snapshotUsage = 0
+}
+
+func (r *Lenses) closeSource() {
+	if r.sourceGroup != nil {
+		r.sourceGroup.Release()
+		r.sourceGroup = nil
+	}
+	if r.sourceView != nil {
+		r.sourceView.Release()
+		r.sourceView = nil
+	}
+	r.sourceWorld = nil
 }
 
 func (r *Lenses) Close() {
@@ -368,6 +418,7 @@ func (r *Lenses) Close() {
 		return
 	}
 	r.closed, r.prepared, r.ready = true, false, false
+	r.closeSource()
 	r.closeSnapshot()
 	if r.samples != nil {
 		r.samples.Release()

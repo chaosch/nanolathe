@@ -44,21 +44,18 @@ func TestLensCopyBoundsMatchNativeScaledFloorCeilAndClamp(t *testing.T) {
 			t.Fatal("invalid bounds accepted", read)
 		}
 	}
-	world, snapshot := &wgpu.Texture{}, &wgpu.Texture{}
-	copy := lensCopyRegion(world, snapshot, [4]uint32{2, 3, 4, 5})
-	if copy.Source.Texture != world || copy.Destination.Texture != snapshot || copy.Source.Origin != (wgpu.Origin3D{X: 2, Y: 3}) || copy.Destination.Origin != copy.Source.Origin || copy.Size != (wgpu.Extent3D{Width: 4, Height: 5, DepthOrArrayLayers: 1}) {
-		t.Fatal("snapshot alias or source-coordinate translation", copy)
+	read := [4]uint32{2, 3, 4, 5}
+	if scissor := lensSnapshotScissor(read); scissor != (gputypes.ScissorRect{X: 2, Y: 3, Width: 4, Height: 5}) {
+		t.Fatal("snapshot moved or expanded the admitted crop", scissor)
 	}
-	for _, previous := range []gputypes.TextureUsage{0, wgpu.TextureUsageTextureBinding} {
-		before, after := lensCopyTransitions(world, snapshot, previous)
-		if before[0].Texture != world || before[0].Usage.OldUsage != wgpu.TextureUsageRenderAttachment || before[0].Usage.NewUsage != wgpu.TextureUsageCopySrc || before[1].Texture != snapshot || before[1].Usage.OldUsage != previous || before[1].Usage.NewUsage != wgpu.TextureUsageCopyDst || after[0].Usage.OldUsage != wgpu.TextureUsageCopySrc || after[0].Usage.NewUsage != wgpu.TextureUsageRenderAttachment || after[1].Usage.OldUsage != wgpu.TextureUsageCopyDst || after[1].Usage.NewUsage != wgpu.TextureUsageTextureBinding {
-			t.Fatal("copy/draw barrier state changed", before, after)
-		}
-		for _, barrier := range [4]wgpu.TextureBarrier{before[0], before[1], after[0], after[1]} {
-			if barrier.Range.MipLevelCount != 1 || barrier.Range.ArrayLayerCount != 1 || barrier.Range.Aspect != gputypes.TextureAspectAll {
-				t.Fatal("copy barrier omitted its single color subresource", barrier)
-			}
-		}
+	view := &wgpu.TextureView{}
+	pass := lensSnapshotPass(view)
+	if len(pass.ColorAttachments) != 1 || pass.ColorAttachments[0].View != view || pass.ColorAttachments[0].LoadOp != gputypes.LoadOpLoad || pass.ColorAttachments[0].StoreOp != gputypes.StoreOpStore || pass.DepthStencilAttachment != nil {
+		t.Fatal("snapshot changed pixels outside the scissor or world depth", pass)
+	}
+	pipeline := lensSnapshotPipeline(nil, nil, gputypes.TextureFormatRGBA16Float)
+	if len(pipeline.Fragment.Targets) != 1 || pipeline.Fragment.Targets[0].Format != gputypes.TextureFormatRGBA16Float || pipeline.Fragment.Targets[0].Blend != nil || pipeline.Fragment.Targets[0].WriteMask != gputypes.ColorWriteMaskAll || pipeline.DepthStencil != nil || len(pipeline.Vertex.Buffers) != 0 || pipeline.Multisample.Count != 1 {
+		t.Fatal("raster snapshot acquired color treatment or depth", pipeline)
 	}
 }
 
@@ -121,7 +118,7 @@ func TestLensAbsentAndEmptyFramesAllocateNoSamplesOrSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Draw(nil, 0, 0)
-	if r.ready || r.Counters() != (LensCounters{}) || r.samples != nil || r.viewport != nil || r.snapshot != nil || r.data != nil {
+	if r.ready || r.Counters() != (LensCounters{}) || r.samples != nil || r.viewport != nil || r.snapshot != nil || r.sourceWorld != nil || r.sourceView != nil || r.sourceGroup != nil || r.data != nil {
 		t.Fatal("absent frame retained work", r)
 	}
 	stock := &meshscene.StockFrame{Scale: 1, Layers: []meshscene.EffectLayer{{Lenses: []meshscene.EffectLens{{ReadRect: [4]float32{1, 1, 1, 1}}, {ReadRect: [4]float32{40, 1, 1, 1}, Samples: []meshscene.EffectLensSample{{}}}}}}}
@@ -221,6 +218,7 @@ func TestLensCoreShaderNativeSlotsNearestKeyAndHDRPreservation(t *testing.T) {
 	for _, expression := range []string{
 		"floor(input.source)", "textureLoad(lensSnapshot,texel,0)", "floor(color.rgb*255.0+0.5)",
 		"key.x==input.key.x && key.y==input.key.y && key.z==input.key.z", "return color;",
+		"return textureLoad(lensSnapshot,vec2<i32>(floor(pixel.xy)),0);",
 	} {
 		if !strings.Contains(lensShader, expression) {
 			t.Fatal("native nearest/key/HDR operation changed", expression)
