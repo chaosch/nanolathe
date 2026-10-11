@@ -10,6 +10,8 @@ env=dict(os.environ,GOWORK='off',CGO_ENABLED='0',GOMAXPROCS='2')
 for name,target,tags in [('probe-go',{},[]),('probe-rust',{},['-tags','rust']),('probe.wasm',{'GOOS':'js','GOARCH':'wasm'},[])]:
  cmd=['go','build','-p','2','-trimpath',*tags,'-o',str(out/name),'./cmd/webgpu-probe']
  print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=root,env=env|target,check=True)
+if sys.platform=='darwin':
+ subprocess.run(['go','build','-p','2','-trimpath','-o',str(out/'metal-probe'),'./cmd/webgpu-metal'],cwd=root,env=env,check=True)
 for source in (root/'web').iterdir(): shutil.copy2(source,out/source.name)
 goroot=subprocess.check_output(['go','env','GOROOT'],text=True).strip()
 shutil.copy2(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js',out/'wasm_exec.js')

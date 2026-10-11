@@ -134,8 +134,8 @@ P2 review corrections: diagnostic readback now includes an untimed surface-forma
 Native Go and Chrome each completed ten 3k/200-triangle scene cycles at physical
 1920×1080. Real queue completion precedes Close. Each cycle returns the tracked
 32 objects / 26,724,848 bytes to zero. Native process RSS rose from 111.75 MB
-to 117.29 MB, Go live heap from about 3.63 to 3.72 MB; browser live Go heap
-from 3.175 to 3.187 MB. These short cycles do not prove a driver-memory plateau.
+to 117.29 MB, Go allocated heap from about 3.63 to 3.72 MB; browser allocated Go heap
+from 3.175 to 3.187 MB. HeapAlloc includes uncollected garbage: the old artifact field heap_live_bytes is mislabeled. These short cycles do not prove a driver-memory plateau.
 Browser dedicated RSS is unavailable. Counts estimate renderer allocations,
 not device-wide memory. The browser queue observer measured at most two
 outstanding submits and zero completion handles after shutdown. Native fencing

@@ -35,3 +35,8 @@ func StopRequested() bool { return js.Global().Get("probeBridge").Get("stop").Bo
 func MarkEncoded(draw int, input uint64) {
 	js.Global().Get("probeBridge").Call("markEncoded", draw, float64(input))
 }
+
+func PublishMeasurement(_, text string) error {
+	js.Global().Get("probeBridge").Call("measurement", text)
+	return nil
+}

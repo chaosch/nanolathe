@@ -22,3 +22,8 @@ carry MIT licenses. x/sys carries BSD-3-Clause. wgpu-native is MIT/Apache-2.0;
 redistribution must preserve its source/license notices and its Rust transitive
 notices. Packaging a redistributable Rust bundle is unqualified while runtime
 fails. No GPL code was imported.
+
+The P4 public Metal comparison imports the root's existing purego v0.11.1
+(Apache-2.0) into this nested module only. Its downloaded LICENSE was audited;
+no source is copied and the root module graph is unchanged. A distributed
+comparison binary needs its license notice.
