@@ -89,8 +89,8 @@ fn texel(uv:vec2<f32>,blue:bool)->vec4<f32> {
 fn clipped(i:Instance,key:f32)->bool {return (i.clip.x>0.5&&i.clip.x<1.5&&key<=i.clip.y)||(i.clip.z>0.5&&key<=i.clip.w);}
 fn modelBlue(i:Instance,key:f32)->bool {
  if i.groupOperand.x!=0 && i.groupOperand.y!=2 {
-  let stored=(u32(key)+bitcast<u32>(i.groupOperand.z))&255u;
-  return i.counts.z>0u&&i.groupClip.x>1.5&&f32(stored)<=i.groupClip.y;
+  let stored=clamp(key+f32(i.groupOperand.z),0.0,255.0);
+  return i.counts.z>0u&&i.groupClip.x>1.5&&stored<=i.groupClip.y;
  }
  return i.counts.z>0u&&i.clip.x>1.5&&key<=i.clip.y;
 }
