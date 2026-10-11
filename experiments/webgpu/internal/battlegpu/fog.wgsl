@@ -45,7 +45,7 @@ fn layerWorldPixel(p:vec2<f32>)->vec3<f32> {
  let q=p-0.5;let a=vec2<i32>(floor(q));let f=fract(q);let size=vec2<i32>(textureDimensions(layerWorld));
  let lo=vec2<i32>(0);let hi=size-1;
  let first=textureLoad(layerWorld,clamp(a,lo,hi),0).rgb;
- if(all(f==vec2<f32>(0))){return first;}
+ if(f.x==0 && f.y==0){return first;}
  return mix(mix(first,textureLoad(layerWorld,clamp(a+vec2<i32>(1,0),lo,hi),0).rgb,f.x),mix(textureLoad(layerWorld,clamp(a+vec2<i32>(0,1),lo,hi),0).rgb,textureLoad(layerWorld,clamp(a+vec2<i32>(1,1),lo,hi),0).rgb,f.x),f.y);
 }
 // Distortion samples completed world/glow at a shifted position. Fog and map
