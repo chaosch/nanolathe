@@ -2,6 +2,7 @@ package battlegpu
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gogpu/naga"
@@ -9,6 +10,42 @@ import (
 	"github.com/gogpu/naga/msl"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 )
+
+func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
+	ast, e := naga.Parse(modelResolveShader)
+	if e != nil {
+		t.Fatal(e)
+	}
+	module, e := naga.LowerWithCapabilities(ast, modelResolveShader, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	code, _, e := msl.Compile(module, msl.DefaultOptions())
+	if e != nil {
+		t.Fatal(e)
+	}
+	loads, screenScales, atlasScales := 0, 0, 0
+	for _, line := range strings.Split(code, "\n") {
+		if strings.Contains(line, "corners.inner[") {
+			loads++
+			// The pinned writer does not parenthesize a robust array-read
+			// conditional when used inside multiplication. Native readback
+			// proved that this collapsed the resolved subject to one pixel.
+			if strings.Contains(line, "*") || !strings.Contains(line, "= uint(") {
+				t.Fatalf("corner guard participates in arithmetic: %s", line)
+			}
+		}
+		if strings.Contains(line, "* s_") && strings.Contains(line, ".screen.zw") {
+			screenScales++
+		}
+		if strings.Contains(line, "* s_") && strings.Contains(line, ".atlas.zw") {
+			atlasScales++
+		}
+	}
+	if loads != 2 || screenScales != 2 || atlasScales != 1 {
+		t.Fatalf("resolve scales: loads=%d screen=%d atlas=%d", loads, screenScales, atlasScales)
+	}
+}
 
 func TestModelShadersParseAndLower(t *testing.T) {
 	for name, source := range map[string]string{"poses": modelPoseShader, "models": modelBodyShader, "resolve": modelResolveShader} {
