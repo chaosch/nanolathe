@@ -176,9 +176,18 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		return nil
 	}
+	callbackFailureLogged := false
 	app.OnDraw(func(ctx *gogpu.Context) {
 		entry := time.Now()
-		defer func() { lastReturn = time.Now() }()
+		defer func() {
+			lastReturn = time.Now()
+			// The pinned multi-thread host can panic while quitting after a
+			// callback error. Preserve the actual renderer failure first.
+			if failure != nil && !callbackFailureLogged {
+				fmt.Fprintf(os.Stderr, "nanolathe: WebGPU callback failed: logical path presentation/battle, providers searched [pinned GoGPU native host], expected a completed draw: %v\n", failure)
+				callbackFailureLogged = true
+			}
+		}()
 		if failure != nil {
 			app.Quit()
 			return
