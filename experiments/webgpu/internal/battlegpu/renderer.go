@@ -153,9 +153,13 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 		return Counters{}, e
 	}
 	delete(r.layers.missing, "water_reflections_and_model_refraction")
+	// TODO(question): model reflections require prepared face/key records,
+	// final merged metadata and a shared ordered model/stock vertex budget.
 	if f.Water.Mask[0] > 0 && f.Water.Controls[3] >= .5 {
 		r.layers.missing["model_water_reflection_and_mixed_budget"] = 1
 	}
+	// TODO(question): underwater commit requires marked BLUE metadata and
+	// production 2x body resolve before its padded area-weighted gather.
 	if f.Water.Mask[3] > .5 {
 		r.layers.missing["model_water_refraction"] = 1
 	}
