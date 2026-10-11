@@ -112,10 +112,11 @@ It consumes ordered BodyDraws/BodyRuleSlots and independent ProjectedDraws,
 Topology and DontCache flags. Body RGBA8, depth32 keys and R8 projected masks
 have their own atlas and CopySrc diagnostic views. The old resolve shadow
 binding is a transparent 1×1 compatibility dummy. Cached/live chronology and
-producer-omitted offscreen shadow-only subjects stay explicit gaps. Real native
-source planes were populated; the first shadow-on/off final image comparison
-had zero changed pixels, so visible shadow qualification is failed pending
-investigation. Do not promote populated resources or draw counters to success.
+producer-omitted offscreen shadow-only subjects stay explicit gaps. The first native shadow-on/off gate failed with zero changed pixels despite
+populated source planes. Split commit/projection shader modules with checked
+emitted Metal resource indices fixed the binding mismatch at 4dd51c156. The
+matched corrected native gate changed 94,737 pixels with identical simulation
+state; preserve the failed attempt as evidence.
 
 Seabed unit owns layers.go/terrain.wgsl and new seabed.go/seabed_test.go;
 water_test.go changes only its ABI checks. API adds EncodeSeabed(encoder,depth)
@@ -131,10 +132,26 @@ cropped same-format raster snapshot with integer textureLoad and no blend,
 then resumes the world/depth attachments with Load. Copies in lens counters
 means these raster snapshots. The actual lens fixture changed 19,968 pixels
 inside its 200×100 destination without simulation change; later paint can
-replace copied pixels. This does not yet qualify key-match discard or HDR
-source values, dormant in that natural crop.
+replace copied pixels. A separate authored controlled packet at f44d5e7f3 qualifies exact HDR
+preservation in 3,600 destination pixels and key-match discard in 3,600 more
+with zero semantic mismatches. Its raw source green half differs from Python
+nearest-half conversion by one neighboring half value, while shader
+floor(channel*255+.5) still equals the authored 8-bit key. Preserve the failed
+auxiliary rounding oracle and the successful semantic oracle.
 
 Native macOS pointer capture is also dependency-blocked: SetCursorMode is an
 empty method in the exact pinned darwin platform. PointerEvent carries relative
 deltas but this host cannot produce them while locked. Do not manufacture a
 platform click count or a capture implementation inside the prototype.
+
+
+## Shared commit binding dependency
+
+The allocation investigation identified retained model/shadow interleaving as
+remaining SetBindGroup traffic. A shared layout/group unit is ready, but its
+new fixed-capacity resolve array also removes a preexisting hidden Metal
+`_mslBufferSizes` argument. Isolate and qualify that ABI correction first with
+unchanged independent bindings, then qualify the shared group against the
+corrected baseline. No performance or pixel claim before actual native gates.
+The shader compiler numbers all declared resources by type, including unused
+globals; both commit modules must declare the full shared prefix.
