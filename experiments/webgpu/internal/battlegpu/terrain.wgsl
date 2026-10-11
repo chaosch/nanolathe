@@ -10,6 +10,7 @@ struct LayerUniform {
 @group(0) @binding(4) var layerFallback:texture_2d<f32>;
 @group(0) @binding(5) var layerGroundField:texture_2d<f32>;
 @group(0) @binding(6) var layerWaterMask:texture_2d<f32>;
+@group(0) @binding(7) var layerSeabed:texture_2d<f32>;
 struct LayerTerrainOut {
  @builtin(position) position:vec4<f32>, @location(0) world:vec2<f32>, @location(1) uv:vec2<f32>,
 }
@@ -31,7 +32,7 @@ fn layerTileCell(tex:texture_2d<f32>,origin:vec2<u32>,local:vec2<f32>,side:u32,f
  // Clamp all four colour reads to this authored tile (GPU design §16.3).
  return mix(mix(layerTileTexel(tex,origin,p,side),layerTileTexel(tex,origin,p+vec2<i32>(1,0),side),f.x),mix(layerTileTexel(tex,origin,p+vec2<i32>(0,1),side),layerTileTexel(tex,origin,p+vec2<i32>(1,1),side),f.x),f.y);
 }
-fn layerTerrainAt(world:vec2<f32>,filtered:bool)->vec4<f32> {
+fn layerRawTerrainAt(world:vec2<f32>,filtered:bool)->vec4<f32> {
  if(layerU.flags.y==0u){
   let size=textureDimensions(layerFallback);let uv=(world-layerU.rect.xy)/(layerU.rect.zw-layerU.rect.xy);
   let lo=vec2<i32>(0);let hi=vec2<i32>(size)-1;
@@ -49,13 +50,36 @@ fn layerTerrainAt(world:vec2<f32>,filtered:bool)->vec4<f32> {
  let origin=vec2<u32>(cell%layerU.tiles.z,cell/layerU.tiles.z)*32u;
  return layerTileCell(layerTiles,origin,local,32u,filtered);
 }
-fn layerTerrainColor(in:LayerTerrainOut)->vec4<f32> {
+fn layerRawTerrainColor(in:LayerTerrainOut)->vec4<f32> {
  if(layerU.flags.y==0u){
   // Keep the original inactive fallback's interpolated UV arithmetic.
   let size=textureDimensions(layerFallback);let at=clamp(vec2<i32>(floor(in.uv*vec2<f32>(size))),vec2<i32>(0),vec2<i32>(size)-1);
   return textureLoad(layerFallback,at,0);
  }
- return layerTerrainAt(in.world,(layerU.flags.x&1u)!=0u);
+ return layerRawTerrainAt(in.world,(layerU.flags.x&1u)!=0u);
+}
+
+// The completed bed occupies the physical viewport, not the map texture's
+// extent. Ripple displacement remains in painted-map world coordinates
+// (GPU design §26.3; native waterObjectsSurface viewport override).
+fn layerSeabedAt(world:vec2<f32>,filtered:bool)->vec4<f32> {
+ let pixel=(world-layerU.camera.xy)*layerU.camera.z+layerU.viewport.xy*0.5;
+ let lo=vec2<i32>(0);let hi=vec2<i32>(textureDimensions(layerSeabed))-1;
+ if(!filtered){return textureLoad(layerSeabed,clamp(vec2<i32>(floor(pixel)),lo,hi),0);}
+ let q=pixel-0.5;let at=vec2<i32>(floor(q));let f=fract(q);
+ return mix(mix(textureLoad(layerSeabed,clamp(at,lo,hi),0),textureLoad(layerSeabed,clamp(at+vec2<i32>(1,0),lo,hi),0),f.x),mix(textureLoad(layerSeabed,clamp(at+vec2<i32>(0,1),lo,hi),0),textureLoad(layerSeabed,clamp(at+vec2<i32>(1,1),lo,hi),0),f.x),f.y);
+}
+fn layerTerrainAt(world:vec2<f32>,filtered:bool)->vec4<f32> {
+ if(layerU.flags.w!=0u){return layerSeabedAt(world,filtered);}
+ return layerRawTerrainAt(world,filtered);
+}
+fn layerTerrainColor(in:LayerTerrainOut)->vec4<f32> {
+ if(layerU.flags.w!=0u){return layerSeabedAt(in.world,true);}
+ return layerRawTerrainColor(in);
+}
+@fragment fn layer_seabed_fragment(in:LayerTerrainOut)->@location(0) vec4<f32> {
+ // Raw terrain does not sample the bed or apply water and ground light.
+ return layerRawTerrainColor(in);
 }
 
 fn layerLinear(c:vec3<f32>)->vec3<f32> {

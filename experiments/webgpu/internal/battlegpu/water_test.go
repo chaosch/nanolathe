@@ -62,7 +62,7 @@ func TestWaterSurfaceCoreABIAndNativeResourceMap(t *testing.T) {
 	if !found {
 		t.Fatal("missing terrain uniform")
 	}
-	if len(module.GlobalVariables) != 7 {
+	if len(module.GlobalVariables) != 8 {
 		t.Fatalf("unexpected resources: %v", module.GlobalVariables)
 	}
 	for i, global := range module.GlobalVariables {
@@ -85,17 +85,17 @@ func TestWaterSurfaceCoreABIAndNativeResourceMap(t *testing.T) {
 	}
 	// Native rendering numbers resources independently by type, in layout
 	// order. New group binding 6 is the sixth texture, not texture slot 6.
-	for _, binding := range []string{"layerU [[buffer(0)]]", "layerTiles [[texture(0)]]", "layerLookup [[texture(1)]]", "layerDetail [[texture(2)]]", "layerFallback [[texture(3)]]", "layerGroundField [[texture(4)]]", "layerWaterMask [[texture(5)]]"} {
+	for _, binding := range []string{"layerU [[buffer(0)]]", "layerTiles [[texture(0)]]", "layerLookup [[texture(1)]]", "layerDetail [[texture(2)]]", "layerFallback [[texture(3)]]", "layerGroundField [[texture(4)]]", "layerWaterMask [[texture(5)]]", "layerSeabed [[texture(6)]]"} {
 		if !strings.Contains(code, binding) {
 			t.Fatalf("native terrain binding changed: %q", binding)
 		}
 	}
-	for _, entry := range []string{"layer_terrain_vertex", "layer_terrain_fragment"} {
+	for _, entry := range []string{"layer_terrain_vertex", "layer_terrain_fragment", "layer_seabed_fragment"} {
 		if info.EntryPointNames[entry] == "" {
 			t.Fatalf("missing entry point %q", entry)
 		}
 	}
-	if len(info.EntryPointNames) != 2 {
+	if len(info.EntryPointNames) != 3 {
 		t.Fatalf("unrelated water pass reached terrain module: %v", info.EntryPointNames)
 	}
 	for _, line := range strings.Split(code, "\n") {
