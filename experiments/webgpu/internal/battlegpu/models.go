@@ -100,41 +100,42 @@ func (a *modelAtlasResources) modelClose() {
 // Prepare and Close, so replaced atlas resources can be released immediately.
 // Geometry stays resident; endpoint, rule and material records grow as needed.
 type Models struct {
-	d                                                                                     *wgpu.Device
-	q                                                                                     *wgpu.Queue
-	format                                                                                gputypes.TextureFormat
-	owned                                                                                 []modelRelease
-	closed, prepared                                                                      bool
-	state                                                                                 *battleRenderState
-	meshes                                                                                []modelMesh
-	materials                                                                             []meshscene.Material
-	frames                                                                                [][4]float32
-	vertices, indices, materialData, frameData, centers                                   *wgpu.Buffer
-	endpoints, poses, instances, selected, lights, slots, shadowRecords                   modelBuffer
-	groups, members                                                                       modelBuffer
-	uniform                                                                               *wgpu.Buffer
-	textureView, paletteView                                                              *wgpu.TextureView
-	sampler                                                                               *wgpu.Sampler
-	poseLayout, bodyLayout, resolveLayout                                                 *wgpu.BindGroupLayout
-	mergeLayout                                                                           *wgpu.BindGroupLayout
-	mergePipelineLayout                                                                   *wgpu.PipelineLayout
-	posePipeline                                                                          *wgpu.ComputePipeline
-	bodyPipeline, outlinePipeline, shadowPipeline, resolvePipeline, shadowResolvePipeline *wgpu.RenderPipeline
-	poseGroup, bodyGroup                                                                  *wgpu.BindGroup
-	mergePipeline, copyPipeline                                                           *wgpu.RenderPipeline
-	mergeCapacities                                                                       [3]int
-	groupWork                                                                             modelGroupWork
-	copySlots                                                                             []uint32
-	packedSlots, shadowSlots, shadowPacked, inputSlots                                    []meshscene.ModelSlot
-	atlas                                                                                 modelAtlasResources
-	width, height, pieceCount                                                             int
-	generation                                                                            uint64
-	poseBytes, instanceBytes, selectedBytes, lightBytes, slotBytes, shadowBytes           []byte
-	draws, shadowDraws                                                                    []modelDraw
-	paint                                                                                 []modelPaint
-	shadowPaint                                                                           []modelShadowPaint
-	shadowCount                                                                           int
-	counters                                                                              ModelCounters
+	d                                                                           *wgpu.Device
+	q                                                                           *wgpu.Queue
+	format                                                                      gputypes.TextureFormat
+	owned                                                                       []modelRelease
+	closed, prepared                                                            bool
+	state                                                                       *battleRenderState
+	meshes                                                                      []modelMesh
+	materials                                                                   []meshscene.Material
+	frames                                                                      [][4]float32
+	vertices, indices, materialData, frameData, centers                         *wgpu.Buffer
+	endpoints, poses, instances, selected, lights, slots, shadowRecords         modelBuffer
+	groups, members                                                             modelBuffer
+	uniform                                                                     *wgpu.Buffer
+	textureView, paletteView                                                    *wgpu.TextureView
+	sampler                                                                     *wgpu.Sampler
+	poseLayout, bodyLayout, resolveLayout                                       *wgpu.BindGroupLayout
+	mergeLayout                                                                 *wgpu.BindGroupLayout
+	mergePipelineLayout                                                         *wgpu.PipelineLayout
+	posePipeline                                                                *wgpu.ComputePipeline
+	bodyPipeline, outlinePipeline, resolvePipeline                              *wgpu.RenderPipeline
+	poseGroup, bodyGroup                                                        *wgpu.BindGroup
+	mergePipeline, copyPipeline                                                 *wgpu.RenderPipeline
+	mergeCapacities                                                             [3]int
+	groupWork                                                                   modelGroupWork
+	shadowWork                                                                  modelShadowWork
+	copySlots                                                                   []uint32
+	packedSlots, shadowSlots, shadowPacked, inputSlots                          []meshscene.ModelSlot
+	atlas                                                                       modelAtlasResources
+	width, height, pieceCount                                                   int
+	generation                                                                  uint64
+	poseBytes, instanceBytes, selectedBytes, lightBytes, slotBytes, shadowBytes []byte
+	draws, shadowDraws                                                          []modelDraw
+	paint                                                                       []modelPaint
+	shadowPaint                                                                 []modelShadowPaint
+	shadowCount                                                                 int
+	counters                                                                    ModelCounters
 }
 
 func modelError(reason string) error {
@@ -266,9 +267,15 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	if next.depth, next.depthView, err = m.modelCreateTexture("battle-model-subject-depth", next.width, next.height, wgpu.TextureFormatDepth32Float, wgpu.TextureUsageRenderAttachment); err != nil {
 		return err
 	}
-	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+	// The old body-resolve layout retains this binding for compatibility. Real
+	// shadows have independent sources; keep only a transparent one-pixel dummy.
+	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-dummy", 1, 1, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageCopyDst|wgpu.TextureUsageCopySrc); err != nil {
 		return err
 	}
+	if err = m.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: next.shadow}, []byte{0, 0, 0, 0}, &wgpu.ImageDataLayout{BytesPerRow: 4, RowsPerImage: 1}, &wgpu.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}); err != nil {
+		return err
+	}
+	m.counters.UploadBytes += 4
 	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
 		return err
 	}
@@ -314,6 +321,9 @@ func (m *Models) modelPipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineL
 	desc := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: module, EntryPoint: vertex}, Primitive: gputypes.PrimitiveState{Topology: topology, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}, Fragment: &wgpu.FragmentState{Module: module, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{target}}}
 	if fragment == "model_fragment" || fragment == "outline_fragment" {
 		desc.Fragment.Targets = append(desc.Fragment.Targets, gputypes.ColorTargetState{Format: wgpu.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll})
+	}
+	if fragment == "model_shadow_fragment" {
+		desc.Primitive.FrontFace, desc.Primitive.CullMode = gputypes.FrontFaceCW, gputypes.CullModeBack
 	}
 	if depth == 1 {
 		desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionLessEqual}
@@ -477,7 +487,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if m.outlinePipeline, err = m.modelPipeline(module, layout, "model_vertex", "outline_fragment", wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyLineList); err != nil {
 		return
 	}
-	if m.shadowPipeline, err = m.modelPipeline(module, layout, "shadow_vertex", "shadow_fragment", wgpu.TextureFormatRGBA8Unorm, 0, false, gputypes.PrimitiveTopologyTriangleList); err != nil {
+	if err = m.modelInitShadows(scene, module, layout); err != nil {
 		return
 	}
 	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, 48), modelBufferEntry(1, vf, gputypes.BufferBindingTypeReadOnlyStorage, 96), modelBufferEntry(2, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(3), modelTextureEntry(4), {Binding: 5, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}}, modelTextureEntry(6)}
@@ -488,9 +498,6 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return
 	}
 	if m.resolvePipeline, err = m.modelPipeline(module, layout, "resolve_vertex", "resolve_fragment", format, 2, true, gputypes.PrimitiveTopologyTriangleList); err != nil {
-		return
-	}
-	if m.shadowResolvePipeline, err = m.modelPipeline(module, layout, "shadow_resolve_vertex", "shadow_resolve_fragment", format, 2, true, gputypes.PrimitiveTopologyTriangleList); err != nil {
 		return
 	}
 	entries = []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
@@ -921,83 +928,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			}
 		}
 	}
-	// A separate projected silhouette atlas collapses each subject's overlapping
-	// triangles before darkening the world once (GPU design §13.3). The source
-	// body's alpha punches the shadow at its unshifted screen coordinates.
-	m.shadowBytes = modelBytes(m.shadowBytes, max(modelShadowStride, len(f.Shadows.Subjects)*modelShadowStride))
-	for si, s := range f.Shadows.Subjects {
-		if int(s.Order[3]) >= len(f.Instances) {
-			return modelError("valid shadow source instance")
-		}
-		i := int(s.Order[3])
-		slot := uint32(0)
-		if f.Composed {
-			slot = f.Composition.FinalSlotForInstance(i)
-		}
-		if slot == 0 || int(slot) > len(slots) {
-			continue
-		}
-		if s.Params[0] < .5 {
-			continue
-		}
-		sourceSlot := f.Composition.InstanceSlots[i]
-		if sourceSlot == 0 || int(sourceSlot) > len(slots) {
-			continue
-		}
-		m.shadowCount = max(m.shadowCount, si+1)
-		at := si * 96
-		modelVec(m.shadowBytes, at, s.Screen)
-		modelVec(m.shadowBytes, at+16, slots[sourceSlot-1].Screen)
-		modelVec(m.shadowBytes, at+32, slots[sourceSlot-1].Atlas)
-		modelVec(m.shadowBytes, at+48, s.Params)
-		modelVec(m.shadowBytes, at+64, s.Placement)
-		// TODO(question): Shadow BodyDraws/BodyRuleSlots need their separate solo
-		// raster before grouped shadow masks are exact. Retain one projected
-		// silhouette per original subject, punching against its source here.
-		ia := len(m.instanceBytes)
-		m.instanceBytes = append(m.instanceBytes, m.instanceBytes[i*modelInstanceStride:(i+1)*modelInstanceStride]...)
-		clear(m.instanceBytes[ia+384 : ia+modelInstanceStride])
-		// Source staging defers carrier clipping. Shadow silhouettes retain
-		// their own rules and punch against the immutable solo body source.
-		if len(f.ModelRules) > 0 {
-			rule := f.ModelRules[i]
-			for j, v := range [][4]float32{rule.Reveal, rule.Below, rule.Band, rule.Above, rule.Clip, rule.Shadow, rule.Outline} {
-				modelVec(m.instanceBytes, ia+80+j*16, v)
-			}
-		}
-		modelVec(m.instanceBytes, ia+336, s.Params)
-		modelVec(m.instanceBytes, ia+352, s.Placement)
-		modelVec(m.instanceBytes, ia+368, s.Screen)
-		m.shadowDraws = append(m.shadowDraws, modelDraw{mesh: f.Instances[i].Mesh, instance: uint32(ia / modelInstanceStride), shadow: si})
-		m.shadowPaint = append(m.shadowPaint, modelShadowPaint{slot, uint32(si)})
-	}
-	// Shadow regions use the world viewport directly. Their union coverage is
-	// resolved per subject from a private vertical strip in the same page; this
-	// keeps ownership independent even when their world rectangles overlap.
-	m.shadowSlots = slices.Grow(m.shadowSlots[:0], len(f.Shadows.Subjects))[:len(f.Shadows.Subjects)]
-	shadowSlots := m.shadowSlots
-	for i, s := range f.Shadows.Subjects {
-		r := s.Screen
-		if r[2] <= 0 || r[3] <= 0 {
-			r = [4]float32{0, 0, 1, 1}
-		}
-		shadowSlots[i] = meshscene.ModelSlot{Screen: r}
-	}
-	packed, sw, sh, e := modelPackSlotsInto(m.shadowPacked, shadowSlots)
-	if e != nil {
+	if e = m.modelPrepareShadowSources(f); e != nil {
 		return e
-	}
-	m.shadowPacked = packed
-	aw, ah = max(aw, sw), max(ah, sh)
-	for i, s := range packed {
-		if i < m.shadowCount {
-			if modelFinite(math.Float32frombits(binary.LittleEndian.Uint32(m.shadowBytes[i*96+48:]))) && math.Float32frombits(binary.LittleEndian.Uint32(m.shadowBytes[i*96+48:])) > .5 {
-				modelVec(m.shadowBytes, i*96+80, s.Atlas)
-			}
-		}
-	}
-	for _, d := range m.shadowDraws {
-		modelVec(m.instanceBytes, int(d.instance)*modelInstanceStride+320, packed[d.shadow].Atlas)
 	}
 	if e = m.modelResizeAtlas(aw, ah); e != nil {
 		return e
@@ -1101,6 +1033,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return e
 		}
 	}
+	if e = m.modelPrepareShadowGPU(f, changed); e != nil {
+		return e
+	}
 	m.counters.Instances, m.counters.Pieces = len(f.Instances), len(f.Current)
 	m.prepared = true
 	return nil
@@ -1173,20 +1108,7 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 			return e
 		}
 	}
-	pass, e = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.shadowView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
-	if e != nil {
-		return e
-	}
-	pass.SetPipeline(m.shadowPipeline)
-	pass.SetBindGroup(0, m.bodyGroup, nil)
-	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
-	for _, d := range m.shadowDraws {
-		mesh := m.meshes[d.mesh]
-		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: d.instance})
-		m.counters.Draws++
-	}
-	e = pass.End()
-	return e
+	return m.modelComputeShadows(enc)
 }
 
 func (m *Models) Draw(pass *wgpu.RenderPassEncoder, phase uint32) {
@@ -1207,7 +1129,7 @@ func (m *Models) DrawShadows(pass *wgpu.RenderPassEncoder) {
 	if m == nil || m.closed || !m.prepared || pass == nil || m.shadowCount == 0 {
 		return
 	}
-	m.state.selectResources(pass, m.shadowResolvePipeline, m.atlas.group)
+	m.state.selectResources(pass, m.shadowWork.commitPipeline, m.shadowWork.atlas.group)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(m.shadowCount)})
 	m.counters.Draws++
 }
@@ -1231,7 +1153,7 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 		if p.slot != slot {
 			continue
 		}
-		m.state.selectResources(pass, m.shadowResolvePipeline, m.atlas.group)
+		m.state.selectResources(pass, m.shadowWork.commitPipeline, m.shadowWork.atlas.group)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: p.subject})
 		m.counters.Draws++
 	}
@@ -1247,6 +1169,8 @@ func (m *Models) Counters() ModelCounters {
 // is 80 bytes: a column-major Mat4 followed by four flag words. The caller must
 // finish all copies/maps before the next Prepare or Close. Native texture reads
 // need an explicit transition from TextureBinding before CopyTextureToBuffer.
+// Shadow is a legacy 1x1 compatibility dummy; DebugShadowResources exposes the
+// actual retained shadow planes and their independent dimensions.
 func (m *Models) DebugResources() (color, shadow *wgpu.Texture, poses *wgpu.Buffer, width, height, pieceCount int) {
 	if m == nil || m.closed || !m.prepared {
 		return
@@ -1271,6 +1195,7 @@ func (m *Models) Close() {
 		return
 	}
 	m.closed = true
+	m.shadowWork.modelClose()
 	m.atlas.modelClose()
 	for i := len(m.owned) - 1; i >= 0; i-- {
 		m.owned[i]()

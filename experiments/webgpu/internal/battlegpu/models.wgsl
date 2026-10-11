@@ -70,8 +70,8 @@ fn admitted(i:Instance,material:u32,m:mat4x4<f32>,flags:u32)->bool {
 @vertex fn model_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
  let v=vertices[vid];let i=instances[iid];let p=poses[i.ids.x+v.piece];let m=p.matrix;var out:Out;out.instance=iid;
  out.position=vec4<f32>(2.0,2.0,2.0,1.0);if m[3].w<0.5||i.counts.y==0u{return out;}
- let world=(m*vec4<f32>(v.position.xyz,1.0)).xyz;let mat=modelMaterial(v,i);if mat.params.x<0.5{return out;}if v.material!=0u&&!admitted(i,v.material,m,p.flags.x){return out;}
- let screen=projection(world,i,p.flags.x);let pixel=(screen-i.screen.xy)*(i.atlas.zw/i.screen.zw)+i.atlas.xy;
+ let world=(m*vec4<f32>(v.position.xyz,1.0)).xyz;let mat=modelMaterial(v,i);if mat.params.x<0.5{return out;}if i.counts.w==0u&&v.material!=0u&&!admitted(i,v.material,m,p.flags.x){return out;}
+ var screen=project(world);if i.counts.w==0u{screen=projection(world,i,p.flags.x);}let pixel=(screen-i.screen.xy)*(i.atlas.zw/i.screen.zw)+i.atlas.xy;
  out.position=vec4<f32>(pixel.x/u.extent.z*2.0-1.0,1.0-pixel.y/u.extent.w*2.0,0.5,1.0);out.uv=mat.uv.xy;out.color=mat.color.rgb;out.params=mat.params;
  let origin=select(i.bounds.w,m[1].w,m[2].w>0.5);out.key=floor(world.y-origin)+i.clip.w;
  let shadeNormal=(m*vec4<f32>(v.shadeNormal.xyz,0.0)).xyz*vec3<f32>(1.0,1.0,-1.0);var row=u32(i32(dot(shadeNormal,vec3<f32>(-0.8,1.0,0.25))*5.0))&31u;
@@ -108,12 +108,12 @@ fn glint(source:vec3<f32>,lit:vec3<f32>,strength:f32,normal:vec3<f32>)->vec3<f32
 // from untouched atlas space. Staged source erasure retains this plane and
 // depth, as production shadeModel does (GPU design §22.4).
 struct Fragment { @location(0) color:vec4<f32>,@location(1) metadata:vec4<f32>,@builtin(frag_depth) depth:f32 }
-@fragment fn model_fragment(input:Out)->Fragment {
+fn modelShade(input:Out)->Fragment {
  let i=instances[input.instance];let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=modelBlue(i,key);
  if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
  let tex=texel(input.uv,blue);var erased=tex.a<0.02||ruled&&clipped(i,key);
  var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);erased=erased||rule.w< -1.5;}
- if erased&&i.groupOperand.x==0{discard;}
+ if erased&&i.groupOperand.x==0&&i.counts.w==0u{discard;}
  var source=tex.rgb*input.color;if blue&&input.params.x>1.5{source=textureLoad(palette,vec2<i32>(i32(input.params.w),1),0).rgb;}
  let shade=select(min(0.06875*floor(input.shade),2.0),1.0,input.shade<0.0);var color=source*shade;
  if (u32(u.timing.z)&1u)!=0u{if any(input.irradiance!=vec3<f32>(0.0)){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
@@ -121,22 +121,14 @@ struct Fragment { @location(0) color:vec4<f32>,@location(1) metadata:vec4<f32>,@
  let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
  var out:Fragment;out.color=select(vec4<f32>(color*tex.a,tex.a),vec4<f32>(0.0),erased);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
 }
-@fragment fn outline_fragment(input:Out)->Fragment {
+fn modelOutline(input:Out)->Fragment {
  let i=instances[input.instance];let outline=select(i.outline,i.ruleOutline,i.counts.z>0u);if i.state.z<=0.0||outline.a<=0.0{discard;}
  if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
  let key=wrappedKey(input.key);var out:Fragment;out.color=vec4<f32>(outline.rgb*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
 }
-@vertex fn shadow_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
- let v=vertices[vid];let i=instances[iid];let p=poses[i.ids.x+v.piece];let m=p.matrix;var out:Out;out.instance=iid;out.position=vec4<f32>(2.0,2.0,2.0,1.0);
- if m[3].w<0.5||i.shadowParams.x<0.5||i.shadowAtlas.z<=0.0{return out;}
- var w=(m*vec4<f32>(v.position.xyz,1.0)).xyz;let origin=select(i.bounds.w,m[1].w,m[2].w>0.5);out.key=floor(w.y-origin)+i.clip.w;
- let mat=modelMaterial(v,i);out.uv=mat.uv.xy;out.params=mat.params;
- if i.shadowParams.x<1.5 {if p.flags.y!=0u{return out;}let quarter=floor(floor(w.y-origin)/4.0);w.x+=quarter;w.z-=quarter;w.y=i.shadow.y;}else{w.y=w.y-origin+i.shadow.y;}
- w.x+=5.0;let screen=project(w);let pixel=(screen-i.shadowScreen.xy)*(i.shadowAtlas.zw/i.shadowScreen.zw)+i.shadowAtlas.xy;
- out.position=vec4<f32>(pixel.x/u.extent.z*2.0-1.0,1.0-pixel.y/u.extent.w*2.0,0.5,1.0);return out;
-}
-@fragment fn shadow_fragment(input:Out)->@location(0) vec4<f32> {
- let i=instances[input.instance];if any(input.position.xy<i.shadowAtlas.xy)||any(input.position.xy>=i.shadowAtlas.xy+i.shadowAtlas.zw){discard;}
- if i.shadowParams.x>1.5{let key=wrappedKey(input.key);if texel(input.uv,false).a<0.02||input.params.x<0.5{discard;}if i.reveal.z>0.5&&verdict(i,key).w< -1.5{discard;}if (i.clip.z>0.5&&key<=i.clip.w)||(i.reveal.w>0.5&&i.clip.x>0.5&&key<=i.clip.y){discard;}}
- return vec4<f32>(1.0);
-}
+
+@fragment fn model_fragment(input:Out)->Fragment {return modelShade(input);}
+@fragment fn outline_fragment(input:Out)->Fragment {return modelOutline(input);}
+struct ModelShadowFragment {@location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32}
+@fragment fn model_shadow_fragment(input:Out)->ModelShadowFragment {let shaded=modelShade(input);var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
+@fragment fn model_shadow_outline(input:Out)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
