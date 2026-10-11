@@ -117,6 +117,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var capturePending bool
 	var nativeDevice *wgpu.Device
 	var live meshscene.LiveFrame
+	debugWritten := false
 	var last, next, timeStart time.Time
 	var rows []drawRow
 	var input []meshscene.NativeEvent
@@ -250,6 +251,24 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if failure != nil || live.Exit {
 			app.Quit()
 			return
+		}
+		if path := os.Getenv("NANOLATHE_WEBGPU_DEBUG_FRAME"); path != "" && !debugWritten {
+			meshes := make(map[int]meshscene.Mesh)
+			for _, i := range live.Instances {
+				if i.Mesh >= 0 && i.Mesh < len(scene.Meshes) {
+					meshes[i.Mesh] = scene.Meshes[i.Mesh]
+				}
+			}
+			data, err := json.Marshal(map[string]any{"camera": live.Camera, "alpha": live.Alpha, "generation": live.Generation, "instances": live.Instances, "previous": live.Previous, "current": live.Current, "rules": live.ModelRules, "projections": live.ModelProjections, "composition": live.Composition, "shadows": live.Shadows, "lighting": live.Lighting, "meshes": meshes, "materials": scene.Materials, "texture_frames": scene.TextureFrames, "model_palette": scene.ModelPalette, "atlas": scene.Atlas})
+			if err == nil {
+				err = os.WriteFile(path, data, 0644)
+			}
+			if err != nil {
+				failure = err
+				app.Quit()
+				return
+			}
+			debugWritten = true
 		}
 		completionStart := time.Now()
 		if e := nativeDevice.WaitIdle(); e != nil {

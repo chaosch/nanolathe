@@ -17,6 +17,7 @@ type Renderer struct {
 	world, depth         *wgpu.Texture
 	worldView, depthView *wgpu.TextureView
 	width, height        int
+	paint                []battlePaint
 }
 type Counters struct {
 	Models ModelCounters
@@ -29,6 +30,9 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		return
 	}
 	r.layers, err = NewLayers(d, q, format, scene)
+	if err == nil {
+		r.layers.SetFeaturePaintOrder(true)
+	}
 	return
 }
 func (r *Renderer) targets(width, height int) error {
@@ -82,32 +86,46 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 	if e := r.models.Compute(enc); e != nil {
 		return Counters{}, e
 	}
-	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: wgpu.LoadOpClear, StoreOp: wgpu.StoreOpStore, ClearValue: wgpu.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: wgpu.LoadOpClear, DepthStoreOp: wgpu.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: r.worldView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: r.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
 	if e != nil {
 		return Counters{}, e
 	}
+	r.paint = battlePaintOrder(r.paint, f)
+	paintPhase := func(phase uint32) {
+		for _, p := range r.paint {
+			if p.phase != phase {
+				continue
+			}
+			if p.feature {
+				r.layers.DrawFeature(pass, p.source)
+			} else {
+				r.models.DrawShadowSlot(pass, p.slot)
+				r.models.DrawSlot(pass, p.slot)
+			}
+		}
+	}
 	r.layers.DrawTerrain(pass)
 	r.layers.DrawEffects(pass, 0)
-	r.layers.DrawSprites(pass, 0)
-	r.models.DrawShadows(pass)
-	r.models.Draw(pass, meshscene.PhaseGround)
-	r.layers.DrawSprites(pass, 1)
+	r.layers.DrawLooseSprites(pass, 0)
+	paintPhase(meshscene.ModelPhaseShortFeatures)
 	r.layers.DrawEffects(pass, 1)
+	paintPhase(meshscene.ModelPhaseGround)
+	r.layers.DrawLooseSprites(pass, 1)
+	// Projectile body markers remain an explicitly reported approximation:
+	// their producer-owned individual effect barriers are not yet replayed.
+	paintPhase(meshscene.ModelPhaseEffects)
 	r.layers.DrawEffects(pass, 2)
-	r.models.Draw(pass, meshscene.PhaseEffects)
+	paintPhase(meshscene.ModelPhaseAir)
 	r.layers.DrawEffects(pass, 3)
-	r.models.Draw(pass, meshscene.PhaseAir)
 	r.layers.DrawEffects(pass, 4)
 	pass.End()
-	pass.Release()
-	final, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: output, LoadOp: wgpu.LoadOpClear, StoreOp: wgpu.StoreOpStore, ClearValue: wgpu.Color{A: 1}}}})
+	final, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: output, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}})
 	if e != nil {
 		return Counters{}, e
 	}
 	r.layers.DrawFog(final)
 	r.layers.DrawOverlay(final)
 	final.End()
-	final.Release()
 	return Counters{r.models.Counters(), r.layers.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {

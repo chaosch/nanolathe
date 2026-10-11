@@ -30,6 +30,8 @@ Models unit owns models.go, model*.wgsl, liveposes.wgsl, models_test.go only:
     (*Models).Compute(enc *wgpu.CommandEncoder) error
     (*Models).Draw(pass *wgpu.RenderPassEncoder, phase uint32)
     (*Models).DrawShadows(pass *wgpu.RenderPassEncoder)
+    (*Models).DrawSlot(pass *wgpu.RenderPassEncoder, slot uint32)
+    (*Models).DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32)
     (*Models).Close()
     (*Models).Counters() ModelCounters
 
@@ -48,11 +50,14 @@ overlay.wgsl, layers_test.go only:
     (*Layers).Prepare(f meshscene.LiveFrame, width, height int) error
     (*Layers).DrawTerrain(pass *wgpu.RenderPassEncoder)
     (*Layers).DrawSprites(pass *wgpu.RenderPassEncoder, phase uint32)
-    (*Layers).SetWorldTexture(view *wgpu.TextureView) // borrowed, rebind on resize
+    (*Layers).SetWorldTexture(view *wgpu.TextureView) error // borrowed, rebind on resize
     (*Layers).DrawEffects(pass *wgpu.RenderPassEncoder, layer uint32) // 0..4
     (*Layers).Missing() map[string]int // explicit unsupported-operation counts
     (*Layers).DrawFog(pass *wgpu.RenderPassEncoder)
     (*Layers).DrawOverlay(pass *wgpu.RenderPassEncoder)
+    (*Layers).SetFeaturePaintOrder(enabled bool)
+    (*Layers).DrawFeature(pass *wgpu.RenderPassEncoder, originalSource uint32) bool
+    (*Layers).DrawLooseSprites(pass *wgpu.RenderPassEncoder, phase uint32)
     (*Layers).Close()
     (*Layers).Counters() LayerCounters
 
@@ -83,3 +88,18 @@ against classic and modern; preserve census and captures. Report CPU/GPU/display
 observations separately; dependency APIs still limit native GPU/presentation time.
 Run affected checks, experimental checks, independent review and root gates.
 No main merge; retain this worktree and the launch command for morning testing.
+
+## Live host dependency gate
+
+The combined command's CGO-disabled link fails: GoFFI and Ebitengine purego both
+define `_cgo_init` through their fakecgo packages. That path stops at linking.
+The independent CGO-enabled build links and completed a bounded real-battle
+launch on Apple M3 Pro; build-play deliberately selects CGO=1. No dependency
+source patch, release substitution or root module change is adopted.
+
+The first live capture verified terrain/features/fog/HUD but exposed missing
+model body pixels despite submitted topology. Shader compilation and counters
+were insufficient evidence. Actual frame and native pixel diagnosis are required
+before the play command is qualified. Benchmark timing and public Native GPU
+timing remain separate: callback/source/encode/completion CPU measurements do
+not establish GPU duration or presentation cadence.
