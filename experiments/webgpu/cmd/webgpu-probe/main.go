@@ -316,7 +316,11 @@ func main() {
 					app.Quit()
 					return
 				}
-				capture.Encode(ctx.CommandEncoder(), retained)
+				if e := capture.Encode(ctx.CommandEncoder(), retained); e != nil {
+					failure = e
+					app.Quit()
+					return
+				}
 				capturePending = true
 				captureStarted = time.Now()
 			}

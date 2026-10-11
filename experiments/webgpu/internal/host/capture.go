@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/binary"
 	"fmt"
 	"github.com/gogpu/gputypes"
@@ -13,9 +14,18 @@ import (
 	"math"
 )
 
+//go:embed points.wgsl
+var pointShader string
+
 // Capture owns untimed staging only. MapAsync readiness is actual map completion on all paths.
 type Capture struct {
 	d                     *wgpu.Device
+	points                *wgpu.Buffer
+	pointPipeline         *wgpu.ComputePipeline
+	pointLayout           *wgpu.BindGroupLayout
+	pointGroup            *wgpu.BindGroup
+	pointReleases         []func()
+	pointSize             uint64
 	buffer                *wgpu.Buffer
 	pending               *wgpu.MapPending
 	final                 *wgpu.Texture
@@ -29,7 +39,8 @@ func NewCapture(d *wgpu.Device, count, width, height int, format gputypes.Textur
 	c := &Capture{d: d, poseSize: uint64(count * 3 * 64), width: width, height: height, row: (width*4 + 255) / 256 * 256}
 	c.plane = uint64(c.row * height)
 	c.format = format
-	c.size = c.poseSize + c.plane*4
+	c.pointSize = uint64(count * 3 * 16)
+	c.size = c.poseSize + c.plane*4 + c.pointSize
 	b, e := d.CreateBuffer(&wgpu.BufferDescriptor{Label: "untimed-diagnostic", Size: c.size, Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst})
 	c.buffer = b
 	if e != nil {
@@ -40,6 +51,33 @@ func NewCapture(d *wgpu.Device, count, width, height int, format gputypes.Textur
 		return c, e
 	}
 	c.finalView, e = d.CreateTextureView(c.final, nil)
+	if e != nil {
+		return c, e
+	}
+	c.points, e = d.CreateBuffer(&wgpu.BufferDescriptor{Label: "untimed-points", Size: c.pointSize, Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc})
+	if e != nil {
+		return c, e
+	}
+	c.pointReleases = append(c.pointReleases, c.points.Release)
+	c.pointLayout, e = d.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{{Binding: 0, Visibility: wgpu.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeReadOnlyStorage, MinBindingSize: 64}}, {Binding: 1, Visibility: wgpu.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage, MinBindingSize: 16}}}})
+	if e != nil {
+		return c, e
+	}
+	c.pointReleases = append(c.pointReleases, c.pointLayout.Release)
+	layout, e := d.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{BindGroupLayouts: []*wgpu.BindGroupLayout{c.pointLayout}})
+	if e != nil {
+		return c, e
+	}
+	c.pointReleases = append(c.pointReleases, layout.Release)
+	shader, e := d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: pointShader})
+	if e != nil {
+		return c, e
+	}
+	c.pointReleases = append(c.pointReleases, shader.Release)
+	c.pointPipeline, e = d.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{Layout: layout, Module: shader, EntryPoint: "transform"})
+	if e == nil {
+		c.pointReleases = append(c.pointReleases, c.pointPipeline.Release)
+	}
 	return c, e
 }
 func (c *Capture) FinalView() *wgpu.TextureView { return c.finalView }
@@ -62,8 +100,27 @@ func (c *Capture) PNG(data []byte) ([]byte, error) {
 	return out.Bytes(), e
 }
 
-func (c *Capture) Encode(e *wgpu.CommandEncoder, r *render.Renderer) {
+func (c *Capture) Encode(e *wgpu.CommandEncoder, r *render.Renderer) error {
 	poses, color, ids, depth := r.DiagnosticResources()
+	if c.pointGroup == nil {
+		g, err := c.d.CreateBindGroup(&wgpu.BindGroupDescriptor{Layout: c.pointLayout, Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: poses, Size: c.poseSize}, {Binding: 1, Buffer: c.points, Size: c.pointSize}}})
+		if err != nil {
+			return err
+		}
+		c.pointGroup = g
+		c.pointReleases = append(c.pointReleases, g.Release)
+	}
+	pass, err := e.BeginComputePass(nil)
+	if err != nil {
+		return err
+	}
+	pass.SetPipeline(c.pointPipeline)
+	pass.SetBindGroup(0, c.pointGroup, nil)
+	pass.Dispatch(uint32((c.pointSize/16+63)/64), 1, 1)
+	if err := pass.End(); err != nil {
+		return err
+	}
+	e.CopyBufferToBuffer(c.points, 0, c.buffer, c.poseSize+c.plane*4, c.pointSize)
 	e.CopyBufferToBuffer(poses, 0, c.buffer, 0, c.poseSize)
 	for i, t := range []*wgpu.Texture{color, ids, depth, c.final} {
 		aspect := gputypes.TextureAspectAll
@@ -77,6 +134,7 @@ func (c *Capture) Encode(e *wgpu.CommandEncoder, r *render.Renderer) {
 		e.TransitionTextures([]wgpu.TextureBarrier{{Texture: t, Range: wgpu.TextureRange{Aspect: aspect, MipLevelCount: 1, ArrayLayerCount: 1}, Usage: wgpu.TextureUsageTransition{OldUsage: old, NewUsage: wgpu.TextureUsageCopySrc}}})
 		e.CopyTextureToBuffer(t, c.buffer, []wgpu.BufferTextureCopy{{BufferLayout: wgpu.ImageDataLayout{Offset: c.poseSize + uint64(i)*c.plane, BytesPerRow: uint32(c.row), RowsPerImage: uint32(c.height)}, TextureBase: wgpu.ImageCopyTexture{Texture: t, Aspect: aspect}, Size: wgpu.Extent3D{Width: uint32(c.width), Height: uint32(c.height), DepthOrArrayLayers: 1}}})
 	}
+	return nil
 }
 func (c *Capture) Poll() ([]byte, bool, error) {
 	c.d.Poll(wgpu.PollPoll)
@@ -103,6 +161,10 @@ func (c *Capture) Poll() ([]byte, bool, error) {
 	return data, true, nil
 }
 func (c *Capture) Close() {
+	for i := len(c.pointReleases) - 1; i >= 0; i-- {
+		c.pointReleases[i]()
+	}
+	c.pointReleases = nil
 	if c.finalView != nil {
 		c.finalView.Release()
 		c.finalView = nil
@@ -123,7 +185,7 @@ func (c *Capture) Close() {
 
 type Comparison struct {
 	Alpha                                       float32
-	MaxPoseError                                float64
+	MaxPoseError, MaxPointError                 float64
 	MinimumIDPixels, ColorSamples, DepthSamples int
 	Resources                                   render.Resources
 }
@@ -132,6 +194,16 @@ func (c *Capture) Compare(data []byte, w *fixture.Workload, s fixture.Snapshot, 
 	result.Alpha = alpha
 	for i := range s.Previous {
 		want := fixture.Blend(s.Previous[i], s.Current[i], alpha)
+		for row := 0; row < 3; row++ {
+			expected := float64(want[row])*.25 + float64(want[4+row])*(-.13) + float64(want[8+row])*.17 + float64(want[12+row])
+			offset := int(c.poseSize+c.plane*4) + i*16 + row*4
+			got := float64(math.Float32frombits(binary.LittleEndian.Uint32(data[offset:])))
+			delta := math.Abs(got - expected)
+			result.MaxPointError = max(result.MaxPointError, delta)
+			if math.IsNaN(got) || delta > 1e-4 {
+				return result, fmt.Errorf("GPU transformed point %d component %d error %.9g", i, row, delta)
+			}
+		}
 		for lane, x := range want {
 			got := math.Float32frombits(binary.LittleEndian.Uint32(data[i*64+lane*4:]))
 			delta := math.Abs(float64(got) - float64(x))
