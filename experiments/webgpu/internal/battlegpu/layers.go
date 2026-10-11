@@ -514,7 +514,7 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 			return
 		}
 	}
-	l.geometry, err = l.layerPipeline(shader, pl, "layer_triangle_vertex", "layer_quad_fragment", 0, 1)
+	l.geometry, err = l.layerPipeline(shader, pl, "layer_triangle_vertex", "layer_geometry_fragment", 0, 1)
 	if err != nil {
 		return
 	}
@@ -972,14 +972,9 @@ func (l *Layers) layerPrepareEffects(f meshscene.LiveFrame) (changed bool, err e
 					l.missing["direct_effect_supersample"]++
 				}
 				spans[i] = layerDraw{kind: meshscene.EffectOpGeometry, first: uint32(len(vb) / layerDirectVertexStride), count: uint32(len(m.Vertices))}
-				for _, v := range m.Vertices {
-					v.PositionUV[0] *= scale
-					v.PositionUV[1] *= scale
-					at := len(vb)
-					vb = append(vb, make([]byte, layerDirectVertexStride)...)
-					layerVec(vb, at, v.PositionUV)
-					layerVec(vb, at+16, v.Color)
-					layerVec(vb, at+32, v.Bounds)
+				vb, err = layerAppendDirectGeometry(vb, m, f.Lighting.Lights, scale, f.LightControls&1 != 0)
+				if err != nil {
+					return false, err
 				}
 			}
 			for _, g := range src.Ground {
