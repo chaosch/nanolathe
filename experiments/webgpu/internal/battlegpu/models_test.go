@@ -120,6 +120,26 @@ func TestModelSlotIsolationAndBorrowedInput(t *testing.T) {
 	}
 }
 
+func TestModelAtlasGeometricGrowth(t *testing.T) {
+	current, allocated := 0, 0
+	for need := 1; need <= 8192; need++ {
+		next := modelAtlasExtent(need, current)
+		if next < need || next < current || next > 8192 || next&(next-1) != 0 {
+			t.Fatalf("need=%d current=%d next=%d", need, current, next)
+		}
+		if next != current {
+			allocated += next
+		}
+		current = next
+		if allocated >= 2*current {
+			t.Fatalf("growth tiers exceed twice current extent: total=%d current=%d", allocated, current)
+		}
+	}
+	if got := modelAtlasExtent(64, current); got != current {
+		t.Fatalf("smaller frame shrank resident atlas: %d", got)
+	}
+}
+
 func TestModelRetainedLightSelection(t *testing.T) {
 	lights := make([]meshscene.RetainedLight, 10)
 	for i := range lights {
