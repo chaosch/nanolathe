@@ -312,7 +312,7 @@ func (r *StockReflections) reflectionResize(width, height int) error {
 		color.close()
 		return err
 	}
-	flags, err := r.reflectionTexture((width+reflectionTileSide-1)/reflectionTileSide, (height+reflectionTileSide-1)/reflectionTileSide, gputypes.TextureFormatR32Uint, wgpu.TextureUsageStorageBinding|wgpu.TextureUsageTextureBinding)
+	flags, err := r.reflectionTexture((width+reflectionTileSide-1)/reflectionTileSide, (height+reflectionTileSide-1)/reflectionTileSide, gputypes.TextureFormatR32Uint, wgpu.TextureUsageStorageBinding|wgpu.TextureUsageTextureBinding|wgpu.TextureUsageCopySrc)
 	if err != nil {
 		color.close()
 		soft.close()
