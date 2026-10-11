@@ -30,7 +30,7 @@ contracts using exported Composition.Groups/Members. Keep NewModels/Prepare/
 Compute/DrawSlot/DrawShadowSlot/Close/Counters signatures unchanged. Additional
 private source/key/merge resources must be core compatible and completion-owned.
 Rasterize immutable member source slots and paint only final slot; preserve
-signed wrapped key shifts and visible/erased coverage where provided. The host
+current Modern saturated shifted keys and visible/erased coverage where provided. The host
 explicitly lacks cached/live source chronology: report that upstream gap; do
 not manufacture lifecycle inputs or call the approximation exact parity.
 
@@ -102,3 +102,39 @@ layouts. It tracks explicit Set calls only, resets at pass boundaries and
 untracked distortion/reflection/lens draws, and never reorders submissions.
 Every allocation-only unit requires byte-identical final pixels and simulation
 states. A clean repeated benchmark separates timing from concurrent builds.
+
+
+## Retained shadows and submerged features
+
+Shadow unit owns models.go/models.wgsl/modelresolve.wgsl/models_test.go and new
+modelshadows.go/modelshadows.wgsl/modelshadows_test.go in its separate worktree.
+It consumes ordered BodyDraws/BodyRuleSlots and independent ProjectedDraws,
+Topology and DontCache flags. Body RGBA8, depth32 keys and R8 projected masks
+have their own atlas and CopySrc diagnostic views. The old resolve shadow
+binding is a transparent 1×1 compatibility dummy. Cached/live chronology and
+producer-omitted offscreen shadow-only subjects stay explicit gaps. Real native
+source planes were populated; the first shadow-on/off final image comparison
+had zero changed pixels, so visible shadow qualification is failed pending
+investigation. Do not promote populated resources or draw counters to success.
+
+Seabed unit owns layers.go/terrain.wgsl and new seabed.go/seabed_test.go;
+water_test.go changes only its ABI checks. API adds EncodeSeabed(encoder,depth)
+and DebugSeabedResource(). It draws raw terrain and published Submerged feature
+sources into a lazy viewport RGBA16F target before water and ground light.
+Inactive frames retain the direct path. Model refraction/reflection, ground
+seabed decals and source chronology remain independent gaps.
+
+The pinned public texture-transition call does not update the core texture
+usage tracker after a source copy. The original DMA lens path failed its real
+native CopySrc-to-RenderAttachment gate. The independent replacement uses a
+cropped same-format raster snapshot with integer textureLoad and no blend,
+then resumes the world/depth attachments with Load. Copies in lens counters
+means these raster snapshots. The actual lens fixture changed 19,968 pixels
+inside its 200×100 destination without simulation change; later paint can
+replace copied pixels. This does not yet qualify key-match discard or HDR
+source values, dormant in that natural crop.
+
+Native macOS pointer capture is also dependency-blocked: SetCursorMode is an
+empty method in the exact pinned darwin platform. PointerEvent carries relative
+deltas but this host cannot produce them while locked. Do not manufacture a
+platform click count or a capture implementation inside the prototype.

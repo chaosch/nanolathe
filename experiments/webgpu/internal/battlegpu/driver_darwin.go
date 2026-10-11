@@ -87,6 +87,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			queue.add(meshscene.NativeEvent{Kind: 7, Key: uint32(c), Modifiers: mods})
 		}
 	})
+	// TODO(question): relative pointer capture needs a working pinned macOS
+	// SetCursorMode; its darwin implementation is empty. Native click count is
+	// also absent from the public event API, so double-click edges stay unqualified.
 	events.OnMouseMove(func(x, y float64) { queue.pointer(1, 0, x, y) })
 	events.OnMousePress(func(b gpucontext.MouseButton, x, y float64) { queue.pointer(2, uint32(b), x, y) })
 	events.OnMouseRelease(func(b gpucontext.MouseButton, x, y float64) { queue.pointer(3, uint32(b), x, y) })
