@@ -272,10 +272,11 @@ presentation timestamps.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1 | 30.050 | 119.80 | 5.11 / 5.91 | 5.09 / 5.79 | 8.34 | 6/3599 |
 | 2 | 30.016 | 119.93 | 4.88 / 5.63 | 4.57 / 5.55 | 8.34 | 2/3599 |
-| 3 | 30.375 | 118.52 | 5.41 / 5.67 | 4.52 / 5.62 | 8.34 | 45/3599 |
+| 3 | 30.375 | 118.52 | 5.41 / 5.67 | 4.52 / 5.62 | 16.67 | 45/3599 |
 
 No gap exceeded50ms. Rounds1 and3 fail the proposed gap fraction; round3 also
-fails119 displayed frames/s. Do not pool away those failures. Source preparation
+fails119 displayed frames/s and the p99 interval limit (1.1×8.333≈9.167ms).
+Do not pool away those failures. Source preparation
 alone exceeds the proposed CPU budget in this context; this identifies authored
 endpoint generation as a follow-up cost to measure, not GoGPU's GPU cost.
 Each round allocated about1.047GB of Go memory (process-wide, includes final
