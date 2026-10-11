@@ -740,3 +740,14 @@ Suggested handoff message:
   native Go/browser compute+indexed-texture smoke executed. Rust runtime aborts
   at the pinned binding/native API boundary; see experimental README. No
   production change or adoption is implied.
+
+- 2026-10-10: P0–P4 isolated implementation and qualification recorded in
+  experiments/webgpu/README.md on branch webgpu-p0-p4. P1 authored fixtures
+  and independent oracle complete; P2 native/browser pose/pixel/ID results
+  recorded, with added GPU point readback qualified natively and browser pending.
+  P3 ten-cycle baselines pass on Go/browser, but native fullscreen deadlocks
+  at the exact pin and browser interactive qualification is incomplete. Dependent
+  P4 WebGPU matrices are explicitly unrun (63 report entries); three public Metal
+  context rounds measured independently, with unmatched passes and failed cadence
+  rounds disclosed. Verdict: Promising with limits; bounded dependency/lifecycle
+  follow-up required. Production/root module/defaults unchanged. No M1–M5 or landing.

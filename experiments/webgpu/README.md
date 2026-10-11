@@ -170,3 +170,182 @@ fixture placement is cropped during resize rather than silently refitted.
 Interactive native: prebuilt probe-go -workload -frames=0 (R resize, F fullscreen,
 M minimize, Q close). Cycle checks: probe-go -workload -count=3000 -cycles=10
 -frames=0; browser ?workload=true&count=3000&cycles=10.
+
+## P4 result and verdict — 2026-10-10
+
+**Promising with limits. No native backend is accepted for production.** Keep
+native Go as the candidate for a bounded qualification follow-up; Rust FFI is
+not a viable fallback at these pins. The common retained shader workload works,
+but native fullscreen fails, native device loss/presentation/GPU timestamps
+lack qualification, and the browser interactive gate is incomplete. These are
+essential gates. Following the requested dependency order, the Go/Rust/browser
+performance matrices were stopped. No 120 Hz WebGPU success or CPU/GPU budget
+pass is claimed, and no M1–M5 work or landing was started.
+
+All changes are isolated to this nested module and the plan's pin/progress.
+The branch is webgpu-p0-p4, created from the plan-containing commit afe0c4254
+and integrated with main at 1430571dc before editing. Bounded commits include
+9415015c0 (pin/probes), 30b0b1845/98dd5fdff (fixture/oracle),
+31f6efdd5/4020b78b5/9285554b8 (retained renderer/corrections),
+60aeaa652 (lifecycle), 1a7f3688f/211079ccc/1741f594b (reports/review fixes),
+and 28cbdfa4a (GPU point readback). No root module, production Go file, default,
+or authoritative simulation change is part of this branch.
+
+### What was measured, and what was stopped
+
+Reference environment: Apple M3 Pro, 12 CPU/18 GPU cores, 18 GiB memory,
+macOS 26.6.2 build25G83, Go1.27.1, AC power/low-power disabled, Chrome153/DPR2.
+CoreGraphics confirms the main display at 120 Hz, logical1728×1117,
+physical3456×2234. Primary qualification surfaces actually acquired1920×1080.
+Native comparison GOMAXPROCS=2; Wasm executes Go on the browser main thread
+without a worker renderer. See environment.json and display.txt in the artifact
+root. Interactive desktop/browser activity was not controlled, so the independent
+Metal results below are context and do not establish a clean adoption benchmark.
+
+For each blocked WebGPU path, tools/bench --inventory-only emitted all seven
+workloads × three rounds: manifest.json with the fixture/module/shader hashes,
+empty frames.csv and summary.json with status unrun, zero measured draws,
+null timings/throughput and the precise failed/incomplete dependency gate.
+There are **63 unrun entries**, not 63 completed runs. Qualification metadata
+is in qualification.json. A normal launch through tools/bench rejects these
+statuses before creating output. There was no qualified backend pair to alternate.
+The 5k, 500-triangle, Retina, static and camera performance results are unrun;
+large-count correctness at200 triangles/1080p is separate evidence.
+
+The observation schema preserves missing values as null; it excludes the
+warmup-crossing interval and distinguishes fixture preparation, encoding,
+fence-poll CPU, queue submit/completion, callback cadence and presentation.
+Packing is currently included in Encode rather than separately observed;
+total CPU-budget telemetry therefore stays unavailable. Browser raw queue
+observations are downloaded separately from Go observations, without substituting
+queue completion for GPU execution. GPU timestamps and native actual display
+observations remain unavailable through the pinned borrowed-context API.
+Framework-owned transient object counts are also not instrumented; zero
+persistent creations refers only to renderer-owned resources. This scaffold is
+CPU/build-reviewed, **not runtime-qualified P4 timing infrastructure**.
+
+Source snapshots are now prepared only on a new generation; static/camera
+reuse endpoints and camera changes affect uniforms only. CPU tests and actual
+native point runs validate the unchanged fixture contract. Timed runs need to
+confirm update/allocation cadence; source inspection is not their substitute.
+First-frame/pipeline creation is separated as cold work when observations exist.
+Missing input-to-submission and presentation latency remain null. Browser input
+bookkeeping now consumes a marker only on the next actual submit and records
+latency only for the first reflected serial; unlimited interactive runs retain
+at most8192 submissions and1024 events. Authored Node mocks lock those properties;
+they provide no real GPU or browser lifecycle evidence.
+
+The added untimed points.wgsl pass transforms (.25,-.13,.17,1) through every
+interpolated GPU piece, then reads back XYZ. Native64/1k/3k/5k × five alphas
+passed against the independent oracle at absolute1e-4; maximum error2.158e-6.
+It is excluded from timed rendering and its resources are owned by Capture.
+Browser verification of this added point readback remains **unverified** because
+control was unavailable. Earlier browser matrix/pixel/depth/ID diagnostics remain
+passing evidence, with their exact scope preserved.
+
+### Independent public Metal comparison
+
+An experiment-owned LiveSource feeds the same meshes, endpoint sequence,
+projection, count and pixels to metalrender.Run; tiny authored terrain/sprite
+textures satisfy its public contract. Its model atlas expects palette-index
+bytes. An authored lossless conversion preserves the original nearest sampled
+colors and records encoded-atlas/palette hashes separately from the semantic
+fixture hash. An initial main-thread setup mistake was corrected in the adapter
+before measuring; its failed log is preserved, not attributed to Metal.
+
+Metal shading, quantized-height depth, attachments and composition differ from
+WGSL's diagnostic MRT/ID/overlay passes. Thus these are **contextual measurements,
+not matched end-to-end FPS or GPU rankings**. No production shader was changed.
+The public runner exposes actual drawable presentation callbacks and command-
+buffer GPU start/end. No profiler, readback or forced collection ran inside the
+measurement interval. Captures were made afterward.
+
+Each round submitted240 warmup +3600 measured draws at1920×1080, with exactly
+3000 instances/9000 pieces/600000 model triangles in every CSV row. Every tick
+and alpha was checked against d/4 and(d%4)/4. All command statuses completed.
+The warmup boundary is excluded from intervals, and all3600 measured rows have
+presentation timestamps.
+
+| Round | Submission elapsed s | Actual displayed frames/s | GPU p95/p99 ms | Source preparation p95/p99 ms | Display interval p99 ms | Gaps >1.5 refresh periods |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 30.050 | 119.80 | 5.11 / 5.91 | 5.09 / 5.79 | 8.34 | 6/3599 |
+| 2 | 30.016 | 119.93 | 4.88 / 5.63 | 4.57 / 5.55 | 8.34 | 2/3599 |
+| 3 | 30.375 | 118.52 | 5.41 / 5.67 | 4.52 / 5.62 | 8.34 | 45/3599 |
+
+No gap exceeded50ms. Rounds1 and3 fail the proposed gap fraction; round3 also
+fails119 displayed frames/s. Do not pool away those failures. Source preparation
+alone exceeds the proposed CPU budget in this context; this identifies authored
+endpoint generation as a follow-up cost to measure, not GoGPU's GPU cost.
+Each round allocated about1.047GB of Go memory (process-wide, includes final
+submission drain; see report scope), roughly34.5–34.9MB/s. This is distinct from
+live heap and device memory. Device allocation and native waits are in each
+original report. Missing cold/input telemetry is null in the supplemental summary.
+
+Artifacts: metal-primary-round-{1,2,3}-v2/{manifest.json,frames.csv,
+live-frames.csv,report.json,summary.json,final.png}; exact command vectors in
+metal-primary-round-{1,2,3}-command.json. Independent reviewer checked all row
+counts/schedules and the64/3k captures. Round1 and3 final images were visually
+inspected: complete colored grid, articulation, rotated/beveled forms and viewport
+margins, with expected shader/pass differences. No whole-image parity claim.
+
+### Platform qualification matrix
+
+| Platform/path | Build | Runtime/correctness | Cadence / GPU timing | Lifecycle | Packaging |
+| --- | --- | --- | --- | --- | --- |
+| macOS arm64 Go | CGO0 pass | smoke, poses/pixels/IDs and GPU points pass64/1k/3k/5k | unrun / unavailable |10 cycles pass; resize/focus pass; fullscreen fails; native loss/DPI/minimize unverified | normal binary and diagnostic app bundle launch; distributable signing/notarization unverified |
+| macOS arm64 Rust FFI | CGO0 pass | pinned ABI abort; diagnostic patch then map-state abort | unrun | stopped | exact v29 artifact locally hashed; clean-install discovery/notices incomplete |
+| Chrome153 macOS Wasm | pass | smoke and prior pose/pixel/ID tests pass; added GPU point readback pending | unrun / timestamps unavailable at requested features |10 cycles, loss/stop/fresh session pass; interactive gate incomplete | localhost + matching wasm_exec.js works; other browser/deployment environments untested |
+| Windows amd64 Go/Rust | CGO0 cross-build pass | hardware untested | untested | untested | Go runtime and Rust native-library discovery/checksums not locally qualified |
+| Linux amd64 Go/Rust | CGO0 cross-build pass | hardware untested | untested | untested | graphics/runtime and Rust native-library discovery/checksums not locally qualified |
+
+Resolved graph: exact GoGPU pseudo-version from §3; wgpu0.34.2,
+gpucontext0.31.3, gputypes0.8.0, goffi0.6.3, webgpu0.5.5, naga0.19.0,
+x/sys0.48.0. The optional Metal comparison imports the root's existing
+purego0.11.1 (Apache-2.0) only into the nested graph. License/provenance audit
+is in patches/README.md. No dependency patch is adopted. The native-artifact
+publisher pins are recorded separately; only the macOS artifact was downloaded
+and independently hashed. No GPL dependency was introduced.
+
+### Reproduction and bounded next recommendation
+
+Artifact root: /private/tmp/nanolathe-webgpu-20261010. Run from this module:
+
+```sh
+tools/check
+tools/build /tmp/webgpu-followup-new
+# This report-only command deliberately records blocked work:
+tools/bench --backend go --inventory-only   --qualification /private/tmp/nanolathe-webgpu-20261010/qualification.json   --environment /private/tmp/nanolathe-webgpu-20261010/environment.json   --output /tmp/webgpu-go-unrun-new
+# Independent context only, prebuilt on Darwin; run sequentially:
+../../tools/host-run env GOMAXPROCS=2 /tmp/webgpu-followup-new/metal-probe   -count=3000 -detail=200 -width=1920 -height=1080 -warmup=240 -frames=3600   -mode=animated -out=/tmp/webgpu-metal-context-new
+```
+
+The next assignment should be2–5 engineering days of bounded qualification:
+review a pinned fullscreen correction with an actual round-trip regression;
+qualify native loss/error and real submission/presentation/GPU timing seams;
+restore a stable browser test session and finish point/resize/DPI/fullscreen/
+hide-resume/first-input/close-relaunch checks; then run the complete controlled
+three-round matrix with alternated backend order. If required fixes grow into
+compiler/HAL/framework reconstruction, reject/rescope the dependency instead
+of expanding this experiment. Current report tooling still needs real runtime
+qualification, completion/wait accounting and browser report joining before
+that measurement can be accepted.
+
+Subsequent production risks, only after a new assignment: (1) host/device
+lifecycle and Windows/Linux/browser runtime evidence; (2) presentation timing,
+retained uploads and CPU preparation costs; (3) real-battle immutable sample
+lifetimes/composition and Original/Enhanced parity; (4) terrain/water/fog/shadow/
+effect/material visual contracts; (5) menus/input/audio/assets/save/online host
+behavior; (6) packaging, fallback policy and library extraction. Based on the
+prototype's binding and host friction, budget1–2 weeks for a first battle proof
+and roughly8–16 engineer-weeks for full host/renderer migration after qualified
+dependencies, with hardware/platform scheduling additional. These are planning
+ranges, not authorization or a promise. Keep the production defaults until the
+later gates actually pass.
+
+Independent read-only reviews covered P0/P1, P2/P3 and P4; their telemetry and
+clock-label findings were fixed forward with separate commits. Experiment
+checks and root architecture/docs guards passed on the earlier P4 candidate;
+final checks are recorded in experiment-check-final.log/root-guards-final.log.
+Root tools/check passed. The short retail gate is still running at this report
+write; do not infer success from its intermediate package output. This branch
+is retained for review and has not been landed.
