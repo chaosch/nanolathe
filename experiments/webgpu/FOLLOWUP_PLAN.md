@@ -68,3 +68,37 @@ pixels and state. Preserve failed attempts and benchmark metadata externally.
 Re-profile after changes, measure classic/modern/WebGPU matching scenes; do not
 claim GPU or scanout timing from callback/CPU metrics. Update evidence/report and
 commit bounded units. No landing while required gates fail.
+
+## Next independent units
+
+Stock lens unit: branch webgpu-lens-followup, separate worktree, based on
+910ec98f8. Own only lenses.go, lenses.wgsl and lenses_test.go in battlegpu.
+API: NewLenses(device,queue,format); Prepare(frame,width,height);
+Snapshot(encoder,world,layer,index); Draw(pass,layer,index); Close();
+Counters() LensCounters with Draws, Copies, Samples and UploadBytes. Snapshot
+copies the completed world crop at the operation barrier, preserving absolute
+coordinates. Root ends and resumes the world/depth pass with Load at each
+barrier. Key comparison and source coordinates follow production's stock lens;
+HDR values survive copies. Authored injected operations qualify this dormant
+path without changing the default battle producer or borrowed packets.
+
+Stock reflection unit: branch webgpu-stock-water-followup, separate worktree,
+based on 0e3bfaff9. Own only reflections.go, reflections.wgsl,
+reflectiontiles.wgsl and reflections_test.go in battlegpu. API:
+NewStockReflections(device,queue,format); Prepare(frame,width,height);
+SetInputs(uniform,atlas,mask); Encode(encoder); Draw(pass); Close();
+Counters() ReflectionCounters with Draws, Dispatches, Sources and UploadBytes.
+Sources are the already mirrored/admitted WaterSources. Borrow the shared
+240-byte uniform and existing effect atlas/mask; own source color/soft planes,
+conservative tile flags and output resolve. Root draws immediately after
+terrain and before bodies. This unit has no model reflection sources and uses
+the native zero-model-source stock corner budget of 32768. Mixed admission
+cannot be claimed until the producer exports admitted model corner cost;
+record that missing input at the cap. Model reflection, refraction and seabed
+promotion remain separate gaps.
+
+Root's pass-local binding cache spans compatible Models/Layers group-0
+layouts. It tracks explicit Set calls only, resets at pass boundaries and
+untracked distortion/reflection/lens draws, and never reorders submissions.
+Every allocation-only unit requires byte-identical final pixels and simulation
+states. A clean repeated benchmark separates timing from concurrent builds.
