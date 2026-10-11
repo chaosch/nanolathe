@@ -266,3 +266,11 @@ func TestModelGroupedSourceMetalKeepsCoveredErasedKeys(t *testing.T) {
 		}
 	}
 }
+
+// A keyless member never selects the own BLUE clip, even when that clip would
+// claim its key. The current Modern group contract owns this bypass (§22).
+func TestModelGroupKeylessBlueBypassesOwnClip(t *testing.T) {
+	if !strings.Contains(modelBodyShader, "if i.groupOperand.x!=0 {\n  if i.groupOperand.y==2{return false;}") {
+		t.Fatal("keyless membership falls through to the standalone BLUE clip")
+	}
+}
