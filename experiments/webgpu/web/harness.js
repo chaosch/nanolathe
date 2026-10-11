@@ -5,7 +5,9 @@ let device;
 function log(kind, value){report.events.push({kind,value,at:performance.now()});document.querySelector('#report').textContent=JSON.stringify(report,null,2);}
 window.probeBridge = {
  lost:'', stop:false,
+ capture(name,data){const image=document.createElement('img');image.alt=name;image.src='data:image/png;base64,'+data;image.style.width='480px';document.querySelector('#captures').append(image);},
  beginCompletion(){const id=++token;device.queue.onSubmittedWorkDone().then(()=>completions.set(id,'done'),e=>completions.set(id,String(e)));return id;},
+ beginFrameCompletion(){const id=++token;queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>completions.set(id,'done'),e=>completions.set(id,String(e))));return id;},
  completion(id){const value=completions.get(id);if(value!==undefined)completions.delete(id);return value;},
  publish(text){report.results.push(JSON.parse(text));log('finished',true);document.querySelector('#status').textContent='Smoke finished; inspect report.';},
 };
