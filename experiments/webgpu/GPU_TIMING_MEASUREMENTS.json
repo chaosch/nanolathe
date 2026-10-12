@@ -169,7 +169,7 @@
     "binary_sha256": "d3f63773683084ba481948cfaf9468f0bc36cecaf6e3cdcc8d788877869d92fd",
     "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
     "analysis_script": "/tmp/analyze_nanolathe_gpu_timing.py",
-    "analysis_script_sha256": "89cca0148fc03de894b880bd9d411878cc276c31a1e4130e118e5083a40ebc03",
+    "analysis_script_sha256": "b20bbf69418af59a321666dcb5a65ce34f64d40d8b279d0c1c2a0758c8bc2a1a",
     "run_metadata": [
       {
         "name": "A1",
@@ -574,7 +574,7 @@
             "p99": 47.08185778984226,
             "max": 63.872875283975716
           },
-          "source_request_to_present_ms": {
+          "source_sample_target_to_present_ms": {
             "mean": 32.74910703450223,
             "median": 31.986214810179412,
             "p95": 38.994648730657545,
@@ -1190,7 +1190,7 @@
             "p99": 47.22879713946443,
             "max": 89.71849954479504
           },
-          "source_request_to_present_ms": {
+          "source_sample_target_to_present_ms": {
             "mean": 33.74427064324476,
             "median": 31.906317314947785,
             "p95": 39.706346482660905,
@@ -1730,13 +1730,13 @@
         "GPU_envelope_over_8_333333ms": 4,
         "GPU_envelope_over12ms": 1,
         "source_over_8_333333ms": 647,
-        "correlated_rows_sha256": "7d16aa574d95f3a94359c2d013f750c2e52416c8ca636829d2750468da00b825"
+        "correlated_rows_sha256": "dfdc01199d79c57e82806cad344f57d7ecac84dcb61e71fa3c54622e8c11fca7"
       },
       "B2": {
         "GPU_envelope_over_8_333333ms": 5,
         "GPU_envelope_over12ms": 1,
         "source_over_8_333333ms": 733,
-        "correlated_rows_sha256": "35a3c4ff9a6e6e78b1a0e601561def38d7fe219baa85048e8c5395377294e995"
+        "correlated_rows_sha256": "a43decae8c066d2061d398e03057045ddcc854116f6fcf15d79be1c5771fdc4f"
       }
     },
     "qualification": "GPU on/off encoding rangesoverlap and no observedslowdown underthiscampaignvariance; this is not proof ofzero observeroverhead. Samebinarycontrols evolve atdifferentwallcadence/alphas/endticks; comparecommonfulltickranges."
@@ -1754,8 +1754,9 @@
       "GPU timestamps arecommandbuffer-level hosttimes; sum/envelope notper-bodytime andnotadditive toCPUduration",
       "HALSubmit coverage excludesnativePresent/WaitIdle/privatefallbackCBs; postGPUgap is not purecompositor cost",
       "Causal attribution of eachmiss stillopen; no hardware120ceiling orzeroobserveroverhead claim",
-      "NativeCPU clock sample isnearencodeStart, notexact; predictive source-request time differs fromactualsource start",
-      "SameNoShake suppressesauthoritativeRequestShake andchangesCRTchronology relative tooldsoak; comparesidenticalpolicyhere"
+      "NativeCPU clock sample isnearencodeStart, notexact; predictive source-sample target time differs fromactualsource start",
+      "SameNoShake suppressesauthoritativeRequestShake andchangesCRTchronology relative tooldsoak; comparesidenticalpolicyhere",
+      "source_sample_target_to_present uses input.At, often a predicted future sampling target, not actualrequestdispatch; actualNextstart is separatelyreconstructed fromready-time minusSourceMS andremainsapproximate"
     ]
   },
   "chosen_CPU_candidate": {
@@ -1774,5 +1775,6 @@
       "Samebinary/privateoverlaydense A/B actualpresentation,source/visual/join tails andsimulation/scheduler contention"
     ],
     "not_selected": "Do notremovejoinSimulation; it protectsorderedpublication observers,admissions,captions/audio. DirectbodypathchangesUV/coverage/quantization/order andhasno measuredneed yet."
-  }
+  },
+  "independent_results_review": "3600uniquecompletebatchjoins each independentlyverified; no negative GPU\u2192present/precommit\u2192GPU gaps; CPU-firstboundedpooltrial supported; predicted sampletarget label corrected toexclude dispatch/inputlatency interpretation"
 }
