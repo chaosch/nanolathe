@@ -1,6 +1,6 @@
 {
   "base_commit": "a938aeb9bab5fe6bacfe2fe4efd734617686661e",
-  "status": "default-off isolated diagnostic; nativecallback/ABI/lifetime smoke qualified; denseoff-onoverhead andpixel-state controls pending",
+  "status": "default-off diagnostic qualified for listednativeGPUcallback/ABI/lifetime, densecomplete-batchcorrelation andpixel/state controls; native rendering usuallywithin8.33ms; CPUfirst-retained-read pooling chosen as next candidate, not implemented yet",
   "scope": "all commandbuffers through HAL Submit, including pendinguploads andmainrender; excludes nativePresent/WaitIdle/privateHALfallback commandbuffers; not all GPU work or a per-pass query system",
   "API_evidence": {
     "primary_urls": [
@@ -105,6 +105,45 @@
         }
       ],
       "stress_policy": "GPU_GC_STRESS1 triggersruntimeGC beforeobserverattachment atsubmissionmultiples120; not a performance run"
+    },
+    "native_UV_growth": {
+      "off": "/tmp/nanolathe-gputiming-uv-off",
+      "on": "/tmp/nanolathe-gputiming-uv-on",
+      "cases_each": 19,
+      "raw_files_each": 38,
+      "all_raw_files_equal": true,
+      "both_reports_passed": true
+    },
+    "fixed_coast": {
+      "artifact": "/tmp/nanolathe-gputiming-coast",
+      "reference": "/tmp/nanolathe-chunked-coast",
+      "equalities": {
+        "battle.png": true,
+        "final-fields.json": true,
+        "benchmark-state.json": true
+      },
+      "sidecar_count": 18,
+      "all_sidecars_equal": true,
+      "GPU_summary": {
+        "Enabled": true,
+        "Closed": true,
+        "Requested": 1926,
+        "Completed": 1926,
+        "Missing": 0,
+        "Evicted": 0,
+        "Ignored": 0,
+        "Outstanding": 0,
+        "RegistryOutstanding": 0,
+        "HighWater": 4,
+        "PermanentBlocks": 1,
+        "ExtraNativeRetains": 0,
+        "Scope": "completed Metal command-buffer host timestamps; all HAL Submit batch buffers including upload copies; bounded value ring and routes; no new waits/retains; pre-commit and encode clock samples are observations, not exact submission instants; CPU/GPU overlap is not additive"
+      },
+      "close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "report_sha256": "c984d0ee263aa0e0c78b23a88be1fd86d73be670e967adb668af44e6d0e8af49"
     }
   },
   "build": {
@@ -115,9 +154,1625 @@
     "patch_manifest": "patches/gpu-timing-manifest.json"
   },
   "remaining_gates": [
-    "samebinaryA/B timings-off/on stablecameraNoShakeboth, nonstress;verifyallcompleteCBbatches matchsource/present",
-    "quantifyobserverCPU/presentationoverhead in matchedtickwindows",
-    "existingnativeUV/growth andfixedCoastimage/state/sidecar controls",
-    "choose directbodyversusCPUpublication frommeasuredcriticalpath; no hardwarelimit or optimizationconclusion yet"
-  ]
+    "Implementandmeasure chosenpooledfirst-retained-read candidate",
+    "Explainresidual25ms postobservedGPU\u2192presentationgap beforeinputlatency claims orcompositor/pacingchanges",
+    "Otherplatformruntime/browser qualification andcompleteGPUheapaccountingremainunavailable/unclaimed"
+  ],
+  "dense_comparison": {
+    "artifact": "/tmp/nanolathe-gputiming-pairs",
+    "sequence": [
+      "A1",
+      "B1",
+      "B2",
+      "A2"
+    ],
+    "binary_sha256": "d3f63773683084ba481948cfaf9468f0bc36cecaf6e3cdcc8d788877869d92fd",
+    "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+    "analysis_script": "/tmp/analyze_nanolathe_gpu_timing.py",
+    "analysis_script_sha256": "89cca0148fc03de894b880bd9d411878cc276c31a1e4130e118e5083a40ebc03",
+    "run_metadata": [
+      {
+        "name": "A1",
+        "gpu_timing": false,
+        "command": [
+          "/tmp/nanolathe-gputiming-fixed/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-gputiming-pairs/A1-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-gputiming-pairs/A1",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 38.18988037481904,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:39  up 18 days,  6:47, 10 users, load averages: 2.80 2.66 2.99"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:40  up 18 days,  6:48, 10 users, load averages: 3.83 2.96 3.09"
+        }
+      },
+      {
+        "name": "B1",
+        "gpu_timing": true,
+        "command": [
+          "/tmp/nanolathe-gputiming-fixed/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--gpu-timing",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-gputiming-pairs/B1-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-gputiming-pairs/B1",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 36.89543704199605,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:40  up 18 days,  6:48, 10 users, load averages: 3.83 2.96 3.09"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:40  up 18 days,  6:48, 10 users, load averages: 4.15 3.14 3.15"
+        }
+      },
+      {
+        "name": "B2",
+        "gpu_timing": true,
+        "command": [
+          "/tmp/nanolathe-gputiming-fixed/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--gpu-timing",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-gputiming-pairs/B2-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-gputiming-pairs/B2",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 37.21570041705854,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:40  up 18 days,  6:48, 10 users, load averages: 4.15 3.14 3.15"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:41  up 18 days,  6:49, 10 users, load averages: 4.87 3.45 3.26"
+        }
+      },
+      {
+        "name": "A2",
+        "gpu_timing": false,
+        "command": [
+          "/tmp/nanolathe-gputiming-fixed/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-gputiming-pairs/A2-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-gputiming-pairs/A2",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 37.26684329099953,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:41  up 18 days,  6:49, 10 users, load averages: 4.87 3.45 3.26"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:41  up 18 days,  6:49, 10 users, load averages: 5.49 3.81 3.40"
+        }
+      }
+    ],
+    "fixture": "Samebinaryfastprofile,chunkedownedasync/reserve/prepare1,runtimearrays0; fixedcamera3192,4536,2;Town & Country field:1000 three1000-unitarmies;1920x1080 normalzoom1;speed10 seed7; identicalNoShakebothcontrols;120warmup+3600measured; nootherbuilds/tests overlapped",
+    "summary": {
+      "A": {
+        "display_hz_range": [
+          116.44068504409923,
+          118.94204176895178
+        ],
+        "encode_mean_ms": [
+          1.2986856472222221,
+          1.3034502816666667
+        ],
+        "source_mean_ms": [
+          5.871318405277778,
+          5.911383556388889
+        ],
+        "source_p99_ms": [
+          12.523323419999997,
+          12.59657516999999
+        ],
+        "late_display_intervals": [
+          104,
+          28
+        ]
+      },
+      "B": {
+        "display_hz_range": [
+          118.74581308985515,
+          119.23755979107585
+        ],
+        "encode_mean_ms": [
+          1.2832821866666666,
+          1.294272973888889
+        ],
+        "source_mean_ms": [
+          5.862156160833333,
+          5.926286768055555
+        ],
+        "source_p99_ms": [
+          12.252466489999996,
+          12.318395419999998
+        ],
+        "late_display_intervals": [
+          22,
+          30
+        ]
+      }
+    },
+    "runs": [
+      {
+        "name": "A1",
+        "report_sha256": "f3c2313ff62586f91321d25960d5aed68614d7b6bb6f9d11dc21f40ec0ae8d3e",
+        "measured_rows": 3600,
+        "unique_source_identities": 3600,
+        "unique_positive_presentations": 3600,
+        "duplicate_or_nonpositive_intervals": 0,
+        "display_hz": 116.44068504409923,
+        "display_ms": {
+          "mean": 8.588063524542758,
+          "median": 8.333374978974462,
+          "p95": 8.339708228595555,
+          "p99": 16.66670828126371,
+          "max": 33.33341679535806
+        },
+        "over12ms": 104,
+        "camera_values": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "cpu_ms": {
+          "source_ms": {
+            "mean": 5.871318405277778,
+            "median": 4.770396,
+            "p95": 11.4407101,
+            "p99": 12.523323419999997,
+            "max": 32.367041
+          },
+          "join_ms": {
+            "mean": 0.8429649822222223,
+            "median": 0.000417,
+            "p95": 4.016658,
+            "p99": 5.345117089999997,
+            "max": 24.415042
+          },
+          "encode_ms": {
+            "mean": 1.2986856472222221,
+            "median": 1.2679369999999999,
+            "p95": 1.63326665,
+            "p99": 2.285560089999998,
+            "max": 6.389625
+          }
+        },
+        "GPU_summary": {
+          "Enabled": false
+        },
+        "complete_measured_GPU_batches": 0,
+        "missing_batches": [],
+        "memory": {
+          "alloc_bytes": 910453696,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3372413464,
+          "go_sys_bytes_start": 3360060440,
+          "heap_bytes_end": 2863290528,
+          "heap_bytes_start": 1952836832,
+          "mallocs": 5791590,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        }
+      },
+      {
+        "name": "B1",
+        "report_sha256": "d39f29f850a00ff9949135a65e5be48d3e4a4fab671481739b6d416cf69ec9c2",
+        "measured_rows": 3600,
+        "unique_source_identities": 3600,
+        "unique_positive_presentations": 3600,
+        "duplicate_or_nonpositive_intervals": 0,
+        "display_hz": 119.23755979107585,
+        "display_ms": {
+          "mean": 8.386619130349256,
+          "median": 8.333374978974462,
+          "p95": 8.33929581567645,
+          "p99": 8.339958270080388,
+          "max": 25.00008326023817
+        },
+        "over12ms": 22,
+        "camera_values": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "cpu_ms": {
+          "source_ms": {
+            "mean": 5.862156160833333,
+            "median": 5.041708,
+            "p95": 10.827355949999998,
+            "p99": 12.252466489999996,
+            "max": 16.241416
+          },
+          "join_ms": {
+            "mean": 0.7143504686111111,
+            "median": 0.000375,
+            "p95": 4.044755899999996,
+            "p99": 5.139642579999981,
+            "max": 9.951417
+          },
+          "encode_ms": {
+            "mean": 1.2832821866666666,
+            "median": 1.268375,
+            "p95": 1.61460385,
+            "p99": 1.8276940799999992,
+            "max": 4.711625
+          }
+        },
+        "GPU_summary": {
+          "Enabled": true,
+          "Closed": true,
+          "Requested": 7446,
+          "Completed": 7446,
+          "Missing": 0,
+          "Evicted": 0,
+          "Ignored": 0,
+          "Outstanding": 0,
+          "RegistryOutstanding": 0,
+          "HighWater": 4,
+          "PermanentBlocks": 1,
+          "ExtraNativeRetains": 0,
+          "Scope": "completed Metal command-buffer host timestamps; all HAL Submit batch buffers including upload copies; bounded value ring and routes; no new waits/retains; pre-commit and encode clock samples are observations, not exact submission instants; CPU/GPU overlap is not additive"
+        },
+        "complete_measured_GPU_batches": 3600,
+        "missing_batches": [],
+        "memory": {
+          "alloc_bytes": 903578048,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 2923106744,
+          "go_sys_bytes_start": 2729800600,
+          "heap_bytes_end": 2857316328,
+          "heap_bytes_start": 1953738280,
+          "mallocs": 5923422,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "GPU_matched_ms": {
+          "gpu_sum_ms": {
+            "mean": 4.172443569405004,
+            "median": 4.011916695162654,
+            "p95": 5.820366577245294,
+            "p99": 6.962709245271979,
+            "max": 31.738999765366316
+          },
+          "gpu_envelope_ms": {
+            "mean": 4.17514944610755,
+            "median": 4.013208439573646,
+            "p95": 5.823137401603162,
+            "p99": 6.963583806063978,
+            "max": 31.7395415622741
+          },
+          "first_CB_ms": {
+            "mean": 0.04795739724714723,
+            "median": 0.037937541492283344,
+            "p95": 0.09059156291186805,
+            "p99": 0.2333800005726515,
+            "max": 0.6986248772591352
+          },
+          "last_CB_ms": {
+            "mean": 4.124486172157857,
+            "median": 3.9667291566729546,
+            "p95": 5.753931263461709,
+            "p99": 6.908033732324838,
+            "max": 31.69699991121888
+          },
+          "precommit_to_gpu_start_ms": {
+            "mean": 0.3149038064940315,
+            "median": 0.39410393219441175,
+            "p95": 0.5072101368568838,
+            "p99": 0.5527101340703666,
+            "max": 15.761374728754163
+          },
+          "encode_start_to_gpu_start_ms": {
+            "mean": 1.6234557409512087,
+            "median": 1.5825831796973944,
+            "p95": 2.0725683658383787,
+            "p99": 2.3387852380983523,
+            "max": 17.57879159413278
+          },
+          "encode_end_to_precommit_ms": {
+            "mean": 0.025269747790510423,
+            "median": 0.022541644781827852,
+            "p95": 0.03871265238186126,
+            "p99": 0.0581011762810512,
+            "max": 1.422875109270215
+          },
+          "gpu_end_to_present_ms": {
+            "mean": 25.256765405776807,
+            "median": 25.631104363128543,
+            "p95": 27.342444087844342,
+            "p99": 28.351049432530996,
+            "max": 42.809833539649844
+          },
+          "source_ready_to_present_ms": {
+            "mean": 32.74398729422445,
+            "median": 32.532729591657045,
+            "p95": 37.17343325332626,
+            "p99": 39.281972513298676,
+            "max": 59.855749316877485
+          },
+          "source_actual_start_to_present_ms": {
+            "mean": 38.60614345505779,
+            "median": 39.2193750148341,
+            "p95": 39.8864756166761,
+            "p99": 47.08185778984226,
+            "max": 63.872875283975716
+          },
+          "source_request_to_present_ms": {
+            "mean": 32.74910703450223,
+            "median": 31.986214810179412,
+            "p95": 38.994648730657545,
+            "p99": 40.320783627918516,
+            "max": 56.62234131687748
+          }
+        },
+        "late_vs_other": {
+          "late": {
+            "source_ms": {
+              "mean": 7.703484772727273,
+              "median": 7.4438130000000005,
+              "p95": 14.2154896,
+              "p99": 14.87562864,
+              "max": 15.045291
+            },
+            "join_ms": {
+              "mean": 2.1421041818181816,
+              "median": 0.703271,
+              "p95": 9.485166649999998,
+              "p99": 9.86987568,
+              "max": 9.951417
+            },
+            "encode_ms": {
+              "mean": 1.4767859545454545,
+              "median": 1.4055415,
+              "p95": 2.1496847999999997,
+              "p99": 2.4202111099999994,
+              "max": 2.4905
+            },
+            "gpu_sum_ms": {
+              "mean": 5.614000012759458,
+              "median": 4.1679166024550796,
+              "p95": 6.912770902272313,
+              "p99": 26.53596108080817,
+              "max": 31.738999765366316
+            },
+            "gpu_envelope_ms": {
+              "mean": 5.62006819315932,
+              "median": 4.168437444604933,
+              "p95": 6.913633388467132,
+              "p99": 26.536572845652678,
+              "max": 31.7395415622741
+            },
+            "gpu_end_to_present_ms": {
+              "mean": 32.05612902952866,
+              "median": 33.8493543677032,
+              "p95": 40.3637774521485,
+              "p99": 41.338211067486554,
+              "max": 41.55095852911472
+            },
+            "precommit_to_gpu_start_ms": {
+              "mean": 0.32469291578639636,
+              "median": 0.41693716775625944,
+              "p95": 0.5142998183146119,
+              "p99": 0.983103967737406,
+              "max": 1.1069164611399174
+            }
+          },
+          "other": {
+            "source_ms": {
+              "mean": 5.850834408608161,
+              "median": 5.0383960000000005,
+              "p95": 10.713173099999986,
+              "p99": 12.14716216,
+              "max": 16.241416
+            },
+            "join_ms": {
+              "mean": 0.7055716587479038,
+              "median": 0.000375,
+              "p95": 4.038097249999999,
+              "p99": 5.00392768,
+              "max": 9.061375
+            },
+            "encode_ms": {
+              "mean": 1.2820923926774734,
+              "median": 1.2673335,
+              "p95": 1.6137910999999998,
+              "p99": 1.80822109,
+              "max": 4.711625
+            },
+            "gpu_sum_ms": {
+              "mean": 4.163579890882422,
+              "median": 4.009958240203559,
+              "p95": 5.801197898108512,
+              "p99": 6.935281709302217,
+              "max": 11.096458416432142
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.166265093833895,
+              "median": 4.012958379462361,
+              "p95": 5.805575137492263,
+              "p99": 6.936230454593897,
+              "max": 11.097125010564923
+            },
+            "gpu_end_to_present_ms": {
+              "mean": 25.21495825101925,
+              "median": 25.628437753766775,
+              "p95": 27.2976940497756,
+              "p99": 28.041635947301984,
+              "max": 42.809833539649844
+            },
+            "precommit_to_gpu_start_ms": {
+              "mean": 0.3148436163306911,
+              "median": 0.39389554876834154,
+              "p95": 0.5072080530226231,
+              "p99": 0.5501735745929183,
+              "max": 15.761374728754163
+            }
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 398,
+            "gpu_sum_ms": {
+              "mean": 3.885826622440138,
+              "median": 3.5298335133120418,
+              "p95": 6.145285360980776,
+              "p99": 7.857583400327712,
+              "max": 8.352333214133978
+            },
+            "gpu_envelope_ms": {
+              "mean": 3.8878683980095703,
+              "median": 3.5304375924170017,
+              "p95": 6.146122829522935,
+              "p99": 7.858661760110408,
+              "max": 8.353249868378043
+            },
+            "source_ms": {
+              "mean": 4.259734819095478,
+              "median": 3.156625,
+              "p95": 9.1781974,
+              "p99": 9.949164239999998,
+              "max": 12.148542
+            },
+            "join_ms": {
+              "mean": 0.1567860879396985,
+              "median": 0.00025,
+              "p95": 1.5873561999999977,
+              "p99": 2.3187092499999937,
+              "max": 4.240459
+            },
+            "encode_ms": {
+              "mean": 1.1754200226130653,
+              "median": 1.143521,
+              "p95": 1.5538276,
+              "p99": 1.7828012699999989,
+              "max": 3.76475
+            },
+            "late_intervals": 1,
+            "triangles_mean": 27499.924623115578
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 398,
+            "gpu_sum_ms": {
+              "mean": 3.866152848987536,
+              "median": 3.836645744740963,
+              "p95": 5.009441659785807,
+              "p99": 6.064106596168104,
+              "max": 7.415666710585356
+            },
+            "gpu_envelope_ms": {
+              "mean": 3.869837726204277,
+              "median": 3.8371457485482097,
+              "p95": 5.010150163434446,
+              "p99": 6.06478194240478,
+              "max": 7.416166597977281
+            },
+            "source_ms": {
+              "mean": 5.393782854271357,
+              "median": 3.954479,
+              "p95": 10.15147505,
+              "p99": 10.44400301,
+              "max": 15.045291
+            },
+            "join_ms": {
+              "mean": 0.5957486582914573,
+              "median": 0.00025,
+              "p95": 2.759676749999999,
+              "p99": 3.133533499999999,
+              "max": 9.951417
+            },
+            "encode_ms": {
+              "mean": 1.415793703517588,
+              "median": 1.3409170000000001,
+              "p95": 1.7798874500000001,
+              "p99": 1.8961687599999895,
+              "max": 3.126292
+            },
+            "late_intervals": 2,
+            "triangles_mean": 27540.645728643216
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 400,
+            "gpu_sum_ms": {
+              "mean": 4.156203864258714,
+              "median": 3.9680206682533026,
+              "p95": 6.3613291596993795,
+              "p99": 7.395998234860599,
+              "max": 11.096458416432142
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.1593345877481624,
+              "median": 3.9802708197385073,
+              "p95": 6.362441694363951,
+              "p99": 7.397203708533198,
+              "max": 11.097125010564923
+            },
+            "source_ms": {
+              "mean": 5.9183227175,
+              "median": 4.947271000000001,
+              "p95": 8.686987499999999,
+              "p99": 11.573989079999997,
+              "max": 13.606375
+            },
+            "join_ms": {
+              "mean": 0.38240396,
+              "median": 0.00025,
+              "p95": 2.2747610499999995,
+              "p99": 4.4689061699999995,
+              "max": 7.597417
+            },
+            "encode_ms": {
+              "mean": 1.228519875,
+              "median": 1.1934580000000001,
+              "p95": 1.5860568999999998,
+              "p99": 1.71127166,
+              "max": 1.819709
+            },
+            "late_intervals": 1,
+            "triangles_mean": 28127.4975
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 393,
+            "gpu_sum_ms": {
+              "mean": 4.205703783339557,
+              "median": 3.91783332452178,
+              "p95": 6.180750112980604,
+              "p99": 7.5029832869768125,
+              "max": 31.738999765366316
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.208442757413284,
+              "median": 3.918374888598919,
+              "p95": 6.18160841986537,
+              "p99": 7.503688205033539,
+              "max": 31.7395415622741
+            },
+            "source_ms": {
+              "mean": 5.733636043256998,
+              "median": 4.3035,
+              "p95": 10.463033600000001,
+              "p99": 11.716374719999997,
+              "max": 14.780875
+            },
+            "join_ms": {
+              "mean": 0.33903136641221376,
+              "median": 0.000291,
+              "p95": 2.807925,
+              "p99": 3.9797286399999994,
+              "max": 7.03725
+            },
+            "encode_ms": {
+              "mean": 1.19654093129771,
+              "median": 1.120875,
+              "p95": 1.4363831999999999,
+              "p99": 2.551516719999988,
+              "max": 4.711625
+            },
+            "late_intervals": 6,
+            "triangles_mean": 33031.82697201018
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 400,
+            "gpu_sum_ms": {
+              "mean": 4.594873334863223,
+              "median": 4.577625077217817,
+              "p95": 6.007753987796605,
+              "p99": 6.584870135411619,
+              "max": 7.441624999046326
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.599008021177724,
+              "median": 4.578125081025064,
+              "p95": 6.008220766671002,
+              "p99": 6.58549380255863,
+              "max": 7.442374946549535
+            },
+            "source_ms": {
+              "mean": 6.1962153125,
+              "median": 4.7731665,
+              "p95": 8.292175649999999,
+              "p99": 11.114034579999979,
+              "max": 15.481542
+            },
+            "join_ms": {
+              "mean": 0.44962022,
+              "median": 0.0003125,
+              "p95": 1.6776559499999992,
+              "p99": 4.165086249999983,
+              "max": 7.868792
+            },
+            "encode_ms": {
+              "mean": 1.2847133275,
+              "median": 1.2509165,
+              "p95": 1.5330726,
+              "p99": 1.63133601,
+              "max": 2.239125
+            },
+            "late_intervals": 0,
+            "triangles_mean": 34596.255
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 396,
+            "gpu_sum_ms": {
+              "mean": 4.2529608713312435,
+              "median": 4.211437422782183,
+              "p95": 5.378385540097952,
+              "p99": 5.9549729456193745,
+              "max": 6.801999872550368
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.256504739521805,
+              "median": 4.211937543004751,
+              "p95": 5.378968780860305,
+              "p99": 5.955479317344725,
+              "max": 6.802625022828579
+            },
+            "source_ms": {
+              "mean": 6.776970676767677,
+              "median": 5.3827915,
+              "p95": 8.835552499999999,
+              "p99": 12.666266350000003,
+              "max": 13.671708
+            },
+            "join_ms": {
+              "mean": 1.065485196969697,
+              "median": 0.7999585,
+              "p95": 4.378573,
+              "p99": 7.951194050000001,
+              "max": 9.061375
+            },
+            "encode_ms": {
+              "mean": 1.3935411035353535,
+              "median": 1.3631875,
+              "p95": 1.6345722500000002,
+              "p99": 1.8240833000000027,
+              "max": 2.458292
+            },
+            "late_intervals": 4,
+            "triangles_mean": 34413.128787878784
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 397,
+            "gpu_sum_ms": {
+              "mean": 4.336960336911288,
+              "median": 4.252958344295621,
+              "p95": 5.590149899944663,
+              "p99": 5.9589434042573,
+              "max": 6.282250164076686
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.3397470669450255,
+              "median": 4.253458231687546,
+              "p95": 5.590766668319702,
+              "p99": 5.959566654637459,
+              "max": 6.282875081524253
+            },
+            "source_ms": {
+              "mean": 6.773657420654912,
+              "median": 5.665875,
+              "p95": 9.0515662,
+              "p99": 12.420995000000001,
+              "max": 13.799667
+            },
+            "join_ms": {
+              "mean": 0.9403487783375315,
+              "median": 0.551125,
+              "p95": 3.721974999999999,
+              "p99": 5.7210216800000016,
+              "max": 6.459542
+            },
+            "encode_ms": {
+              "mean": 1.3501716070528966,
+              "median": 1.3165,
+              "p95": 1.5941496,
+              "p99": 1.8391733200000007,
+              "max": 2.177375
+            },
+            "late_intervals": 3,
+            "triangles_mean": 33902.831234256926
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 398,
+            "gpu_sum_ms": {
+              "mean": 3.9745411430789748,
+              "median": 3.964603994973004,
+              "p95": 4.511479171924293,
+              "p99": 4.876957261003553,
+              "max": 6.041874876245856
+            },
+            "gpu_envelope_ms": {
+              "mean": 3.975512036332982,
+              "median": 3.9659790927544236,
+              "p95": 4.512050142511725,
+              "p99": 4.877778065856545,
+              "max": 6.042416673153639
+            },
+            "source_ms": {
+              "mean": 6.735765577889447,
+              "median": 5.0835205,
+              "p95": 11.9001813,
+              "p99": 12.265686769999999,
+              "max": 13.5445
+            },
+            "join_ms": {
+              "mean": 1.5911350703517588,
+              "median": 0.87925,
+              "p95": 4.49920885,
+              "p99": 5.38806649,
+              "max": 7.464459
+            },
+            "encode_ms": {
+              "mean": 1.3788404572864321,
+              "median": 1.340917,
+              "p95": 1.6045151,
+              "p99": 1.71727524,
+              "max": 1.892167
+            },
+            "late_intervals": 1,
+            "triangles_mean": 33506.42462311558
+          }
+        ]
+      },
+      {
+        "name": "B2",
+        "report_sha256": "bb67f932181a397b3d14975f59dfdac278db69561e7fabe26f59ef467ea5672b",
+        "measured_rows": 3600,
+        "unique_source_identities": 3600,
+        "unique_positive_presentations": 3600,
+        "duplicate_or_nonpositive_intervals": 0,
+        "display_hz": 118.74581308985515,
+        "display_ms": {
+          "mean": 8.421349553127389,
+          "median": 8.333374978974462,
+          "p95": 8.339375024661422,
+          "p99": 8.339960160665214,
+          "max": 58.33349982276559
+        },
+        "over12ms": 30,
+        "camera_values": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "cpu_ms": {
+          "source_ms": {
+            "mean": 5.926286768055555,
+            "median": 5.0955829999999995,
+            "p95": 10.232177099999998,
+            "p99": 12.318395419999998,
+            "max": 24.745584
+          },
+          "join_ms": {
+            "mean": 0.7298058486111111,
+            "median": 0.000458,
+            "p95": 3.5763773999999953,
+            "p99": 5.812371749999999,
+            "max": 16.01575
+          },
+          "encode_ms": {
+            "mean": 1.294272973888889,
+            "median": 1.293375,
+            "p95": 1.6142305999999997,
+            "p99": 1.7939049999999994,
+            "max": 4.881542
+          }
+        },
+        "GPU_summary": {
+          "Enabled": true,
+          "Closed": true,
+          "Requested": 7446,
+          "Completed": 7446,
+          "Missing": 0,
+          "Evicted": 0,
+          "Ignored": 0,
+          "Outstanding": 0,
+          "RegistryOutstanding": 0,
+          "HighWater": 4,
+          "PermanentBlocks": 1,
+          "ExtraNativeRetains": 0,
+          "Scope": "completed Metal command-buffer host timestamps; all HAL Submit batch buffers including upload copies; bounded value ring and routes; no new waits/retains; pre-commit and encode clock samples are observations, not exact submission instants; CPU/GPU overlap is not additive"
+        },
+        "complete_measured_GPU_batches": 3600,
+        "missing_batches": [],
+        "memory": {
+          "alloc_bytes": 903678424,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3355542056,
+          "go_sys_bytes_start": 3343320104,
+          "heap_bytes_end": 2857356088,
+          "heap_bytes_start": 1953677664,
+          "mallocs": 5923840,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "GPU_matched_ms": {
+          "gpu_sum_ms": {
+            "mean": 4.182490291035113,
+            "median": 4.055083496496081,
+            "p95": 5.840326915495098,
+            "p99": 6.910199539270243,
+            "max": 33.171374816447496
+          },
+          "gpu_envelope_ms": {
+            "mean": 4.184681655606255,
+            "median": 4.05679177492857,
+            "p95": 5.845631205011159,
+            "p99": 6.911197879817328,
+            "max": 33.17199996672571
+          },
+          "first_CB_ms": {
+            "mean": 0.04814319668285963,
+            "median": 0.037999823689460754,
+            "p95": 0.09062491590157151,
+            "p99": 0.23114557610824657,
+            "max": 0.5354583263397217
+          },
+          "last_CB_ms": {
+            "mean": 4.134347094352254,
+            "median": 4.014333360828459,
+            "p95": 5.77573322225362,
+            "p99": 6.766136323567477,
+            "max": 33.068708376958966
+          },
+          "precommit_to_gpu_start_ms": {
+            "mean": 0.313982300964805,
+            "median": 0.3861872246488929,
+            "p95": 0.5009621265344322,
+            "p99": 0.5421384843066331,
+            "max": 24.061833042651415
+          },
+          "encode_start_to_gpu_start_ms": {
+            "mean": 1.6341180415151433,
+            "median": 1.5834997175261378,
+            "p95": 2.059341361746192,
+            "p99": 2.348017427138982,
+            "max": 26.543541345745325
+          },
+          "encode_end_to_precommit_ms": {
+            "mean": 0.025862766661449505,
+            "median": 0.02370845154142376,
+            "p95": 0.03858285937983995,
+            "p99": 0.0600935276098584,
+            "max": 0.6044164179073572
+          },
+          "gpu_end_to_present_ms": {
+            "mean": 25.39939588084558,
+            "median": 25.61218768823892,
+            "p95": 27.5414023315534,
+            "p99": 28.490607547573738,
+            "max": 75.68675023503602
+          },
+          "source_ready_to_present_ms": {
+            "mean": 32.867577827133644,
+            "median": 32.73872887196922,
+            "p95": 37.437708370622246,
+            "p99": 39.92437697074065,
+            "max": 84.89129154479504
+          },
+          "source_actual_start_to_present_ms": {
+            "mean": 38.793864595189206,
+            "median": 39.13399957814914,
+            "p95": 39.948043823786826,
+            "p99": 47.22879713946443,
+            "max": 89.71849954479504
+          },
+          "source_request_to_present_ms": {
+            "mean": 33.74427064324476,
+            "median": 31.906317314947785,
+            "p95": 39.706346482660905,
+            "p99": 40.23511316714445,
+            "max": 82.19451071641171
+          }
+        },
+        "late_vs_other": {
+          "late": {
+            "source_ms": {
+              "mean": 9.827049966666667,
+              "median": 8.6836255,
+              "p95": 19.82540609999999,
+              "p99": 23.767462140000003,
+              "max": 24.745584
+            },
+            "join_ms": {
+              "mean": 4.598947133333334,
+              "median": 2.2673750000000004,
+              "p95": 15.397901599999997,
+              "p99": 15.97840032,
+              "max": 16.01575
+            },
+            "encode_ms": {
+              "mean": 1.5121916,
+              "median": 1.4818544999999999,
+              "p95": 1.7762231,
+              "p99": 3.4005723600000017,
+              "max": 4.061458
+            },
+            "gpu_sum_ms": {
+              "mean": 5.412370804697275,
+              "median": 4.1225418681278825,
+              "p95": 7.736283342819661,
+              "p99": 25.814860307145885,
+              "max": 33.171374816447496
+            },
+            "gpu_envelope_ms": {
+              "mean": 5.417737481184304,
+              "median": 4.169770982116461,
+              "p95": 7.73724167374894,
+              "p99": 25.815582079812906,
+              "max": 33.17199996672571
+            },
+            "gpu_end_to_present_ms": {
+              "mean": 30.76843498274684,
+              "median": 32.08654199261218,
+              "p95": 41.88498774310573,
+              "p99": 66.10736150760206,
+              "max": 75.68675023503602
+            },
+            "precommit_to_gpu_start_ms": {
+              "mean": 0.31005671868721646,
+              "median": 0.38454157765954733,
+              "p95": 0.48791663721203804,
+              "p99": 0.5312856519594789,
+              "max": 0.5489997565746307
+            }
+          },
+          "other": {
+            "source_ms": {
+              "mean": 5.893507245378151,
+              "median": 5.0918955,
+              "p95": 10.210574999999999,
+              "p99": 12.175550789999997,
+              "max": 15.077791
+            },
+            "join_ms": {
+              "mean": 0.697292056302521,
+              "median": 0.000458,
+              "p95": 3.4901225499999966,
+              "p99": 5.32353598,
+              "max": 8.594375
+            },
+            "encode_ms": {
+              "mean": 1.292441724929972,
+              "median": 1.2920625000000001,
+              "p95": 1.6125024499999998,
+              "p99": 1.79304148,
+              "max": 4.881542
+            },
+            "gpu_sum_ms": {
+              "mean": 4.172155160668204,
+              "median": 4.055083496496081,
+              "p95": 5.826020939275622,
+              "p99": 6.803174049127847,
+              "max": 11.37033337727189
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.174319841945935,
+              "median": 4.056187579408288,
+              "p95": 5.831387557554988,
+              "p99": 6.809559988323599,
+              "max": 11.370999971404672
+            },
+            "gpu_end_to_present_ms": {
+              "mean": 25.354277905199353,
+              "median": 25.606521172448993,
+              "p95": 27.484889759216458,
+              "p99": 28.289278110023588,
+              "max": 74.93625022470951
+            },
+            "precommit_to_gpu_start_ms": {
+              "mean": 0.31401528905117126,
+              "median": 0.3861872246488929,
+              "p95": 0.501003919634968,
+              "p99": 0.541319700423628,
+              "max": 24.061833042651415
+            }
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 398,
+            "gpu_sum_ms": {
+              "mean": 4.138460439564333,
+              "median": 4.078145953826606,
+              "p95": 6.401452084537594,
+              "p99": 7.36808921676129,
+              "max": 7.92233319953084
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.140410603295506,
+              "median": 4.078645957633853,
+              "p95": 6.402381241787223,
+              "p99": 7.368965444620698,
+              "max": 7.923291530460119
+            },
+            "source_ms": {
+              "mean": 4.351648708542713,
+              "median": 3.4295,
+              "p95": 6.930584850000001,
+              "p99": 7.411726759999976,
+              "max": 12.347916
+            },
+            "join_ms": {
+              "mean": 0.030142766331658293,
+              "median": 0.00025,
+              "p95": 0.000672299999999999,
+              "p99": 0.6711737499999966,
+              "max": 4.425667
+            },
+            "encode_ms": {
+              "mean": 1.1803519899497488,
+              "median": 1.154271,
+              "p95": 1.4566186999999995,
+              "p99": 1.6628125199999877,
+              "max": 3.873625
+            },
+            "late_intervals": 2,
+            "triangles_mean": 27500.600502512563
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 397,
+            "gpu_sum_ms": {
+              "mean": 4.144194803930238,
+              "median": 3.8024999666959047,
+              "p95": 6.137658329680561,
+              "p99": 7.6129367016255864,
+              "max": 8.840750204399228
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.145447209932529,
+              "median": 3.8031248841434717,
+              "p95": 6.1382665764540425,
+              "p99": 7.61385502293706,
+              "max": 8.841500151902437
+            },
+            "source_ms": {
+              "mean": 5.492495614609572,
+              "median": 4.468791,
+              "p95": 7.933941399999999,
+              "p99": 11.501079000000036,
+              "max": 13.582
+            },
+            "join_ms": {
+              "mean": 0.20751111083123425,
+              "median": 0.000291,
+              "p95": 1.4094913999999996,
+              "p99": 2.8331027200000007,
+              "max": 4.540291
+            },
+            "encode_ms": {
+              "mean": 1.4175962594458438,
+              "median": 1.389917,
+              "p95": 1.720192,
+              "p99": 2.0339110000000025,
+              "max": 4.881542
+            },
+            "late_intervals": 3,
+            "triangles_mean": 27542.425692695215
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 399,
+            "gpu_sum_ms": {
+              "mean": 3.8391121524271736,
+              "median": 3.7671667523682117,
+              "p95": 5.263641732744871,
+              "p99": 6.913257455453273,
+              "max": 11.37033337727189
+            },
+            "gpu_envelope_ms": {
+              "mean": 3.8410459433852657,
+              "median": 3.7677499931305647,
+              "p95": 5.264695710502563,
+              "p99": 6.914259963668879,
+              "max": 11.370999971404672
+            },
+            "source_ms": {
+              "mean": 5.931641170426065,
+              "median": 4.469083,
+              "p95": 10.5495452,
+              "p99": 11.235497839999999,
+              "max": 13.693375
+            },
+            "join_ms": {
+              "mean": 0.713171992481203,
+              "median": 0.0005,
+              "p95": 2.9987457999999996,
+              "p99": 4.022958839999996,
+              "max": 7.674875
+            },
+            "encode_ms": {
+              "mean": 1.230737984962406,
+              "median": 1.217083,
+              "p95": 1.5383957999999998,
+              "p99": 1.71533782,
+              "max": 1.756792
+            },
+            "late_intervals": 1,
+            "triangles_mean": 28127.160401002508
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 392,
+            "gpu_sum_ms": {
+              "mean": 4.157587054912571,
+              "median": 4.0143749210983515,
+              "p95": 5.632706044707447,
+              "p99": 6.620771344751119,
+              "max": 33.171374816447496
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.161210676621912,
+              "median": 4.014874924905598,
+              "p95": 5.633318587206304,
+              "p99": 6.621476097498088,
+              "max": 33.17199996672571
+            },
+            "source_ms": {
+              "mean": 5.8048401658163264,
+              "median": 4.220875,
+              "p95": 10.55653955,
+              "p99": 11.71276378,
+              "max": 24.745584
+            },
+            "join_ms": {
+              "mean": 0.6471427372448979,
+              "median": 0.000333,
+              "p95": 3.1495685999999994,
+              "p99": 4.3465517499999695,
+              "max": 15.886958
+            },
+            "encode_ms": {
+              "mean": 1.1973761479591836,
+              "median": 1.1449585,
+              "p95": 1.44727325,
+              "p99": 1.922626969999986,
+              "max": 4.061458
+            },
+            "late_intervals": 6,
+            "triangles_mean": 33027.28571428572
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 397,
+            "gpu_sum_ms": {
+              "mean": 4.340906179409183,
+              "median": 4.263916751369834,
+              "p95": 5.675025051459669,
+              "p99": 6.137036383152009,
+              "max": 6.54008355922997
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.343617237137832,
+              "median": 4.264416638761759,
+              "p95": 5.678099952638148,
+              "p99": 6.157865021377803,
+              "max": 6.540625123307109
+            },
+            "source_ms": {
+              "mean": 6.333546619647355,
+              "median": 5.130542,
+              "p95": 8.5316004,
+              "p99": 11.342701680000003,
+              "max": 21.37275
+            },
+            "join_ms": {
+              "mean": 0.5398354458438287,
+              "median": 0.001292,
+              "p95": 1.9986169999999999,
+              "p99": 4.256598040000009,
+              "max": 14.800166
+            },
+            "encode_ms": {
+              "mean": 1.3258619823677582,
+              "median": 1.291375,
+              "p95": 1.5752662,
+              "p99": 1.6717150000000003,
+              "max": 2.431209
+            },
+            "late_intervals": 3,
+            "triangles_mean": 34601.680100755664
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 396,
+            "gpu_sum_ms": {
+              "mean": 4.1942323259350776,
+              "median": 4.042041371576488,
+              "p95": 5.194833327550441,
+              "p99": 5.690633272752167,
+              "max": 6.138125201687217
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.196927083110569,
+              "median": 4.046062473207712,
+              "p95": 5.195364647079259,
+              "p99": 5.691262357868255,
+              "max": 6.138625089079142
+            },
+            "source_ms": {
+              "mean": 6.866882161616162,
+              "median": 5.2391255,
+              "p95": 11.926875500000001,
+              "p99": 12.732861900000001,
+              "max": 14.195541
+            },
+            "join_ms": {
+              "mean": 1.560370601010101,
+              "median": 1.0554375,
+              "p95": 4.6779475,
+              "p99": 7.1408149000000085,
+              "max": 10.87875
+            },
+            "encode_ms": {
+              "mean": 1.412524830808081,
+              "median": 1.3866255,
+              "p95": 1.66842725,
+              "p99": 1.7927274,
+              "max": 1.9145
+            },
+            "late_intervals": 4,
+            "triangles_mean": 34409.94696969697
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 390,
+            "gpu_sum_ms": {
+              "mean": 4.338372209204886,
+              "median": 4.290958400815725,
+              "p95": 5.55844148620963,
+              "p99": 6.162659400142731,
+              "max": 7.445041788741946
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.340896471284139,
+              "median": 4.291562479920685,
+              "p95": 5.558918684255331,
+              "p99": 6.163164104800673,
+              "max": 7.4459584429860115
+            },
+            "source_ms": {
+              "mean": 6.867569971794872,
+              "median": 7.8417705,
+              "p95": 9.2862099,
+              "p99": 12.256325870000001,
+              "max": 17.934208
+            },
+            "join_ms": {
+              "mean": 1.1191645205128204,
+              "median": 0.628187,
+              "p95": 4.287385299999997,
+              "p99": 6.677499510000008,
+              "max": 16.01575
+            },
+            "encode_ms": {
+              "mean": 1.376196058974359,
+              "median": 1.344771,
+              "p95": 1.59355845,
+              "p99": 1.9849966300000021,
+              "max": 2.707834
+            },
+            "late_intervals": 5,
+            "triangles_mean": 33894.135897435895
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 396,
+            "gpu_sum_ms": {
+              "mean": 4.097963065953191,
+              "median": 4.026645794510841,
+              "p95": 5.009135405998677,
+              "p99": 5.271233234088869,
+              "max": 5.4616250563412905
+            },
+            "gpu_envelope_ms": {
+              "mean": 4.099860058913967,
+              "median": 4.027145798318088,
+              "p95": 5.014968628529459,
+              "p99": 5.271693749818952,
+              "max": 5.462124943733215
+            },
+            "source_ms": {
+              "mean": 6.797142777777778,
+              "median": 5.7619375,
+              "p95": 8.7584375,
+              "p99": 8.94967915,
+              "max": 15.077791
+            },
+            "join_ms": {
+              "mean": 0.8200300606060607,
+              "median": 0.6062915,
+              "p95": 2.3350210000000002,
+              "p99": 3.1077417000000014,
+              "max": 5.18425
+            },
+            "encode_ms": {
+              "mean": 1.3859551717171716,
+              "median": 1.3551039999999999,
+              "p95": 1.61828125,
+              "p99": 1.7225351000000002,
+              "max": 1.972292
+            },
+            "late_intervals": 3,
+            "triangles_mean": 33508.36616161616
+          }
+        ]
+      },
+      {
+        "name": "A2",
+        "report_sha256": "50f84de90661ba90db0f362bb45557a4a2cda0e40671474df33841a0e4c45063",
+        "measured_rows": 3600,
+        "unique_source_identities": 3600,
+        "unique_positive_presentations": 3600,
+        "duplicate_or_nonpositive_intervals": 0,
+        "display_hz": 118.94204176895178,
+        "display_ms": {
+          "mean": 8.407456145258779,
+          "median": 8.333374978974462,
+          "p95": 8.33945816848427,
+          "p99": 8.340041618794203,
+          "max": 25.003541726619005
+        },
+        "over12ms": 28,
+        "camera_values": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "cpu_ms": {
+          "source_ms": {
+            "mean": 5.911383556388889,
+            "median": 4.9905415,
+            "p95": 11.688660699999996,
+            "p99": 12.59657516999999,
+            "max": 29.251583
+          },
+          "join_ms": {
+            "mean": 1.027123755,
+            "median": 0.000458,
+            "p95": 4.30994645,
+            "p99": 6.098164759999974,
+            "max": 20.420417
+          },
+          "encode_ms": {
+            "mean": 1.3034502816666667,
+            "median": 1.298146,
+            "p95": 1.6444295,
+            "p99": 1.8661163399999992,
+            "max": 5.103333
+          }
+        },
+        "GPU_summary": {
+          "Enabled": false
+        },
+        "complete_measured_GPU_batches": 0,
+        "missing_batches": [],
+        "memory": {
+          "alloc_bytes": 897167928,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3380449848,
+          "go_sys_bytes_start": 3368817720,
+          "heap_bytes_end": 2850116392,
+          "heap_bytes_start": 1952948464,
+          "mallocs": 5714692,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        }
+      }
+    ],
+    "extra_counts": {
+      "B1": {
+        "GPU_envelope_over_8_333333ms": 4,
+        "GPU_envelope_over12ms": 1,
+        "source_over_8_333333ms": 647,
+        "correlated_rows_sha256": "7d16aa574d95f3a94359c2d013f750c2e52416c8ca636829d2750468da00b825"
+      },
+      "B2": {
+        "GPU_envelope_over_8_333333ms": 5,
+        "GPU_envelope_over12ms": 1,
+        "source_over_8_333333ms": 733,
+        "correlated_rows_sha256": "35a3c4ff9a6e6e78b1a0e601561def38d7fe219baa85048e8c5395377294e995"
+      }
+    },
+    "qualification": "GPU on/off encoding rangesoverlap and no observedslowdown underthiscampaignvariance; this is not proof ofzero observeroverhead. Samebinarycontrols evolve atdifferentwallcadence/alphas/endticks; comparecommonfulltickranges."
+  },
+  "attribution": {
+    "established_for_measured_scene": [
+      "All3600 measuredGPU batches complete inbothonruns;7446validCBrecords each;0misses/evictions,0routes atclose andqueue3723/3723",
+      "MeanGPUbatchenvelopeabout4.18ms,p99about6.9\u20137.0ms; firstCBmostlyuploadcopies~0.048ms andlastCB~4.13ms includeswhole mainrenderpasswork, not exclusivelybodies",
+      "Only4\u20135GPUbatches exceed8.33ms while647\u2013733sourcepreparations exceed it; sourcep99~12.3ms",
+      "RareGPUbatchoutliers~32ms andqueue-startoutliers~16\u201324ms stilloccur; cannotcall allpresentationmisses CPU-only",
+      "End-of-observedGPU\u2192present mean~25.3ms andsourceactualstart\u2192present mean~38.7ms are host-clock correlations, notinputlatency/photons; gap includes unobservednativepresentCB,queue/display scheduling andclockbridgeuncertainty"
+    ],
+    "supported_next_decision": "Try unchanged pooled unit interpolation on firstretained-effects read, not directbodyrewrite or simulation-join removal; profile identifiedserialblendcost andsource orderingcurrently leaves pooldisabled forfirst read",
+    "limits": [
+      "GPU timestamps arecommandbuffer-level hosttimes; sum/envelope notper-bodytime andnotadditive toCPUduration",
+      "HALSubmit coverage excludesnativePresent/WaitIdle/privatefallbackCBs; postGPUgap is not purecompositor cost",
+      "Causal attribution of eachmiss stillopen; no hardware120ceiling orzeroobserveroverhead claim",
+      "NativeCPU clock sample isnearencodeStart, notexact; predictive source-request time differs fromactualsource start",
+      "SameNoShake suppressesauthoritativeRequestShake andchangesCRTchronology relative tooldsoak; comparesidenticalpolicyhere"
+    ]
+  },
+  "chosen_CPU_candidate": {
+    "status": "chosen; implementation/measuredadoptionpending nextunit",
+    "problem": "RecordRetainedEffectsInto calls presentationFrame beforeparallelRecord=true; retainedsource nevercreatesrecordPool throughbodyrecording, sofirstfullunitblend remainsserial andlaterreaders hitexistingexactblendkey",
+    "sources": [
+      "internal/client/retained_effects.go:79",
+      "internal/client/interpolate.go:189",
+      "internal/client/interpolate.go:457",
+      "internal/client/record_parallel.go:248"
+    ],
+    "method": "Enableparallel interpolation beforefirstretainedread andlazilyinitialize pool onlyforlargeunitsets, boundedby minNumCPU,GOMAXPROCS. Keep lookup/history serial, unchangedblendUnitRange disjointslots, joinbeforeremainingeffects/projectiles; Client.Close alreadyjoinsworkers. No cachekey/arithmetic/CRTorder change.",
+    "gates": [
+      "Retainedentry completeframe+flags+CRT parity tosequential; existingpooled andheld-walktests/race",
+      "NativeUV/growth,fixedCoastpixel/state andsharedclientfallback checks",
+      "Samebinary/privateoverlaydense A/B actualpresentation,source/visual/join tails andsimulation/scheduler contention"
+    ],
+    "not_selected": "Do notremovejoinSimulation; it protectsorderedpublication observers,admissions,captions/audio. DirectbodypathchangesUV/coverage/quantization/order andhasno measuredneed yet."
+  }
 }

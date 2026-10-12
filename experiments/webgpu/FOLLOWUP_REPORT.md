@@ -933,3 +933,33 @@ TAIL_PROFILE_MEASUREMENTS.json preserves exact commands/hashes, all run/tick
 summaries, display duplicate and accounting limits. Native GPU start/end
 durations are the next concrete attribution check before any direct-body
 rewrite; collecting them locally need not wait for an upstream release.
+
+
+## Completed command-buffer timing attribution
+
+The default-off GPU timing probe preserved19-case UV/growth pixels and fixed
+coastal image/fields/state plus18 GPU sidecars. Four same-binary3600-frame runs
+(A1 B1 B2 A2) used identical fast modes, fixed camera/NoShake, seed and isolated
+settings. Both timing-on runs matched3600 complete two-CB batches with7446/7446
+valid observations and zero missing/evicted/outstanding records; everyrun drained
+3723/3723. Encoding meansoff1.299/1.303ms versuson1.283/1.294ms show no observed
+slowdown within this campaign's variance, not proof of zero overhead. Display
+ranges116.44–118.94/118.75–119.24Hz overlap and do not establish sustained120.
+
+GPU batch envelopes average~4.18ms,p99~6.9–7.0ms. Only4/5 measured batches exceed
+8.33ms, versus647/733 source preparations and sourcep99~12.3ms. Rare~32ms GPU
+outliers remain; misses cannot all be assigned to CPU. The~25.3ms observedGPU-end
+to-present gap includes nativePresentCB/queue/display work outside the probe's
+scope and clockbridge uncertainty, not pure compositor cost or input latency.
+Completebatch sum/envelope are not body-only times or additive CPU+GPU costs.
+
+The next supported candidate is the first retained-effects unit blend. It calls
+presentationFrame before settingparallelRecord, and the retained lane never
+creates the existing model-record pool, so the expensive firstblend is serial
+while laterreaders reuse the correctfullkey. Enable the existing disjoint-unit
+blend with participants bounded byactiveGo parallelism; keep lookup/history and
+all effects/CRT calls serial and joinbefore recordingcontinues. This changes no
+arithmetic/cachekey and avoids simulationjoin removal or an unqualified direct
+body rewrite. Implementation, nativeparity and measuredCPU/presentation adoption
+are nextunit gates. GPU_TIMING_MEASUREMENTS.json preserves perrun/tick metrics,
+correlations and scope/clock/accounting limitations.

@@ -71,5 +71,12 @@ command-buffer start/end doubles only from completed callbacks and records
 immutable submission/batch identity. Native forced-GC smoke produced485 valid
 CB observations, including both buffers for120 measured rows,243/243 queue drain
 and0 outstanding routes. It adds no waits or extra native retains and stays off
-in normal fast launches. Dense overhead, complete-batch analysis and pixel/state
-controls remain pending; no CPU-versus-GPU or direct-body conclusion follows yet.
+in normal fast launches. Four same-binary3600-frame controls show complete batches and no observed CPU
+encoding slowdown within variance. Mean observedGPU batches~4.18ms andp99~6.9ms
+usually fit8.33ms while sourcep99~12.3ms. Rare GPU outliers remain. The~25ms
+post-observedGPU→present gap includes unobservednativework/queue/display; it is
+not pure compositor cost. UV/growth andfixedCoastimage/state controls preserve
+allrawfiles/sidecars. The next chosenfix is pooled interpolation on thefirst
+retained-effects read, withboundedparticipants andunchangedserialhistory/effects;
+implementationandmeasuredadoptionremainpending. The timingdiagnostic stays off
+in ordinaryfast launches.
