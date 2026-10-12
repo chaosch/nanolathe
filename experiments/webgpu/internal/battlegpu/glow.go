@@ -45,7 +45,7 @@ func (t *glowTexture) close() {
 // Prepare, replacement and Close require its completion boundary.
 type Glow struct {
 	d                         *wgpu.Device
-	q                         *wgpu.Queue
+	q                         rendererQueue
 	owned                     []func()
 	closed, enabled           bool
 	width, height, vertices   int

@@ -78,7 +78,7 @@ type Layers struct {
 	reserveStorage                                                                              bool
 	runtimeArrays                                                                               bool
 	d                                                                                           *wgpu.Device
-	q                                                                                           *wgpu.Queue
+	q                                                                                           rendererQueue
 	format, outputFormat                                                                        gputypes.TextureFormat
 	owned                                                                                       []func()
 	closed                                                                                      bool

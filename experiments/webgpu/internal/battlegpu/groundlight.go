@@ -32,7 +32,7 @@ type groundLightDisc struct {
 // next Prepare; a resized output requires the host to refresh its bindings.
 type GroundLight struct {
 	d                           *wgpu.Device
-	q                           *wgpu.Queue
+	q                           rendererQueue
 	owned                       []func()
 	closed, prepared, enabled   bool
 	texture                     *wgpu.Texture

@@ -57,7 +57,7 @@ type reflectionInputs struct {
 // Model reflection sources, seabed promotion and underwater commits are absent.
 type StockReflections struct {
 	d                    *wgpu.Device
-	q                    *wgpu.Queue
+	q                    rendererQueue
 	owned                []func()
 	closed, prepared     bool
 	encoded              bool

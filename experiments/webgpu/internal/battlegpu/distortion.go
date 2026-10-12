@@ -32,7 +32,7 @@ type distortionInputs struct {
 // sources replace earlier ones without feedback; fog keeps destination pixels.
 type Distortions struct {
 	d          *wgpu.Device
-	q          *wgpu.Queue
+	q          rendererQueue
 	owned      []func()
 	closed     bool
 	prepared   bool

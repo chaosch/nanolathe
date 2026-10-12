@@ -107,7 +107,7 @@ func (a *modelAtlasResources) modelClose() {
 type Models struct {
 	chunkedUploads                                                              bool
 	d                                                                           *wgpu.Device
-	q                                                                           *wgpu.Queue
+	q                                                                           rendererQueue
 	format                                                                      gputypes.TextureFormat
 	owned                                                                       []modelRelease
 	closed, prepared                                                            bool

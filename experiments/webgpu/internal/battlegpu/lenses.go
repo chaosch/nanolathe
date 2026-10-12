@@ -33,7 +33,7 @@ type lensSpan struct {
 // replacement and Close require completion of this component's previous use.
 type Lenses struct {
 	d                           *wgpu.Device
-	q                           *wgpu.Queue
+	q                           rendererQueue
 	format                      gputypes.TextureFormat
 	owned                       []func()
 	layout                      *wgpu.BindGroupLayout

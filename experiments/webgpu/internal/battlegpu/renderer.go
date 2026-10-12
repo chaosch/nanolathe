@@ -29,6 +29,8 @@ type Renderer struct {
 	// prepared says every component holds a complete prepared frame, which
 	// Redraw may encode again without reading a source.
 	prepared bool
+	// queue defers every component's writes past the source handoff.
+	queue *deferredQueue
 }
 type Counters struct {
 	// Targets, models, glow, ground fields, layers, distortions, reflections, lenses/paint, command encoding.
@@ -80,6 +82,11 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	}
 	if err == nil {
 		r.reflections, err = NewStockReflections(d, q, worldFormat)
+	}
+	if err == nil {
+		r.queue = &deferredQueue{q: q}
+		r.models.q, r.layers.q, r.glow.q, r.groundLight.q = r.queue, r.queue, r.queue, r.queue
+		r.distortions.q, r.lenses.q, r.reflections.q = r.queue, r.queue, r.queue
 	}
 	return
 }
@@ -140,6 +147,8 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 		return Counters{}, fmt.Errorf("incomplete battle renderer")
 	}
 	var phases [9]float64
+	// Writes made while preparing replay after the source handoff below.
+	r.queue.begin()
 	mark := time.Now()
 	split := func(i int) { now := time.Now(); phases[i] = float64(now.Sub(mark)) / 1e6; mark = now }
 	if e := r.targets(width, height); e != nil {
@@ -207,6 +216,9 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 	split(7)
 	if sourceReady != nil {
 		sourceReady()
+	}
+	if e := r.queue.flush(); e != nil {
+		return Counters{PreparationMS: phases}, e
 	}
 	var lateAcquireMS float64
 	if acquire != nil {
