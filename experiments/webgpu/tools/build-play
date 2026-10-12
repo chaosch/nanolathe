@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 """Build a real-battle WebGPU command with an explicit, external Go source overlay."""
-import hashlib, json, os, pathlib, plistlib, shutil, subprocess, sys
+import hashlib, json, os, pathlib, plistlib, shutil, subprocess, sys, re
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
-if len(sys.argv)<2 or any(a not in ('--metal-cache','--owned-submission','--render-runtime','--present-handler','--gpu-timing') for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--metal-cache] [--owned-submission] [--render-runtime] [--present-handler] [--gpu-timing]')
+if len(sys.argv)<2 or any(a not in ('--metal-cache','--owned-submission','--render-runtime','--present-handler','--gpu-timing') and not a.startswith(('--engine-source=','--engine-revision=','--presentation-overlay=')) for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--metal-cache] [--owned-submission] [--render-runtime] [--present-handler] [--gpu-timing] [--engine-source=ARCHIVE --engine-revision=SHA] [--presentation-overlay=JSON]')
 gpu_timing='--gpu-timing' in sys.argv[2:]
 present_handler='--present-handler' in sys.argv[2:] or gpu_timing
 render_runtime='--render-runtime' in sys.argv[2:] or present_handler
 metal_cache='--metal-cache' in sys.argv[2:] or render_runtime
 owned_submission='--owned-submission' in sys.argv[2:] or render_runtime
+engine=repo;engine_revision=None;presentation_overlay={};presentation_overlay_path=None
+for argument in sys.argv[2:]:
+ if argument.startswith('--engine-source='):engine=pathlib.Path(argument.split('=',1)[1]).resolve()
+ elif argument.startswith('--engine-revision='):engine_revision=argument.split('=',1)[1]
+ elif argument.startswith('--presentation-overlay='):presentation_overlay_path=pathlib.Path(argument.split('=',1)[1]).resolve()
+if engine!=repo and (engine_revision is None or not re.fullmatch('[0-9a-f]{40}',engine_revision)):sys.exit('an explicit archived engine requires its exact --engine-revision=SHA; no engine files are merged')
+if not (engine/'go.mod').is_file() or 'module github.com/nanolathe-gg/nanolathe\n' not in (engine/'go.mod').read_text():sys.exit('engine source must be the Nanolathe root module')
+if presentation_overlay_path:
+ presentation_overlay=json.loads(presentation_overlay_path.read_text())['Replace']
+ allowed={'internal/client/hover_hull.go','internal/client/model_textures.go','internal/client/retained_effects.go','internal/client/record_parallel.go','internal/meshscene/retained_battle.go'}
+ relative={str(pathlib.Path(k).relative_to(engine)) for k in presentation_overlay}
+ if relative!=allowed or any(not pathlib.Path(v).is_file() for v in presentation_overlay.values()):sys.exit('presentation overlay must contain exactly the reviewed five common rendering files')
 out=pathlib.Path(sys.argv[1]).resolve()
 if out.is_relative_to(repo):sys.exit('output must be outside the repository')
 out.mkdir(parents=True,exist_ok=False);work=out/'build';command=work/'cmd/nanolathe';command.mkdir(parents=True)
@@ -21,11 +33,21 @@ require (
  github.com/nanolathe-gg/nanolathe v0.0.0
  github.com/nanolathe-gg/nanolathe/experiments/webgpu v0.0.0
 )
-replace github.com/nanolathe-gg/nanolathe => {repo}
+replace github.com/nanolathe-gg/nanolathe => {engine}
 replace github.com/nanolathe-gg/nanolathe/experiments/webgpu => {exp}
 ''')
 if owned_submission:
  owned=json.loads(subprocess.check_output([sys.executable,str(exp/'tools/prepare-owned-submission'),str(work/'owned-dependencies')],cwd=exp,text=True))
+ deferred_manifest=json.loads((exp/'patches/gogpu-deferred-acquire-manifest.json').read_text())
+ digest=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+ if digest(exp/'patches/gogpu-deferred-acquire.patch')!=deferred_manifest['patch_sha256']:sys.exit('deferred-host patch digest differs from its reviewed manifest')
+ for name,expected in deferred_manifest['original_sha256'].items():
+  if digest(pathlib.Path(owned['gogpu'])/name)!=expected:sys.exit('deferred-host base differs from reviewed source: '+name)
+ subprocess.run(['git','apply','--check',str(exp/'patches/gogpu-deferred-acquire.patch')],cwd=owned['gogpu'],check=True)
+ subprocess.run(['git','apply',str(exp/'patches/gogpu-deferred-acquire.patch')],cwd=owned['gogpu'],check=True)
+ for name,expected in deferred_manifest['result_sha256'].items():
+  if digest(pathlib.Path(owned['gogpu'])/name)!=expected:sys.exit('deferred-host result differs from reviewed source: '+name)
+
  with (work/'go.mod').open('a') as f:
   for name,path in owned.items():f.write(f'\nreplace github.com/gogpu/{name} => {path}\n')
 if metal_cache:
@@ -43,11 +65,11 @@ if present_handler:
  subprocess.run([sys.executable,str(exp/'tools/apply-present-handler'),str(fork)],cwd=exp,check=True)
 if gpu_timing:
  subprocess.run([sys.executable,str(exp/'tools/apply-gpu-timing'),str(fork)],cwd=exp,check=True)
-(work/'go.sum').write_text((repo/'go.sum').read_text()+(exp/'go.sum').read_text())
-overlay={};sources=[]
-for original in sorted((repo/'cmd/nanolathe').rglob('*')):
+(work/'go.sum').write_text((engine/'go.sum').read_text()+(exp/'go.sum').read_text())
+overlay=dict(presentation_overlay);sources=[]
+for original in sorted((engine/'cmd/nanolathe').rglob('*')):
  if not original.is_file():continue
- relative=original.relative_to(repo/'cmd/nanolathe');virtual=command/relative
+ relative=original.relative_to(engine/'cmd/nanolathe');virtual=command/relative
  source=original;rewrites=[]
  if original.suffix=='.go' and not original.name.endswith('_test.go'):
   text=original.read_text();before=text
@@ -139,25 +161,8 @@ func (h *metalBattleHost) ResizePhysicalExtent(width, height int) error {
    source=out/'overrides'/relative;source.parent.mkdir(parents=True,exist_ok=True);source.write_text(text)
  overlay[str(virtual)]=str(source)
  sources.append(dict(path=str(relative),source_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),build_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),rewrites=rewrites))
-if present_handler:
- handler_manifest=json.loads((exp/'patches/present-handler-manifest.json').read_text())
- handler_patch=exp/'patches/present-handler-driver.patch'
- driver=exp/'internal/battlegpu/driver_darwin.go'
- if hashlib.sha256(driver.read_bytes()).hexdigest()!=handler_manifest['driver_original_sha256']:sys.exit('handler driver base digest mismatch')
- if hashlib.sha256(handler_patch.read_bytes()).hexdigest()!=handler_manifest['driver_patch_sha256']:sys.exit('handler driver patch digest mismatch')
- driver_root=out/'handler-driver';patched_driver=driver_root/'internal/battlegpu/driver_darwin.go';patched_driver.parent.mkdir(parents=True);patched_driver.write_bytes(driver.read_bytes())
- subprocess.run(['git','apply','--check','--unidiff-zero',str(handler_patch)],cwd=driver_root,check=True)
- subprocess.run(['git','apply','--unidiff-zero',str(handler_patch)],cwd=driver_root,check=True)
- if hashlib.sha256(patched_driver.read_bytes()).hexdigest()!=handler_manifest['driver_current_sha256']:sys.exit('handler driver result digest mismatch')
- overlay[str(driver)]=str(patched_driver)
-if gpu_timing:
- gpu_manifest=json.loads((exp/'patches/gpu-timing-manifest.json').read_text())
- gpu_patch=exp/'patches/gpu-timing-driver.patch'
- if hashlib.sha256(patched_driver.read_bytes()).hexdigest()!=gpu_manifest['driver_original_sha256']:sys.exit('GPU timing driver base digest mismatch')
- if hashlib.sha256(gpu_patch.read_bytes()).hexdigest()!=gpu_manifest['driver_patch_sha256']:sys.exit('GPU timing driver patch digest mismatch')
- subprocess.run(['git','apply','--check',str(gpu_patch)],cwd=driver_root,check=True)
- subprocess.run(['git','apply',str(gpu_patch)],cwd=driver_root,check=True)
- if hashlib.sha256(patched_driver.read_bytes()).hexdigest()!=gpu_manifest['driver_current_sha256']:sys.exit('GPU timing driver result digest mismatch')
+# Driver telemetry calls are now integrated and remain runtime opt-in; optional
+# flags still install only their exact private native dependency hooks.
 (out/'overlay.json').write_text(json.dumps(dict(Replace=overlay),indent=2)+'\n')
 # Both GoGPU/goffi and Ebitengine/purego otherwise define fakecgo runtime
 # symbols when linked together. The exact pinned goffi documents nofakecgo:
@@ -168,6 +173,6 @@ print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=work,env=env,check=True)
 bundle=out/'Nanolathe WebGPU Prototype.app';mac=bundle/'Contents/MacOS';mac.mkdir(parents=True)
 os.link(out/'nanolathe-webgpu',mac/'nanolathe-webgpu')
 (bundle/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier='gg.nanolathe.webgpu.prototype',CFBundleName='Nanolathe WebGPU Prototype',CFBundleDisplayName='Nanolathe WebGPU Prototype',CFBundleExecutable='nanolathe-webgpu',CFBundlePackageType='APPL',CFBundleVersion='1',NSHighResolutionCapable=True)))
-(out/'build-manifest.json').write_text(json.dumps(dict(launcher_sha256=hashlib.sha256((exp/'tools/run-play').read_bytes()).hexdigest(),repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),dependency_diagnostic=dict(gpu_timing=gpu_timing,gpu_timing_patch_sha256=hashlib.sha256((exp/'patches/wgpu-gpu-timing.patch').read_bytes()).hexdigest() if gpu_timing else None,present_handler=present_handler,present_handler_patch_sha256=hashlib.sha256((exp/'patches/wgpu-present-handler.patch').read_bytes()).hexdigest() if present_handler else None,render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='generated prototype command/source overlay; shared client and culling improvements in worktree, root module and shipping native renderer unchanged'),indent=2)+'\n')
+(out/'build-manifest.json').write_text(json.dumps(dict(engine_source=str(engine),engine_revision=engine_revision or subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),presentation_overlay_sha256=hashlib.sha256(presentation_overlay_path.read_bytes()).hexdigest() if presentation_overlay_path else None,presentation_overlay_sources={str(pathlib.Path(k).relative_to(engine)):hashlib.sha256(pathlib.Path(v).read_bytes()).hexdigest() for k,v in presentation_overlay.items()},launcher_sha256=hashlib.sha256((exp/'tools/run-play').read_bytes()).hexdigest(),repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),dependency_diagnostic=dict(deferred_acquire=owned_submission,deferred_acquire_patch_sha256=hashlib.sha256((exp/'patches/gogpu-deferred-acquire.patch').read_bytes()).hexdigest() if owned_submission else None,gpu_timing=gpu_timing,gpu_timing_patch_sha256=hashlib.sha256((exp/'patches/wgpu-gpu-timing.patch').read_bytes()).hexdigest() if gpu_timing else None,present_handler=present_handler,present_handler_patch_sha256=hashlib.sha256((exp/'patches/wgpu-present-handler.patch').read_bytes()).hexdigest() if present_handler else None,render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='generated prototype command/source overlay; shared client and culling improvements in worktree, root module and shipping native renderer unchanged'),indent=2)+'\n')
 shutil.copy2(exp/'tools/run-play',out/'run-play')
 print(out/'nanolathe-webgpu')

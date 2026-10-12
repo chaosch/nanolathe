@@ -29,14 +29,16 @@ type Renderer struct {
 }
 type Counters struct {
 	// Targets, models, glow, ground fields, layers, distortions, reflections, lenses/paint, command encoding.
-	PreparationMS [9]float64
-	Models        ModelCounters
-	Layers        LayerCounters
-	Glow          GlowCounters
-	GroundLight   GroundLightCounters
-	Distortions   DistortionCounters
-	Lenses        LensCounters
-	Reflections   ReflectionCounters
+	PreparationMS   [9]float64
+	LateAcquireMS   float64
+	CommandEncodeMS float64
+	Models          ModelCounters
+	Layers          LayerCounters
+	Glow            GlowCounters
+	GroundLight     GroundLightCounters
+	Distortions     DistortionCounters
+	Lenses          LensCounters
+	Reflections     ReflectionCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
@@ -119,6 +121,15 @@ func (r *Renderer) Encode(enc *wgpu.CommandEncoder, output *wgpu.TextureView, wi
 // copied/uploaded every borrowed frame slice and derived ordered paint records.
 // Command encoding after this seam reads renderer-owned state exclusively.
 func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.TextureView, width, height int, f meshscene.LiveFrame, sourceReady func()) (Counters, error) {
+	return r.encodeSourceReadyAcquire(enc, output, width, height, f, sourceReady, nil)
+}
+
+type frameAcquisition func() (*wgpu.CommandEncoder, *wgpu.TextureView, error)
+
+// The optional acquisition runs synchronously on the render owner after all
+// borrowed source reads and the source handoff. Its operands remain borrowed
+// from the host for this callback only. Failure must not reread the old packet.
+func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wgpu.TextureView, width, height int, f meshscene.LiveFrame, sourceReady func(), acquire frameAcquisition) (Counters, error) {
 	if width <= 0 || height <= 0 {
 		return Counters{}, nil
 	}
@@ -194,6 +205,21 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if sourceReady != nil {
 		sourceReady()
 	}
+	var lateAcquireMS float64
+	if acquire != nil {
+		start := time.Now()
+		var err error
+		enc, output, err = acquire()
+		lateAcquireMS = float64(time.Since(start)) / 1e6
+		if err != nil {
+			return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS}, err
+		}
+		if enc == nil || output == nil {
+			return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS}, fmt.Errorf("late acquisition returned incomplete frame operands")
+		}
+	}
+	// Command timing excludes both source handoff and drawable acquisition.
+	mark = time.Now()
 	if e := r.models.Compute(enc); e != nil {
 		return Counters{}, e
 	}
@@ -295,8 +321,9 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 		return Counters{}, e
 	}
 	split(8)
-	return Counters{PreparationMS: phases, Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
+	return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS, CommandEncodeMS: phases[8], Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
 }
+
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {
 		return nil

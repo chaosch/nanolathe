@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gogpu/gogpu"
 	"github.com/gogpu/gpucontext"
+	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 	"os"
@@ -17,6 +19,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -38,12 +41,15 @@ type BenchmarkFrame struct {
 	PaceWait, OutsideDraw, DrawWork, Cadence, Source, Packing, Submit, Join float64
 }
 type drawRow struct {
+	NativeEncodeStartSeconds                                 float64
 	SourceStagesMS                                           [12]float64
 	Index                                                    int
 	Warmup                                                   bool
 	Tick                                                     uint32
 	Alpha                                                    float32
 	SourceMS, EncodeMS, CallbackMS, PaceMS, CompletionWaitMS float64
+	LateAcquireMS, CommandEncodeMS                           float64
+	LateAcquire                                              bool
 	JoinMS                                                   float64
 	PreparedAhead                                            bool
 	PreviousSubmission, CompletedSubmission                  uint64
@@ -82,6 +88,13 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	cfg := gogpu.DefaultConfig().WithTitle("Nanolathe — WebGPU prototype").WithSize(opts.Width/2, opts.Height/2).WithResizable(sourceResizable && opts.Benchmark == nil).WithContinuousRender(true).WithVSync(opts.VSync)
 	app := gogpu.NewApp(cfg)
 	asyncUploads := os.Getenv("NANOLATHE_WEBGPU_ASYNC_UPLOADS") == "1"
+	lateAcquire := os.Getenv("NANOLATHE_WEBGPU_LATE_ACQUIRE") == "1"
+	if lateAcquire && !asyncUploads {
+		return nil, fmt.Errorf("late acquisition requires reviewed asynchronous upload ownership")
+	}
+	var lifecycleEpoch atomic.Uint64
+	var focused atomic.Bool
+	focused.Store(true)
 	if asyncUploads {
 		contract, ok := any(app).(interface{ SubmissionFailuresReturned() bool })
 		if !ok || !contract.SubmissionFailuresReturned() {
@@ -120,6 +133,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			key = 1
 		}
 		queue.add(meshscene.NativeEvent{Kind: 8, Key: key})
+		if lateAcquire {
+			focused.Store(f)
+			lifecycleEpoch.Add(1)
+		}
 	})
 	if scroll, ok := events.(gpucontext.ScrollEventSource); ok {
 		scroll.OnScrollEvent(func(s gpucontext.ScrollEvent) {
@@ -139,6 +156,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var actualW, actualH int
 	var runtimeModeAtInit map[string]bool
 	var renderer *Renderer
+	var surfaceFormat gputypes.TextureFormat
+	var fallbackFrames int
+	var lastLifecycleEpoch uint64
+	var lateFallbacks, lateFrames uint64
 	var retainedDescriptors [2]map[string]any
 	var failure error
 	var capture *battleCapture
@@ -162,8 +183,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	probeDirectLight := os.Getenv("NANOLATHE_WEBGPU_PROBE_DIRECT_LIGHT") == "1"
 	directLightFixture := battleDirectLightFixture{disabled: os.Getenv("NANOLATHE_WEBGPU_PROBE_DIRECT_LIGHT_OFF") == "1"}
 	debugWritten := false
-	var last, next, timeStart, lastReturn time.Time
+	var last, next, timeStart, lastReturn, lastSourceSampleAt time.Time
 	var rows []drawRow
+	var presentationTelemetry any
+	var gpuTimingTelemetry any
+	gpuTimingRequested := os.Getenv("NANOLATHE_WEBGPU_GPU_TIMING") == "1"
 	var input []meshscene.NativeEvent
 	neutralPointer := os.Getenv("NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER") == "1"
 	if neutralPointer && (opts.Benchmark != nil || opts.Frames <= 0 || opts.OutputDir == "") {
@@ -186,6 +210,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	draw := 0
 	// Keep the worker explicit until its gain is repeatable across large scenes.
 	prepareAhead := opts.PrepareAhead != nil && os.Getenv("NANOLATHE_WEBGPU_PREPARE_AHEAD") == "1"
+	if lateAcquire && !prepareAhead {
+		return nil, fmt.Errorf("late acquisition requires the serial source handoff")
+	}
 	var preparer *sourceWorker
 	if prepareAhead {
 		preparer = newSourceWorker(scene.Live)
@@ -240,12 +267,64 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			app.Quit()
 			return
 		}
-		ctx.CommandEncoder()
-		ctx.SurfaceView()
+		epoch := lifecycleEpoch.Load()
+		interactive := opts.Benchmark == nil
+		if lateAcquire && interactive && (epoch != lastLifecycleEpoch || !lastReturn.IsZero() && entry.Sub(lastReturn) > 2*period) {
+			fallbackFrames = 2
+			// Discard a completed old presentation sample, after serial Next joins.
+			// Input/state already consumed by that Next is never replayed.
+			if terminal, err := dropPreparedSource(preparer); err != nil || terminal {
+				failure = err
+				app.Quit()
+				return
+			}
+			next = entry
+		}
+		lastLifecycleEpoch = epoch
+		deferred, deferredOK := any(ctx).(deferredFrameContext)
+		if lateAcquire && (!deferredOK || !deferred.DisableDeferredFrameReplay()) {
+			failure = fmt.Errorf("late acquisition requires the reviewed deferred-frame host contract")
+			app.Quit()
+			return
+		}
 		w, h := ctx.FramebufferSize()
+		stable := false
+		if lateAcquire {
+			_, _, _, stable = deferred.DeferredAcquireState()
+		}
+		acquireLate := lateAcquire && stable && renderer != nil && !capturePending && fallbackFrames == 0 &&
+			(!interactive || focused.Load()) && lateAcquireSteadyFrame(draw, opts.Warmup, opts.Frames) &&
+			w == actualW && h == actualH && renderer.width == w && renderer.height == h
+		if !acquireLate {
+			enc := ctx.CommandEncoder()
+			var view *wgpu.TextureView
+			if enc != nil {
+				view = ctx.SurfaceView()
+			}
+			if enc == nil || view == nil {
+				if lateAcquire && interactive && deferred.DiscardDeferredAcquire() {
+					terminal, err := dropPreparedSource(preparer)
+					if err != nil || terminal {
+						failure = err
+						app.Quit()
+						return
+					}
+					fallbackFrames = 2
+					lateFallbacks++
+					next = time.Now()
+					return
+				}
+				failure = fmt.Errorf("native frame encoder or surface unavailable before source preparation")
+				app.Quit()
+				return
+			}
+			w, h = ctx.FramebufferSize()
+		}
+
 		if renderer == nil {
 			p := app.DeviceProvider()
 			nativeDevice = p.Device()
+			surfaceFormat = p.SurfaceFormat()
 			actualW, actualH = w, h
 			if w != opts.Width || h != opts.Height {
 				failure = fmt.Errorf("WebGPU physical extent %dx%d; expected %dx%d", w, h, opts.Width, opts.Height)
@@ -347,10 +426,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			actualW, actualH = w, h
 		}
-		if next.IsZero() {
-			next = entry
-			timeStart = entry
-		}
+		next, timeStart = startSourceTimeline(next, timeStart, entry)
 		paceStart := time.Now()
 		if wait := time.Until(next); wait > 0 {
 			time.Sleep(wait)
@@ -398,9 +474,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if !ahead {
 			input = sampleInput()
 			sourceStart := time.Now()
-			prepared.frame, prepared.err = scene.Live.Next(start.Sub(timeStart).Seconds(), meshscene.Input{Events: input, At: start})
+			sampleAt := start
+			if lateAcquire {
+				sampleAt = sourceSampleTime(lastSourceSampleAt, sampleAt)
+			}
+			lastSourceSampleAt = sampleAt
+			prepared.frame, prepared.err = scene.Live.Next(sampleAt.Sub(timeStart).Seconds(), meshscene.Input{Events: input, At: sampleAt})
 			prepared.readyAt = time.Now()
-			prepared.sampleAt = start
+			prepared.sampleAt = sampleAt
 			prepared.stages = sourcePreparationTimings(scene.Live)
 			prepared.milliseconds = float64(time.Since(sourceStart).Nanoseconds()) / 1e6
 		}
@@ -464,6 +545,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 		}
 		encodeStart := time.Now()
+		nativeEncodeStart := float64(0)
+		if gpuTimingRequested {
+			if p, ok := any(nativeDevice).(interface{ NativeGPUClockSeconds() float64 }); ok {
+				nativeEncodeStart = p.NativeGPUClockSeconds()
+			}
+		}
 		// Current diagnostics consumed the packet above. Renderer preparation
 		// owns every later command operand before this callback starts Next.
 		nextDraw := draw + 1
@@ -475,10 +562,54 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				if next.After(at) {
 					at = next
 				}
+				if lateAcquire {
+					at = sourceSampleTime(lastSourceSampleAt, at)
+				}
+				lastSourceSampleAt = at
 				preparer.start(at.Sub(timeStart).Seconds(), meshscene.Input{Events: input, At: at})
 			}
 		}
-		c, e := renderer.encodeSourceReady(ctx.CommandEncoder(), ctx.SurfaceView(), w, h, live, sourceReady)
+		var c Counters
+		var e error
+		if acquireLate {
+			acquire := func() (*wgpu.CommandEncoder, *wgpu.TextureView, error) {
+				enc, view, err := acquireFixedFrame(ctx, w, h, surfaceFormat)
+				if err == nil && interactive && lifecycleEpoch.Load() != epoch {
+					err = errDeferredFrameChanged
+				}
+				return enc, view, err
+			}
+			c, e = renderer.encodeSourceReadyAcquire(nil, nil, w, h, live, sourceReady, acquire)
+			if e != nil && interactive && errors.Is(e, errDeferredFrameChanged) {
+				// No renderer commands exist yet. Drop this surface frame and the
+				// serial next sample; pending owned uploads remain safe for the
+				// next Submit/device teardown. Never re-Prepare borrowed live data.
+				if !deferred.DiscardDeferredAcquire() {
+					failure = e
+					app.Quit()
+					return
+				}
+				terminal, err := dropPreparedSource(preparer)
+				if err != nil || terminal {
+					failure = err
+					app.Quit()
+					return
+				}
+				fallbackFrames = 2
+				lateFallbacks++
+				next = time.Now()
+				return
+			}
+		} else {
+			c, e = renderer.encodeSourceReady(ctx.CommandEncoder(), ctx.SurfaceView(), w, h, live, sourceReady)
+		}
+		if acquireLate && e == nil {
+			lateFrames++
+		}
+		if !acquireLate && fallbackFrames > 0 {
+			fallbackFrames--
+		}
+
 		failure = e
 		encodeMS := float64(time.Since(encodeStart).Nanoseconds()) / 1e6
 		outsideMS := 0.0
@@ -494,7 +625,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if source, ok := scene.Live.(interface{ PublicationTick() (uint32, bool) }); ok {
 			publishedTick, publishedTickAvailable = source.PublicationTick()
 		}
-		row := drawRow{Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, Camera: live.Camera, SourceStagesMS: prepared.stages, SourceSampleAgeMS: float64(encodeStart.Sub(prepared.sampleAt).Nanoseconds()) / 1e6, SourceReadyAgeMS: float64(encodeStart.Sub(prepared.readyAt).Nanoseconds()) / 1e6, PublishedTick: publishedTick, PublishedTickAvailable: publishedTickAvailable, PreviousSubmission: nativeDevice.Queue().LastSubmissionIndex(), CompletedSubmission: nativeDevice.Queue().Poll(), Counters: c, Missing: renderer.Missing()}
+		row := drawRow{NativeEncodeStartSeconds: nativeEncodeStart, Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, LateAcquireMS: c.LateAcquireMS, CommandEncodeMS: c.CommandEncodeMS, LateAcquire: acquireLate, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, Camera: live.Camera, SourceStagesMS: prepared.stages, SourceSampleAgeMS: float64(encodeStart.Sub(prepared.sampleAt).Nanoseconds()) / 1e6, SourceReadyAgeMS: float64(encodeStart.Sub(prepared.readyAt).Nanoseconds()) / 1e6, PublishedTick: publishedTick, PublishedTickAvailable: publishedTickAvailable, PreviousSubmission: nativeDevice.Queue().LastSubmissionIndex(), CompletedSubmission: nativeDevice.Queue().Poll(), Counters: c, Missing: renderer.Missing()}
 		if len(rows) >= 8192 {
 			rows[draw%len(rows)] = row
 		} else {
@@ -523,6 +654,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				}
 				return // No capture/renderer destruction with completion unknown.
 			}
+			if provider, ok := any(nativeDevice).(interface{ NativePresentationTelemetry(bool) any }); ok {
+				presentationTelemetry = provider.NativePresentationTelemetry(true)
+				if provider, ok := any(nativeDevice).(interface{ NativeGPUTiming(bool) any }); ok {
+					gpuTimingTelemetry = provider.NativeGPUTiming(true)
+				}
+			}
 			submittedAtClose = nativeDevice.Queue().LastSubmissionIndex()
 			completedAtClose = nativeDevice.Queue().Poll()
 		}
@@ -539,6 +676,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 	})
 	runErr := app.Run()
+	if presentationTelemetry == nil && nativeDevice != nil {
+		if provider, ok := any(nativeDevice).(interface{ NativePresentationTelemetry(bool) any }); ok {
+			presentationTelemetry = provider.NativePresentationTelemetry(true)
+			if provider, ok := any(nativeDevice).(interface{ NativeGPUTiming(bool) any }); ok {
+				gpuTimingTelemetry = provider.NativeGPUTiming(true)
+			}
+		}
+	}
 	// Quarantined native shutdown skips OnClose. CPU-only source/profiling
 	// cleanup must still finish before collecting the result.
 	if e := preparer.close(); failure == nil {
@@ -557,6 +702,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": prepareAhead, "source_ownership": "one serial worker; next source starts after all Prepare CPU reads/uploads and copied paint records, before command encoding; measurement boundaries and final capture stop preparation", "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "optional source preparation overlaps host submission/pacing; per-frame GPU completion still protects mutable-resource replacement", "hardware model triangles approximate production integer span coverage; doubled hardware outline lines lack whole-native-pixel row blocks", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"compact_slot_packing": compactSlotPacking, "authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens, "controlled_direct_light_stock_replacement": probeDirectLight, "controlled_direct_light_off": directLightFixture.disabled}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "model_batching": disableModelBatching, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
 	report["resizable_source"] = sourceResizable && opts.Benchmark == nil
+	report["late_acquire"] = map[string]any{"requested": lateAcquire, "frames": lateFrames, "recoveries": lateFallbacks, "scope": "opt-in owned preparation/source handoff before acquisition; lifecycle/resize/setup/final boundaries retain early acquire; deferred acquisition change drops unencoded frame and source sample, never replays borrowed data or input; host outdated retries deferred to a fresh callback"}
+	report["encode_timing_scope"] = "EncodeMS/common Submit/DrawWork include late acquisition but exclude upfront early acquisition; CommandEncodeMS excludes preparation/source handoff/acquisition; nested wall durations are not additive"
+	report["native_presentation_telemetry"] = presentationTelemetry
+	report["native_gpu_timing"] = gpuTimingTelemetry
+	report["native_encode_clock_scope"] = "CACurrentMediaTime sampled immediately after Go encodeStart; per-frame clock bridge approximate by getter latency; source sample/ready time inferred from existing monotonic ages; no additional waits"
 	report["asynchronous_uploads"] = asyncUploads
 	report["runtime_arrays"] = map[string]any{"requested": os.Getenv("NANOLATHE_WEBGPU_RUNTIME_ARRAYS") == "1", "enabled": runtimeModeAtInit["models"], "renderer_components_at_init": runtimeModeAtInit, "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"}
 	report["storage_reservation"] = map[string]any{"enabled": storageReserveEnabled(), "model_buffer_floor_bytes": modelStorageReserveBytes, "glow_buffer_floor_bytes": glowStorageReserveBytes, "scope": "opt-in buffer reservation and fixed-array pipeline precompilation; normal growth retained, textures unchanged"}

@@ -12,6 +12,9 @@ The later user-authorized overnight real-battle experiment is described in
 measurements, fidelity gaps and failed gates. It preserves the P0–P4 dependency
 verdict below and does not start the production migration.
 
+The later opt-in interactive ordering seam and explicit engine-archive build are
+documented in [INTERACTIVE_LATE_ACQUISITION.md](INTERACTIVE_LATE_ACQUISITION.md).
+
 ## Dependency qualification — 2026-10-10
 
 Exact GoGPU source: `12620c9d50073b8591f075c97ba0c6f3b6ad92f7`, canonical

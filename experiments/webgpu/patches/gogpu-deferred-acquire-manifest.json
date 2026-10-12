@@ -1,0 +1,16 @@
+{
+  "base": "owned GoGPU exactpinnedv0.54.1 guardpatched, no hostphases",
+  "original_sha256": {
+    "app.go": "390578e2dddc8860feb31c6444be68610507dd75ee42520f318768730f97673c",
+    "renderer.go": "e8e8b0b5e8e65dc237168a8b194d01b8629719b76539af61dbacb6e61c66342d"
+  },
+  "patch_sha256": "b3932abc8276fd4aa0e6b543870cbd5ecd17d2965fc6cf1826046e1ca3b9ed0f",
+  "result_sha256": {
+    "app.go": "87b98540214f92cd0c66daef16f158e7b7d68a45252e1b14a2ed8f6d3d3050ef",
+    "renderer.go": "23fae21df978dfd1495f50eef08988fe5258d291c41eab64dbcf1e6d5c398431",
+    "deferred_acquire.go": "55f9a0eb8cc91c648641bbd764e261546ef3396b48a459fa11484d6f223d2122",
+    "deferred_acquire_test.go": "a13b6c0cfeed10c0b67c18b34c502d65afbe23286df484bd0e3a5b700e588b12"
+  },
+  "scope": "Private opt-in deferred callback recovery/no-replay and same-size restore prerequisite; no upstream/default application",
+  "qualification": "Six deferred-host software mock tests and existing owned-frame/submission failure tests passed; native interactive21-action lifecycle/cancellation gates at1080/1440 with monotonic source timestamps and complete checked drain; physical OS keyboard injection and backend/device-loss/format migration remain unqualified."
+}
