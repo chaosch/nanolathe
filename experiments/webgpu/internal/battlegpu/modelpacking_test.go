@@ -19,11 +19,11 @@ func TestModelCompactPackingPreservesSelectorsAndIsolation(t *testing.T) {
 	before := append([]meshscene.ModelSlot(nil), input...)
 	compact := modelPackingWork{compact: true}
 	var legacy modelPackingWork
-	slots, w, h, err := compact.pack(nil, input)
+	slots, w, h, err := compact.pack(nil, input, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, ow, oh, err := legacy.pack(nil, input)
+	_, ow, oh, err := legacy.pack(nil, input, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,13 +53,13 @@ func TestModelCompactPackingPreservesSelectorsAndIsolation(t *testing.T) {
 			}
 		}
 	}
-	again, _, _, err := compact.pack(nil, input)
+	again, _, _, err := compact.pack(nil, input, nil)
 	if err != nil || !reflect.DeepEqual(slots, again) {
 		t.Fatalf("packing is not deterministic: %v", err)
 	}
 	if n := testing.AllocsPerRun(20, func() {
 		var e error
-		slots, _, _, e = compact.pack(slots, input)
+		slots, _, _, e = compact.pack(slots, input, nil)
 		if e != nil {
 			panic(e)
 		}

@@ -165,14 +165,14 @@ func TestModelBodyCapacitiesFollowWholeAllocatedRecords(t *testing.T) {
 	// Immutable meshes use exact spans, while dynamic instances/poses use
 	// geometric tiers, including the appended independent solo-shadow records.
 	bytes := [8]uint64{11 * 80, 2048, 8192, 7 * 16, 13 * 16, 4096, 512, 19 * 16}
-	if got := modelBodyCapacities(bytes); got != [8]int{11, 25, 19, 7, 13, 85, 8, 19} {
+	if got := modelBodyCapacities(bytes); got != [8]int{11, 25, 18, 7, 13, 85, 8, 19} {
 		t.Fatalf("immutable/grown capacity mapping=%v", got)
 	}
 }
 
 func TestModelBodyPipelineReplacementFailureAndReleaseOrder(t *testing.T) {
 	failure := errors.New("authored pipeline creation failure")
-	for failAt := 0; failAt <= 5; failAt++ {
+	for failAt := 0; failAt <= 6; failAt++ {
 		var released []int
 		old := modelBodyPipelines{module: &wgpu.ShaderModule{}, capacities: [8]int{3}}
 		for i := range old.releases {
@@ -193,7 +193,7 @@ func TestModelBodyPipelineReplacementFailureAndReleaseOrder(t *testing.T) {
 			t.Fatal("failed body creation replaced the old current set")
 		}
 		var want []int
-		for i := min(failAt, 5) - 1; i >= 0; i-- {
+		for i := min(failAt, 6) - 1; i >= 0; i-- {
 			want = append(want, i)
 		}
 		if !reflect.DeepEqual(released, want) {
@@ -213,12 +213,12 @@ func TestModelBodyPipelineReplacementFailureAndReleaseOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(released, []int{4, 3, 2, 1, 0}) || current.capacities != [8]int{2} {
+	if !reflect.DeepEqual(released, []int{5, 4, 3, 2, 1, 0}) || current.capacities != [8]int{2} {
 		t.Fatal("successful replacement retained or prematurely closed a current set")
 	}
 	current.modelClose()
 	current.modelClose()
-	if !reflect.DeepEqual(released, []int{4, 3, 2, 1, 0, 14, 13, 12, 11, 10}) || current.module != nil {
+	if !reflect.DeepEqual(released, []int{5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10}) || current.module != nil {
 		t.Fatal("body Close leaked, double-released or closed its module before pipelines")
 	}
 }

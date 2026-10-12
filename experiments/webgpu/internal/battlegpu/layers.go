@@ -1170,7 +1170,9 @@ func (l *Layers) DrawLooseSprites(pass *wgpu.RenderPassEncoder, phase uint32) {
 	if l.closed || pass == nil || phase > 1 {
 		return
 	}
-	l.state.selectResources(pass, l.sprite, l.spriteGroup)
+	// Equivalent to the depth-tested sprite pipeline against the cleared
+	// world depth, and unaffected by the depth bands direct models write.
+	l.state.selectResources(pass, l.feature, l.spriteGroup)
 	for _, span := range l.looseSpriteRuns[phase] {
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: span.count, FirstInstance: span.first})
 		l.counts.Draws++

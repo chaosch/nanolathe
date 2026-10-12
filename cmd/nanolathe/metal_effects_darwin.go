@@ -45,14 +45,31 @@ type metalEffectRecorder struct {
 // dedicated adapter, so HUD Prepare cannot replace borrowed effect quads or
 // lose the aggregated effects-atlas upload rectangle.
 func (r *metalEffectRecorder) record(cl *client.Client, adapter *metalhud.Foreground) (metalEffectFrame, error) {
-	var out metalEffectFrame
 	if cl == nil || adapter == nil {
-		return out, fmt.Errorf("nanolathe: native stock-effects recording requires client and atlas adapter")
+		return metalEffectFrame{}, fmt.Errorf("nanolathe: native stock-effects recording requires client and atlas adapter")
 	}
+	return r.adapt(r.capture(cl), adapter)
+}
+
+// capture is the half of record that reads the client: the stock-effect
+// producers and the unit labels, recorded into this recorder's storage.
+func (r *metalEffectRecorder) capture(cl *client.Client) client.RetainedEffects {
 	start := time.Now()
 	recorded := cl.RecordRetainedEffectsInto(&r.storage)
+	// Unit labels open the last layer: production draws them after the
+	// airborne pass and before strip 9 [03 §1]. Empty unless the client
+	// leaves them to the host (SetExternalSelection).
+	cl.RecordRetainedLabels(&r.labels)
 	r.recordMS = float64(time.Since(start)) / 1e6
-	start = time.Now()
+	return recorded
+}
+
+// adapt is the half of record that never touches the client: it converts the
+// captured lists, which this recorder's storage owns, into effect layers. It
+// may therefore run beside the host's foreground recording.
+func (r *metalEffectRecorder) adapt(recorded client.RetainedEffects, adapter *metalhud.Foreground) (metalEffectFrame, error) {
+	var out metalEffectFrame
+	start := time.Now()
 	groups := r.groups[:]
 	order := 0
 	for i, batches := range [][]client.RetainedEffectBatch{recorded.BeforeFeatures, recorded.BeforeGround, recorded.AfterGround, recorded.AfterAir, recorded.AfterLabels} {
@@ -70,10 +87,6 @@ func (r *metalEffectRecorder) record(cl *client.Client, adapter *metalhud.Foregr
 			groups[i] = append(groups[i], metalhud.EffectBatch{List: &batches[j].List, ProjectileModels: batches[j].ProjectileModels, ProjectileOrder: converted})
 		}
 	}
-	// Unit labels open the last layer: production draws them after the
-	// airborne pass and before strip 9 [03 §1]. Empty unless the client
-	// leaves them to the host (SetExternalSelection).
-	cl.RecordRetainedLabels(&r.labels)
 	groups[4] = slices.Insert(groups[4], 0, metalhud.EffectBatch{List: &r.labels, Labels: true})
 	groups[0] = append(groups[0], metalhud.EffectBatch{List: &recorded.LightSources.Short, SourceOnly: true})
 	groups[1] = append(groups[1], metalhud.EffectBatch{List: &recorded.LightSources.Ground, SourceOnly: true})

@@ -538,6 +538,12 @@ func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Clie
 			}
 			return shell.battle.presentationAt(ahead)
 		},
+		PresentationTickAt: func(at time.Time) (uint32, float32, bool) {
+			if shell.battle == nil {
+				return 0, 0, false
+			}
+			return shell.battle.presentationAtInstant(at)
+		},
 		JoinSimulation: func() {
 			if shell.battle != nil {
 				shell.battle.stopSimulation(cl)

@@ -203,7 +203,9 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		return meshscene.LiveFrame{Exit: true}, nil
 	}
 	h.cl.SetCameraFraction(float32(now.Sub(h.updated).Seconds() * 30))
-	h.cl.PinPresentation()
+	// Sample the world at the frame's predicted instant, as the camera
+	// fraction above is: the worker runs Next at varying times before it.
+	h.cl.PinPresentationAt(now)
 	h.cl.BeginPresentationFrame()
 	fraction := h.cl.ResolveTickFraction()
 	view := h.cl.CameraViewFor(h.cl.PresentationDigest())
@@ -251,21 +253,37 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 			h.cachedPrevious = previous
 		}
 	}
+	// The effects' client half records here; their adapter, lighting and glow
+	// half reads only the recorder's own storage, so it runs beside the
+	// foreground recording, frame sources and projection below, and its
+	// outputs merge before the composer, the first reader of the layers.
 	var visuals meshscene.LiveFrame
 	visuals.Camera = camera
-	visualsErr := h.visuals.Prepare(h.cl, &visuals, h.width, h.height, 2)
+	finishVisuals := h.visuals.Begin(h.cl, &visuals, h.width, h.height, 2)
+	visualsDone := make(chan error, 1)
+	go func() { visualsDone <- finishVisuals() }()
 	if rebuilt != nil {
 		h.frame = <-rebuilt
 	}
-	if visualsErr != nil {
-		return meshscene.LiveFrame{}, visualsErr
+	frame, err := h.prepareForeground(camera, fraction, cur)
+	if visualsErr := <-visualsDone; err == nil {
+		err = visualsErr
 	}
-	h.frame.WaterObjectScales = visuals.WaterObjectScales
-	h.frame.TerrainFlags = visuals.TerrainFlags
-	h.frame.Lighting.Lights = visuals.Lighting.Lights
-	h.frame.LightControls |= visuals.LightControls
-	h.frame.WaterSources = visuals.WaterSources
-	h.frame.StockEffects = visuals.StockEffects
+	if err != nil {
+		return meshscene.LiveFrame{}, err
+	}
+	frame.WaterObjectScales = visuals.WaterObjectScales
+	frame.TerrainFlags = visuals.TerrainFlags
+	frame.Lighting.Lights = visuals.Lighting.Lights
+	frame.LightControls |= visuals.LightControls
+	frame.WaterSources = visuals.WaterSources
+	frame.StockEffects = visuals.StockEffects
+	return h.compose(cur)
+}
+
+// prepareForeground fills the frame's camera, foreground and frame sources
+// while the visuals' client-free half runs.
+func (h *metalBattleHost) prepareForeground(camera [3]float32, fraction int32, cur *frame.Frame) (*meshscene.LiveFrame, error) {
 	h.frame.Camera = camera
 	h.frame.Alpha = float32(fraction) / 65536
 	// The world art keeps its load-time palette; a later gamma factor scales
@@ -292,7 +310,7 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	}
 	quads, texture, version, err := h.hud.Prepare(list)
 	if err != nil {
-		return meshscene.LiveFrame{}, err
+		return nil, err
 	}
 	// +fps: production draws its panel over the finished frame, cursor
 	// included; so does this, as the last HUD quad.
@@ -320,8 +338,14 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	}
 	prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2, &h.subjects)
 	if err := h.projection.Prepare(h.cl, h.world, &h.frame, 2); err != nil {
-		return meshscene.LiveFrame{}, err
+		return nil, err
 	}
+	return &h.frame, nil
+}
+
+// compose adds production paint order, selection and shadows once the
+// effect layers are in the frame.
+func (h *metalBattleHost) compose(cur *frame.Frame) (meshscene.LiveFrame, error) {
 	if h.composer == nil {
 		h.composer = newMetalModelComposer(h.scene)
 	}

@@ -107,7 +107,7 @@ for original in sorted((engine/'cmd/nanolathe').rglob('*')):
      ('h.fps.observe(time.Now(), in.Timing)',0),
      ('h.cl.SetCameraFraction(float32(now.Sub(h.updated).Seconds() * 30))',1),
      ('previous, cur := h.cl.PresentedFramePair()',2),
-     ('visualsErr := h.visuals.Prepare(h.cl, &visuals, h.width, h.height, 2)',3),
+     ('finishVisuals := h.visuals.Begin(h.cl, &visuals, h.width, h.height, 2)',3),
      ('list := h.cl.RecordRetainedForeground()',4),
      ('prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2, &h.subjects)',5),
      ('if h.composer == nil {',6),
@@ -117,15 +117,16 @@ for original in sorted((engine/'cmd/nanolathe').rglob('*')):
     for marker,index in source_markers:
      if text.count(marker)!=1:sys.exit('phase overlay requires exactly one '+marker)
      prefix=''
-     if index==0:prefix='h.diagnosticStages = [12]float64{}\n\tdiagnosticMark := time.Now()\n\tdiagnosticSplit := func(i int) { t := time.Now(); h.diagnosticStages[i]=float64(t.Sub(diagnosticMark))/1e6; diagnosticMark=t }\n\t'
-     else:prefix='diagnosticSplit('+str(index-1)+')\n\t'
+     if index==0:prefix='h.diagnosticStages = [12]float64{}\n\th.diagnosticMark = time.Now()\n\t'
+     else:prefix='h.diagnosticSplit('+str(index-1)+')\n\t'
      text=text.replace(marker,prefix+marker)
     final='return h.frame, nil'
     if text.count(final)!=1:sys.exit('phase overlay requires exactly one completed source result')
-    text=text.replace(final,'diagnosticSplit(7)\n\tcopy(h.diagnosticStages[8:],h.visuals.parts[:])\n\t'+final)
+    text=text.replace(final,'h.diagnosticSplit(7)\n\tcopy(h.diagnosticStages[8:],h.visuals.parts[:])\n\t'+final)
     host='type metalBattleHost struct {'
     if text.count(host)!=1:sys.exit('phase overlay requires exactly one source owner')
-    text=text.replace(host,host+'\n\tdiagnosticStages [12]float64')
+    text=text.replace(host,host+'\n\tdiagnosticStages [12]float64\n\tdiagnosticMark time.Time')
+    text+='\nfunc (h *metalBattleHost) diagnosticSplit(i int) { t := time.Now(); h.diagnosticStages[i] = float64(t.Sub(h.diagnosticMark)) / 1e6; h.diagnosticMark = t }\n'
     text+='\nfunc (h *metalBattleHost) PreparationTimings() [12]float64 { return h.diagnosticStages }\n'
     text+='''
 // ResizePhysicalExtent changes presentation only after the serial source is joined.

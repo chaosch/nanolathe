@@ -4,7 +4,7 @@ struct ModelShadowUniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,p
 struct ModelShadowVertex {position:vec4<f32>,piece:u32,pad0:u32,pad1:u32,pad2:u32}
 struct ModelShadowPose {matrix:mat4x4<f32>,flags:vec4<u32>}
 // This projection-only view preserves the shared 416-byte instance ABI.
-struct ModelShadowInstance {ids:vec4<u32>,prefix:array<vec4<f32>,9>,shadow:vec4<f32>,middle:array<vec4<f32>,4>,screen:vec4<f32>,atlas:vec4<f32>,suffix:array<vec4<f32>,9>}
+struct ModelShadowInstance {ids:vec4<u32>,prefix:array<vec4<f32>,9>,shadow:vec4<f32>,middle:array<vec4<f32>,4>,screen:vec4<f32>,atlas:vec4<f32>,suffix:array<vec4<f32>,10>}
 @group(0) @binding(0) var<storage,read> vertices:array<ModelShadowVertex,__VERTICES__>;
 @group(0) @binding(1) var<storage,read> poses:array<ModelShadowPose,__POSES__>;
 @group(0) @binding(2) var<storage,read> instances:array<ModelShadowInstance,__INSTANCES__>;

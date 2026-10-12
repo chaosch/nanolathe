@@ -10,6 +10,7 @@ type modelBatchWork struct {
 	independent      bool
 	ordered          []byte
 	slots, instances []bool
+	moved            []uint32
 }
 
 // SetSourceBatching selects the diagnostic A/B path before Prepare. Both paths
@@ -94,10 +95,19 @@ func (m *Models) modelBatchSources(f meshscene.LiveFrame) {
 		draw.instance = uint32(i)
 	}
 	at := len(m.draws) * modelInstanceStride
+	w.moved = slices.Grow(w.moved[:0], len(f.Instances))[:len(f.Instances)]
 	for original, drawn := range w.instances {
 		if !drawn {
+			w.moved[original] = uint32(at / modelInstanceStride)
 			copy(w.ordered[at:], m.instanceBytes[original*modelInstanceStride:(original+1)*modelInstanceStride])
 			at += modelInstanceStride
+		}
+	}
+	// Direct subjects never enter the body pass: their records follow the
+	// drawn prefix in original order, so their addresses move with them.
+	for i := range m.directDraws {
+		if d := &m.directDraws[i]; d.mesh >= 0 {
+			d.instance = w.moved[d.instance]
 		}
 	}
 	// Prepare has already cloned shadow/projected records from the original

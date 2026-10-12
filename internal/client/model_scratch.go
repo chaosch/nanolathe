@@ -6,6 +6,7 @@ import (
 	presentationrender "github.com/nanolathe-gg/nanolathe/internal/render"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Model scratch is owned by a client and borrowed for one recorded frame.
@@ -14,7 +15,6 @@ import (
 type modelScratch struct {
 	states      [][]compiledmodel.PieceState
 	stateNext   int
-	names       map[string]string
 	draws       []*presentationrender.DrawScratch
 	drawNext    int
 	packets     []*packetScratch
@@ -339,14 +339,16 @@ func (c *Client) modelNameKey(name string) string {
 	if c == nil {
 		return strings.ToLower(name)
 	}
-	s := &c.modelScratch
-	if key, ok := s.names[name]; ok {
-		return key
-	}
-	if s.names == nil {
-		s.names = make(map[string]string)
+	if key, ok := modelNameKeys.Load(name); ok {
+		return key.(string)
 	}
 	key := strings.ToLower(name)
-	s.names[name] = key
+	modelNameKeys.Store(name, key)
 	return key
 }
+
+// modelNameKeys memoizes the lowercase spelling of texture names. It is a pure
+// function of the name, so one process-wide concurrent memo serves every
+// client and recording clone; a native host resolves retained materials on its
+// world goroutine while the presentation goroutine records effects.
+var modelNameKeys sync.Map

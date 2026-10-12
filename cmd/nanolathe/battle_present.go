@@ -188,6 +188,27 @@ func (b *battleSession) presentLagAt(ms float64, active int32) float64 {
 // will release the delay, and both the end title and ENDMSN must see the same
 // frozen result as the host's post-battle controller [07 §11][08 R-CAMP-01 §6].
 func (b *battleSession) presentationAt(ahead time.Duration) (uint32, float32, bool) {
+	if b == nil {
+		return 0, 0, false
+	}
+	return b.presentationSample(b.presentMillis()+float64(ahead)/float64(time.Millisecond), ahead == 0)
+}
+
+// presentationAtInstant is presentationAt for a frame a host prepared ahead of
+// its display: at is that frame's predicted instant, and the sample is the
+// frame's own, so it holds the floor as a Draw's does.
+func (b *battleSession) presentationAtInstant(at time.Time) (uint32, float32, bool) {
+	if b == nil {
+		return 0, 0, false
+	}
+	now := b.presentMillis()
+	if src, ok := b.millisSource.(*monotonicMillisSource); ok && src != nil {
+		now = float64(at.Sub(src.start)) / float64(time.Millisecond)
+	}
+	return b.presentationSample(now, true)
+}
+
+func (b *battleSession) presentationSample(now float64, own bool) (uint32, float32, bool) {
 	if b == nil || b.sim == nil || !b.sim.observedValid {
 		return 0, 0, false
 	}
@@ -202,7 +223,6 @@ func (b *battleSession) presentationAt(ahead time.Duration) (uint32, float32, bo
 	case !p.set:
 		return joined, 0, true
 	}
-	now := b.presentMillis() + float64(ahead)/float64(time.Millisecond)
 	active := min(max(b.simActive, 1), 20)
 	rate := float64(active) * 3 / 1000 // 30 × active × 0.1 ticks per second
 	t := p.base + (now-p.baseMS)*rate - b.presentLagAt(now, active) - b.presentMarginAt(now)*rate
@@ -218,7 +238,7 @@ func (b *battleSession) presentationAt(ahead time.Duration) (uint32, float32, bo
 		// held until it is.
 		tick, fraction, t = joined, 1, float64(joined)
 	}
-	if ahead == 0 {
+	if own {
 		p.floor, p.floorSet = t, true
 		p.tick, p.fraction, p.sampled = tick, fraction, true
 	}

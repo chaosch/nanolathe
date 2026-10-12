@@ -75,18 +75,38 @@ func (c *Client) AsyncSimulation() bool { return c != nil && c.asyncSim }
 // than blending toward a tick it cannot see.
 func (c *Client) PinPresentation() { c.pinPresentation(0) }
 
+// PinPresentationAt pins the pair named for the instant at, the presented
+// frame's predicted instant. A host that prepares frames on a worker passes
+// it so that the world advances by the frames' spacing, not by when the
+// worker ran; it falls back to PinPresentation without a PresentationTickAt.
+func (c *Client) PinPresentationAt(at time.Time) {
+	if c == nil || c.opts.PresentationTickAt == nil || at.IsZero() {
+		c.PinPresentation()
+		return
+	}
+	c.pinPresentationWith(func() (uint32, float32, bool) { return c.opts.PresentationTickAt(at) })
+}
+
 // pinPresentation pins the pair the host names for the instant ahead of now:
 // zero for the Draw about to present, the predicted present instant for a
 // pre-record (StartPreRecordAt).
 func (c *Client) pinPresentation(ahead time.Duration) {
+	if c == nil || c.opts.PresentationTick == nil {
+		c.pinPresentationWith(nil)
+		return
+	}
+	c.pinPresentationWith(func() (uint32, float32, bool) { return c.opts.PresentationTick(ahead) })
+}
+
+func (c *Client) pinPresentationWith(name func() (uint32, float32, bool)) {
 	if c == nil || !c.asyncSim || c.buffer == nil {
 		return
 	}
 	next := framePin{buf: c.buffer}
 	target, named := uint32(0), false
-	if c.opts.PresentationTick != nil {
+	if name != nil {
 		var fraction float32
-		target, fraction, named = c.opts.PresentationTick(ahead)
+		target, fraction, named = name()
 		if named {
 			next.fraction16, next.fractionSet = clampFraction16(fraction), true
 		}

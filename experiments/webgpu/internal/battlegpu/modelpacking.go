@@ -10,6 +10,7 @@ import (
 type modelPackingWork struct {
 	compact bool
 	order   []int
+	seen    []bool
 }
 
 // SetSourcePacking selects compact body-slot placement before Prepare. Logical
@@ -23,10 +24,12 @@ func (m *Models) SetSourcePacking(compact bool) { m.packingWork.compact = compac
 // pixel's four samples inside one subject. Shadows retain exported coordinates.
 func modelPackSlots(input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
 	var work modelPackingWork
-	return work.pack(nil, input)
+	return work.pack(nil, input, nil)
 }
 
-func (p *modelPackingWork) pack(dst, input []meshscene.ModelSlot) ([]meshscene.ModelSlot, int, int, error) {
+// Direct slots take no atlas space: each keeps a zero-origin doubled extent,
+// so its staged projection and face admission keep the atlas path's scale.
+func (p *modelPackingWork) pack(dst, input []meshscene.ModelSlot, direct []bool) ([]meshscene.ModelSlot, int, int, error) {
 	out := append(dst[:0], input...)
 	width := 2048
 	for _, s := range out {
@@ -59,6 +62,10 @@ func (p *modelPackingWork) pack(dst, input []meshscene.ModelSlot) ([]meshscene.M
 		x, y, row := 0, 0, 0
 		for _, i := range p.order {
 			w, h := 2*int(math.Ceil(float64(out[i].Screen[2]))), 2*int(math.Ceil(float64(out[i].Screen[3])))
+			if i < len(direct) && direct[i] {
+				out[i].Atlas = [4]float32{0, 0, float32(w), float32(h)}
+				continue
+			}
 			if x+w > width {
 				x, y, row = 0, y+row, 0
 			}

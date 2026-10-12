@@ -40,6 +40,26 @@ type metalVisuals struct {
 }
 
 func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, width, height int, scale float32) error {
+	finish := v.Begin(cl, live, width, height, scale)
+	return finish()
+}
+
+// metalVisualSettings are the client values the client-free half reads.
+type metalVisualSettings struct {
+	families        [3]int
+	effects         drawlist.Effects
+	groundStrength  int
+	glowOn          bool
+	glowStrength    int
+	waterSurfaceOff bool
+}
+
+// Begin runs the half of Prepare that reads the client — palette, settings
+// and the stock-effect recording — on the calling goroutine and returns the
+// rest, which reads only this recorder's own storage. The host may run the
+// returned finish beside its foreground recording; live must not be touched
+// by anyone else until finish returns.
+func (v *metalVisuals) Begin(cl *client.Client, live *meshscene.LiveFrame, width, height int, scale float32) (finish func() error) {
 	display := cl.DisplayPalette()
 	if v.worldPalette != nil {
 		display = *v.worldPalette
@@ -56,8 +76,16 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 		v.version = 0
 	}
 	mark := time.Now()
+	captured := v.effects.capture(cl)
+	weapons, nano, ground := cl.GlowFamilies()
+	settings := metalVisualSettings{families: [3]int{weapons, nano, ground}, effects: cl.Effects(), groundStrength: cl.GroundLightStrength(),
+		glowOn: cl.Glow(), glowStrength: cl.GlowStrength(), waterSurfaceOff: !cl.RetainedWaterSurface().Enabled}
+	return func() error { return v.finish(captured, settings, mark, display, live, width, height, scale) }
+}
+
+func (v *metalVisuals) finish(captured client.RetainedEffects, s metalVisualSettings, mark time.Time, display [256][4]byte, live *meshscene.LiveFrame, width, height int, scale float32) error {
 	split := func(i int) { now := time.Now(); v.parts[i] = float64(now.Sub(mark)) / 1e6; mark = now }
-	recorded, err := v.effects.record(cl, v.adapter)
+	recorded, err := v.effects.adapt(captured, v.adapter)
 	split(0)
 	if err != nil {
 		return err
@@ -78,16 +106,15 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 			break
 		}
 	}
-	weapons, nano, ground := cl.GlowFamilies()
-	families := [3]int{weapons, nano, ground}
-	settings := gpurender.RetainedLightingSettings{Effects: cl.Effects(), GroundStrength: cl.GroundLightStrength(), Families: families, Width: width, Height: height}
+	families := s.families
+	settings := gpurender.RetainedLightingSettings{Effects: s.effects, GroundStrength: s.groundStrength, Families: families, Width: width, Height: height}
 	if v.lighting == nil {
 		v.lighting = gpurender.NewRetainedLighting(display, settings)
 	} else {
 		v.lighting.SetPalette(display)
 		v.lighting.SetSettings(settings)
 	}
-	glowSettings := gpurender.RetainedGlowSettings{On: cl.Glow(), Strength: cl.GlowStrength(), Effects: cl.Effects(), Families: families, Width: width, Height: height, Palette: display}
+	glowSettings := gpurender.RetainedGlowSettings{On: s.glowOn, Strength: s.glowStrength, Effects: s.effects, Families: families, Width: width, Height: height, Palette: display}
 	if v.glow == nil {
 		v.glow = gpurender.NewRetainedGlow(glowSettings)
 	} else {
@@ -157,9 +184,14 @@ func (v *metalVisuals) Prepare(cl *client.Client, live *meshscene.LiveFrame, wid
 	v.frame.Glow.Parameters.Blur[0] *= scale
 	v.frame.Glow.Parameters.Blur[1] = min(v.frame.Glow.Parameters.Blur[1]*scale, float32(24.0/2.5))
 	split(2)
-	waterSources, _, err := metalWaterSources(v.water, cl, v.adapter, v.layers[:], display)
-	if err != nil {
-		return err
+	var waterSources []meshscene.WaterSource
+	if !s.waterSurfaceOff {
+		if waterSources, _, err = meshscene.AppendWaterSources(v.water, v.layers[:], display, v.adapter.GlowAtlas().Frame); err != nil {
+			return err
+		}
+		if len(waterSources) == 0 {
+			waterSources = nil
+		}
 	}
 	if waterSources != nil {
 		v.water = waterSources

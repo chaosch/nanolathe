@@ -52,6 +52,11 @@ type Options struct {
 	// presents the newest publication and leaves the fraction to TickFraction.
 	// The synchronous path never reads it.
 	PresentationTick func(ahead time.Duration) (tick uint32, fraction float32, ok bool)
+	// PresentationTickAt is PresentationTick for an absolute instant that is
+	// the presented frame's own sample, for a host that prepares each frame
+	// ahead of its display on a worker: it names the frame's predicted
+	// instant rather than whenever the worker happens to run.
+	PresentationTickAt func(at time.Time) (tick uint32, fraction float32, ok bool)
 
 	// JoinSimulation returns the session to the synchronous path: it joins the
 	// asynchronous simulation goroutine and stops it. SetAsyncSimulation(false)

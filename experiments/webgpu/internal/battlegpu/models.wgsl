@@ -14,7 +14,8 @@ struct Instance {
  origin:vec4<f32>,anchors:vec4<f32>,control:vec4<f32>,screen:vec4<f32>,atlas:vec4<f32>,
  lightIDs0:vec4<u32>,lightIDs1:vec4<u32>,counts:vec4<u32>,
  shadowAtlas:vec4<f32>,shadowParams:vec4<f32>,shadowPlacement:vec4<f32>,shadowScreen:vec4<f32>,
- groupOperand:vec4<i32>,groupClip:vec4<f32>
+ groupOperand:vec4<i32>,groupClip:vec4<f32>,
+ direct:vec4<f32>
 }
 struct Material { first:u32,count:u32,kind:u32,local:u32 }
 struct Selected { uv:vec4<f32>,color:vec4<f32>,params:vec4<f32> }
@@ -73,7 +74,8 @@ fn admitted(i:Instance,material:u32,m:mat4x4<f32>,flags:u32)->bool {
  // than the production integer edge accumulation and remains approximate.
  return area>0.0;
 }
-@vertex fn model_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
+@vertex fn model_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {return modelVertex(vid,iid);}
+fn modelVertex(vid:u32,iid:u32)->Out {
  let v=vertices[vid];let i=instances[iid];let p=poses[i.ids.x+v.piece];let m=p.matrix;var out:Out;out.instance=iid;
  out.position=vec4<f32>(2.0,2.0,2.0,1.0);if m[3].w<0.5||i.counts.y==0u{return out;}
  let world=(m*vec4<f32>(v.position.xyz,1.0)).xyz;let mat=modelMaterial(v,i);if mat.params.x<0.5{return out;}if i.counts.w==0u&&v.material!=0u&&!admitted(i,v.material,m,p.flags.x){return out;}
@@ -140,3 +142,54 @@ fn modelOutline(input:Out)->Fragment {
 struct ModelShadowFragment {@location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32}
 @fragment fn model_shadow_fragment(input:Out)->ModelShadowFragment {let shaded=modelShade(input);var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
 @fragment fn model_shadow_outline(input:Out)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
+
+// Direct subjects: an opaque single-member subject outside the effects phase
+// draws straight into the world in its paint position instead of through the
+// isolated 2x body atlas and its resolve (Metal's depth-slab subjects). The
+// vertex keeps the staged projection and admission; only the destination moves
+// from atlas pixels to world pixels. The fragment reproduces the resolve's
+// 2x2 box filter by shading the four sub-sample positions the doubled raster
+// would have shaded, so interiors match; silhouettes are single-sampled.
+@vertex fn model_direct_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
+ var out=modelVertex(vid,iid);
+ if out.position.x>1.5{return out;}
+ let atlasPixel=vec2<f32>((out.position.x+1.0)*0.5*u.extent.z,(1.0-out.position.y)*0.5*u.extent.w);
+ let i=instances[iid];let screen=(atlasPixel-i.atlas.xy)*(i.screen.zw/i.atlas.zw)+i.screen.xy;
+ out.position=vec4<f32>(screen.x/u.extent.x*2.0-1.0,1.0-screen.y/u.extent.y*2.0,0.5,1.0);
+ return out;
+}
+fn directTexel(uv:vec2<f32>,blue:bool)->vec4<f32> {
+ let tex=textureSampleLevel(atlas,nearestSampler,uv,0.0);if tex.g>0.5{return vec4<f32>(1.0,1.0,1.0,tex.a);}
+ let index=i32(round(tex.r*255.0));return vec4<f32>(textureLoad(palette,vec2<i32>(index,select(0,1,blue)),0).rgb,tex.a);
+}
+fn directSample(input:Out,i:Instance,uv:vec2<f32>)->vec4<f32> {
+ let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=modelBlue(i,key);
+ let tex=directTexel(uv,blue);var erased=tex.a<0.02||ruled&&clipped(i,key);
+ var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);erased=erased||rule.w< -1.5;}
+ if erased{return vec4<f32>(0.0);}
+ var source=tex.rgb*input.color;if blue&&input.params.x>1.5{source=textureLoad(palette,vec2<i32>(i32(input.params.w),1),0).rgb;}
+ let shade=select(min(0.06875*floor(input.shade),2.0),1.0,input.shade<0.0);var color=source*shade;
+ if (u32(u.timing.z)&1u)!=0u{if any(input.irradiance!=vec3<f32>(0.0)){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
+ if rule.w<0.0{color=finish(source,color,u32(input.params.y),input.faceNormal);color=glint(source,color,input.params.z,input.faceNormal);}else{color=rule.rgb;if blue{color=textureLoad(palette,vec2<i32>(i32(rule.w),1),0).rgb;}}
+ let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
+ return vec4<f32>(color*tex.a,tex.a);
+}
+struct DirectFragment { @location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32 }
+@fragment fn model_direct_fragment(input:Out)->DirectFragment {
+ let i=instances[input.instance];
+ // One world pixel spans two raster samples per axis: the sub-samples sit a
+ // quarter pixel either side of the centre, the top-left one alone when the
+ // resolve does not average.
+ let dx=dpdx(input.uv)*0.25;let dy=dpdy(input.uv)*0.25;
+ var color=directSample(input,i,input.uv-dx-dy);
+ if (u32(u.timing.z)&8u)!=0u{
+  color=(color+directSample(input,i,input.uv+dx-dy)+directSample(input,i,input.uv-dx+dy)+directSample(input,i,input.uv+dx+dy))*0.25;
+ }
+ if color.a<0.001{discard;}
+ // Each direct subject owns one depth band, nearer for later paint ranks
+ // (direct.x bands, this one direct.y); inside it the atlas path's own depth
+ // orders its faces, so a ruled subject still resolves by height key.
+ let key=wrappedKey(input.key);
+ let local=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);
+ var out:DirectFragment;out.color=color;out.depth=(i.direct.x-i.direct.y-1.0+local)/i.direct.x;return out;
+}

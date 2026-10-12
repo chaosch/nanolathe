@@ -12,9 +12,9 @@ import (
 // entries. One current set owns all four pipelines and their shared module.
 type modelBodyPipelines struct {
 	module     *wgpu.ShaderModule
-	pipelines  [4]*wgpu.RenderPipeline
+	pipelines  [5]*wgpu.RenderPipeline
 	capacities [8]int
-	releases   [5]modelRelease // module, then the four dependent pipelines
+	releases   [6]modelRelease // module, then the five dependent pipelines
 }
 
 func (p *modelBodyPipelines) modelClose() {
@@ -122,11 +122,19 @@ func (m *Models) modelPrepareBodyPipelines() error {
 				return err
 			}
 		}
-		return nil
+		// Direct subjects draw into the world pass and are its only depth
+		// writers: banded by paint rank, so a later subject always covers an
+		// earlier one, and each subject's own faces resolve as on the atlas.
+		next.pipelines[4], err = m.modelCreatePipeline(next.module, m.bodyPipelineLayout, "model_direct_vertex", "model_direct_fragment", m.format, 1, true, gputypes.PrimitiveTopologyTriangleList)
+		if next.pipelines[4] != nil {
+			next.releases[5] = next.pipelines[4].Release
+		}
+		return err
 	})
 	if err != nil {
 		return err
 	}
+	m.directPipeline = m.bodyWork.pipelines[4]
 	m.bodyPipeline, m.outlinePipeline = m.bodyWork.pipelines[0], m.bodyWork.pipelines[1]
 	m.shadowWork.bodyPipeline, m.shadowWork.outlinePipeline = m.bodyWork.pipelines[2], m.bodyWork.pipelines[3]
 	return nil

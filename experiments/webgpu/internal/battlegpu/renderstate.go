@@ -1,20 +1,36 @@
 package battlegpu
 
-import "github.com/gogpu/wgpu"
+import (
+	"github.com/gogpu/gputypes"
+	"github.com/gogpu/wgpu"
+)
 
 // This pass-local state records only explicit prototype Set calls. It never
 // reorders draws. All pipelines sharing a group use the same group-0 layout;
 // changing groups rebinds every resource after selecting the new pipeline.
-// No index/vertex/dynamic-offset state is cached. Reset at each world/final pass.
+// Only the index buffer bound through selectIndex is cached; no vertex or
+// dynamic-offset state is. Reset at each world/final pass.
 type battleRenderState struct {
 	pass     *wgpu.RenderPassEncoder
 	pipeline *wgpu.RenderPipeline
 	group    *wgpu.BindGroup
+	index    *wgpu.Buffer
 	disabled bool
 }
 
 func (s *battleRenderState) reset(pass *wgpu.RenderPassEncoder) {
-	s.pass, s.pipeline, s.group = pass, nil, nil
+	s.pass, s.pipeline, s.group, s.index = pass, nil, nil, nil
+}
+
+// selectIndex binds a uint32 index buffer unless this pass already holds it.
+func (s *battleRenderState) selectIndex(pass *wgpu.RenderPassEncoder, buffer *wgpu.Buffer) {
+	if s != nil && !s.disabled && s.pass == pass && s.index == buffer {
+		return
+	}
+	pass.SetIndexBuffer(buffer, gputypes.IndexFormatUint32, 0)
+	if s != nil {
+		s.index = buffer
+	}
 }
 func (s *battleRenderState) selectResources(pass *wgpu.RenderPassEncoder, pipeline *wgpu.RenderPipeline, group *wgpu.BindGroup) {
 	if s == nil || s.disabled {

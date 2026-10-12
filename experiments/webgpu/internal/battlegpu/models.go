@@ -2,10 +2,12 @@
 package battlegpu
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +33,7 @@ var modelGroupsShader string
 const (
 	modelVertexStride    = 80
 	modelPoseStride      = 80
-	modelInstanceStride  = 416
+	modelInstanceStride  = 432
 	modelGroupStride     = 48
 	modelMemberStride    = 16
 	modelUniformSize     = 256
@@ -42,6 +44,7 @@ const (
 
 type ModelCounters struct {
 	Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes, PipelineBuilds int
+	DirectDraws                                                                  int
 	PreparationMS                                                                [6]float64
 	ChunkedUploads                                                               bool
 	// Attempted API calls/full payload bytes, including zero writes or failed prefixes.
@@ -149,7 +152,17 @@ type Models struct {
 	shadowPaint                                                                 []modelShadowPaint
 	shadowCount                                                                 int
 	counters                                                                    ModelCounters
+	// Direct subjects (meshscene.ModelSlot.Params[2]) bypass the body atlas;
+	// directDraws is indexed by slot-1 and valid where directSlots is set.
+	directEnabled  bool
+	directPipeline *wgpu.RenderPipeline
+	directSlots    []bool
+	directDraws    []modelDraw
+	directOrder    []modelDirectPaint
 }
+
+// modelDirectPaint is one direct subject's place in the world pass walk.
+type modelDirectPaint struct{ slot, phase, rank uint32 }
 
 func modelError(reason string) error {
 	return fmt.Errorf("nanolathe: WebGPU models failed: logical path retained battle models, providers searched [meshscene production composition], expected %s", reason)
@@ -430,7 +443,8 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if d == nil || q == nil || scene == nil {
 		return nil, modelError("device, queue and retained scene")
 	}
-	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
+	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames),
+		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") != "0"}
 	defer func() {
 		if err != nil {
 			m.Close()
@@ -895,7 +909,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	// TODO(question): the producer exports no raw/resized cached-plane seed or
 	// cached→outline→live chronology. Immutable source rasters and ordered group
 	// merges below preserve only the coverage this retained mesh pass can supply.
-	slots, aw, ah, e := m.packingWork.pack(m.packedSlots, inputSlots)
+	m.modelSelectDirect(f, inputSlots)
+	slots, aw, ah, e := m.packingWork.pack(m.packedSlots, inputSlots, m.directSlots)
 	if e != nil {
 		return e
 	}
@@ -974,7 +989,12 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			}
 			binary.LittleEndian.PutUint32(m.instanceBytes[at+304:], n)
 			binary.LittleEndian.PutUint32(m.instanceBytes[at+308:], 1)
-			m.draws = append(m.draws, modelDraw{mesh: in.Mesh, instance: uint32(i), outline: modelOutlineNeeded(visual, rule, len(f.ModelRules) > 0)})
+			draw := modelDraw{mesh: in.Mesh, instance: uint32(i), outline: modelOutlineNeeded(visual, rule, len(f.ModelRules) > 0)}
+			if m.directSlots[slot-1] {
+				m.directDraws[slot-1] = draw
+			} else {
+				m.draws = append(m.draws, draw)
+			}
 			m.counters.Triangles += int(m.meshes[in.Mesh].count) / 3
 		}
 		binary.LittleEndian.PutUint32(m.instanceBytes[at+312:], uint32(len(f.ModelRules)))
@@ -997,7 +1017,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	m.copySlots = m.copySlots[:0]
 	if m.groupWork.count > 0 {
 		for _, p := range m.paint {
-			if m.groupWork.roles[p.slot-1] == 0 {
+			if m.groupWork.roles[p.slot-1] == 0 && !m.directSlots[p.slot-1] {
 				m.copySlots = append(m.copySlots, p.slot)
 			}
 		}
@@ -1005,6 +1025,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareShadowSources(f); e != nil {
 		return e
 	}
+	m.modelDirectBands(f)
 	m.modelBatchSources(f)
 	split(0)
 	if e = m.modelResizeAtlas(aw, ah); e != nil {
@@ -1259,9 +1280,75 @@ func (m *Models) DrawSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil || slot == 0 || int(slot) > len(m.slotBytes)/modelSlotStride {
 		return
 	}
+	if int(slot) <= len(m.directSlots) && m.directSlots[slot-1] {
+		d := m.directDraws[slot-1]
+		if d.mesh < 0 || m.meshes[d.mesh].count == 0 {
+			return
+		}
+		mesh := m.meshes[d.mesh]
+		m.state.selectResources(pass, m.directPipeline, m.bodyGroup)
+		m.state.selectIndex(pass, m.indices)
+		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: 1, FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: d.instance})
+		m.counters.Draws++
+		m.counters.DirectDraws++
+		return
+	}
 	m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: slot - 1})
 	m.counters.Draws++
+}
+
+// modelDirectBands numbers the direct subjects in the world pass's own walk —
+// phase, then rank, stable, as battlePaintOrder sorts it — and stores each
+// one's band in its instance record before any batch reorder moves it.
+func (m *Models) modelDirectBands(f meshscene.LiveFrame) {
+	m.directOrder = m.directOrder[:0]
+	for _, p := range f.Composition.Paint {
+		if p.Slot > 0 && int(p.Slot) <= len(m.directSlots) && m.directSlots[p.Slot-1] && m.directDraws[p.Slot-1].mesh >= 0 {
+			m.directOrder = append(m.directOrder, modelDirectPaint{slot: p.Slot, phase: p.Phase, rank: p.Rank})
+		}
+	}
+	slices.SortStableFunc(m.directOrder, func(a, b modelDirectPaint) int {
+		if a.phase != b.phase {
+			return cmp.Compare(a.phase, b.phase)
+		}
+		return cmp.Compare(a.rank, b.rank)
+	})
+	bands := float32(len(m.directOrder) + 1)
+	for k, p := range m.directOrder {
+		at := int(m.directDraws[p.slot-1].instance)*modelInstanceStride + 416
+		modelVec(m.instanceBytes, at, [4]float32{bands, float32(k), 0, 0})
+	}
+}
+
+// modelSelectDirect marks the composed slots that draw straight into the
+// world. The producer flags only single-member opaque subjects; a slot that
+// several instances name keeps the atlas path, so one direct draw is exact.
+func (m *Models) modelSelectDirect(f meshscene.LiveFrame, slots []meshscene.ModelSlot) {
+	m.directSlots = modelBatchFlags(m.directSlots, len(slots))
+	m.directDraws = slices.Grow(m.directDraws[:0], len(slots))[:len(slots)]
+	for i := range m.directDraws {
+		m.directDraws[i] = modelDraw{mesh: -1}
+	}
+	if !m.directEnabled || !f.Composed {
+		return
+	}
+	for i, s := range slots {
+		m.directSlots[i] = s.Params[2] > 0.5
+	}
+	seen := m.packingWork.seen[:0]
+	seen = slices.Grow(seen, len(slots))[:len(slots)]
+	clear(seen)
+	for _, slot := range f.Composition.InstanceSlots {
+		if slot == 0 || int(slot) > len(slots) {
+			continue
+		}
+		if seen[slot-1] {
+			m.directSlots[slot-1] = false
+		}
+		seen[slot-1] = true
+	}
+	m.packingWork.seen = seen
 }
 func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil {
