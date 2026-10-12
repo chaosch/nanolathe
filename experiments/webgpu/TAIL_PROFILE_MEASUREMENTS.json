@@ -1,0 +1,61 @@
+{
+  "base_commit": "f374f44c5df2341052c060159b692e3bbff48468",
+  "status": "native pixel/UV correctness qualified; performance comparison pending; default-off",
+  "original_soak": {
+    "path": "/tmp/nanolathe-profile-soak/webgpu-report.json",
+    "sha256": "e646d7b8b617b523d56794ed48b921632c52f1a9be25a9dd20b397de8ba819a8",
+    "measured_frames": 3600,
+    "positive_presentations": 3600,
+    "display_hz": 114.22335730089057,
+    "late_intervals_over12ms": 178,
+    "unique_camera_positions": 1786,
+    "camera_control_limit": "neutral pointer centers entry view; original source still had explosion shake, so this is not a fixed-camera A/B control",
+    "attribution": "CPU wall correlation, not GPU/compositor proof; no GPU duration or queue-submit timestamps",
+    "miss_correlations": {
+      "mean_source_ms_late": 11.58,
+      "mean_source_ms_other": 5.824,
+      "mean_join_ms_late": 4.959,
+      "mean_join_ms_other": 1.209,
+      "mean_encode_ms_late": 2.067,
+      "mean_encode_ms_other": 1.61
+    },
+    "cpu_profile": {
+      "source_Next_cumulative_s": 9.51,
+      "visual_prepare_cumulative_s": 5.62,
+      "renderer_encode_cumulative_s": 2.9,
+      "oversized_staging_cumulative_s": 2.16,
+      "note": "Cumulative CPU samples overlap through parent/child calls; process total samples37.67s over31.66s profile; sample attribution is not wall-frame duration"
+    }
+  },
+  "candidate": {
+    "method": "split only mutable model uploads into<=256KiB writes using pinned existing completion-safe reusable staging belt",
+    "enabled": "--fast --chunked-uploads explicit; runtime envNANOLATHE_WEBGPU_CHUNKED_UPLOADS=1; Darwinarm64 andCompletionSafeUploads gate; defaultoff",
+    "fallback": "immutable meshes/UV/load-time buffers unchanged; all other platform builds use original writes",
+    "counter_scope": "UploadWrites attempted API calls;ChunkedUploadBytes attempted full large payloads, not successful GPU-copy bytes",
+    "fresh_build": "/tmp/nanolathe-chunked-current",
+    "build_manifest": "/tmp/nanolathe-chunked-current/build-manifest.json"
+  },
+  "qualification": {
+    "experiment_tools_check": "passed tests,vet,native/Rust/wasm builds andNode mockedbrowser telemetry",
+    "upload_boundary_and_first_failure_contracts": "passed",
+    "native_off": "/tmp/nanolathe-chunked-uv-off",
+    "native_on": "/tmp/nanolathe-chunked-uv-on",
+    "native_cases_each": 19,
+    "raw_pixel_files_each": 38,
+    "all_raw_files_byte_equal": true,
+    "pose_growth": "40000-pose grow/shrink andtailpose readback passed both",
+    "independent_review": "no safety blocker; immutablepathunchanged; aligned contiguous slices staged synchronously; attemptedcounters explicit; newNoShakecontrol requires newmatchedpair"
+  },
+  "host_observation": {
+    "model": "Mac15,7",
+    "memory_bytes": 19327352832,
+    "logical_cpus": 12,
+    "load_averages_at0253UTC": [
+      6.22,
+      4.26,
+      3.52
+    ],
+    "thermal": "pmset reports no recorded thermal/performance warning; no CPU power status recorded; does not prove no throttling"
+  },
+  "next_step": "samebinaryA1/B1/B2/A2 3600frame runswithstablecameraNoShake onboth, isolatedfixedsettings;comparematchedtickwindows andprofiles beforeadoption"
+}

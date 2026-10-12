@@ -43,6 +43,9 @@ const (
 type ModelCounters struct {
 	Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes, PipelineBuilds int
 	PreparationMS                                                                [6]float64
+	ChunkedUploads                                                               bool
+	// Attempted API calls/full payload bytes, including zero writes or failed prefixes.
+	UploadWrites, ChunkedUploadBytes int
 }
 type modelMesh struct {
 	first, count         uint32
@@ -99,6 +102,7 @@ func (a *modelAtlasResources) modelClose() {
 // Prepare and Close, so replaced atlas resources can be released immediately.
 // Geometry stays resident; endpoint, rule and material records grow as needed.
 type Models struct {
+	chunkedUploads                                                              bool
 	d                                                                           *wgpu.Device
 	q                                                                           *wgpu.Queue
 	format                                                                      gputypes.TextureFormat
@@ -426,7 +430,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if d == nil || q == nil || scene == nil {
 		return nil, modelError("device, queue and retained scene")
 	}
-	m = &Models{runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
+	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
 	defer func() {
 		if err != nil {
 			m.Close()
@@ -853,7 +857,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return modelError("open model component")
 	}
 	m.prepared = false
-	m.counters = ModelCounters{}
+	m.counters = ModelCounters{ChunkedUploads: m.chunkedUploads}
 	mark := time.Now()
 	split := func(i int) { n := time.Now(); m.counters.PreparationMS[i] = float64(n.Sub(mark)) / 1e6; mark = n }
 	if width <= 0 || height <= 0 || width > 8192 || height > 8192 || len(f.Previous) != len(f.Current) || !modelFinite(f.Alpha) || f.Alpha < 0 || f.Alpha > 1 || !modelFinite(f.Camera[0]+f.Camera[1]+f.Camera[2]) || f.Camera[2] <= 0 {
@@ -1061,7 +1065,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 			}
 		}
 		if len(m.poseBytes) > 0 {
-			if e = m.q.WriteBuffer(m.endpoints.buffer, 0, m.poseBytes); e != nil {
+			if e = m.writeMutableBuffer(m.endpoints.buffer, m.poseBytes); e != nil {
 				return e
 			}
 			m.counters.UploadBytes += len(m.poseBytes)
@@ -1088,7 +1092,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		b    *wgpu.Buffer
 		data []byte
 	}{{m.instances.buffer, m.instanceBytes}, {m.selected.buffer, m.selectedBytes}, {m.lights.buffer, m.lightBytes}, {m.slots.buffer, m.slotBytes}, {m.shadowRecords.buffer, m.shadowBytes}, {m.groups.buffer, m.groupWork.groups}, {m.members.buffer, m.groupWork.members}, {m.uniform, ub[:]}} {
-		if e = m.q.WriteBuffer(u.b, 0, u.data); e != nil {
+		if e = m.writeMutableBuffer(u.b, u.data); e != nil {
 			return e
 		}
 		m.counters.UploadBytes += len(u.data)

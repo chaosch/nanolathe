@@ -73,8 +73,10 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
 			return fmt.Errorf("neutral pointer diagnostic requires a staged field scene")
 		}
 		battle.cam.JumpToBattleViewCenter(liveFieldCentre[0], liveFieldCentre[1])
+		// Use the existing film/developer gate for a stable diagnostic camera.
+		if !sess.NoShake() { sess.ToggleNoShake() }
 	}''')
-    rewrites.append('opt-in bounded field diagnostic restores staged camera after entry placement')
+    rewrites.append('opt-in bounded field diagnostic restores staged camera and suppresses shake through existing session gate')
     text+='\n// PublicationTick reads only the existing synchronized committed snapshot metadata.\nfunc (h *metalBattleHost) PublicationTick() (uint32,bool) { return h.sess.Snapshot.PublishedTick() }\n'
     source_markers=[
      ('h.fps.observe(time.Now(), in.Timing)',0),

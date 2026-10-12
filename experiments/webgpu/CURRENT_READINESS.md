@@ -50,3 +50,11 @@ resets prototype QA environment flags and preserves saved settings selection.
 A 3600-frame unattended profile soak verified every presentation row, zero
 capacity pipeline rebuilds and clean close, but measured114.22Hz under a growing
 dense workload. This does not establish sustained120FPS or whole-GPU leak freedom.
+
+A new default-off mutable model upload candidate splits large writes into the
+pinned queue's reusable256KiB staging chunks. Native19-case UV/growth checks and
+all38 raw pixel files match the original path. The original3600-frame soak used
+1786 camera positions due to explosion shake, so it is not a fixed-camera
+performance control. The bounded neutral-pointer field diagnostic now uses the
+existing NoShake gate on both A/B paths. Matched timing comparison is pending;
+TAIL_PROFILE_MEASUREMENTS.json records the CPU evidence and its attribution limits.
