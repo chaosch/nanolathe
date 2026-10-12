@@ -354,10 +354,10 @@ const modelAtlasShrinkFrames = 120
 func modelAtlasFit(needW, needH, curW, curH int, ready bool, shrink *int) (w, h int, change bool) {
 	if !ready || needW > curW || needH > curH {
 		*shrink = 0
-		return modelAtlasExtent(needW, curW), modelAtlasExtent(needH, curH), true
+		return modelAtlasExtent(needW, curW), max(curH, modelAtlasRows(needH)), true
 	}
-	fitW, fitH := modelAtlasExtent(needW, 64), modelAtlasExtent(needH, 64)
-	if fitW >= curW && fitH >= curH {
+	fitW, fitH := modelAtlasExtent(needW, 64), modelAtlasRows(needH)
+	if fitW >= curW && fitH >= curH*3/4 {
 		*shrink = 0
 		return curW, curH, false
 	}
@@ -366,6 +366,13 @@ func modelAtlasFit(needW, needH, curW, curH int, ready bool, shrink *int) (w, h 
 	}
 	*shrink = 0
 	return fitW, fitH, true
+}
+
+// modelAtlasRows sizes an atlas height in 512-row steps with a quarter of
+// headroom, instead of the next power of two, which stored up to twice the
+// rows a busy view needs.
+func modelAtlasRows(need int) int {
+	return min(8192, max(64, (need*5/4+511)&^511, need))
 }
 
 func (m *Models) modelResizeAtlas(width, height int) (err error) {

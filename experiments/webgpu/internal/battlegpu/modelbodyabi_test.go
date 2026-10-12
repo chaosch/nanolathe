@@ -124,7 +124,7 @@ func TestModelBodyFixedCapacityEntryBindings(t *testing.T) {
 		{"model_vertex", []string{"vertices buffer 0", "poses buffer 1", "instances buffer 2", "u buffer 3", "materials buffer 4", "frames buffer 5", "selected buffer 6", "lights buffer 7", "centers buffer 8"}},
 		{"model_fragment", []string{"instances buffer 2", "u buffer 3", "atlas texture 0", "palette texture 1", "nearestSampler sampler 0"}},
 		{"outline_fragment", []string{"instances buffer 2", "palette texture 1"}},
-		{"model_shadow_fragment", []string{"instances buffer 2", "u buffer 3", "atlas texture 0", "palette texture 1", "nearestSampler sampler 0"}},
+		{"model_shadow_fragment", []string{"instances buffer 2", "atlas texture 0", "nearestSampler sampler 0"}},
 		{"model_shadow_outline", []string{"instances buffer 2", "palette texture 1"}},
 	} {
 		signature := modelBodyEntry(t, code, tc.name)

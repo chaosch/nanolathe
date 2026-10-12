@@ -3,6 +3,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
@@ -17,10 +19,13 @@ type metalShadowComposer struct {
 	units map[uint64]*frame.UnitView
 	frame *frame.Frame
 	tick  uint32
+	// supersample keeps the production 2x shadow silhouette raster;
+	// NANOLATHE_SHADOW_SUPERSAMPLE=0 rasterizes silhouettes at 1x.
+	supersample bool
 }
 
 func newMetalShadowComposer(retained *meshscene.RetainedBattle) *metalShadowComposer {
-	return &metalShadowComposer{composer: meshscene.NewShadowComposer(retained), units: make(map[uint64]*frame.UnitView)}
+	return &metalShadowComposer{composer: meshscene.NewShadowComposer(retained), units: make(map[uint64]*frame.UnitView), supersample: os.Getenv("NANOLATHE_SHADOW_SUPERSAMPLE") != "0"}
 }
 func (m *metalShadowComposer) Prepare(cl *client.Client, retained *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame, width, height int, order []meshscene.ModelOrder) (meshscene.ShadowComposition, error) {
 	if m.frame != current || current != nil && m.tick != current.Tick {
@@ -47,6 +52,6 @@ func (m *metalShadowComposer) Prepare(cl *client.Client, retained *meshscene.Ret
 		if kind == 2 && id >= 1 && id <= uint64(len(current.Features)) {
 			p = cl.RetainedFeatureShadow(current.Features[id-1])
 		}
-		return meshscene.ShadowPolicy{Rules: metalModelRules(p.Rules), Clearance: p.Clearance, Softness: p.Softness, ClipKey: p.ClipKey, Supersample: p.Supersample, Tint: p.Tint}
+		return meshscene.ShadowPolicy{Rules: metalModelRules(p.Rules), Clearance: p.Clearance, Softness: p.Softness, ClipKey: p.ClipKey, Supersample: p.Supersample && m.supersample, Tint: p.Tint}
 	})
 }
