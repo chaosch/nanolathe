@@ -1,13 +1,11 @@
-//go:build darwin
-
 package battlegpu
 
 import (
+	"bytes"
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"image"
 	"image/png"
-	"os"
 )
 
 // Final capture is an extra untimed draw into a copyable texture. Reading an
@@ -68,7 +66,9 @@ func (c *battleCapture) poll() ([]byte, bool, error) {
 	c.pending = nil
 	return data, true, nil
 }
-func (c *battleCapture) save(path string, data []byte) error {
+
+// encodePNG converts one padded readback into PNG bytes.
+func (c *battleCapture) encodePNG(data []byte) ([]byte, error) {
 	im := image.NewRGBA(image.Rect(0, 0, c.w, c.h))
 	for y := range c.h {
 		copy(im.Pix[y*im.Stride:y*im.Stride+c.w*4], data[y*c.row:y*c.row+c.w*4])
@@ -78,16 +78,9 @@ func (c *battleCapture) save(path string, data []byte) error {
 			im.Pix[i], im.Pix[i+2] = im.Pix[i+2], im.Pix[i]
 		}
 	}
-	f, e := os.Create(path)
-	if e != nil {
-		return e
-	}
-	e = png.Encode(f, im)
-	ce := f.Close()
-	if e != nil {
-		return e
-	}
-	return ce
+	var b bytes.Buffer
+	err := png.Encode(&b, im)
+	return b.Bytes(), err
 }
 func (c *battleCapture) close() {
 	if c == nil {
@@ -109,22 +102,12 @@ func (c *battleCapture) close() {
 
 // Key/coverage planes are data, not premultiplied colors. Preserve every byte
 // in both an NRGBA PNG and tightly packed raw diagnostic sidecar.
-func (c *battleCapture) saveMetadata(path string, data []byte) error {
+func (c *battleCapture) encodeMetadata(data []byte) (raw, encoded []byte, err error) {
 	im := image.NewNRGBA(image.Rect(0, 0, c.w, c.h))
 	for y := range c.h {
 		copy(im.Pix[y*im.Stride:y*im.Stride+c.w*4], data[y*c.row:y*c.row+c.w*4])
 	}
-	if err := os.WriteFile(path+".rgba8", im.Pix, 0644); err != nil {
-		return err
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	err = png.Encode(f, im)
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	return closeErr
+	var b bytes.Buffer
+	err = png.Encode(&b, im)
+	return im.Pix, b.Bytes(), err
 }

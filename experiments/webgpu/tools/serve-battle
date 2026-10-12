@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Loopback page for the real WebGPU battle built for js/wasm.
+
+Serves a tools/build-play --goos=js --goarch=wasm output, the repository's
+browser filesystem adapter (web/fs.js, web/storage.js, read in place), the
+harness page in tools/browser-battle, and the content root read-only by HTTP
+range requests so the archives are never copied. The page posts its console
+text and report files back here; nothing leaves the loopback interface.
+"""
+import argparse, http.server, json, pathlib, sys, threading, urllib.parse
+
+exp = pathlib.Path(__file__).resolve().parents[1]
+repo = exp.parent.parent
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--build', type=pathlib.Path, required=True, help='js/wasm tools/build-play output directory')
+parser.add_argument('--root', type=pathlib.Path, required=True, help='retail content root, served read-only')
+parser.add_argument('--out', type=pathlib.Path, required=True, help='new directory for posted logs and report files')
+parser.add_argument('--port', type=int, default=8767)
+parser.add_argument('--args', default='', help='JSON object merged into the launch: {"argv":[...],"env":{...}}')
+opts = parser.parse_args()
+build, root, out = opts.build.resolve(), opts.root.resolve(), opts.out.resolve()
+manifest = json.loads((build / 'build-manifest.json').read_text())
+if manifest.get('target', {}).get('goos') != 'js':
+    parser.error('--build must be a js/wasm build-play output')
+out.mkdir(parents=True, exist_ok=False)
+files = sorted((p for p in root.rglob('*') if p.is_file()), key=lambda p: str(p))
+index = [{'path': str(p.relative_to(root)), 'size': p.stat().st_size} for p in files]
+launch = json.loads(opts.args) if opts.args else {}
+static = {
+    '/': exp / 'tools/browser-battle/index.html',
+    '/battle.js': exp / 'tools/browser-battle/battle.js',
+    '/fs.js': repo / 'web/fs.js',
+    '/storage.js': repo / 'web/storage.js',
+    '/wasm_exec.js': build / 'wasm_exec.js',
+    '/nanolathe.wasm': build / manifest['target']['binary'],
+}
+types = {'.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json'}
+log = (out / 'console.log').open('a', buffering=1)
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def reply(self, code, data=b'', kind='text/plain', extra=()):
+        self.send_response(code)
+        self.send_header('Content-Type', kind)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        for k, v in extra:
+            self.send_header(k, v)
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(data)
+
+    def do_GET(self):
+        path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+        if path in static:
+            source = static[path]
+            return self.reply(200, source.read_bytes(), types.get(source.suffix, 'application/octet-stream'))
+        if path == '/launch.json':
+            return self.reply(200, json.dumps({'files': index, **launch}).encode(), 'application/json')
+        if path.startswith('/game/'):
+            target = (root / path[len('/game/'):]).resolve()
+            if not target.is_relative_to(root) or not target.is_file():
+                return self.reply(404)
+            size = target.stat().st_size
+            start, end = 0, size - 1
+            ranged = self.headers.get('Range', '')
+            if ranged.startswith('bytes='):
+                a, _, b = ranged[6:].partition('-')
+                start, end = int(a), min(int(b) if b else size - 1, size - 1)
+            with target.open('rb') as f:
+                f.seek(start)
+                data = f.read(max(0, end - start + 1))
+            if ranged:
+                return self.reply(206, data, 'application/octet-stream', [('Content-Range', f'bytes {start}-{end}/{size}'), ('Accept-Ranges', 'bytes')])
+            return self.reply(200, data, 'application/octet-stream', [('Accept-Ranges', 'bytes')])
+        return self.reply(404)
+
+    do_HEAD = do_GET
+
+    def do_POST(self):
+        path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+        data = self.rfile.read(int(self.headers.get('Content-Length', '0')))
+        if path == '/log':
+            log.write(data.decode(errors='replace') + '\n')
+        elif path.startswith('/result/'):
+            name = pathlib.Path(path[len('/result/'):]).name
+            (out / name).write_bytes(data)
+            if name == 'done.json':
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+        else:
+            return self.reply(404)
+        self.reply(200)
+
+
+print(f'http://127.0.0.1:{opts.port}/', flush=True)
+http.server.ThreadingHTTPServer(('127.0.0.1', opts.port), Handler).serve_forever()
+print('done', file=sys.stderr)
