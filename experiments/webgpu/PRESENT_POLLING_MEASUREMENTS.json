@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-12",
+  "renderer_base_commit": "00fcae682",
+  "adopted": false,
+  "native_summary": {
+    "Enabled": true,
+    "Closed": true,
+    "Retains": 843,
+    "Releases": 843,
+    "Outstanding": 0,
+    "HighWater": 2,
+    "Requested": 843,
+    "Presented": 3,
+    "Missing": 840,
+    "ValueEvictions": 0,
+    "Scope": "CAMetalDrawable presentedTime in Metal host-clock seconds; missing observations do not prove dropped display frames; derive cadence only from consecutive ordinals; no GPU timestamps or new waits",
+    "missing_reasons": {
+      "acquire-pool-credit": 839,
+      "presented": 3,
+      "final-close-observation": 1
+    },
+    "unique_positive_timestamps": 3,
+    "consecutive_positive_pairs": 1
+  },
+  "callback_hz": 119.6237467514747,
+  "measured_source_rows": 720,
+  "unique_tick_alpha": 720,
+  "submission_close": {
+    "completed": 843,
+    "submitted": 843
+  },
+  "run_error": null,
+  "race_tracker_tests_pass": true,
+  "independent_review": "Retain/lock/close logic reviewed; before-acquire pressure pruning, O(1) value ring, clock-off gating, repeated-submission separation and ordinal sorting incorporated",
+  "limits": [
+    "Only3/843 presentedTime values observed before safe pool-credit retirement; display cadence is unavailable from this run",
+    "Missing observations do not establish frame drops",
+    "No new callbacks or GPU work; no GPU execution timestamps",
+    "Steady dense native run and synthetic missing/timeout/reconfigure/close ownership cases checked; actual minimization/occlusion/resize stress and pixel A/B remain",
+    "Same-binary off run overlapped race compilation during startup; no causal telemetry overhead conclusion",
+    "Latest source sorts value snapshots by ordinal; measured binary used finish order and analysis explicitly sorted it"
+  ],
+  "artifacts": {
+    "binary": "/tmp/nanolathe-present-build/nanolathe-webgpu",
+    "on_report": "/tmp/nanolathe-present-dense/report.json",
+    "off_report": "/tmp/nanolathe-present-off/report.json",
+    "private_dependency": "/tmp/nanolathe-wgpu-present-telemetry",
+    "private_driver": "/tmp/nanolathe-present-driver.go",
+    "race_log": "/tmp/nanolathe-present-race-tests.log"
+  },
+  "next_step": "Review a single permanent process-global presented-handler block with a bounded drawableID/row-generation registry; late callbacks ignored after eviction/close; no per-frame Go block unpinning"
+}
