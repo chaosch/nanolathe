@@ -937,11 +937,11 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 				return modelError("selected material spans aligned to the instance mesh")
 			}
 			for _, mat := range in.Materials {
-				b := make([]byte, 48)
-				modelVec(b, 0, mat.UV)
-				modelVec(b, 16, mat.Color)
-				modelVec(b, 32, mat.Params)
-				m.selectedBytes = append(m.selectedBytes, b...)
+				at := len(m.selectedBytes)
+				m.selectedBytes = append(m.selectedBytes, make([]byte, 48)...)
+				modelVec(m.selectedBytes, at, mat.UV)
+				modelVec(m.selectedBytes, at+16, mat.Color)
+				modelVec(m.selectedBytes, at+32, mat.Params)
 			}
 		}
 		visual := in.Visual
