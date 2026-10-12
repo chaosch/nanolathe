@@ -86,9 +86,30 @@ async simulation, `--fast` + late acquisition):
   1.0% -> 4.4%. It stays opt-in; the render-thread profile that motivated it
   (half of preparation inside the queue's pending-write setup) still stands.
 
+## Shadows
+
+Every model is rasterized twice: once into the 2x body atlas and once more
+as a silhouette into the shadow atlas, which the projected quarter masks and
+the per-subject commit (2x2, or 5x5 for aircraft) then sample. Whole-frame GPU
+span (first command buffer start to last end), not per-pass busy time, is what
+decides the frame; Apple GPUs overlap the shadow encoders with other work.
+
+| Scene | default | shadows 1x | no model shadows |
+| --- | --- | --- | --- |
+| play window, ~830 units, 1440p drawable | 5.38 ms | 5.59 ms | 5.34 ms |
+| GPU-bound: 2560x1440 non-Retina, zoom 1, 1,395 instances (2 reps) | 6.25 ms | 6.12 ms | 5.30 ms |
+
+So shadows are nearly free while the GPU has slack and ~0.95 ms (15%) when it
+is saturated; supersampling is ~0.13 ms of that. The silhouette fragment now
+writes only coverage and key depth, and both atlases grow in 512-row steps
+and shrink after a second (~150 MB at peak before). Larger redesigns (reuse
+the body atlas for shadows, a screen-space shadow mask, blob shadows when
+zoomed out) are proposals awaiting a decision.
+
 ## Next
 
-- Model shadows are the largest model GPU cost; the body atlas is not.
+- Model shadows are the largest model GPU cost when the GPU is saturated
+  (above); the body atlas is not.
 - ~5 MB/frame of model records upload between ticks (instances, slots,
   materials, shadow records rebuilt every frame); matters for discrete GPUs
   and the browser.
