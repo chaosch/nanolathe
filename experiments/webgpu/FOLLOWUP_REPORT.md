@@ -1044,3 +1044,34 @@ use a separate bounded phase ring if instrumented. LONG_DENSE_PHASE_MEASUREMENTS
 preserves exact commands, hashes, profiles, probe source, ownership and nested
 phase caveats. The qualified launcher and shared pure-Go architecture remain
 unchanged.
+
+
+## Bounded trace and separate Present-CB attribution
+
+One same-binary trace-off/on pair yields118.81/118.78Hz with34 late intervals each.
+The trace covers final1200 frames (~10s). Its7.48s aggregate syscall blocking under
+CommandEncoder/beginFrame supports drawable-acquisition backpressure, not CPU
+expense or a causal assignment for every miss. Source annotations and partial
+boundary tasks limit the trace. Ownership/start-error paths are repaired before
+reuse and focused race checks pass; exact measured v1 source is preserved.
+
+The first attempted Present-CB run had no probe report because dependency overlay
+keys used/tmp instead of resolved/private/tmp. It is excluded as invalid probe
+evidence. Corrected native smoke gives243 valid completions and243/243 drain.
+The corrected same-binary12000-frame control/probe pair fully correlates3600 final
+rows, with separate bounded trackers, corrected scope andDeviceDestroy closure.
+HAL Submit wall mean0.048ms and host Present0.026ms are short; reported Present-CB
+GPU duration is near resolution (~0.000068ms). MainGPU-end→PresentCB-start~0.132ms
+and PresentCB-end→scanout~21.91ms distinguish the remaining outside-phase gap;
+it is not pure compositor cost. Cumulative offsets and HAL/public path boundaries
+are retained in PRESENT_QUEUE_TRACE_MEASUREMENTS.json.
+
+Probe-on106.52Hz/403late is substantially worse than control118.84Hz/35late, with
+higher systemload and a different evolved scene. This pair cannot establish
+harmless observer overhead or distinguish callback cost from system/workload
+variance. The probe stays private and off in the qualified launcher. Acquisition
+waits are generally larger in regular rows than late rows; removing backpressure
+or simulation joins is not supported. The next bounded comparison is GPU stage
+ablation with this heavier Present probe off and unchanged source/RNG preparation,
+using the earlier qualified mainCB timer. Choose a materially expensive pass
+before any direct-body rewrite. No further production change is adopted.

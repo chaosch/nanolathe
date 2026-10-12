@@ -116,3 +116,14 @@ metrics and scope limits. No further production change is justified yet: the
 next attribution step is a bounded execution trace and separate Present-CB/queue
 timing before another source, renderer or pacing change. The qualified launcher
 remains unchanged.
+
+
+A final-window Go trace and separate Present-CB probe support normal drawable
+backpressure and mixed source/GPU/display pressure. The measured Present path is
+short;~22ms after its reported completion remains outside measured phases.
+The heavier probe's one control pair regresses markedly and remains private/off;
+no harmless-overhead claim is made. Trace startup ownership/error paths are
+repaired. PRESENT_QUEUE_TRACE_MEASUREMENTS.json preserves the invalid first
+wiring attempt, corrected smoke/pair, scope boundaries and observer limitations.
+Next use controlled GPU stage ablation with the heavier probe off, rather than
+removing waits or rewriting small effect producers. Production/launcher unchanged.
