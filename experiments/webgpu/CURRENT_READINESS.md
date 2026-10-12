@@ -127,3 +127,14 @@ repaired. PRESENT_QUEUE_TRACE_MEASUREMENTS.json preserves the invalid first
 wiring attempt, corrected smoke/pair, scope boundaries and observer limitations.
 Next use controlled GPU stage ablation with the heavier probe off, rather than
 removing waits or rewriting small effect producers. Production/launcher unchanged.
+
+
+### Dense GPU stage omissions (2026-10-12)
+
+Five sequential 12,000-frame runs used one private diagnostic binary, the qualified normal-speed fixture, fixed camera, retained CPU preparation/uploads and the lightweight completion/presentation observers. The heavy Present-CB probe was off. B removed the whole model source pipeline and world commits; C removed only world model commits; D removed glow generation/sampling and final distortion. These deliberately alter visuals and measure marginal costs in changed graphs, not additive pass timings or equivalent-render FPS gains.
+
+All final 3,600 samples per run had complete GPU batches and unique positive presentations; queue/completion closed at 12,123/12,123 with no GPU missing/routes outstanding. Whole-session presentation missing was still four per run, so final-window completeness is not whole-session display proof. The earlier P2 238-unknown caveat remains. Shared complete tick bins 2,200–2,999 contained 3,083–3,181 rows per run; maximum per-bin model-geometry spread was 0.128%, while effect counts differed by up to 1.67%.
+
+Common-window GPU envelope means were A1 7.192 ms, B 3.439 ms, C 7.308 ms, D 7.274 ms, A2 7.215 ms. B remained 3.126–3.615 ms in every bin, versus baseline means 6.826–7.674 ms. C and D did not establish a robust GPU improvement. A1 had noisier source/display tails and higher initial host load than A2; no sustained-120-FPS conclusion follows.
+
+The bounded next step is to isolate body/group-merge versus shadow-source work and inspect model atlas bandwidth. Evidence favors that source pipeline over world commits or post effects, but does not yet justify a direct-body rewrite or a particular shipping optimization. Private overlays only; production code unchanged. See `GPU_STAGE_ABLATION_MEASUREMENTS.json`; raw reports, settings/binary hashes and scripts remain under `/tmp/nanolathe-gpu-stage-dense` and `/tmp/nanolathe-gpu-ablations`.
