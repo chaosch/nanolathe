@@ -1,15 +1,18 @@
 # Parity and allocation follow-up — 2026-10-11
 
-Completed bounded follow-up on `webgpu-p0-p4`; no main merge, production source, root
-module or default changes. GoGPU remains pinned to
-`12620c9d50073b8591f075c97ba0c6f3b6ad92f7`. This report supersedes the historical
-fidelity/allocation snapshot in LIVE_REPORT.md for the qualified units described below. Final measured rendering candidate is 42aabae98, with later evidence wording
-commits. All native gates below
-use the exact pin and the CGO_ENABLED=0 combined host.
+This report records successive prototype and diagnostic qualifications. The early
+42aabae98 candidate is historical; later sections identify the current changes
+and measured binaries. Work remains on webgpu-p0-p4 with no main merge or push.
+The module pins and shipping native Metal renderer are unchanged. The prototype defaults to independent model batching. Shared client/source
+changes include authored hull-name aliases and viewport cache invalidation. The generated prototype host adds serial resize
+adaptation; preparation/reservation/asynchronous-upload/runtime-array/handler
+options have the explicit scopes below. GoGPU remains pinned to
+12620c9d50073b8591f075c97ba0c6f3b6ad92f7. Native qualifications use the exact
+reviewed sources and the CGO_ENABLED=0 combined host.
 
 ## Qualified independent paths
 
-The windowed Metal-backed Go path runs the unchanged battle/input producer via
+The windowed Metal-backed Go path reuses the production battle/input producer via
 an external source overlay. New retained rendering work includes staged model
 source/key/group composition, current Modern shifted-key saturation and keyless
 BLUE bypass, HDR world accumulation, ordered projectile body barriers, the
@@ -875,3 +878,14 @@ A public-control prototype-only probe resized the GPU target from1920×1080 to16
 A private candidate joins/discards the old-extent prepared packet before changing source dimensions, client/HUD layout and culling viewport, invalidates cached culling coverage, and recreates the foreground atlas epoch. Two native runs completed three resize/restore cycles, Hide/Show and resize-before-Quit. Actual source/target dimensions and injected logical center pointer mapping match through1600×900,2000×1140,1400×800,1920×1080 restoration and1640×920 closing. Both close with submitted/completed equal, selected descriptor inventories empty, one permanent helper, zero extra drawable retains and owner/global registry0. Handler observations missing around resize/visibility/close are unknown display status.
 
 The candidate is preserved only in patches/window-lifecycle-candidate.patch with exact hashes. Independent review requires two repairs before adoption: retain a pending terminal packet's Exit signal and protect final capture from a native resize after the final consumed packet. Runtime mode reporting also queries device capability after teardown; that false value cannot establish the mode used while rendering. Capture mode at construction before making lifecycle runtime-mode claims. The actual timed session can join one unconsumed source packet at close, so no fixed final simulation equality is asserted. Native live drag, compositor occlusion, minimize restoration, actual native pointer delivery and other-platform runtime remain open. WINDOW_LIFECYCLE_MEASUREMENTS.json records the two successful runs and the initial refusal.
+
+
+## Durable lifecycle repair and final readiness
+
+The serial resize source protocol is adopted for the generated interactive prototype, with shared viewport cache invalidation. Joined old-extent packets retain their Exit/error result; final capture uses the last consumed packet's rendered extent before any new resize adaptation. Runtime mode is latched from models/layers/glow at construction, so teardown cannot falsify the report. Earlier post-close enabled=false fields do not establish fallback versus runtime execution.
+
+Two fresh native cycles with construction-time runtime latches all true passed actual resize/restore, Hide/Show and resize-before-close, with zero source/target/injected-center mismatch and drains530/530 and541/541. Selected post-close descriptor inventories and owner/global handler registries are zero, with one permanent block and no extra drawable retains. A dedicated last-draw race resized the native window to1640×920 before capture; its1920×1080 consumed packet and PNG remained at1920×1080 and drained843/843. Missing handler observations around reconfigure/visibility/close remain unknown display status.
+
+The reproduced current Coast image, fields, state and18 sidecars match the fixed oracle. Fresh native UV/growth passes19/19 and all38 atlas/world files match, with checked tail poses and zero growth pipelines. The fixed-array reservation fast run records720 unique source identities and720 unique positive display timestamps at119.33568Hz with four double-refresh intervals, dense visible bodies and no measured model/layer pipeline creation; it drains843/843. This is one current-host observation, not an FPS guarantee or alias speedup.
+
+Experiment tests/vet and native/Rust/wasm builds, affected shared client/meshscene gates, source-ordering race and explicit Node browser-bookkeeping regressions pass. A fresh guarded --present-handler build verifies every external library/driver source and patch hash; environment modes remain independently opt-in. Independent final review found no remaining correctness blocker in this scope and directly checked the final native artifacts. CURRENT_READINESS.md and README.md distinguish defaults, opt-ins, capabilities and remaining native/browser/fidelity limits. No main checkout, dependency pins or shipping Metal renderer was changed; no push/merge/deploy occurred.

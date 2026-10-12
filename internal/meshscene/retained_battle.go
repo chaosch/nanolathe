@@ -13,9 +13,10 @@ import (
 // RetainedBattle translates the production host's joined frame pair. It owns
 // no simulation loop, input, HUD, session lifecycle or content provider.
 type RetainedBattle struct {
-	source   *battleSource
-	previous *battlePublication
-	spare    *battlePublication
+	viewportDirty bool
+	source        *battleSource
+	previous      *battlePublication
+	spare         *battlePublication
 	// The last build's pair, camera and model culling slack, for Covers and
 	// Recull. A camera-only change keeps the build's instances.
 	pair   [2]*frame.Frame
@@ -118,13 +119,14 @@ func (r *RetainedBattle) Frame(previous, current *frame.Frame, camera [3]float32
 	r.generation++
 	pub.frame.Generation = r.generation
 	r.previous = pub
+	r.viewportDirty = false
 	return pub.frame
 }
 
 // Covers reports whether the last build's model culling region contains the
 // region camera needs, so a camera-only change can keep its instances.
 func (r *RetainedBattle) Covers(camera [3]float32) bool {
-	if r == nil || r.previous == nil || camera[2] <= 0 || r.camera[2] <= 0 {
+	if r == nil || r.viewportDirty || r.previous == nil || camera[2] <= 0 || r.camera[2] <= 0 {
 		return false
 	}
 	// Recorded sprites carry the art variant chosen for their camera scale.
@@ -148,7 +150,7 @@ func (r *RetainedBattle) Covers(camera [3]float32) bool {
 // are capped after culling, so they cannot use the widened model region.
 // Instances, poses and subject identities are unchanged.
 func (r *RetainedBattle) Recull(live *LiveFrame, camera [3]float32) {
-	if r == nil || r.previous == nil || live == nil {
+	if r == nil || r.viewportDirty || r.previous == nil || live == nil {
 		return
 	}
 	pub, s := r.previous, r.source
@@ -202,4 +204,18 @@ func (r *RetainedBattle) SetSourceEffects(e drawlist.Effects) {
 	if r.source.sprites != nil {
 		r.source.sprites.SetSourceEffects(e)
 	}
+}
+
+// SetViewport changes the physical culling extent on the serial presentation
+// owner. Cached camera coverage is invalid until Frame rebuilds at that extent.
+func (r *RetainedBattle) SetViewport(width, height int) {
+	if r == nil || r.source == nil || width <= 0 || height <= 0 {
+		return
+	}
+	extent := [2]int{width, height}
+	if r.source.viewport == extent {
+		return
+	}
+	r.source.viewport = extent
+	r.viewportDirty = true
 }

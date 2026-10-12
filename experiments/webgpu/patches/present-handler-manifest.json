@@ -21,5 +21,8 @@
     "hal/metal/present_root_native_test.go",
     "presentation_telemetry_native.go"
   ],
-  "patch_sha256": "58c23abd513828c96c607cbcd75a320224fa03a8a0f76c1f6b9ae49a4f4e00e9"
+  "patch_sha256": "58c23abd513828c96c607cbcd75a320224fa03a8a0f76c1f6b9ae49a4f4e00e9",
+  "driver_original_sha256": "49b0adc186844c9229d6ebdb90c923584c159cd586fd5797709b086aa9290f18",
+  "driver_current_sha256": "1232cd98937bf4f0557d8280305fa157cd050a5b470b3084d93021e319f627bc",
+  "driver_patch_sha256": "dae5195a45cc386048afd1ec4db64dff418520970eee7d58de8dc854d4181aaa"
 }

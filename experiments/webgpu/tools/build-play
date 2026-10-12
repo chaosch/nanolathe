@@ -2,8 +2,9 @@
 """Build a real-battle WebGPU command with an explicit, external Go source overlay."""
 import hashlib, json, os, pathlib, plistlib, subprocess, sys
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
-if len(sys.argv)<2 or any(a not in ('--metal-cache','--owned-submission','--render-runtime') for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--metal-cache] [--owned-submission] [--render-runtime]')
-render_runtime='--render-runtime' in sys.argv[2:]
+if len(sys.argv)<2 or any(a not in ('--metal-cache','--owned-submission','--render-runtime','--present-handler') for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--metal-cache] [--owned-submission] [--render-runtime] [--present-handler]')
+present_handler='--present-handler' in sys.argv[2:]
+render_runtime='--render-runtime' in sys.argv[2:] or present_handler
 metal_cache='--metal-cache' in sys.argv[2:] or render_runtime
 owned_submission='--owned-submission' in sys.argv[2:] or render_runtime
 out=pathlib.Path(sys.argv[1]).resolve()
@@ -37,6 +38,8 @@ if metal_cache:
   with (work/'go.mod').open('a') as f:f.write(f'\nreplace github.com/gogpu/wgpu => {fork}\n')
 if render_runtime:
  subprocess.run([sys.executable,str(exp/'tools/apply-render-runtime'),str(fork)],cwd=exp,check=True)
+if present_handler:
+ subprocess.run([sys.executable,str(exp/'tools/apply-present-handler'),str(fork)],cwd=exp,check=True)
 (work/'go.sum').write_text((repo/'go.sum').read_text()+(exp/'go.sum').read_text())
 overlay={};sources=[]
 for original in sorted((repo/'cmd/nanolathe').rglob('*')):
@@ -97,6 +100,33 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
     if text.count(host)!=1:sys.exit('phase overlay requires exactly one source owner')
     text=text.replace(host,host+'\n\tdiagnosticStages [12]float64')
     text+='\nfunc (h *metalBattleHost) PreparationTimings() [12]float64 { return h.diagnosticStages }\n'
+    text+='''
+// ResizePhysicalExtent changes presentation only after the serial source is joined.
+func (h *metalBattleHost) ResizePhysicalExtent(width, height int) error {
+	if width <= 0 || height <= 0 || width%2 != 0 || height%2 != 0 {
+		return fmt.Errorf("native source resize requires positive doubled logical dimensions")
+	}
+	if h.width*2 == width && h.height*2 == height {
+		return nil
+	}
+	h.width, h.height = width/2, height/2
+	h.cl.Resize(h.width, h.height)
+	h.battle.setSurfaceSize(int32(h.width), int32(h.height))
+	h.world.SetViewport(width, height)
+	h.cached = false
+	var pal palette.Tables
+	if source := h.cl.PaletteTables(); source != nil {
+		pal = *source
+	}
+	pal.Base = h.cl.DisplayPalette()
+	h.hud = metalhud.New(&pal, h.width, h.height)
+	h.displayPalette = pal.Base
+	h.atlasEpoch += h.atlasLocalVersion + 1
+	h.atlasLocalVersion = 0
+	return nil
+}
+'''
+    rewrites.append('serial prototype resize updates client/HUD/culling extent and atlas identity')
     rewrites.append('experimental CPU source phase telemetry copied on the serial source owner')
     rewrites.append('experimental read-only publication tick telemetry')
    rewrites.append('reuse production host with experimental renderer and honest observation labels')
@@ -104,6 +134,17 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
    source=out/'overrides'/relative;source.parent.mkdir(parents=True,exist_ok=True);source.write_text(text)
  overlay[str(virtual)]=str(source)
  sources.append(dict(path=str(relative),source_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),build_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),rewrites=rewrites))
+if present_handler:
+ handler_manifest=json.loads((exp/'patches/present-handler-manifest.json').read_text())
+ handler_patch=exp/'patches/present-handler-driver.patch'
+ driver=exp/'internal/battlegpu/driver_darwin.go'
+ if hashlib.sha256(driver.read_bytes()).hexdigest()!=handler_manifest['driver_original_sha256']:sys.exit('handler driver base digest mismatch')
+ if hashlib.sha256(handler_patch.read_bytes()).hexdigest()!=handler_manifest['driver_patch_sha256']:sys.exit('handler driver patch digest mismatch')
+ driver_root=out/'handler-driver';patched_driver=driver_root/'internal/battlegpu/driver_darwin.go';patched_driver.parent.mkdir(parents=True);patched_driver.write_bytes(driver.read_bytes())
+ subprocess.run(['git','apply','--check','--unidiff-zero',str(handler_patch)],cwd=driver_root,check=True)
+ subprocess.run(['git','apply','--unidiff-zero',str(handler_patch)],cwd=driver_root,check=True)
+ if hashlib.sha256(patched_driver.read_bytes()).hexdigest()!=handler_manifest['driver_current_sha256']:sys.exit('handler driver result digest mismatch')
+ overlay[str(driver)]=str(patched_driver)
 (out/'overlay.json').write_text(json.dumps(dict(Replace=overlay),indent=2)+'\n')
 # Both GoGPU/goffi and Ebitengine/purego otherwise define fakecgo runtime
 # symbols when linked together. The exact pinned goffi documents nofakecgo:
@@ -114,5 +155,5 @@ print(' '.join(cmd),flush=True);subprocess.run(cmd,cwd=work,env=env,check=True)
 bundle=out/'Nanolathe WebGPU Prototype.app';mac=bundle/'Contents/MacOS';mac.mkdir(parents=True)
 os.link(out/'nanolathe-webgpu',mac/'nanolathe-webgpu')
 (bundle/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier='gg.nanolathe.webgpu.prototype',CFBundleName='Nanolathe WebGPU Prototype',CFBundleDisplayName='Nanolathe WebGPU Prototype',CFBundleExecutable='nanolathe-webgpu',CFBundlePackageType='APPL',CFBundleVersion='1',NSHighResolutionCapable=True)))
-(out/'build-manifest.json').write_text(json.dumps(dict(repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),dependency_diagnostic=dict(render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='temporary command overlay only; root sources/module/defaults unchanged'),indent=2)+'\n')
+(out/'build-manifest.json').write_text(json.dumps(dict(repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256((out/'nanolathe-webgpu').read_bytes()).hexdigest(),dependency_diagnostic=dict(present_handler=present_handler,present_handler_patch_sha256=hashlib.sha256((exp/'patches/wgpu-present-handler.patch').read_bytes()).hexdigest() if present_handler else None,render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='generated prototype command/source overlay; shared client and culling improvements in worktree, root module and shipping native renderer unchanged'),indent=2)+'\n')
 print(out/'nanolathe-webgpu')

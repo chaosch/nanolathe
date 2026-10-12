@@ -1,6 +1,6 @@
 {
   "date": "2026-10-12",
-  "status": "Checkpoint; private candidate only, no durable source adoption yet",
+  "status": "Durable serial resize and all identified terminal/capture/mode-report repairs qualified; earlier probe/private candidates retained as history",
   "binaries": {
     "probe": {
       "path": "/tmp/nanolathe-handler-build/nanolathe-webgpu-lifecycle-probe",
@@ -10074,12 +10074,17 @@
   "validated_scope": "Programmatic public SetSize, three resize/restore cycles, Hide/Show, resize-before-Quit, actual physical/source/renderer sizes and injected center pointer mapping; one prototype window only. External20s watchdog not triggered.",
   "review": {
     "safety": "Programmatic public resize skips live-drag callback; Hide/Show keeps OnUpdate active. No unrelated app or preference changes.",
-    "pending_repairs": [
+    "cumulative_review": "Independent read-only reviewer found no remaining correctness blocker within scoped prototype changes; directly verified final lifecycle/capture/fast presentation artifacts. Wording corrections incorporated; reviewer did not run tests.",
+    "historical_pending_repairs": [
       "Preserve pending prepared.frame.Exit as well as error before discarding old-extent packet",
       "Final capture must encode the last consumed packet at its last rendered extent if native window changes after frame limit",
       "Store runtime mode at renderer construction: post-teardown device capability getter returns false and cannot report mode used during rendering"
     ],
-    "cumulative_review": "In progress; final adoption/readiness review follows these repairs."
+    "resolved_repairs": [
+      "resizeSource preserves joined Exit/error before any mutation or next Next",
+      "Final capture uses renderer.width/height of the last consumed packet and executes before resize adaptation",
+      "runtime mode reports stored model/layer/glow construction latches"
+    ]
   },
   "limits": [
     "Hide/Show is visibility pressure, not demonstrated compositor occlusion or minimize/restore",
@@ -10089,5 +10094,1127 @@
     "Timed close can join one unconsumed source packet; fixed final simulation equality is not claimed",
     "Native live drag, fullscreen, relative capture and other-platform runtime remain unqualified"
   ],
-  "next_step": "Repair terminal/final-capture and mode-reporting edges, repeat bounded cycles/capture correctness, then adopt only durable source/viewport synchronization separately from handler/timer diagnostics."
+  "next_step": "Use the reproducible scoped prototype command; upstream contribution or broader native/browser/loss/fidelity qualifications are future work, not blockers to these completed local repairs.",
+  "final_qualification": {
+    "durable_source_hashes": {
+      "internal/meshscene/retained_battle.go": "4cc9e68e79ee39ff3aae83b161c19edd1370ab5db283cdbd9e8cd48cf65caf40",
+      "internal/meshscene/viewport_test.go": "168d4ab31b6184d8597487d109c13107df611417f24ea28533c11f2a8336ecb9",
+      "experiments/webgpu/internal/battlegpu/driver_darwin.go": "49b0adc186844c9229d6ebdb90c923584c159cd586fd5797709b086aa9290f18",
+      "experiments/webgpu/internal/battlegpu/sourceworker.go": "aa929f2bc797b22cd2fb052a6123a1b1085525d9e7271292cf5fcda175f95bd5",
+      "experiments/webgpu/tools/build-play": "950fe536810b018039e5510a830bcaebb57c7d6fb521f1dba1da5c9f2f28ee32",
+      "experiments/webgpu/tools/apply-present-handler": "5ddfac6352768ff11fb07d3de6180451d7f0d0aca66eabc137f159794b8948be"
+    },
+    "native_lifecycle": {
+      "adopted1": {
+        "artifact": "/tmp/nanolathe-lifecycle-adopted1",
+        "report_sha256": "7625c48abc13cb4312cf5096c28dfe0efc4afbdf6ca5b1f689893d9770cdccbb",
+        "rows": 529,
+        "extent_mismatches": 0,
+        "injected_center_pointer_mismatches": 0,
+        "runtime_components": {
+          "enabled": true,
+          "renderer_components_at_init": {
+            "glow": true,
+            "layers": true,
+            "models": true
+          },
+          "requested": true,
+          "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"
+        },
+        "actions": [
+          {
+            "elapsed_ms": 1007.453792,
+            "kind": "resize",
+            "logical": [
+              800,
+              450
+            ],
+            "phase": 1,
+            "physical": [
+              1600,
+              900
+            ],
+            "requested_logical": [
+              800,
+              450
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 1804.232208,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 2,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 2406.747292,
+            "kind": "resize",
+            "logical": [
+              1000,
+              570
+            ],
+            "phase": 3,
+            "physical": [
+              2000,
+              1140
+            ],
+            "requested_logical": [
+              1000,
+              570
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 3109.200833,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 4,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 3505.163,
+            "kind": "resize",
+            "logical": [
+              700,
+              400
+            ],
+            "phase": 5,
+            "physical": [
+              1400,
+              800
+            ],
+            "requested_logical": [
+              700,
+              400
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 4107.348042,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 6,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 4510.81475,
+            "kind": "hide",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 7,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": false
+          },
+          {
+            "elapsed_ms": 4801.002125,
+            "kind": "show",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 8,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 5304.184833,
+            "kind": "resize-before-close",
+            "logical": [
+              820,
+              460
+            ],
+            "phase": 9,
+            "physical": [
+              1640,
+              920
+            ],
+            "requested_logical": [
+              820,
+              460
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 5423.3725,
+            "kind": "close",
+            "logical": [
+              820,
+              460
+            ],
+            "phase": 10,
+            "physical": [
+              1640,
+              920
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": true
+          }
+        ],
+        "transitions": [
+          {
+            "phase": 0,
+            "draw": 0,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 810630817,
+            "buffer_descriptor_bytes": 40650384
+          },
+          {
+            "phase": 1,
+            "draw": 80,
+            "physical": [
+              1600,
+              900
+            ],
+            "source": [
+              1600,
+              900
+            ],
+            "cursor": [
+              400,
+              225
+            ],
+            "renderer_target": [
+              1600,
+              900
+            ],
+            "texture_descriptor_bytes": 977615521,
+            "buffer_descriptor_bytes": 52148208
+          },
+          {
+            "phase": 2,
+            "draw": 165,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1005972769,
+            "buffer_descriptor_bytes": 52422560
+          },
+          {
+            "phase": 3,
+            "draw": 233,
+            "physical": [
+              2000,
+              1140
+            ],
+            "source": [
+              2000,
+              1140
+            ],
+            "cursor": [
+              500,
+              285
+            ],
+            "renderer_target": [
+              2000,
+              1140
+            ],
+            "texture_descriptor_bytes": 1014708713,
+            "buffer_descriptor_bytes": 52481872
+          },
+          {
+            "phase": 4,
+            "draw": 309,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 5,
+            "draw": 347,
+            "physical": [
+              1400,
+              800
+            ],
+            "source": [
+              1400,
+              800
+            ],
+            "cursor": [
+              350,
+              200
+            ],
+            "renderer_target": [
+              1400,
+              800
+            ],
+            "texture_descriptor_bytes": 989183073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 6,
+            "draw": 416,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 8,
+            "draw": 457,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 9,
+            "draw": 518,
+            "physical": [
+              1640,
+              920
+            ],
+            "source": [
+              1640,
+              920
+            ],
+            "cursor": [
+              410,
+              230
+            ],
+            "renderer_target": [
+              1640,
+              920
+            ],
+            "texture_descriptor_bytes": 997738833,
+            "buffer_descriptor_bytes": 55183888
+          },
+          {
+            "phase": 10,
+            "draw": 528,
+            "physical": [
+              1640,
+              920
+            ],
+            "source": [
+              1640,
+              920
+            ],
+            "cursor": [
+              410,
+              230
+            ],
+            "renderer_target": [
+              1640,
+              920
+            ],
+            "texture_descriptor_bytes": 997738833,
+            "buffer_descriptor_bytes": 55183888
+          }
+        ],
+        "submission_close": {
+          "completed": 530,
+          "submitted": 530
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 530,
+          "Presented": 502,
+          "Missing": 28,
+          "Callbacks": 504,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "reasons": {
+          "handler-timeout-observation": 1,
+          "presented": 502,
+          "handler-zero-observation": 2,
+          "surface-reconfigured-or-closed": 25
+        },
+        "post_close_selected_descriptor_bytes": {
+          "textures": 0,
+          "buffers": 0
+        },
+        "run_error": null
+      },
+      "adopted2": {
+        "artifact": "/tmp/nanolathe-lifecycle-adopted2",
+        "report_sha256": "037aea72d1ae31d91938b2524d8dcddea1574bdca4af52ef8315d9b78253201a",
+        "rows": 540,
+        "extent_mismatches": 0,
+        "injected_center_pointer_mismatches": 0,
+        "runtime_components": {
+          "enabled": true,
+          "renderer_components_at_init": {
+            "glow": true,
+            "layers": true,
+            "models": true
+          },
+          "requested": true,
+          "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"
+        },
+        "actions": [
+          {
+            "elapsed_ms": 1006.296708,
+            "kind": "resize",
+            "logical": [
+              800,
+              450
+            ],
+            "phase": 1,
+            "physical": [
+              1600,
+              900
+            ],
+            "requested_logical": [
+              800,
+              450
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 1805.362416,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 2,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 2406.708458,
+            "kind": "resize",
+            "logical": [
+              1000,
+              570
+            ],
+            "phase": 3,
+            "physical": [
+              2000,
+              1140
+            ],
+            "requested_logical": [
+              1000,
+              570
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 3106.561375,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 4,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 3505.893416,
+            "kind": "resize",
+            "logical": [
+              700,
+              400
+            ],
+            "phase": 5,
+            "physical": [
+              1400,
+              800
+            ],
+            "requested_logical": [
+              700,
+              400
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 4105.946958,
+            "kind": "restore",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 6,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              960,
+              540
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 4508.747416,
+            "kind": "hide",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 7,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": false
+          },
+          {
+            "elapsed_ms": 4800.941583,
+            "kind": "show",
+            "logical": [
+              960,
+              540
+            ],
+            "phase": 8,
+            "physical": [
+              1920,
+              1080
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 5306.441958,
+            "kind": "resize-before-close",
+            "logical": [
+              820,
+              460
+            ],
+            "phase": 9,
+            "physical": [
+              1640,
+              920
+            ],
+            "requested_logical": [
+              820,
+              460
+            ],
+            "visible": true
+          },
+          {
+            "elapsed_ms": 5421.711833,
+            "kind": "close",
+            "logical": [
+              820,
+              460
+            ],
+            "phase": 10,
+            "physical": [
+              1640,
+              920
+            ],
+            "requested_logical": [
+              0,
+              0
+            ],
+            "visible": true
+          }
+        ],
+        "transitions": [
+          {
+            "phase": 0,
+            "draw": 0,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 810630817,
+            "buffer_descriptor_bytes": 40650384
+          },
+          {
+            "phase": 1,
+            "draw": 80,
+            "physical": [
+              1600,
+              900
+            ],
+            "source": [
+              1600,
+              900
+            ],
+            "cursor": [
+              400,
+              225
+            ],
+            "renderer_target": [
+              1600,
+              900
+            ],
+            "texture_descriptor_bytes": 977615521,
+            "buffer_descriptor_bytes": 52148208
+          },
+          {
+            "phase": 2,
+            "draw": 168,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1005972769,
+            "buffer_descriptor_bytes": 52422560
+          },
+          {
+            "phase": 3,
+            "draw": 235,
+            "physical": [
+              2000,
+              1140
+            ],
+            "source": [
+              2000,
+              1140
+            ],
+            "cursor": [
+              500,
+              285
+            ],
+            "renderer_target": [
+              2000,
+              1140
+            ],
+            "texture_descriptor_bytes": 1014708713,
+            "buffer_descriptor_bytes": 52481872
+          },
+          {
+            "phase": 4,
+            "draw": 315,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 54987280
+          },
+          {
+            "phase": 5,
+            "draw": 358,
+            "physical": [
+              1400,
+              800
+            ],
+            "source": [
+              1400,
+              800
+            ],
+            "cursor": [
+              350,
+              200
+            ],
+            "renderer_target": [
+              1400,
+              800
+            ],
+            "texture_descriptor_bytes": 989183073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 6,
+            "draw": 425,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 8,
+            "draw": 469,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 1010167073,
+            "buffer_descriptor_bytes": 55052816
+          },
+          {
+            "phase": 9,
+            "draw": 530,
+            "physical": [
+              1640,
+              920
+            ],
+            "source": [
+              1640,
+              920
+            ],
+            "cursor": [
+              410,
+              230
+            ],
+            "renderer_target": [
+              1640,
+              920
+            ],
+            "texture_descriptor_bytes": 997738833,
+            "buffer_descriptor_bytes": 55183888
+          },
+          {
+            "phase": 10,
+            "draw": 539,
+            "physical": [
+              1640,
+              920
+            ],
+            "source": [
+              1640,
+              920
+            ],
+            "cursor": [
+              410,
+              230
+            ],
+            "renderer_target": [
+              1640,
+              920
+            ],
+            "texture_descriptor_bytes": 997738833,
+            "buffer_descriptor_bytes": 55183888
+          }
+        ],
+        "submission_close": {
+          "completed": 541,
+          "submitted": 541
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 541,
+          "Presented": 510,
+          "Missing": 31,
+          "Callbacks": 514,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "reasons": {
+          "handler-zero-observation": 4,
+          "presented": 510,
+          "surface-reconfigured-or-closed": 27
+        },
+        "post_close_selected_descriptor_bytes": {
+          "textures": 0,
+          "buffers": 0
+        },
+        "run_error": null
+      },
+      "capture": {
+        "artifact": "/tmp/nanolathe-lifecycle-capture",
+        "report_sha256": "998b6332164fc697ee3a331988f8452c92a7128449d79141dc12871d92aa60c5",
+        "rows": 840,
+        "extent_mismatches": 0,
+        "injected_center_pointer_mismatches": 0,
+        "runtime_components": {
+          "enabled": true,
+          "renderer_components_at_init": {
+            "glow": true,
+            "layers": true,
+            "models": true
+          },
+          "requested": true,
+          "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"
+        },
+        "actions": [
+          {
+            "kind": "resize-after-last-draw",
+            "logical": [
+              820,
+              460
+            ],
+            "phase": 1,
+            "physical": [
+              1640,
+              920
+            ]
+          }
+        ],
+        "transitions": [
+          {
+            "phase": 0,
+            "draw": 0,
+            "physical": [
+              1920,
+              1080
+            ],
+            "source": [
+              1920,
+              1080
+            ],
+            "cursor": [
+              480,
+              270
+            ],
+            "renderer_target": [
+              1920,
+              1080
+            ],
+            "texture_descriptor_bytes": 810630817,
+            "buffer_descriptor_bytes": 40650384
+          }
+        ],
+        "submission_close": {
+          "completed": 843,
+          "submitted": 843
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 843,
+          "Presented": 836,
+          "Missing": 7,
+          "Callbacks": 838,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "reasons": {
+          "handler-timeout-observation": 1,
+          "handler-zero-observation": 2,
+          "presented": 836,
+          "surface-reconfigured-or-closed": 3,
+          "final-close-observation": 1
+        },
+        "post_close_selected_descriptor_bytes": {
+          "textures": 0,
+          "buffers": 0
+        },
+        "run_error": null,
+        "png_dimensions": [
+          1920,
+          1080
+        ],
+        "last_consumed_extent": [
+          1920,
+          1080
+        ]
+      }
+    },
+    "coast_equalities": {
+      "battle.png": true,
+      "final-fields.json": true,
+      "benchmark-state.json": true,
+      "sidecars": {
+        ".color.png": true,
+        ".glow-octaves.rgba16f": true,
+        ".glow.rgba16f": true,
+        ".ground.png": true,
+        ".instances.bin": true,
+        ".keys.png": true,
+        ".keys.png.rgba8": true,
+        ".poses.bin": true,
+        ".reflection-color.png": true,
+        ".reflection-flags.r32u": true,
+        ".reflection-soft.png": true,
+        ".seabed.rgba16f": true,
+        ".shadow-body.png": true,
+        ".shadow-depth.f32": true,
+        ".shadow-mask.r8": true,
+        ".slots.bin": true,
+        ".source.png": true,
+        ".world.rgba16f": true
+      },
+      "sidecar_count": 18
+    },
+    "native_uv": {
+      "artifact": "/tmp/nanolathe-current-uv",
+      "passed": true,
+      "completed": 19,
+      "expected": 19,
+      "growth_checks": [
+        {
+          "case": "growth-before",
+          "pose_records": 3,
+          "pose_buffer_bytes": 2097152,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        },
+        {
+          "case": "growth-beyond-reservation",
+          "pose_records": 40000,
+          "pose_buffer_bytes": 4194304,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        },
+        {
+          "case": "growth-after",
+          "pose_records": 3,
+          "pose_buffer_bytes": 4194304,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        }
+      ],
+      "raw_files": 38,
+      "raw_files_equal_fixed_baseline": true
+    },
+    "fast_dense": {
+      "artifact": "/tmp/nanolathe-current-fast-dense",
+      "rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_presentations": 720,
+      "consecutive_pairs": 719,
+      "display_hz": 119.33567621725766,
+      "intervals_over12ms": 4,
+      "body_triangle_range": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "runtime_mode": {
+        "enabled": false,
+        "renderer_components_at_init": {
+          "glow": false,
+          "layers": false,
+          "models": false
+        },
+        "requested": false,
+        "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"
+      },
+      "reserve": true,
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "run_error": null,
+      "claim": "One current fixed-array reservation run, no repeatable FPS-gain or sustained120 claim"
+    },
+    "guards_and_build": {
+      "reproduced_binary": "/tmp/nanolathe-current-repro/nanolathe-webgpu",
+      "binary_sha256": "186a0a36889d284d9b80c08733cf90385a0cc378b1b851621cd44766b1fa6938",
+      "manifest": "/tmp/nanolathe-current-repro/build-manifest.json",
+      "final_build_directory": "/tmp/nanolathe-final-ready",
+      "option": "--present-handler implies guarded render-runtime + owned-submission + pointer-cache; environment modes remain off unless explicitly enabled",
+      "final_binary": "/tmp/nanolathe-final-ready/nanolathe-webgpu",
+      "final_binary_sha256": "8b25dad230256326223c63049bbb337c2033520982164740712a394411cf4d20",
+      "final_manifest": "/tmp/nanolathe-final-ready/build-manifest.json"
+    },
+    "tests": {
+      "experiment_gate": "passed /tmp/nanolathe-current-experiment-check.log (native/Rust/wasm builds included)",
+      "browser_bookkeeping": "passed explicitly with /usr/local/bin/node /tmp/nanolathe-current-browser-bookkeeping.log after restricted gate PATH omitted Node",
+      "affected_shared_gate": "passed /tmp/nanolathe-current-shared-check.log",
+      "source_ordering_race": "passed /tmp/nanolathe-current-source-race.log",
+      "source_terminal_and_viewport_contracts": "passed; preserves terminal/error and blocks stale viewport coverage"
+    },
+    "scope": "Programmatic resize/Hide/Show and injected center mapping on Mac ARM64 fixed2x only; no minimization, compositor occlusion, live-drag/native pointer or other-platform runtime claim"
+  }
 }

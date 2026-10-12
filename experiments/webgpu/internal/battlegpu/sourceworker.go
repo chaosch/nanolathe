@@ -1,6 +1,7 @@
 package battlegpu
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
 	"time"
 )
@@ -81,4 +82,21 @@ func sourcePreparationTimings(source meshscene.LiveSource) [12]float64 {
 		return diagnostic.PreparationTimings()
 	}
 	return [12]float64{}
+}
+
+// physicalExtentSource is optional: fixed-frame sources retain their fixed
+// window contract. Mutation is serial with Next, after joining any worker.
+type physicalExtentSource interface{ ResizePhysicalExtent(int, int) error }
+
+func resizeSource(w *sourceWorker, source meshscene.LiveSource, width, height int) (exit bool, err error) {
+	if old, pending, _ := w.join(); pending {
+		if old.err != nil || old.frame.Exit {
+			return old.frame.Exit, old.err
+		}
+	}
+	resizable, ok := source.(physicalExtentSource)
+	if !ok {
+		return false, fmt.Errorf("WebGPU live source lacks resize extent protocol")
+	}
+	return false, resizable.ResizePhysicalExtent(width, height)
 }

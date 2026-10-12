@@ -410,3 +410,45 @@ The authored native oracle accepts `-pose-growth` to test 40,000-pose growth abo
 Optional render runtime arrays can be built on qualified macOS arm64 using `tools/build-play NEW_EXTERNAL_OUTPUT --render-runtime`. This copies and verifies the exact pinned dependencies, applies owned-upload and pointer-cache diagnostics, then checks every base/result hash around the render-runtime patch. Run with `NANOLATHE_WEBGPU_RUNTIME_ARRAYS=1` to select standard runtime-sized WGSL storage arrays. The flag defaults off; pristine pins, other native backends, Intel Mac, Rust and browser builds retain the fixed-array fallback. No platform worker or browser execution changes are introduced.
 
 The runtime path passed native binding/offset tests, the19-case model/UV growth oracle with zero growth pipeline creation, and byte-equal Coast state/final pixels/18 GPU sidecars. It keeps meshes and explicit UVs resident. Current dense performance is near119 callbacks/s with encoding CPU above the reservation reference; neither callback FPS nor this optional path establishes actual presentation. Exact measurements and scopes are in `RUNTIME_ARRAY_MEASUREMENTS.json`.
+
+
+### Current reproducible native prototype
+
+On the qualified macOS arm64 host, from this worktree:
+
+```sh
+experiments/webgpu/tools/build-play /tmp/nanolathe-play --present-handler
+GOMAXPROCS=4 NANOLATHE_WEBGPU_ASYNC_UPLOADS=1 \
+NANOLATHE_WEBGPU_PREPARE_AHEAD=1 NANOLATHE_WEBGPU_RESERVE_STORAGE=1 \
+NANOLATHE_WEBGPU_RUNTIME_ARRAYS=0 \
+NANOLATHE_WEBGPU_PRESENT_TELEMETRY=1 \
+/tmp/nanolathe-play/nanolathe-webgpu --root="$HOME/TotalAnnihilation" \
+  --webgpu --map='Town & Country' --zoom=1 \
+  --webgpu-report=/tmp/nanolathe-play-report
+```
+
+The output build directory must be new. `--present-handler` verifies and applies
+all reviewed private dependency prerequisites: owned submission, Metal pointer
+cache, render-size metadata and the bounded presentation handler. It also
+verifies the external driver overlay. It installs no dependency or plugin and
+never patches the module cache or shipping renderer. The helper produces a
+binary, `.app` bundle and exact source/module/patch manifest. Go1.27.1 is required.
+
+This command uses the measured fixed-array reservation path; runtime WGSL arrays
+remain off. Add `NANOLATHE_WEBGPU_RUNTIME_ARRAYS=1` only for the qualified optional
+growth-stall alternative. Preparation, reservation, asynchronous uploads and
+telemetry all remain opt-in; public API safety markers reject unsupported async
+builds and retain the fixed-array fallback when runtime metadata is unavailable.
+The build option alone does not enable those runtime modes. Ordinary interactive
+play reads the user's current settings; the benchmark evidence used a private
+nominal-speed10 snapshot and must not be extrapolated to different game speeds.
+
+The generated production-source host supports serial programmatic resize:
+join old preparation, preserve its terminal/error result, update client/HUD and
+culling extent, then render with the actual framebuffer size. Fixed benchmark
+sources retain their fixed window contract. Final capture stays at the last
+consumed packet's rendered extent. Actual dragging, minimize/restore, compositor
+occlusion, display-scale migration and device-loss recovery remain unqualified.
+See CURRENT_READINESS.md and WINDOW_LIFECYCLE_MEASUREMENTS.json for evidence and
+remaining limits. No repeatable FPS gain is claimed for hull aliases; their
+measured improvement is allocations and CPU tails.

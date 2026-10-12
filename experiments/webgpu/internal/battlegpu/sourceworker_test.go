@@ -11,12 +11,14 @@ type workerFixture struct {
 	entered chan meshscene.Input
 	release chan struct{}
 	err     error
+	exit    bool
+	resized int
 }
 
 func (f *workerFixture) Next(_ float64, in meshscene.Input) (meshscene.LiveFrame, error) {
 	f.entered <- in
 	<-f.release
-	return meshscene.LiveFrame{Tick: 7, Alpha: .25}, f.err
+	return meshscene.LiveFrame{Tick: 7, Alpha: .25, Exit: f.exit}, f.err
 }
 func (*workerFixture) Close() map[string]any { return nil }
 func TestSourceWorkerSerialJoinAndClose(t *testing.T) {
@@ -110,5 +112,49 @@ func TestSourceWorkerCloseBeforeFirstRequest(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("unused worker failed to join")
+	}
+}
+
+func (f *workerFixture) ResizePhysicalExtent(int, int) error { f.resized++; return nil }
+func TestResizeSourcePreservesTerminalAndFailedPreparedPackets(t *testing.T) {
+	for _, tc := range []struct {
+		exit bool
+		err  error
+	}{{true, nil}, {false, errors.New("source failed")}} {
+		f := &workerFixture{entered: make(chan meshscene.Input, 1), release: make(chan struct{}), exit: tc.exit, err: tc.err}
+		w := newSourceWorker(f)
+		w.start(0, meshscene.Input{})
+		<-f.entered
+		done := make(chan struct{})
+		var exit bool
+		var err error
+		go func() { exit, err = resizeSource(w, f, 800, 600); close(done) }()
+		select {
+		case <-done:
+			t.Fatal("resize raced unfinished Next")
+		default:
+		}
+		close(f.release)
+		<-done
+		if exit != tc.exit || err != tc.err || f.resized != 0 {
+			t.Fatalf("terminal result=%v,%v resize=%d", exit, err, f.resized)
+		}
+		if err := w.close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+func TestResizeSourceMutatesOnlyAfterPreparedPacketCompletes(t *testing.T) {
+	f := &workerFixture{entered: make(chan meshscene.Input, 1), release: make(chan struct{})}
+	w := newSourceWorker(f)
+	w.start(0, meshscene.Input{})
+	<-f.entered
+	close(f.release)
+	exit, err := resizeSource(w, f, 800, 600)
+	if exit || err != nil || f.resized != 1 || w.pending {
+		t.Fatalf("resize=%d exit=%v err=%v pending=%v", f.resized, exit, err, w.pending)
+	}
+	if err := w.close(); err != nil {
+		t.Fatal(err)
 	}
 }
