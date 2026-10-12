@@ -68,3 +68,15 @@ not runtime qualification. Tests named TestOwned cover fault/lifetime/row/chunk
 cases; run focused race tests with the existing CGO-enabled test tooling only.
 No device-loss recovery, tracker rollback/retry, all-platform120FPS, shipping
 fork adoption or upstream release is implied.
+
+
+`wgpu-present-handler.patch` and `present-handler-driver.patch` preserve the
+separate default-absent Mac ARM64 native presentation diagnostic. Its manifest
+hashes target the exact verified `--render-runtime` dependency copy. It uses one
+permanent immutable block, a bounded pointer+drawableID registry, typed getters,
+and no extra drawable retains. Do not apply the polling patch at the same time.
+The helper resolves the concrete block class storage address once; inherited
+shared-event block code is unchanged. Native forced-GC copy/dispatch, live
+callbacks, registry races and Coast output equality are qualified in
+PRESENT_HANDLER_MEASUREMENTS.json. No general GPU timing, native resize/occlusion
+stress, other-platform runtime or shipping/default dependency adoption is claimed.

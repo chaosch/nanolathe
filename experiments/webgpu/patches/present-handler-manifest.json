@@ -1,0 +1,25 @@
+{
+  "scope": "Isolated Mac ARM64 presented-handler diagnostic, default absent; one permanent helper, zero extra drawable retains",
+  "base": "tools/build-play --render-runtime verified private wgpu copy",
+  "original_sha256": {
+    "hal/metal/queue.go": "9d6f37fa187b448d2ccec6fb11da27db2ce4a4087b40e71c03fc9266afa7d618",
+    "hal/metal/surface.go": "c1b534f4d9b5818aa977a62125510cdb1f5c5f16aba9362c74842a599a031c8e",
+    "hal/metal/device.go": "6a5f3fd8ffa11bd826f0a68d61419279d3ce7771fd8b956884be9b82edf8276a"
+  },
+  "current_sha256": {
+    "hal/metal/queue.go": "327298b7030965a06342344ea538d46e06d487008e23d54514a758bf81108696",
+    "hal/metal/surface.go": "1b34e6256ac6caf022f1e3d0ac073383cf6027f222f1f5fb55fd1528785dfbc8",
+    "hal/metal/device.go": "4e6e165dad58ea196c612d584a763fae7486aba4d2d9ed68b1f896d18781dcf3",
+    "hal/metal/present_telemetry.go": "428c9636cbeae0b81992b7b3f304a9f8c0dd681f81c8899af575500727371907",
+    "hal/metal/present_telemetry_test.go": "693aa6c228887797ace0b0277ce37a0863db63bd3962d885a90c05e942177a37",
+    "hal/metal/present_root_native_test.go": "5487635ad1eb0f8aa02264e6ee4fec5c45cbe13bcd6c46058278542cf21c3da1",
+    "presentation_telemetry_native.go": "18dc3aa611debc585b2afec086e1681934164209d8b88940ba5d0e6252128e41"
+  },
+  "added_files": [
+    "hal/metal/present_telemetry.go",
+    "hal/metal/present_telemetry_test.go",
+    "hal/metal/present_root_native_test.go",
+    "presentation_telemetry_native.go"
+  ],
+  "patch_sha256": "58c23abd513828c96c607cbcd75a320224fa03a8a0f76c1f6b9ae49a4f4e00e9"
+}

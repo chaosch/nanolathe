@@ -1,0 +1,675 @@
+--- a/hal/metal/queue.go
++++ b/hal/metal/queue.go
+@@ -24,8 +24,10 @@
+ 
+ // Queue implements hal.Queue for Metal.
+ type Queue struct {
+-	device       *Device
+-	commandQueue ID // id<MTLCommandQueue>
++	presentInit       sync.Once
++	presentDiagnostic *presentTelemetry
++	device            *Device
++	commandQueue      ID // id<MTLCommandQueue>
+ 
+ 	// submissionIndex is a monotonically increasing counter for tracking submissions.
+ 	submissionIndex uint64
+@@ -347,11 +349,16 @@
+ 
+ 	cmdBuffer := MsgSend(q.commandQueue, Sel("commandBuffer"))
+ 	if cmdBuffer == 0 {
+-		Release(st.drawable)
+-		st.drawable = 0
+-		return nil
+-	}
+-
++		if ms, ok := surface.(*Surface); ok {
++			q.observePresent(ms, st, false)
++		}
++		st.releaseAcquired()
++		return nil
++	}
++
++	if ms, ok := surface.(*Surface); ok {
++		q.observePresent(ms, st, true)
++	}
+ 	if !useTransaction {
+ 		_ = MsgSend(cmdBuffer, Sel("presentDrawable:"), uintptr(st.drawable))
+ 	}
+--- a/hal/metal/surface.go
++++ b/hal/metal/surface.go
+@@ -7,6 +7,7 @@
+ 
+ import (
+ 	"fmt"
++	"time"
+ 
+ 	"github.com/gogpu/gputypes"
+ 	"github.com/gogpu/wgpu/hal"
+@@ -14,12 +15,13 @@
+ 
+ // Surface implements hal.Surface for Metal using CAMetalLayer.
+ type Surface struct {
+-	layer       ID // CAMetalLayer
+-	device      *Device
+-	format      gputypes.TextureFormat
+-	width       uint32
+-	height      uint32
+-	presentMode gputypes.PresentMode
++	diagnosticSurface, diagnosticGeneration, diagnosticAcquisition uint64
++	layer                                                          ID // CAMetalLayer
++	device                                                         *Device
++	format                                                         gputypes.TextureFormat
++	width                                                          uint32
++	height                                                         uint32
++	presentMode                                                    gputypes.PresentMode
+ 	// presentsWithTransaction enables Core Animation transaction-based present.
+ 	// Required for smooth live window resize on macOS (wgpu #3756, Flutter/Skia).
+ 	presentsWithTransaction bool
+@@ -68,6 +70,15 @@
+ 		}
+ 	}
+ 
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
++	if s.diagnosticSurface == 0 {
++		s.diagnosticSurface = nextDiagnosticSurface.Add(1)
++	}
++	s.diagnosticGeneration++
+ 	s.device = mtlDevice
+ 
+ 	pool := NewAutoreleasePool()
+@@ -162,6 +173,11 @@
+ func (s *Surface) Unconfigure(_ hal.Device) {
+ 	hal.Logger().Debug("metal: surface unconfigured")
+ 	// Nothing to release for Metal layer
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
+ 	s.device = nil
+ }
+ 
+@@ -188,7 +204,21 @@
+ 	pool := NewAutoreleasePool()
+ 	defer pool.Drain()
+ 
++	var tracker *presentTelemetry
++	var acquireStart time.Time
++	if s.device != nil && s.device.queue != nil {
++		tracker = s.device.queue.presentationDiagnostic()
++	}
++	if tracker != nil {
++		tracker.beforeAcquire()
++		acquireStart = time.Now()
++	}
+ 	drawable := MsgSend(s.layer, Sel("nextDrawable"))
++	var acquireMS float64
++	if tracker != nil {
++		acquireMS = float64(time.Since(acquireStart)) / 1e6
++		s.diagnosticAcquisition++
++	}
+ 	if drawable == 0 {
+ 		hal.Logger().Error("metal: nextDrawable failed", "layer", s.layer)
+ 		return nil, fmt.Errorf("metal: failed to get next drawable")
+@@ -226,8 +256,9 @@
+ 
+ 	return &hal.AcquiredSurfaceTexture{
+ 		Texture: &SurfaceTexture{
+-			texture:  mtlTexture,
+-			drawable: drawable,
++			texture:              mtlTexture,
++			drawable:             drawable,
++			diagnosticGeneration: s.diagnosticGeneration, diagnosticAcquisition: s.diagnosticAcquisition, diagnosticAcquireMS: acquireMS,
+ 		},
+ 		Suboptimal: false,
+ 	}, nil
+@@ -250,6 +281,11 @@
+ // Destroy releases the surface.
+ func (s *Surface) Destroy() {
+ 	hal.Logger().Debug("metal: surface destroyed")
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
+ 	if s.layer != 0 {
+ 		Release(s.layer)
+ 		s.layer = 0
+@@ -258,8 +294,10 @@
+ 
+ // SurfaceTexture wraps a Metal drawable texture.
+ type SurfaceTexture struct {
+-	texture  *Texture
+-	drawable ID // id<CAMetalDrawable>
++	diagnosticGeneration, diagnosticAcquisition uint64
++	diagnosticAcquireMS                         float64
++	texture                                     *Texture
++	drawable                                    ID // id<CAMetalDrawable>
+ }
+ 
+ // CurrentUsage returns 0 — Metal has no explicit resource state tracking.
+--- a/hal/metal/device.go
++++ b/hal/metal/device.go
+@@ -1458,6 +1458,9 @@
+ 
+ // Destroy releases the device and associated resources.
+ func (d *Device) Destroy() {
++	if d.queue != nil {
++		d.queue.NativePresentationTelemetry(true)
++	}
+ 	hal.Logger().Debug("metal: device destroyed")
+ 	d.releaseIndexedICBTranslators()
+ 	if d.eventListener != 0 {
+--- /dev/null
++++ b/hal/metal/present_telemetry.go
+@@ -0,0 +1,331 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"fmt"
++	"math"
++	"os"
++	"runtime"
++	"sort"
++	"sync"
++	"sync/atomic"
++	"time"
++	"unsafe"
++
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++)
++
++const presentObservationLimit = 4096
++
++var nextDiagnosticSurface atomic.Uint64
++
++type presentationObservation struct {
++	Ordinal, Submission, Surface, Generation, Acquisition uint64
++	AcquireMS, PresentedSeconds                           float64
++	Reason                                                string
++	FreshSubmission                                       bool
++}
++type handlerKey struct{ pointer, id uintptr }
++type handlerEntry struct {
++	owner *presentTelemetry
++	token uint64
++}
++type handlerRouter struct {
++	mu      sync.Mutex
++	entries map[handlerKey]handlerEntry
++	late    atomic.Uint64
++}
++
++var presentedRouter = handlerRouter{entries: make(map[handlerKey]handlerEntry)}
++
++// This sole process helper is immutable and permanently rooted. Global blocks
++// are copied/released as no-ops; never unpin this literal/descriptor on timeout.
++var permanentPresented struct {
++	once       sync.Once
++	block      *blockLiteral
++	descriptor *blockDescriptor
++	pointer    atomic.Uintptr
++}
++
++func permanentPresentedBlock() uintptr {
++	permanentPresented.once.Do(func() {
++		// dlsym returns the class storage address, not its first word. Keep
++		// this diagnostic fix separate from inherited event blocks; resolve
++		// it once so ordinary frames do not add symbol lookup work.
++		classStorage, err := ffi.GetSymbol(objcLib, "_NSConcreteGlobalBlock")
++		if err != nil || classStorage == nil {
++			return
++		}
++		invoke := ffi.NewCallback(func(_ uintptr, drawable uintptr) {
++			if drawable == 0 {
++				return
++			}
++			key := handlerKey{pointer: drawable, id: uintptr(MsgSend(ID(drawable), Sel("drawableID")))}
++			// Remove/copy the owner before touching its lock. No global registry
++			// lock is held across native getters or tracker row publication.
++			entry, ok := presentedRouter.take(key)
++			if !ok {
++				presentedRouter.late.Add(1)
++				return
++			}
++			var value float64
++			err := msgSend(ID(drawable), Sel("presentedTime"), types.DoubleTypeDescriptor, unsafe.Pointer(&value))
++			entry.owner.complete(entry.token, key, value, err)
++		})
++		permanentPresented.descriptor = &blockDescriptor{size: uint64(unsafe.Sizeof(blockLiteral{}))}
++		permanentPresented.block = &blockLiteral{isa: uintptr(classStorage), flags: blockIsGlobal, invoke: invoke, descriptor: uintptr(unsafe.Pointer(permanentPresented.descriptor))}
++		permanentPresented.pointer.Store(uintptr(unsafe.Pointer(permanentPresented.block)))
++	})
++	return permanentPresented.pointer.Load()
++}
++func (r *handlerRouter) register(key handlerKey, entry handlerEntry) bool {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	if len(r.entries) >= presentObservationLimit {
++		return false
++	}
++	if _, exists := r.entries[key]; exists {
++		return false
++	}
++	r.entries[key] = entry
++	return true
++}
++func (r *handlerRouter) take(key handlerKey) (handlerEntry, bool) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	entry, ok := r.entries[key]
++	if ok {
++		delete(r.entries, key)
++	}
++	return entry, ok
++}
++func (r *handlerRouter) remove(key handlerKey, owner *presentTelemetry, token uint64) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	if entry, ok := r.entries[key]; ok && entry.owner == owner && entry.token == token {
++		delete(r.entries, key)
++	}
++}
++func (r *handlerRouter) count() int { r.mu.Lock(); defer r.mu.Unlock(); return len(r.entries) }
++
++type pendingPresentation struct {
++	key       handlerKey
++	row       presentationObservation
++	requested time.Time
++}
++type presentationSnapshot struct {
++	Enabled, Closed                                                                 bool
++	Retains, Releases, Outstanding, HighWater, RegistryOutstanding, PermanentBlocks int
++	Requested, Presented, Missing, Callbacks, ValueEvictions, IgnoredAfterClose     uint64
++	Scope                                                                           string
++	Rows                                                                            []presentationObservation
++}
++type presentTelemetry struct {
++	mu                                                                  sync.Mutex
++	closed                                                              bool
++	now                                                                 func() time.Time
++	router                                                              *handlerRouter
++	pending                                                             map[uint64]pendingPresentation
++	rows                                                                []presentationObservation
++	nextRow, highWater                                                  int
++	ordinal, requested, presented, missing, callbacks, evicted, ignored uint64
++	lastSubmission                                                      map[uint64]uint64
++}
++
++func newPresentedTracker(router *handlerRouter) *presentTelemetry {
++	return &presentTelemetry{now: time.Now, router: router, pending: make(map[uint64]pendingPresentation), lastSubmission: make(map[uint64]uint64)}
++}
++func (q *Queue) presentationDiagnostic() *presentTelemetry {
++	if q == nil {
++		return nil
++	}
++	q.presentInit.Do(func() {
++		if runtime.GOARCH == "arm64" && os.Getenv("NANOLATHE_WEBGPU_PRESENT_TELEMETRY") == "1" {
++			q.presentDiagnostic = newPresentedTracker(&presentedRouter)
++		}
++	})
++	return q.presentDiagnostic
++}
++func (t *presentTelemetry) appendRow(row presentationObservation) {
++	if len(t.rows) == presentObservationLimit {
++		t.rows[t.nextRow] = row
++		t.nextRow = (t.nextRow + 1) % presentObservationLimit
++		t.evicted++
++	} else {
++		t.rows = append(t.rows, row)
++	}
++}
++func (t *presentTelemetry) finish(token uint64, value float64, reason string) {
++	p, exists := t.pending[token]
++	if !exists {
++		return
++	}
++	delete(t.pending, token)
++	t.router.remove(p.key, t, token)
++	p.row.PresentedSeconds = value
++	p.row.Reason = reason
++	if reason == "presented" {
++		t.presented++
++	} else {
++		t.missing++
++	}
++	t.appendRow(p.row)
++}
++func (t *presentTelemetry) expireLocked() {
++	now := t.now()
++	for token, p := range t.pending {
++		if now.Sub(p.requested) >= 250*time.Millisecond {
++			t.finish(token, 0, "handler-timeout-observation")
++		}
++	}
++}
++func (t *presentTelemetry) beforeAcquire() {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if !t.closed {
++		t.expireLocked()
++	}
++}
++func (t *presentTelemetry) register(key handlerKey, row presentationObservation, accepted bool) uint64 {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if t.closed {
++		return 0
++	}
++	t.expireLocked()
++	t.ordinal++
++	t.requested++
++	row.Ordinal = t.ordinal
++	row.FreshSubmission = row.Submission > 0 && row.Submission > t.lastSubmission[row.Surface]
++	t.lastSubmission[row.Surface] = max(row.Submission, t.lastSubmission[row.Surface])
++	if !accepted {
++		row.Reason = "present-request-failed"
++		t.missing++
++		t.appendRow(row)
++		return 0
++	}
++	if len(t.pending) >= presentObservationLimit {
++		row.Reason = "owner-registry-budget"
++		t.missing++
++		t.appendRow(row)
++		return 0
++	}
++	token := t.ordinal
++	t.pending[token] = pendingPresentation{key: key, row: row, requested: t.now()}
++	if !t.router.register(key, handlerEntry{owner: t, token: token}) {
++		delete(t.pending, token)
++		row.Reason = "global-registry-budget-or-key-conflict"
++		t.missing++
++		t.appendRow(row)
++		return 0
++	}
++	t.highWater = max(t.highWater, len(t.pending))
++	return token
++}
++func (t *presentTelemetry) complete(token uint64, key handlerKey, value float64, err error) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	p, ok := t.pending[token]
++	if t.closed || !ok || p.key != key {
++		t.ignored++
++		return
++	}
++	t.callbacks++
++	reason := "presented"
++	if err != nil {
++		reason = "handler-getter-error"
++		value = 0
++	} else if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
++		reason = "handler-invalid-timestamp"
++		value = 0
++	} else if value == 0 {
++		reason = "handler-zero-observation"
++	}
++	t.finish(token, value, reason)
++}
++func (t *presentTelemetry) cancel(token uint64, reason string) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	t.finish(token, 0, reason)
++}
++func (t *presentTelemetry) closeSurface(surface uint64) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if t.closed {
++		return
++	}
++	t.expireLocked()
++	for token, p := range t.pending {
++		if p.row.Surface == surface {
++			t.finish(token, 0, "surface-reconfigured-or-closed")
++		}
++	}
++	delete(t.lastSubmission, surface)
++}
++func (t *presentTelemetry) snapshot(close bool) presentationSnapshot {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if !t.closed {
++		t.expireLocked()
++		if close {
++			t.closed = true
++			for token := range t.pending {
++				t.finish(token, 0, "final-close-observation")
++			}
++		}
++	}
++	ordered := append([]presentationObservation(nil), t.rows[t.nextRow:]...)
++	ordered = append(ordered, t.rows[:t.nextRow]...)
++	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Ordinal < ordered[j].Ordinal })
++	blocks := 0
++	if permanentPresented.pointer.Load() != 0 {
++		blocks = 1
++	}
++	return presentationSnapshot{Enabled: true, Closed: t.closed, Outstanding: len(t.pending), RegistryOutstanding: t.router.count(), HighWater: t.highWater, PermanentBlocks: blocks, Requested: t.requested, Presented: t.presented, Missing: t.missing, Callbacks: t.callbacks, ValueEvictions: t.evicted, IgnoredAfterClose: t.ignored, Rows: ordered, Scope: "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"}
++}
++func (q *Queue) NativePresentationTelemetry(close bool) any {
++	if t := q.presentationDiagnostic(); t != nil {
++		return t.snapshot(close)
++	}
++	return presentationSnapshot{Enabled: false}
++}
++func (q *Queue) observePresent(s *Surface, st *SurfaceTexture, accepted bool) {
++	t := q.presentationDiagnostic()
++	if t == nil || s == nil || st == nil || st.drawable == 0 {
++		return
++	}
++	q.submissionMu.Lock()
++	index := q.submissionIndex
++	q.submissionMu.Unlock()
++	row := presentationObservation{Submission: index, Surface: s.diagnosticSurface, Generation: st.diagnosticGeneration, Acquisition: st.diagnosticAcquisition, AcquireMS: st.diagnosticAcquireMS}
++	if !accepted {
++		t.register(handlerKey{}, row, false)
++		return
++	}
++	block := permanentPresentedBlock()
++	if block == 0 {
++		t.register(handlerKey{}, row, false)
++		return
++	}
++	if !msgSendBool(st.drawable, Sel("respondsToSelector:"), argPointer(uintptr(Sel("addPresentedHandler:")))) {
++		t.register(handlerKey{}, row, false)
++		return
++	}
++	key := handlerKey{pointer: uintptr(st.drawable), id: uintptr(MsgSend(st.drawable, Sel("drawableID")))}
++	token := t.register(key, row, true)
++	if token == 0 {
++		return
++	}
++	// Stress-only qualification: GC happens outside both locks, before native
++	// registration. Never enable this fixture in performance comparisons.
++	if os.Getenv("NANOLATHE_WEBGPU_PRESENT_GC_STRESS") == "1" && token%120 == 0 {
++		runtime.GC()
++	}
++	// The route exists before native registration and presentation. No tracker
++	// or global registry lock is held across this possibly reentrant call.
++	if err := msgSend(st.drawable, Sel("addPresentedHandler:"), types.VoidTypeDescriptor, nil, argPointer(block)); err != nil {
++		t.cancel(token, fmt.Sprintf("handler-attach-error:%v", err))
++	}
++}
+--- /dev/null
++++ b/hal/metal/present_telemetry_test.go
+@@ -0,0 +1,94 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"sync"
++	"testing"
++	"time"
++)
++
++func TestSharedPresentedTrackerLateCloseTimeoutLayerIdentity(t *testing.T) {
++	router := &handlerRouter{entries: map[handlerKey]handlerEntry{}}
++	tracker := newPresentedTracker(router)
++	now := time.Unix(0, 0)
++	tracker.now = func() time.Time { return now }
++	first, second := handlerKey{pointer: 1, id: 0}, handlerKey{pointer: 2, id: 0}
++	a := tracker.register(first, presentationObservation{Surface: 1, Submission: 1}, true)
++	b := tracker.register(second, presentationObservation{Surface: 2, Submission: 1}, true)
++	entry, ok := router.take(second)
++	if !ok || entry.token != b {
++		t.Fatal("per-layer drawableID0 collided")
++	}
++	entry.owner.complete(entry.token, second, 42, nil)
++	tracker.closeSurface(1)
++	tracker.complete(a, first, 43, nil)
++	snapshot := tracker.snapshot(true)
++	if snapshot.Presented != 1 || snapshot.Missing != 1 || snapshot.Outstanding != 0 || snapshot.RegistryOutstanding != 0 || snapshot.IgnoredAfterClose != 1 {
++		t.Fatalf("bad closure %+v", snapshot)
++	}
++	if tracker.register(handlerKey{3, 0}, presentationObservation{}, true) != 0 {
++		t.Fatal("registered after close")
++	}
++	tracker = newPresentedTracker(router)
++	tracker.now = func() time.Time { return now }
++	token := tracker.register(first, presentationObservation{}, true)
++	entry, _ = router.take(first)
++	now = now.Add(time.Second)
++	tracker.beforeAcquire()
++	entry.owner.complete(token, first, 44, nil)
++	if tracker.snapshot(true).Presented != 0 {
++		t.Fatal("expired route committed late data")
++	}
++}
++func TestSharedPresentedTrackerRacingCloseAndOutOfOrderCompletion(t *testing.T) {
++	for iteration := 0; iteration < 100; iteration++ {
++		router := &handlerRouter{entries: map[handlerKey]handlerEntry{}}
++		tracker := newPresentedTracker(router)
++		for i := uintptr(1); i <= 16; i++ {
++			tracker.register(handlerKey{i, i}, presentationObservation{Submission: uint64(i)}, true)
++		}
++		var wg sync.WaitGroup
++		for i := uintptr(16); i > 0; i-- {
++			wg.Add(1)
++			go func(i uintptr) {
++				defer wg.Done()
++				key := handlerKey{i, i}
++				entry, ok := router.take(key)
++				if ok {
++					entry.owner.complete(entry.token, key, float64(i), nil)
++				}
++			}(i)
++		}
++		wg.Add(1)
++		go func() { defer wg.Done(); tracker.snapshot(true) }()
++		wg.Wait()
++		snapshot := tracker.snapshot(true)
++		if snapshot.Outstanding != 0 || snapshot.RegistryOutstanding != 0 || snapshot.Requested != snapshot.Presented+snapshot.Missing {
++			t.Fatal("race lost request accounting")
++		}
++		for i := 1; i < len(snapshot.Rows); i++ {
++			if snapshot.Rows[i].Ordinal <= snapshot.Rows[i-1].Ordinal {
++				t.Fatal("snapshot rows unordered")
++			}
++		}
++	}
++}
++func TestSharedPresentedTrackerBoundsAndPointerReuse(t *testing.T) {
++	router := &handlerRouter{entries: map[handlerKey]handlerEntry{}}
++	tracker := newPresentedTracker(router)
++	for i := uintptr(0); i < presentObservationLimit+10; i++ {
++		tracker.register(handlerKey{pointer: 1, id: i}, presentationObservation{Submission: uint64(i)}, true)
++	}
++	if router.count() > presentObservationLimit {
++		t.Fatal("unbounded registry")
++	}
++	tracker.complete(1, handlerKey{pointer: 1, id: 99}, 42, nil)
++	if tracker.snapshot(false).Presented != 0 {
++		t.Fatal("pointer reuse crossed row generation")
++	}
++	snapshot := tracker.snapshot(true)
++	if snapshot.RegistryOutstanding != 0 || snapshot.Outstanding != 0 || snapshot.Retains != 0 || snapshot.Releases != 0 || len(snapshot.Rows) > presentObservationLimit {
++		t.Fatal("close/ring did not bound resources")
++	}
++}
+--- /dev/null
++++ b/hal/metal/present_root_native_test.go
+@@ -0,0 +1,60 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++	"runtime"
++	"testing"
++	"unsafe"
++)
++
++func TestPermanentPresentedBlockSurvivesGCAndNativeCopy(t *testing.T) {
++	if err := Init(); err != nil {
++		t.Fatal(err)
++	}
++	pointer := permanentPresentedBlock()
++	if pointer == 0 {
++		t.Fatal("native permanent helper unavailable")
++	}
++	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
++	if err != nil {
++		t.Fatal(err)
++	}
++	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
++	if err != nil {
++		t.Fatal(err)
++	}
++	var copyCIF, releaseCIF types.CallInterface
++	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
++	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	for i := 0; i < 10; i++ {
++		runtime.GC()
++		var copied uintptr
++		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
++		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
++			t.Fatal(err)
++		}
++		if copied != pointer {
++			t.Fatal("global block copy moved the immutable literal")
++		}
++		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
++			t.Fatal(err)
++		}
++		if permanentPresented.pointer.Load() != pointer || permanentPresented.block == nil || permanentPresented.descriptor == nil {
++			t.Fatal("permanent roots changed")
++		}
++		// A valid block class also supports Objective-C dispatch. This distinguishes
++		// the inherited class-address bug from a GC lifetime failure.
++		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
++			t.Fatal("Objective-C global block copy changed its identity")
++		}
++		Release(ID(pointer))
++	}
++}
+--- /dev/null
++++ b/presentation_telemetry_native.go
+@@ -0,0 +1,12 @@
++//go:build !rust && !(js && wasm)
++
++package wgpu
++
++func (d *Device) NativePresentationTelemetry(close bool) any {
++	if d != nil && d.queue != nil {
++		if provider, ok := d.queue.hal.(interface{ NativePresentationTelemetry(bool) any }); ok {
++			return provider.NativePresentationTelemetry(close)
++		}
++	}
++	return nil
++}
