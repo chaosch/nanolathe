@@ -27,7 +27,7 @@ device teardown; older post-close `enabled=false` report fields cannot establish
 the mode that executed. Exact sources, binary hashes and current native results
 are recorded in WINDOW_LIFECYCLE_MEASUREMENTS.json and the follow-up report.
 
-Known gaps remain: actual live dragging and RequestSize reentry during a drag,
+Known gaps remain: broader live dragging and RequestSize reentry during a drag,
 minimize restoration, compositor occlusion, native pointer delivery/click count,
 relative capture, fullscreen, display-scale migration, device-loss recovery, and
 Linux/Windows/browser runtime qualification. Common client code cross-compiles
@@ -40,3 +40,13 @@ Independent review is recorded with the final qualification results. Selected
 post-close descriptor counts are partial accounting, not a complete GPU-heap
 leak proof. Missing/zero presentation timestamps around visibility/reconfigure/
 close events establish no frame-drop count.
+
+
+Additional practical evidence: one width drag recovered at1700×1080 and a
+minimize/Raise sequence returned visibly; both bounded sessions required watchdog
+SIGTERM and drained cleanly, so complete minimized scheduling remains open. The
+packaged `run-play --fast` is explicit, verifies its binary and prerequisites,
+resets prototype QA environment flags and preserves saved settings selection.
+A 3600-frame unattended profile soak verified every presentation row, zero
+capacity pipeline rebuilds and clean close, but measured114.22Hz under a growing
+dense workload. This does not establish sustained120FPS or whole-GPU leak freedom.

@@ -452,3 +452,37 @@ occlusion, display-scale migration and device-loss recovery remain unqualified.
 See CURRENT_READINESS.md and WINDOW_LIFECYCLE_MEASUREMENTS.json for evidence and
 remaining limits. No repeatable FPS gain is claimed for hull aliases; their
 measured improvement is allocations and CPU tails.
+
+
+### Explicit launch profiles
+
+A fresh `tools/build-play ... --present-handler` output includes `run-play`.
+Use the packaged launcher to avoid an environment-variable list:
+
+```sh
+/tmp/nanolathe-profile-current/run-play --fast --telemetry -- \
+  --root="$HOME/TotalAnnihilation" --map='Town & Country' --zoom=1
+```
+
+Or invoke `experiments/webgpu/tools/run-play --build BUILD_DIRECTORY --fast ...`.
+Omit `--fast` for the baseline profile and `--telemetry` for no handler observations.
+The launcher verifies the binary digest and required build prerequisites, clears
+only inherited prototype diagnostic variables, and explicitly keeps runtime
+arrays off. Fast sets GOMAXPROCS=4, owned asynchronous uploads, preparation
+ahead and storage reservation. It preserves `NANOLATHE_SETTINGS` and never writes
+saved preferences. `execve` keeps signal cleanup attached to the launched process.
+The build records the packaged launcher's digest; runtime checks verify the binary.
+`--neutral-pointer` is restricted by the renderer to a bounded interactive field
+diagnostic; it is not ordinary-play or fixed-benchmark input.
+
+One native width drag and a minimize/Raise visible-recovery sequence were
+observed through supported accessibility controls. The UI sessions closed with
+balanced submissions after bounded watchdog SIGTERM; they did not complete their
+planned frame budgets, so minimized scheduling and broader live-resize behavior
+remain unqualified. Compositor occlusion and display migration were not tested.
+The 3600-frame unattended fast-profile soak had3600 unique positive display
+observations at114.22336Hz as visible body triangles grew to38,374, with no model/
+layer pipeline creation. This lower long-window cadence limits any120FPS claim.
+Go heap grew before GC and a post-measurement heap sample returned to about1.88GiB;
+selected post-close descriptors and handler routes drained. This is bounded
+short-run accounting, not an all-native-memory leak proof.

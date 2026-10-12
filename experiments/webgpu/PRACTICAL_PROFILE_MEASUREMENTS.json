@@ -1,0 +1,300 @@
+{
+  "date": "2026-10-12",
+  "base_commit": "119b293ac3d662f605a812ecd2116c641bade819",
+  "native_UI": {
+    "prototype-ui": {
+      "artifact": "/tmp/nanolathe-prototype-ui",
+      "report_sha256": "bd7fb2bf79137ca65a811c806696bfed18281331820b33e2300924d854f3b944",
+      "target_measured_frames": 6000,
+      "recorded_rows": 4909,
+      "actual_last_extent": [
+        1700,
+        1080
+      ],
+      "watchdog_seconds": 70,
+      "watchdog_SIGTERM_required": true,
+      "process_exit_code": 0,
+      "submission_close": {
+        "completed": 4910,
+        "submitted": 4910
+      },
+      "handler_summary": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 4910,
+        "Presented": 4891,
+        "Missing": 19,
+        "Callbacks": 4909,
+        "ValueEvictions": 814,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "prototype-ui2": {
+      "artifact": "/tmp/nanolathe-prototype-ui2",
+      "report_sha256": "cec85686104fa2dbe1ff5d730e91451000aa3b167db389debf44e9c102053f41",
+      "target_measured_frames": 3000,
+      "recorded_rows": 2812,
+      "actual_last_extent": [
+        1920,
+        1080
+      ],
+      "watchdog_seconds": 45,
+      "watchdog_SIGTERM_required": true,
+      "process_exit_code": 0,
+      "submission_close": {
+        "completed": 2813,
+        "submitted": 2813
+      },
+      "handler_summary": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 2813,
+        "Presented": 2796,
+        "Missing": 17,
+        "Callbacks": 2812,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    }
+  },
+  "UI_action_scope": [
+    "Cua bound only task-owned bundle /tmp/nanolathe-final-ready/Nanolathe WebGPU Prototype.app",
+    "Live right-edge drag changed screenshot/native report1920\u00d71080\u21921700\u00d71080; dense rendering recovered",
+    "Minimize button action then fresh app binding and exposed Raise action returned a visible battle screenshot",
+    "First restore attempt lost active Cua context; both UI sessions ended by watchdog SIGTERM and did not complete their requested frame budgets",
+    "No controls on unrelated apps, settings or preference files; no compositor occlusion or display migration test"
+  ],
+  "launcher": {
+    "source": "/Users/daniel/.codex/worktrees/webgpu-p0-p4/nanolathe/experiments/webgpu/tools/run-play",
+    "sha256": "f5a7e9dd9b9fe0e1b1251fe6ab2f4ff87b8707a11e930fef607558b19369c24e",
+    "profile": "--fast explicit; fixedruntime0, reserve/ownedasync/ahead1,GOM4; --telemetry separatelyrequiredhandlerbuild",
+    "environment_scope": "ClearonlyNANOLATHE_WEBGPU_* QAflags;preserveNANOLATHE_SETTINGS andsavedOS/app preferences",
+    "lifecycle": "os.execve replaces wrapper, preservingPID/signal handling",
+    "runtime_checks": "Binarydigest andbuildprerequisites; launcherhashrecordedbybuild, notselfverified",
+    "tests": [
+      "Syntaxparsed",
+      "Dryrunforcedinheritedruntime1to0andpreservedsettingsselection",
+      "Missinghandlerprerequisite rejectedbeforelaunch",
+      "Falsewebgpu route rejectedbeforelaunch",
+      "Freshguardedbuildpackagedlauncher",
+      "3600-frameactualpackagedlauncherexecutioncompleted"
+    ]
+  },
+  "fresh_build": {
+    "directory": "/tmp/nanolathe-profile-current",
+    "manifest": "/tmp/nanolathe-profile-current/build-manifest.json",
+    "binary_sha256": "41a5cf46b8ea6be12ce298527affd775f363f82c37b2b392852a3419740ae848",
+    "packaged_launcher_sha256": "f5a7e9dd9b9fe0e1b1251fe6ab2f4ff87b8707a11e930fef607558b19369c24e"
+  },
+  "soak": {
+    "artifact": "/tmp/nanolathe-profile-soak",
+    "report_sha256": "e646d7b8b617b523d56794ed48b921632c52f1a9be25a9dd20b397de8ba819a8",
+    "completed_measured_rows": 3600,
+    "unique_tick_alpha": 3600,
+    "matched_unique_positive_presentations": 3600,
+    "display_consecutive_pairs": 3599,
+    "display_hz": 114.22335730089057,
+    "display_interval_ms": {
+      "mean": 8.75477681299255,
+      "median": 8.333416655659676,
+      "p95": 8.340045809745789,
+      "p99": 16.666708285920322,
+      "max": 33.333499915897846
+    },
+    "intervals_over12ms": 178,
+    "windows_of720": [
+      {
+        "offset": 0,
+        "rows": 720,
+        "display_hz": 119.99955438222206,
+        "intervals_over12ms": 0,
+        "source_ms": {
+          "mean": 4.120450908333333,
+          "median": 3.5252915,
+          "p95": 7.18601695,
+          "p99": 7.707321519999996,
+          "max": 12.186583
+        },
+        "encode_ms": {
+          "mean": 1.4758367277777777,
+          "median": 1.4506255000000001,
+          "p95": 2.0145128,
+          "p99": 3.248100059999999,
+          "max": 7.181792
+        },
+        "body_triangle_range": [
+          26970,
+          30046
+        ]
+      },
+      {
+        "offset": 720,
+        "rows": 720,
+        "display_hz": 119.00649931550512,
+        "intervals_over12ms": 4,
+        "source_ms": {
+          "mean": 5.906213590277778,
+          "median": 4.4097290000000005,
+          "p95": 10.804307999999999,
+          "p99": 11.729012709999994,
+          "max": 20.863583
+        },
+        "encode_ms": {
+          "mean": 1.6667092458333332,
+          "median": 1.6170415,
+          "p95": 2.22363095,
+          "p99": 3.024029249999996,
+          "max": 5.315833
+        },
+        "body_triangle_range": [
+          26270,
+          31466
+        ]
+      },
+      {
+        "offset": 1440,
+        "rows": 720,
+        "display_hz": 119.50094229335267,
+        "intervals_over12ms": 2,
+        "source_ms": {
+          "mean": 6.162365115277778,
+          "median": 4.771083,
+          "p95": 11.3771625,
+          "p99": 11.805582479999996,
+          "max": 14.379333
+        },
+        "encode_ms": {
+          "mean": 1.5528153416666666,
+          "median": 1.5038335,
+          "p95": 1.98394615,
+          "p99": 2.2376449999999988,
+          "max": 4.391292
+        },
+        "body_triangle_range": [
+          31230,
+          36719
+        ]
+      },
+      {
+        "offset": 2160,
+        "rows": 720,
+        "display_hz": 102.83642784519716,
+        "intervals_over12ms": 120,
+        "source_ms": {
+          "mean": 7.284271241666667,
+          "median": 5.541104000000001,
+          "p95": 12.7611333,
+          "p99": 13.17503202,
+          "max": 13.920667
+        },
+        "encode_ms": {
+          "mean": 1.7763962361111112,
+          "median": 1.705771,
+          "p95": 2.2062601,
+          "p99": 2.2958732499999996,
+          "max": 4.041458
+        },
+        "body_triangle_range": [
+          32705,
+          38374
+        ]
+      },
+      {
+        "offset": 2880,
+        "rows": 720,
+        "display_hz": 111.90622943182309,
+        "intervals_over12ms": 51,
+        "source_ms": {
+          "mean": 7.0677244125,
+          "median": 5.4109165,
+          "p95": 12.00069965,
+          "p99": 12.327099709999999,
+          "max": 13.931083
+        },
+        "encode_ms": {
+          "mean": 1.6894175430555556,
+          "median": 1.6321245,
+          "p95": 2.0789937499999995,
+          "p99": 2.2455282499999987,
+          "max": 5.03675
+        },
+        "body_triangle_range": [
+          31239,
+          37217
+        ]
+      }
+    ],
+    "pipeline_creates": {
+      "Models": 0,
+      "Layers": 0
+    },
+    "submission_close": {
+      "completed": 3723,
+      "submitted": 3723
+    },
+    "handler_summary": {
+      "Enabled": true,
+      "Closed": true,
+      "Retains": 0,
+      "Releases": 0,
+      "Outstanding": 0,
+      "HighWater": 4,
+      "RegistryOutstanding": 0,
+      "PermanentBlocks": 1,
+      "Requested": 3723,
+      "Presented": 3720,
+      "Missing": 3,
+      "Callbacks": 3722,
+      "ValueEvictions": 0,
+      "IgnoredAfterClose": 0,
+      "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+    },
+    "memory_before_post_measurement_GC": {
+      "alloc_bytes": 930637728,
+      "gc": 0,
+      "gc_pause_ns": 0,
+      "go_sys_bytes_end": 3338834488,
+      "go_sys_bytes_start": 3326350392,
+      "heap_bytes_end": 2883398216,
+      "heap_bytes_start": 1952760488,
+      "mallocs": 5838471,
+      "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+    },
+    "post_measurement_GC_sampled_inuse_bytes": 2019241287,
+    "post_GC_heap_profile": "/tmp/nanolathe-profile-soak/heap.pprof",
+    "post_GC_heap_top": "/tmp/nanolathe-profile-soak-heap-bytes.txt",
+    "selected_post_close_descriptors": {
+      "current_buffer_descriptor_bytes": 0,
+      "current_buffers": [],
+      "scope": "selected current descriptor payloads, not actual GPU heap; excludes model immutable texture/palette owners, older model buffer tiers, distortion/lens buffers, driver alignment, pipeline/staging caches and borrowed host resources",
+      "texture_descriptor_bytes": 0,
+      "textures": []
+    },
+    "run_error": null,
+    "watchdog_required": false,
+    "process_exit_code": 0
+  },
+  "claims": [
+    "Longer advancing dense battle measured114.22Hz, below earlier6secondobservations; no sustained120 claim",
+    "Goheap grewbeforeGC; sampledpostGCinuseabout1.881GiB isnearstarting1.819GiB butstillgrew; no completeleakproof",
+    "Currentmodel/layerpipelinecreates0 and selecteddescriptors/handlerroutes drain; nativeheap/cache/lossrecovery outsideaccounting",
+    "Compositor occlusion, broad minimized scheduling, RequestSize duringlive drag, scale migration and Windows/Linux/browser runtime remain unqualified"
+  ],
+  "next_step": "Profile longer advancing-scene tails using existing CPU phase data before choosing further optimization; broader OS/backend claims need controlled supported runtime environments."
+}
