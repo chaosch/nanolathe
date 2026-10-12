@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/clock"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
@@ -65,6 +66,12 @@ func runMetal(opts Options, cs *contentSet) error {
 	cl.Resize(logicalW, logicalH)
 	battle.setSurfaceSize(int32(logicalW), int32(logicalH))
 	battle.placeEntryCamera(logicalW, logicalH)
+	// --zoom applies after the entry placement (and any staged scene camera),
+	// about the view centre, as a staged live scene applies it.
+	if opts.Zoom != 0 && opts.Zoom != camera.ZoomUnit {
+		mx, my := battleViewCentre(battle.cam)
+		jumpBattleZoom(battle, mx, my, opts.Zoom, true)
+	}
 	cl.SetEnhanced(true)
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)

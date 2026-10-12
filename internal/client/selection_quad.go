@@ -14,6 +14,9 @@ package client
 // Document 07 owns selection membership; this file only draws.
 
 import (
+	"math"
+	"sync"
+
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
@@ -37,6 +40,38 @@ func selectionQuadBounds(m *compiledmodel.Model) (a, b [3]numeric.Fixed) {
 	if m == nil || m.Root < 0 || m.Root >= len(m.Pieces) {
 		return
 	}
+	e := selectionHullExtentOf(m)
+	return e.a, e.b
+}
+
+// selectionHullExtent is a compiled model's selection-quad bounds and the
+// radius of its four corners about the model origin. Compiled models are
+// immutable, so both are computed once per model; the radius bounds every
+// rotation of the corners, since rotation preserves length.
+type selectionHullExtent struct {
+	a, b   [3]numeric.Fixed
+	radius float64 // world units, rounded up
+}
+
+var selectionHullExtents sync.Map // *compiledmodel.Model → selectionHullExtent
+
+func selectionHullExtentOf(m *compiledmodel.Model) selectionHullExtent {
+	if v, ok := selectionHullExtents.Load(m); ok {
+		return v.(selectionHullExtent)
+	}
+	var e selectionHullExtent
+	e.a, e.b = selectionQuadBoundsWalk(m)
+	for _, x := range [2]numeric.Fixed{e.a[0], e.b[0]} {
+		for _, z := range [2]numeric.Fixed{e.a[2], e.b[2]} {
+			fx, fy, fz := float64(x)/65536, float64(e.a[1])/65536, float64(z)/65536
+			e.radius = max(e.radius, math.Ceil(math.Sqrt(fx*fx+fy*fy+fz*fz)))
+		}
+	}
+	selectionHullExtents.Store(m, e)
+	return e
+}
+
+func selectionQuadBoundsWalk(m *compiledmodel.Model) (a, b [3]numeric.Fixed) {
 	piece := m.Pieces[m.Root]
 	if len(piece.Vertices) < 3 {
 		return // fewer than three vertices contributes nothing [03 R-WATER-01 §1]

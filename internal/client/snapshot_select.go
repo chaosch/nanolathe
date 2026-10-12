@@ -1,6 +1,8 @@
 package client
 
 import (
+	"math"
+
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/pool"
@@ -123,6 +125,13 @@ func PickSnapshotUnit(f *frame.Frame, sx, sy int32, cam *camera.Camera, viewer u
 	// The reduction seeds its running best above every reachable score and
 	// replaces it only on a strictly smaller one [07 R-REV-01 §5].
 	bestScore := int32(0x7fff0000)
+	// A unit's rotated hull lies within its corner radius of the projected
+	// origin, so a pointer beyond that (with the projection's rounding slop)
+	// cannot be strictly inside it: skip the corner work for such units. The
+	// record-step scale is measured once from the camera's own projection.
+	x0, _ := cam.WorldToScreen(0, 0, 0)
+	x1, _ := cam.WorldToScreen(numeric.FixedFromInt(4096), 0, 0)
+	reach := float64(x1-x0) / 4096
 	for i := 0; i < len(f.Units); i++ {
 		v := f.Units[i]
 		// Slot zero is not a candidate. The geometry lookup below tests the
@@ -135,6 +144,13 @@ func PickSnapshotUnit(f *frame.Frame, sx, sy int32, cam *camera.Camera, viewer u
 			continue
 		}
 		m := src.HullModel(v.Model)
+		if m != nil && reach > 0 && m.Root >= 0 && m.Root < len(m.Pieces) {
+			ox, oy := cam.WorldToScreen(v.X, v.Y, v.Z)
+			r := selectionHullExtentOf(m).radius*reach*1.02 + 4
+			if math.Abs(float64(sx-(ox-camera.OriginX))) > r || math.Abs(float64(sy-(oy-camera.OriginY))) > 1.5*r {
+				continue
+			}
+		}
 		corners, ok := hoverHullCorners(m, v, cam)
 		if !ok || !containsStrictPolygon(sx, sy, corners[:]) {
 			continue
