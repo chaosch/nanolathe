@@ -319,10 +319,11 @@ func modelShadowCommitShaderSource(capacities [4]int) string {
 
 func (m *Models) modelResizeShadows(width, height int) (err error) {
 	p := &m.shadowWork
-	if width <= p.atlas.width && height <= p.atlas.height && p.atlas.body != nil {
+	nw, nh, change := modelAtlasFit(width, height, p.atlas.width, p.atlas.height, p.atlas.body != nil, &m.shadowShrink)
+	if !change {
 		return nil
 	}
-	next := modelShadowAtlas{width: modelAtlasExtent(width, p.atlas.width), height: modelAtlasExtent(height, p.atlas.height)}
+	next := modelShadowAtlas{width: nw, height: nh}
 	defer func() {
 		if err != nil {
 			next.modelClose()

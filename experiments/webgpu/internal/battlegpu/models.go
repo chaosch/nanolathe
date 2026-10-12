@@ -159,6 +159,8 @@ type Models struct {
 	directSlots    []bool
 	directDraws    []modelDraw
 	directOrder    []modelDirectPaint
+	// atlasShrink and shadowShrink count frames a smaller atlas would do.
+	atlasShrink, shadowShrink int
 }
 
 // modelDirectPaint is one direct subject's place in the world pass walk.
@@ -338,11 +340,40 @@ func modelAtlasExtent(need, current int) int {
 	}
 	return size
 }
+
+// modelAtlasShrinkFrames is how long a smaller extent must suffice before an
+// atlas is reallocated down to it. Render passes clear and store whole
+// attachments, so an atlas left at a past peak (2048x8192 after a busy view)
+// costs every later frame its full bandwidth; a second of hysteresis keeps
+// reallocation rare when the need hovers at a boundary.
+const modelAtlasShrinkFrames = 120
+
+// modelAtlasFit returns the extent to allocate for need given the current
+// extent: growth doubles at once; a smaller power-of-two fit is adopted only
+// after it has held for modelAtlasShrinkFrames consecutive frames.
+func modelAtlasFit(needW, needH, curW, curH int, ready bool, shrink *int) (w, h int, change bool) {
+	if !ready || needW > curW || needH > curH {
+		*shrink = 0
+		return modelAtlasExtent(needW, curW), modelAtlasExtent(needH, curH), true
+	}
+	fitW, fitH := modelAtlasExtent(needW, 64), modelAtlasExtent(needH, 64)
+	if fitW >= curW && fitH >= curH {
+		*shrink = 0
+		return curW, curH, false
+	}
+	if *shrink++; *shrink < modelAtlasShrinkFrames {
+		return curW, curH, false
+	}
+	*shrink = 0
+	return fitW, fitH, true
+}
+
 func (m *Models) modelResizeAtlas(width, height int) (err error) {
-	if width <= m.atlas.width && height <= m.atlas.height && m.atlas.colorView != nil {
+	nw, nh, change := modelAtlasFit(width, height, m.atlas.width, m.atlas.height, m.atlas.colorView != nil, &m.atlasShrink)
+	if !change {
 		return nil
 	}
-	next := modelAtlasResources{width: modelAtlasExtent(width, m.atlas.width), height: modelAtlasExtent(height, m.atlas.height)}
+	next := modelAtlasResources{width: nw, height: nh}
 	defer func() {
 		if err != nil {
 			next.modelClose()
