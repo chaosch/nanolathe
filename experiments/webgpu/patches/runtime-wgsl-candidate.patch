@@ -1,0 +1,342 @@
+--- a/internal/battlegpu/models.go
++++ b/internal/battlegpu/models.go
+@@ -104,6 +104,7 @@
+ 	format                                                                      gputypes.TextureFormat
+ 	owned                                                                       []modelRelease
+ 	closed, prepared                                                            bool
++	runtimeArrays                                                               bool
+ 	state                                                                       *battleRenderState
+ 	meshes                                                                      []modelMesh
+ 	materials                                                                   []meshscene.Material
+@@ -425,7 +426,7 @@
+ 	if d == nil || q == nil || scene == nil {
+ 		return nil, modelError("device, queue and retained scene")
+ 	}
+-	m = &Models{d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
++	m = &Models{runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
+ 	defer func() {
+ 		if err != nil {
+ 			m.Close()
+@@ -787,7 +788,10 @@
+ 	return nil
+ }
+ 
+-func modelGroupShaderSource(capacities [3]int) string {
++func modelGroupShaderSource(capacities [3]int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(modelGroupsShader)
++	}
+ 	return strings.NewReplacer("__GROUPS__", strconv.Itoa(capacities[0]), "__MEMBERS__", strconv.Itoa(capacities[1]), "__SLOTS__", strconv.Itoa(capacities[2])).Replace(modelGroupsShader)
+ }
+ func (m *Models) modelPrepareMergePipeline() error {
+@@ -795,12 +799,12 @@
+ 		return nil
+ 	}
+ 	capacities := [3]int{int(m.groups.size / modelGroupStride), int(m.members.size / modelMemberStride), int(m.slots.size / modelSlotStride)}
+-	if capacities == m.mergeCapacities && m.mergePipeline != nil {
++	if (m.runtimeArrays || capacities == m.mergeCapacities) && m.mergePipeline != nil {
+ 		return nil
+ 	}
+ 	// Fixed arrays match geometric buffer capacities. The pinned render compiler
+ 	// does not bind runtime-array size metadata; this stage never needs it.
+-	module, e := m.modelModule(modelGroupShaderSource(capacities))
++	module, e := m.modelModule(modelGroupShaderSource(capacities, m.runtimeArrays))
+ 	if e != nil {
+ 		return e
+ 	}
+--- a/internal/battlegpu/modelbodyabi.go
++++ b/internal/battlegpu/modelbodyabi.go
+@@ -63,7 +63,10 @@
+ 	return
+ }
+ 
+-func modelBodyShaderSource(capacities [8]int) string {
++func modelBodyShaderSource(capacities [8]int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(modelBodyShader)
++	}
+ 	var replacements [16]string
+ 	for i, record := range modelBodyArrays {
+ 		prefix := record.name + ":array<" + record.element + ","
+@@ -93,13 +96,13 @@
+ 
+ func (m *Models) modelPrepareBodyPipelines() error {
+ 	capacities := modelBodyCapacities([8]uint64{m.vertices.Size(), m.poses.size, m.instances.size, m.materialData.Size(), m.frameData.Size(), m.selected.size, m.lights.size, m.centers.Size()})
+-	if m.bodyWork.module != nil && capacities == m.bodyWork.capacities {
++	if m.bodyWork.module != nil && (m.runtimeArrays || capacities == m.bodyWork.capacities) {
+ 		return nil
+ 	}
+ 	err := m.bodyWork.modelReplace(func(next *modelBodyPipelines) error {
+ 		next.capacities = capacities
+ 		var err error
+-		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelBodyShaderSource(capacities)})
++		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelBodyShaderSource(capacities, m.runtimeArrays)})
+ 		if next.module != nil {
+ 			next.releases[0] = next.module.Release
+ 		}
+--- a/internal/battlegpu/modelcommit.go
++++ b/internal/battlegpu/modelcommit.go
+@@ -34,11 +34,18 @@
+ 	).Replace("const modelShadowCorners=" + tail)
+ }
+ 
+-func modelCommitShaderSource(capacities [2]int) string {
+-	return strings.NewReplacer(
++func modelCommitShaderSource(capacities [2]int, runtime ...bool) string {
++	source := strings.NewReplacer(
+ 		"__SLOTS__", strconv.Itoa(capacities[0]), "__SUBJECTS__", strconv.Itoa(capacities[1]),
+ 		"__BODY_HELPERS__", modelCommitBodyHelpers(), "__SHADOW_HELPERS__", modelCommitShadowHelpers(),
+ 	).Replace(modelCommitShader)
++	if len(runtime) > 0 && runtime[0] {
++		source = runtimeStorageArrays(source)
++		source = strings.Replace(source, "const modelCommitSlotCapacity:u32="+strconv.Itoa(capacities[0])+"u;", "__RUNTIME_CAPACITY_FUNCTION__", 1)
++		source = strings.ReplaceAll(source, "modelCommitSlotCapacity", "modelCommitSlotCapacity()")
++		source = strings.Replace(source, "__RUNTIME_CAPACITY_FUNCTION__", "fn modelCommitSlotCapacity()->u32{return arrayLength(&slots);}", 1)
++	}
++	return source
+ }
+ 
+ func modelCommitCapacities(slotBytes, subjectBytes uint64) [2]int {
+@@ -81,13 +88,14 @@
+ 
+ func (m *Models) modelPrepareCommitPipeline() error {
+ 	capacities := modelCommitCapacities(m.slots.size, m.shadowRecords.size)
+-	if m.commitWork.module != nil && capacities == m.commitWork.capacities {
++	if m.commitWork.module != nil && (m.runtimeArrays || capacities == m.commitWork.capacities) {
++		m.commitWork.capacities = capacities
+ 		return nil
+ 	}
+ 	if err := m.commitWork.modelReplace(func(next *modelCommitPipeline) error {
+ 		next.capacities = capacities
+ 		var err error
+-		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelCommitShaderSource(capacities)})
++		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelCommitShaderSource(capacities, m.runtimeArrays)})
+ 		if next.module != nil {
+ 			next.releases[0] = next.module.Release
+ 		}
+--- a/internal/battlegpu/modelshadows.go
++++ b/internal/battlegpu/modelshadows.go
+@@ -306,7 +306,10 @@
+ 	}
+ }
+ 
+-func modelShadowShaderSource(capacities [4]int) string {
++func modelShadowShaderSource(capacities [4]int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(modelShadowsShader)
++	}
+ 	return strings.NewReplacer("__VERTICES__", strconv.Itoa(capacities[0]), "__POSES__", strconv.Itoa(capacities[1]), "__INSTANCES__", strconv.Itoa(capacities[2]), "__SUBJECTS__", strconv.Itoa(capacities[3])).Replace(modelShadowsShader)
+ }
+ 
+@@ -374,8 +377,8 @@
+ 		return
+ 	}
+ 	capacities := [4]int{p.vertexCount, int(m.poses.size / modelPoseStride), int(m.instances.size / modelInstanceStride), int(m.shadowRecords.size / modelShadowStride)}
+-	if capacities != p.capacities {
+-		projectModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities)})
++	if p.projectPipeline == nil || (!m.runtimeArrays && capacities != p.capacities) {
++		projectModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities, m.runtimeArrays)})
+ 		if e != nil {
+ 			return e
+ 		}
+--- a/internal/battlegpu/layers.go
++++ b/internal/battlegpu/layers.go
+@@ -76,6 +76,7 @@
+ // it never makes emitters or simulation state of its own.
+ type Layers struct {
+ 	reserveStorage                                                                              bool
++	runtimeArrays                                                                               bool
+ 	d                                                                                           *wgpu.Device
+ 	q                                                                                           *wgpu.Queue
+ 	format, outputFormat                                                                        gputypes.TextureFormat
+@@ -364,7 +365,7 @@
+ 	return newLayersFormats(d, q, format, format, scene)
+ }
+ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputypes.TextureFormat, scene *meshscene.Scene) (l *Layers, err error) {
+-	l = &Layers{reserveStorage: storageReserveEnabled(), d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
++	l = &Layers{runtimeArrays: runtimeArraysEnabled(d), reserveStorage: storageReserveEnabled(), d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
+ 	defer func() {
+ 		if err != nil {
+ 			l.Close()
+--- a/internal/battlegpu/layerabi.go
++++ b/internal/battlegpu/layerabi.go
+@@ -11,7 +11,10 @@
+ // The pinned Metal render HAL does not bind Naga's runtime-array size argument.
+ // Fixed declarations use the bound allocation tier, retaining every declaration
+ // so native buffer/texture indices still match the shared group (C-G3, C-G7).
+-func layerABIOverlaySource(capacities [5]int) string {
++func layerABIOverlaySource(capacities [5]int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(layerOverlayShader)
++	}
+ 	source := layerOverlayShader
+ 	for i, name := range [...]string{"LayerQuad", "LayerVertex", "LayerGround", "LayerSmoke", "LayerLight"} {
+ 		source = strings.Replace(source, "array<"+name+",1>", "array<"+name+","+strconv.Itoa(max(capacities[i], 1))+">", 1)
+@@ -19,8 +22,36 @@
+ 	return source
+ }
+ 
+-func layerABISpriteSource(capacity int) string {
++func layerABISpriteSource(capacity int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(layerSpriteShader)
++	}
+ 	return strings.Replace(layerSpriteShader, "array<LayerSprite,1>", "array<LayerSprite,"+strconv.Itoa(max(capacity, 1))+">", 1)
++}
++
++// Annotation's existing layout contains only uniforms and quads. Derive its
++// unchanged equations from the canonical shared source while excluding other
++// entrypoints and globals that this layout cannot bind.
++func layerABIAnnotationRuntimeSource() string {
++	prefix, _, ok := strings.Cut(layerOverlayShader, "fn layerTexel(")
++	if !ok {
++		return ""
++	}
++	lines := strings.Split(prefix, "\n")
++	var kept []string
++	for _, line := range lines {
++		unused := false
++		for binding := 2; binding <= 9; binding++ {
++			if strings.HasPrefix(line, "@group(0) @binding("+strconv.Itoa(binding)+")") {
++				unused = true
++				break
++			}
++		}
++		if !unused {
++			kept = append(kept, line)
++		}
++	}
++	return runtimeStorageArrays(strings.Join(kept, "\n"))
+ }
+ 
+ type layerABIKey struct {
+@@ -92,13 +123,13 @@
+ }
+ 
+ func (l *Layers) layerABISpriteKey() layerABIKey {
+-	return layerABIKey{capacities: [5]int{max(l.sprites.size/96, 1)}, seabed: l.seabed.active || l.seabed.sprite != nil}
++	return runtimeLayerKey(layerABIKey{capacities: [5]int{max(l.sprites.size/96, 1)}, seabed: l.seabed.active || l.seabed.sprite != nil}, l.runtimeArrays)
+ }
+ 
+ func (l *Layers) layerUpdateSpritePipelines() error {
+ 	key := l.layerABISpriteKey()
+ 	return layerABIReplace(&l.layerABI.sprite, key, func(b *layerABIBundle) error {
+-		shader, err := l.layerABIModule(b, layerABISpriteSource(key.capacities[0]))
++		shader, err := l.layerABIModule(b, layerABISpriteSource(key.capacities[0], l.runtimeArrays))
+ 		if err != nil {
+ 			return err
+ 		}
+@@ -125,8 +156,13 @@
+ 
+ func (l *Layers) layerUpdateOverlayPipelines() error {
+ 	annotation := layerABIKey{capacities: [5]int{max(l.annotations.size/64, 1), 1, 1, 1, 1}}
++	annotation = runtimeLayerKey(annotation, l.runtimeArrays)
+ 	if err := layerABIReplace(&l.layerABI.annotation, annotation, func(b *layerABIBundle) error {
+-		shader, err := l.layerABIModule(b, layerABIOverlaySource(annotation.capacities))
++		source := layerABIOverlaySource(annotation.capacities)
++		if l.runtimeArrays {
++			source = layerABIAnnotationRuntimeSource()
++		}
++		shader, err := l.layerABIModule(b, source)
+ 		if err != nil {
+ 			return err
+ 		}
+@@ -135,8 +171,9 @@
+ 		return err
+ 	}
+ 	foreground := layerABIKey{capacities: l.layerABIOverlayCapacities(&l.overlayQuads)}
++	foreground = runtimeLayerKey(foreground, l.runtimeArrays)
+ 	if err := layerABIReplace(&l.layerABI.foreground, foreground, func(b *layerABIBundle) error {
+-		shader, err := l.layerABIModule(b, layerABIOverlaySource(foreground.capacities))
++		shader, err := l.layerABIModule(b, layerABIOverlaySource(foreground.capacities, l.runtimeArrays))
+ 		if err != nil {
+ 			return err
+ 		}
+@@ -150,8 +187,9 @@
+ 		return err
+ 	}
+ 	effects := layerABIKey{capacities: l.layerABIOverlayCapacities(&l.effectQuads)}
++	effects = runtimeLayerKey(effects, l.runtimeArrays)
+ 	return layerABIReplace(&l.layerABI.effects, effects, func(b *layerABIBundle) error {
+-		shader, err := l.layerABIModule(b, layerABIOverlaySource(effects.capacities))
++		shader, err := l.layerABIModule(b, layerABIOverlaySource(effects.capacities, l.runtimeArrays))
+ 		if err != nil {
+ 			return err
+ 		}
+--- a/internal/battlegpu/glow.go
++++ b/internal/battlegpu/glow.go
+@@ -50,6 +50,7 @@
+ 	closed, enabled           bool
+ 	width, height, vertices   int
+ 	vertexCapacity            int
++	runtimeArrays             bool
+ 	uniform, vertexBuffer     *wgpu.Buffer
+ 	source                    *wgpu.RenderPipeline
+ 	sourceModule              *wgpu.ShaderModule
+@@ -152,7 +153,7 @@
+ }
+ 
+ func NewGlow(d *wgpu.Device, q *wgpu.Queue, scene *meshscene.Scene) (g *Glow, err error) {
+-	g = &Glow{d: d, q: q}
++	g = &Glow{runtimeArrays: runtimeArraysEnabled(d), d: d, q: q}
+ 	defer func() {
+ 		if err != nil {
+ 			g.Close()
+@@ -480,15 +481,18 @@
+ 
+ // Render HAL does not bind runtime size metadata. Fixed capacities follow the
+ // current uploaded tier; completion precedes Prepare and pipeline replacement.
+-func glowSourceShader(capacity int) string {
++func glowSourceShader(capacity int, runtime ...bool) string {
++	if len(runtime) > 0 && runtime[0] {
++		return runtimeStorageArrays(glowShader)
++	}
+ 	return strings.Replace(glowShader, "array<GlowVertex,1>", "array<GlowVertex,"+strconv.Itoa(max(capacity, 1))+">", 1)
+ }
+ func (g *Glow) glowPrepareSourcePipeline() error {
+ 	capacity := max(g.vertexCapacity/glowVertexSize, 1)
+-	if g.source != nil && g.sourceCapacity == capacity {
++	if g.source != nil && (g.runtimeArrays || g.sourceCapacity == capacity) {
+ 		return nil
+ 	}
+-	shader, err := g.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowSourceShader(capacity)})
++	shader, err := g.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowSourceShader(capacity, g.runtimeArrays)})
+ 	if err != nil {
+ 		return err
+ 	}
+--- /dev/null
++++ b/internal/battlegpu/runtime_arrays.go
+@@ -0,0 +1,33 @@
++package battlegpu
++
++import (
++	"os"
++	"regexp"
++
++	"github.com/gogpu/wgpu"
++)
++
++// Optional portable WGSL arrays require a qualified native render binding ABI.
++// Browser/Rust and pristine native dependency pins keep fixed declarations.
++func runtimeArraysEnabled(d *wgpu.Device) bool {
++	if os.Getenv("NANOLATHE_WEBGPU_RUNTIME_ARRAYS") != "1" {
++		return false
++	}
++	contract, ok := any(d).(interface{ RenderRuntimeArraysSafe() bool })
++	return ok && contract.RenderRuntimeArraysSafe()
++}
++
++// Restrict conversion to declared storage arrays. Local literal arrays and all
++// retained vertex/UV records stay exactly as authored.
++var runtimeStoragePattern = regexp.MustCompile(`(var<storage,\s*read(?:_write)?>\s+\w+:\s*array<)([^;\n]+),\s*(?:[0-9]+|__[A-Z_]+__)(>;)`)
++
++func runtimeStorageArrays(source string) string {
++	return runtimeStoragePattern.ReplaceAllString(source, "${1}${2}${3}")
++}
++
++func runtimeLayerKey(key layerABIKey, enabled bool) layerABIKey {
++	if enabled {
++		key.capacities = [5]int{1, 1, 1, 1, 1}
++	}
++	return key
++}

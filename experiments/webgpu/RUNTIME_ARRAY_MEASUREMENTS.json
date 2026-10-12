@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-12",
+  "base_commit": "4a8bbfecd1cad042786a82f621534ccce7dc00ef",
+  "renderer_adopted": false,
+  "backend_patch_sha256": "0daff28eaa1eb0134696a10c3f42d20bca0185ca78e350d3eedf21897410ca5c",
+  "qualified": {
+    "native_count_pixel_cases": 70,
+    "native_same_pass_transition_pixel_cases": 4,
+    "native_invalid_range_refusals": 7,
+    "native_all_metal_tests_pass": true,
+    "model_growth_cases": 19,
+    "model_growth_recompilations": [
+      0,
+      0,
+      0
+    ],
+    "all_19_atlas_and_world_equal_to_fixed": true,
+    "coast_final_png_fields_and_benchmark_state_equal": true,
+    "coast_gpu_sidecars_equal": 18,
+    "dense_measured_rows": 720,
+    "dense_unique_tick_alpha": 720,
+    "dense_timings_ms": {
+      "CallbackMS": {
+        "mean": 8.392338194444445,
+        "p95": 8.514667,
+        "p99": 9.800291
+      },
+      "EncodeMS": {
+        "mean": 2.0207117861111112,
+        "p95": 2.72425,
+        "p99": 4.631208
+      },
+      "SourceMS": {
+        "mean": 4.215300920833333,
+        "p95": 9.499667,
+        "p99": 10.068959
+      },
+      "JoinMS": {
+        "mean": 0.32507397499999996,
+        "p95": 2.317875,
+        "p99": 3.389958
+      }
+    },
+    "dense_submission_close": {
+      "completed": 843,
+      "submitted": 843
+    }
+  },
+  "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+  "settings_scope": "Private nominal gameSpeed10 snapshot, saved user speed15 untouched",
+  "dense_fixture": {
+    "GOMAXPROCS": 4,
+    "scene": "Town & Country field:1000, normal zoom1, centered camera and neutral pointer",
+    "warmup": 120,
+    "measured": 720
+  },
+  "limits": [
+    "Previous full-battle binary rebinds metadata before every draw; current backend patch reuses unchanged per-pass metadata and has passed native tests but awaits full-scene requalification",
+    "Renderer candidate is preserved as a patch and is not adopted into default or optional source yet",
+    "Shared modules require all globals to have layout resources; annotation derives only its existing canonical annotation equations",
+    "ICB disabled for runtime pipelines; native indirect paths checked",
+    "Actual WebGPU display/GPU timestamps remain unavailable; callback cadence cannot establish presentation",
+    "Other platforms retain fallback and are not runtime-qualified"
+  ],
+  "artifacts": {
+    "private_dependency": "/tmp/nanolathe-wgpu-runtimearrays",
+    "private_experiment": "/tmp/nanolathe-runtimearray-experiment",
+    "current_game_binary": "/tmp/nanolathe-runtimearray-game-build3/nanolathe-webgpu",
+    "prior_qualified_game_binary": "/tmp/nanolathe-runtimearray-game-build2/nanolathe-webgpu",
+    "growth_result": "/tmp/nanolathe-runtimearray-model-growth/result.json",
+    "dense_report": "/tmp/nanolathe-runtimearray-dense2/report.json",
+    "coast_report": "/tmp/nanolathe-runtimearray-coast/webgpu-report.json",
+    "native_log": "/tmp/nanolathe-runtimearray-all-metal-tests.log"
+  }
+}
