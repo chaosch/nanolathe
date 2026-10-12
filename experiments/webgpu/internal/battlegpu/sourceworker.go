@@ -59,6 +59,13 @@ func (w *sourceWorker) join() (p preparedSource, ahead bool, joinMS float64) {
 	w.pending = false
 	return p, true, float64(time.Since(start).Nanoseconds()) / 1e6
 }
+// waiting reports a started source whose result is not ready yet; it never
+// blocks. A browser frame callback must not wait for it: the page's event
+// loop, which the callback holds, completes the source's file reads.
+func (w *sourceWorker) waiting() bool {
+	return w != nil && w.pending && len(w.results) == 0
+}
+
 func (w *sourceWorker) close() error {
 	if w == nil || w.requests == nil {
 		return nil

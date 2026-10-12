@@ -170,6 +170,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var fallbackFrames int
 	var lastLifecycleEpoch uint64
 	var lateFallbacks, lateFrames uint64
+	var sourceRedraws uint64
 	var retainedDescriptors [2]map[string]any
 	var failure error
 	var capture *battleCapture
@@ -219,7 +220,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	stoppedMeasure := false
 	draw := 0
 	// Keep the worker explicit until its gain is repeatable across large scenes.
-	prepareAhead := opts.PrepareAhead != nil && os.Getenv("NANOLATHE_WEBGPU_PREPARE_AHEAD") == "1"
+	// Where the page's requestAnimationFrame owns cadence (the browser) a
+	// frame callback can never wait on the source, so preparation always runs
+	// on the worker there unless explicitly disabled.
+	prepareAheadEnv := os.Getenv("NANOLATHE_WEBGPU_PREPARE_AHEAD")
+	prepareAhead := opts.PrepareAhead != nil && (prepareAheadEnv == "1" || !hostPacesFrames && prepareAheadEnv != "0")
 	if lateAcquire && !prepareAhead {
 		return nil, fmt.Errorf("late acquisition requires the serial source handoff")
 	}
@@ -521,6 +526,24 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			next = start.Add(period)
 			last = time.Time{}
 		}
+		if !hostPacesFrames && preparer != nil {
+			// The browser callback starts the source on the worker and returns
+			// at once while it is outstanding, presenting the last prepared
+			// picture again; the page's event loop, which completes the
+			// source's file and fetch reads, runs between callbacks.
+			if !preparer.pending {
+				input = sampleInput()
+				preparer.start(start.Sub(timeStart).Seconds(), meshscene.Input{Events: input, At: start})
+			}
+			if preparer.waiting() {
+				if e := renderer.Redraw(ctx.CommandEncoder(), ctx.SurfaceView()); e != nil {
+					failure = e
+					app.Quit()
+				}
+				sourceRedraws++
+				return
+			}
+		}
 		prepared, ahead, joinMS := preparer.join()
 		if !ahead {
 			input = sampleInput()
@@ -759,6 +782,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["target"] = runtime.GOOS + "/" + runtime.GOARCH
 	report["graphics_backend"] = graphicsBackend
 	report["host_paces_frames"] = hostPacesFrames
+	report["source_redraws"] = sourceRedraws
 	report["profiles_recorded"] = opts.OutputDir != "" && callbackFileIO
 	report["late_acquire"] = map[string]any{"requested": lateAcquire, "frames": lateFrames, "recoveries": lateFallbacks, "scope": "opt-in owned preparation/source handoff before acquisition; lifecycle/resize/setup/final boundaries retain early acquire; deferred acquisition change drops unencoded frame and source sample, never replays borrowed data or input; host outdated retries deferred to a fresh callback"}
 	report["encode_timing_scope"] = "EncodeMS/common Submit/DrawWork include late acquisition but exclude upfront early acquisition; CommandEncodeMS excludes preparation/source handoff/acquisition; nested wall durations are not additive"

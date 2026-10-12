@@ -102,6 +102,43 @@ if vulkan_proxy:
  selector.write_text(text)
  with (work/'go.mod').open('a') as f:f.write(f'\nreplace github.com/gogpu/gogpu => {copy}\n')
  dependency_overlays['github.com/gogpu/gogpu/gpu/backend/native/hal_metal.go']=dict(source_sha256=hashlib.sha256(original).hexdigest(),build_sha256=hashlib.sha256(selector.read_bytes()).hexdigest(),rewrites=['link the stock Vulkan HAL beside Metal','GOGPU_GRAPHICS_API=vulkan selects BackendsVulkan'])
+if goos=='js':
+ # The stock browser queue allocates a fresh JS Uint8Array for every
+ # writeBuffer/writeTexture; at a battle's per-frame upload volume the page's
+ # ArrayBuffer allocations fail within seconds. WebGPU copies write data
+ # synchronously, so one growable staging array, viewed per call, is safe.
+ module=json.loads(subprocess.check_output(['go','list','-mod=mod','-m','-json','github.com/gogpu/wgpu'],cwd=work,env=dict(os.environ,GOWORK='off'),text=True))
+ if module.get('Version')!='v0.34.2' or module.get('Replace'):sys.exit('browser staging requires the exact unmodified pinned wgpu v0.34.2')
+ copy=work/'browser-staging/wgpu';shutil.copytree(module['Dir'],copy)
+ for path in [copy,*copy.rglob('*')]:path.chmod(0o755 if path.is_dir() else 0o644)
+ queue=copy/'internal/browser/queue.go';original=queue.read_bytes()
+ if hashlib.sha256(original).hexdigest()!='4092cf6c72f17d9a4a6b4e7b0a11b1dfc551930b6425e4bff4d97693df100399':sys.exit('browser staging requires the reviewed pinned wgpu browser queue')
+ text=original.decode()
+ for old,new_text in (
+  ('\tjsArray := js.Global().Get("Uint8Array").New(len(data))\n\tjs.CopyBytesToJS(jsArray, data)\n\tq.fnWriteBuffer.Invoke(','\tjsArray := stagingBytes(data)\n\tq.fnWriteBuffer.Invoke('),
+  ('\tjsArray := js.Global().Get("Uint8Array").New(len(data))\n\tjs.CopyBytesToJS(jsArray, data)\n\tq.fnWriteTexture.Invoke(','\tjsArray := stagingBytes(data)\n\tq.fnWriteTexture.Invoke(')):
+  if text.count(old)!=1:sys.exit('browser staging edit does not apply')
+  text=text.replace(old,new_text)
+ text+='''
+// Nanolathe build edit: one growable staging array serves every write. The
+// browser copies write data before writeBuffer/writeTexture return, so a view
+// of shared storage is never read after the call.
+var staging js.Value
+var stagingCap int
+
+func stagingBytes(data []byte) js.Value {
+	if len(data) > stagingCap {
+		stagingCap = max(len(data), 2*stagingCap, 1<<20)
+		staging = js.Global().Get("Uint8Array").New(stagingCap)
+	}
+	view := staging.Call("subarray", 0, len(data))
+	js.CopyBytesToJS(view, data)
+	return view
+}
+'''
+ queue.write_text(text)
+ with (work/'go.mod').open('a') as f:f.write(f'\nreplace github.com/gogpu/wgpu => {copy}\n')
+ dependency_overlays['github.com/gogpu/wgpu/internal/browser/queue.go']=dict(source_sha256=hashlib.sha256(original).hexdigest(),build_sha256=hashlib.sha256(queue.read_bytes()).hexdigest(),rewrites=['writeBuffer/writeTexture copy through one growable staging Uint8Array'])
 # The !darwin stubs that report "requires macOS" give way to the real host.
 portable_dropped=('metal_host_other.go','metal_benchmark_other.go')
 portable_host_file=re.compile(r'metal_[a-z_]+_darwin\.go')

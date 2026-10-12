@@ -26,6 +26,9 @@ type Renderer struct {
 	paint                []battlePaint
 	paintState           battleRenderState
 	omitSeabed           bool
+	// prepared says every component holds a complete prepared frame, which
+	// Redraw may encode again without reading a source.
+	prepared bool
 }
 type Counters struct {
 	// Targets, models, glow, ground fields, layers, distortions, reflections, lenses/paint, command encoding.
@@ -218,20 +221,41 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 			return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS}, fmt.Errorf("late acquisition returned incomplete frame operands")
 		}
 	}
+	r.prepared = true
 	// Command timing excludes both source handoff and drawable acquisition.
 	mark = time.Now()
-	if e := r.models.Compute(enc); e != nil {
+	if e := r.encodeCommands(enc, output); e != nil {
 		return Counters{}, e
+	}
+	split(8)
+	return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS, CommandEncodeMS: phases[8], Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
+}
+
+// Redraw encodes the last prepared frame again, reading only renderer-owned
+// state: a host that must not wait for its source (a browser frame callback,
+// whose page event loop completes the source's reads) presents the previous
+// picture instead. It does nothing before the first prepared frame.
+func (r *Renderer) Redraw(enc *wgpu.CommandEncoder, output *wgpu.TextureView) error {
+	if r == nil || !r.prepared || enc == nil || output == nil {
+		return nil
+	}
+	return r.encodeCommands(enc, output)
+}
+
+// encodeCommands records one frame from the prepared state.
+func (r *Renderer) encodeCommands(enc *wgpu.CommandEncoder, output *wgpu.TextureView) error {
+	if e := r.models.Compute(enc); e != nil {
+		return e
 	}
 	if e := r.groundLight.Encode(enc); e != nil {
-		return Counters{}, e
+		return e
 	}
 	if e := r.reflections.Encode(enc); e != nil {
-		return Counters{}, e
+		return e
 	}
 	if !r.omitSeabed {
 		if e := r.layers.EncodeSeabed(enc, r.depthView); e != nil {
-			return Counters{}, e
+			return e
 		}
 	}
 	beginWorld := func(load gputypes.LoadOp) (*wgpu.RenderPassEncoder, error) {
@@ -239,7 +263,7 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 	}
 	pass, e := beginWorld(gputypes.LoadOpClear)
 	if e != nil {
-		return Counters{}, e
+		return e
 	}
 	r.paintState.reset(pass)
 	defer r.paintState.reset(nil)
@@ -281,12 +305,12 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 		return err
 	}
 	if e := drawEffects(0); e != nil {
-		return Counters{}, e
+		return e
 	}
 	r.layers.DrawLooseSprites(pass, 0)
 	paintPhase(meshscene.ModelPhaseShortFeatures)
 	if e := drawEffects(1); e != nil {
-		return Counters{}, e
+		return e
 	}
 	paintPhase(meshscene.ModelPhaseGround)
 	r.layers.DrawLooseSprites(pass, 1)
@@ -294,34 +318,30 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 	// Stock projectile subjects commit at their original effect markers.
 	paintPhase(meshscene.ModelPhaseEffects)
 	if e := drawEffects(2); e != nil {
-		return Counters{}, e
+		return e
 	}
 	paintPhase(meshscene.ModelPhaseAir)
 	if e := drawEffects(3); e != nil {
-		return Counters{}, e
+		return e
 	}
 	if e := drawEffects(4); e != nil {
-		return Counters{}, e
+		return e
 	}
 	if e := pass.End(); e != nil {
-		return Counters{}, e
+		return e
 	}
 	if e := r.glow.Encode(enc, r.worldView); e != nil {
-		return Counters{}, e
+		return e
 	}
 	final, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: output, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: gputypes.Color{A: 1}}}})
 	if e != nil {
-		return Counters{}, e
+		return e
 	}
 	r.layers.DrawFog(final)
 	r.distortions.Draw(final)
 	r.paintState.reset(final)
 	r.layers.DrawOverlay(final)
-	if e := final.End(); e != nil {
-		return Counters{}, e
-	}
-	split(8)
-	return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS, CommandEncodeMS: phases[8], Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
+	return final.End()
 }
 
 func (r *Renderer) Missing() map[string]int {
