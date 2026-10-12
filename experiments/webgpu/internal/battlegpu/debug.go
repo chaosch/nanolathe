@@ -3,7 +3,6 @@ package battlegpu
 import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
-	"os"
 	"strings"
 )
 
@@ -15,7 +14,7 @@ type modelDebugCapture struct {
 
 // Diagnostic copies are encoded only after the measured window. Resources are
 // borrowed through submission; the next callback waits for actual completion.
-func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Renderer, path string) (c *modelDebugCapture, err error) {
+func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Renderer, path string, out *outputWriter) (c *modelDebugCapture, err error) {
 	c = &modelDebugCapture{}
 	m, world, worldW, worldH := renderer.models, renderer.world, renderer.width, renderer.height
 	color, _, poses, w, h, n := m.DebugResources()
@@ -99,13 +98,13 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		e.CopyBufferToBuffer(poses, 0, read.b, 0, read.size)
 	}
 	instances, slots := m.DebugPacking()
-	if err = os.WriteFile(path+".instances.bin", instances, 0644); err != nil {
+	if err = out.write(path+".instances.bin", instances); err != nil {
 		return
 	}
-	err = os.WriteFile(path+".slots.bin", slots, 0644)
+	err = out.write(path+".slots.bin", slots)
 	return
 }
-func (c *modelDebugCapture) finish() error {
+func (c *modelDebugCapture) finish(out *outputWriter) error {
 	for i, r := range c.reads {
 		data, ready, err := r.poll()
 		if err != nil {
@@ -116,11 +115,19 @@ func (c *modelDebugCapture) finish() error {
 		}
 		if strings.HasSuffix(c.paths[i], ".keys.png") {
 			// Metadata is unassociated data: zero alpha must not erase its key.
-			err = r.saveMetadata(c.paths[i], data)
+			var raw, encoded []byte
+			if raw, encoded, err = r.encodeMetadata(data); err == nil {
+				if err = out.write(c.paths[i]+".rgba8", raw); err == nil {
+					err = out.write(c.paths[i], encoded)
+				}
+			}
 		} else if c.png[i] {
-			err = r.save(c.paths[i], data)
+			var encoded []byte
+			if encoded, err = r.encodePNG(data); err == nil {
+				err = out.write(c.paths[i], encoded)
+			}
 		} else {
-			err = os.WriteFile(c.paths[i], data, 0644)
+			err = out.write(c.paths[i], data)
 		}
 		if err != nil {
 			return err

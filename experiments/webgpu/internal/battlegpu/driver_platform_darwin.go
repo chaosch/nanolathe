@@ -13,3 +13,6 @@ const hostPacesFrames = true
 
 // The pasteboard read stays in the production host's own darwin code.
 const clipboardReadable = true
+
+// The host's frame callbacks may write diagnostic files directly.
+const callbackFileIO = true

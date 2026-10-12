@@ -229,6 +229,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	defer preparer.close()
 
+	out := outputWriter{deferred: !callbackFileIO}
 	coldStart := time.Now()
 	var coldMS float64
 	stopMeasure := func() error {
@@ -242,13 +243,19 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			cpu.Close()
 			cpu = nil
 		}
-		if opts.OutputDir != "" {
+		// Profiles read and stream files (the heap profile reads the process
+		// memory map), so only hosts with callback file access record them.
+		if opts.OutputDir != "" && callbackFileIO {
 			// Flush sampled allocation stacks only after freezing exact counters
 			// and stopping CPU timing. Delta profiles include profiler bookkeeping;
 			// MemStats above remains the source for exact measured-window totals.
 			runtime.GC()
 			for _, profile := range []struct{ name, file string }{{"allocs", "alloc.pprof"}, {"heap", "heap.pprof"}} {
-				if e := writeBattleProfile(filepath.Join(opts.OutputDir, profile.file), profile.name); e != nil {
+				data, e := battleProfile(profile.name)
+				if e == nil {
+					e = out.write(filepath.Join(opts.OutputDir, profile.file), data)
+				}
+				if e != nil {
 					return e
 				}
 			}
@@ -388,7 +395,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		if capturePending {
 			if debugCapture != nil {
-				failure = debugCapture.finish()
+				failure = debugCapture.finish(&out)
 				debugCapture.close()
 				debugCapture = nil
 				if failure != nil {
@@ -405,7 +412,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			if !ready {
 				return
 			}
-			failure = capture.save(filepath.Join(opts.OutputDir, "final.png"), data)
+			var encoded []byte
+			if encoded, failure = capture.encodePNG(data); failure == nil {
+				failure = out.write(filepath.Join(opts.OutputDir, "final.png"), encoded)
+			}
 			capturePending = false
 			app.Quit()
 			return
@@ -425,7 +435,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				}
 				data, err := json.MarshalIndent(map[string]any{"tick": live.Tick, "alpha": live.Alpha, "camera": live.Camera, "water": live.Water, "distortions": live.Distortions, "model_groups": len(live.Composition.Groups), "feature_sprites": live.Composition.FeatureSprites, "composition": live.Composition, "shadows": map[string]any{"subjects": live.Shadows.Subjects, "body_draws": len(live.Shadows.BodyDraws), "projected_draws": len(live.Shadows.ProjectedDraws), "atlas": []int{live.Shadows.AtlasWidth, live.Shadows.AtlasHeight}}, "water_sources": len(live.WaterSources), "water_object_scales": live.WaterObjectScales, "world_format": renderer.format}, "", "  ")
 				if err == nil {
-					err = os.WriteFile(filepath.Join(opts.OutputDir, "final-fields.json"), data, 0644)
+					err = out.write(filepath.Join(opts.OutputDir, "final-fields.json"), data)
 				}
 				if err != nil {
 					failure = err
@@ -442,7 +452,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				if failure == nil {
 					capture.encode(ctx.CommandEncoder())
 					if path := os.Getenv("NANOLATHE_WEBGPU_DEBUG_FRAME"); path != "" {
-						debugCapture, failure = captureModelDebug(nativeDevice, ctx.CommandEncoder(), renderer, path)
+						debugCapture, failure = captureModelDebug(nativeDevice, ctx.CommandEncoder(), renderer, path, &out)
 						if failure != nil {
 							app.Quit()
 							return
@@ -484,13 +494,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				}
 			}
 			runtime.GC()
-			if opts.OutputDir != "" {
-				if e := writeBattleProfile(filepath.Join(opts.OutputDir, "alloc-base.pprof"), "allocs"); e != nil {
+			if opts.OutputDir != "" && callbackFileIO {
+				data, e := battleProfile("allocs")
+				if e == nil {
+					e = out.write(filepath.Join(opts.OutputDir, "alloc-base.pprof"), data)
+				}
+				if e != nil {
 					failure = e
 					app.Quit()
 					return
 				}
-				var e error
 				cpu, e = os.Create(filepath.Join(opts.OutputDir, "cpu.pprof"))
 				if e == nil {
 					e = pprof.StartCPUProfile(cpu)
@@ -557,7 +570,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 			data, err := json.Marshal(map[string]any{"camera": live.Camera, "alpha": live.Alpha, "generation": live.Generation, "instances": live.Instances, "previous": live.Previous, "current": live.Current, "rules": live.ModelRules, "projections": live.ModelProjections, "composition": live.Composition, "shadows": live.Shadows, "lighting": live.Lighting, "meshes": meshes, "materials": scene.Materials, "texture_frames": scene.TextureFrames, "model_palette": scene.ModelPalette, "atlas": scene.Atlas})
 			if err == nil {
-				err = os.WriteFile(path, data, 0644)
+				err = out.write(path, data)
 			}
 			if err != nil {
 				failure = err
@@ -733,6 +746,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	if failure == nil {
 		failure = runErr
 	}
+	if e := out.flush(); failure == nil {
+		failure = e
+	}
 	if draw > len(rows) && len(rows) > 0 {
 		at := draw % len(rows)
 		ordered := append([]drawRow(nil), rows[at:]...)
@@ -743,6 +759,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["target"] = runtime.GOOS + "/" + runtime.GOARCH
 	report["graphics_backend"] = graphicsBackend
 	report["host_paces_frames"] = hostPacesFrames
+	report["profiles_recorded"] = opts.OutputDir != "" && callbackFileIO
 	report["late_acquire"] = map[string]any{"requested": lateAcquire, "frames": lateFrames, "recoveries": lateFallbacks, "scope": "opt-in owned preparation/source handoff before acquisition; lifecycle/resize/setup/final boundaries retain early acquire; deferred acquisition change drops unencoded frame and source sample, never replays borrowed data or input; host outdated retries deferred to a fresh callback"}
 	report["encode_timing_scope"] = "EncodeMS/common Submit/DrawWork include late acquisition but exclude upfront early acquisition; CommandEncodeMS excludes preparation/source handoff/acquisition; nested wall durations are not additive"
 	report["native_presentation_telemetry"] = presentationTelemetry
@@ -778,19 +795,6 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	return report, failure
 }
-func writeBattleProfile(path, name string) error {
-	f, e := os.Create(path)
-	if e != nil {
-		return e
-	}
-	e = pprof.Lookup(name).WriteTo(f, 0)
-	closed := f.Close()
-	if e != nil {
-		return e
-	}
-	return closed
-}
-
 func writeRows(path string, rows []drawRow) error {
 	f, e := os.Create(path)
 	if e != nil {

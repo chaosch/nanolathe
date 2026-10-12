@@ -21,3 +21,7 @@ const hostPacesFrames = false
 // Clipboard API cannot be awaited from inside a frame callback. Report the
 // clipboard as unavailable rather than as an empty successful read.
 const clipboardReadable = false
+
+// BrowserFS completes file operations on the page's event loop, which a
+// requestAnimationFrame callback holds: a file call inside one never returns.
+const callbackFileIO = false

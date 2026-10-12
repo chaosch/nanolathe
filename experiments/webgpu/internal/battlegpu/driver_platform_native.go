@@ -12,3 +12,6 @@ const hostPacesFrames = true
 
 // GoGPU reads the Win32, X11 and Wayland clipboards; it is unqualified here.
 const clipboardReadable = true
+
+// The host's frame callbacks may write diagnostic files directly.
+const callbackFileIO = true
