@@ -66,6 +66,18 @@ func runMetal(opts Options, cs *contentSet) error {
 	cl.Resize(logicalW, logicalH)
 	battle.setSurfaceSize(int32(logicalW), int32(logicalH))
 	battle.placeEntryCamera(logicalW, logicalH)
+	// A staged field scene can hold the camera on the armies for comparable
+	// measurements across native executors, with shake off through the
+	// existing film/developer gate. Ordinary play is unaffected.
+	if os.Getenv("NANOLATHE_HOST_FIELD_CAMERA") == "1" {
+		if scene, err := parseLiveScene(opts.LiveScene); err != nil || scene.Kind != "field" {
+			return fmt.Errorf("nanolathe: NANOLATHE_HOST_FIELD_CAMERA requires --live-scene=field")
+		}
+		battle.cam.JumpToBattleViewCenter(liveFieldCentre[0], liveFieldCentre[1])
+		if !sess.NoShake() {
+			sess.ToggleNoShake()
+		}
+	}
 	// --zoom applies after the entry placement (and any staged scene camera),
 	// about the view centre, as a staged live scene applies it.
 	if opts.Zoom != 0 && opts.Zoom != camera.ZoomUnit {
@@ -81,7 +93,7 @@ func runMetal(opts Options, cs *contentSet) error {
 	display := cl.DisplayPalette()
 	worldGamma := cl.GammaFactor()
 	terrainSources := cl.BattleTerrainSources()
-	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: cl.BattleFeatureDetail(), LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl)}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
+	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: cl.BattleFeatureDetail(), LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl), QuadMultiplier: opts.MetalQuads}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
 	}
@@ -198,7 +210,10 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 			h.cl.SetPointerCaptured(false)
 		}
 		h.steps++
-		h.updated = now
+		// The camera blends from the step's ideal instant, not from the
+		// frame the step happened to run on, so it advances by the frames'
+		// spacing like the world does.
+		h.updated = h.due
 		h.due = h.due.Add(time.Second / 30)
 		// A suspended host resumes at wall time; the existing session budget owns
 		// the capped catch-up. Never replay one input batch multiple times.

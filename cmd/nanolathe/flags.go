@@ -263,7 +263,7 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 	set.StringVar(&opts.MetalModelCapture, "metal-model-capture", "", "with --metal and --metal-report: capture armsolar, armcom, armcom-ground/tree/air, armcom-cloaked/underlay or armflash-wreck[-sink] offscreen")
 	set.StringVar(&opts.MetalSize, "metal-size", "2880x1800", "with --metal: drawable pixels, with a 2x logical HUD")
 	set.IntVar(&opts.MetalFrames, "metal-frames", 0, "with --metal: frame limit; zero plays until the window closes")
-	set.IntVar(&opts.MetalQuads, "metal-quads", 1, "Metal battle benchmark stress: mesh subdivisions, 1, 2 or 5")
+	set.IntVar(&opts.MetalQuads, "metal-quads", 1, "Metal battle and benchmark stress: split every model quad into this many partial-texture strips, 1..8")
 	set.IntVar(&opts.MetalTextures, "metal-textures", 1, "Metal battle benchmark stress: model texture scale, 1 or 2")
 	set.StringVar(&opts.SaveDir, "save-dir", "", "exact save/load directory (omitted uses savegame beneath the installation)")
 	set.StringVar(&opts.ReplayDir, "replay-dir", "", "directory battles record their replays to (omitted uses $XDG_DATA_HOME/nanolathe/replays, else ~/.local/share/nanolathe/replays)")
@@ -714,11 +714,11 @@ func validateMetalOptions(opts Options) error {
 			return fmt.Errorf("nanolathe: --metal-model-capture requires --metal-report")
 		}
 	}
-	if (opts.MetalQuads != 1 || opts.MetalTextures != 1) && !metalBenchmark {
-		return fmt.Errorf("nanolathe: --metal-quads and --metal-textures apply only to the Metal battle benchmark")
+	if (opts.MetalQuads != 1 || opts.MetalTextures != 1) && !metalBenchmark && !opts.Metal {
+		return fmt.Errorf("nanolathe: --metal-quads and --metal-textures apply only to the Metal battle and its benchmark")
 	}
-	if (opts.MetalQuads != 1 && opts.MetalQuads != 2 && opts.MetalQuads != 5) || (opts.MetalTextures != 1 && opts.MetalTextures != 2) {
-		return fmt.Errorf("nanolathe: Metal benchmark requires geometry 1, 2 or 5 and textures 1 or 2")
+	if opts.MetalQuads < 1 || opts.MetalQuads > 8 || (opts.MetalTextures != 1 && opts.MetalTextures != 2) {
+		return fmt.Errorf("nanolathe: Metal geometry multiplier must be 1..8 and textures 1 or 2")
 	}
 	return nil
 }

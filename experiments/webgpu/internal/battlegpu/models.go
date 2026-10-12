@@ -444,7 +444,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return nil, modelError("device, queue and retained scene")
 	}
 	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames),
-		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") != "0"}
+		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") == "1"}
 	defer func() {
 		if err != nil {
 			m.Close()
