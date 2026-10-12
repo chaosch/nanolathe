@@ -1,0 +1,123 @@
+{
+  "base_commit": "a938aeb9bab5fe6bacfe2fe4efd734617686661e",
+  "status": "default-off isolated diagnostic; nativecallback/ABI/lifetime smoke qualified; denseoff-onoverhead andpixel-state controls pending",
+  "scope": "all commandbuffers through HAL Submit, including pendinguploads andmainrender; excludes nativePresent/WaitIdle/privateHALfallback commandbuffers; not all GPU work or a per-pass query system",
+  "API_evidence": {
+    "primary_urls": [
+      "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpustarttime",
+      "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpuendtime",
+      "https://developer.apple.com/documentation/metal/mtlcommandbuffer/addcompletedhandler(_:)"
+    ],
+    "verified_local_sdk": "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework/Versions/A/Headers/MTLCommandBuffer.h",
+    "established": "GPUStartTime/GPUEndTime are CFTimeInterval doubles in hostseconds, documented for completedcallbacks; addCompletedHandler receives commandbuffer object in void block; macOS10.15 availability",
+    "clock_bridge": "CACurrentMediaTime sampled immediately after Go encodeStart, with shared exclusiveCIF and once-loaded systemQuartzCore library; source timestamps inferred from existingmonotonicages, approximate byclockgetterlatency"
+  },
+  "architecture": {
+    "activation": "tools/build-play --gpu-timing implies guardedpresenthandler prerequisites; run-play --gpu-timing is explicitdefaultoff and enables presentedtelemetry",
+    "native_roots": "one permanentlyrooted immutable global block+descriptor; correctclass-storageaddress; no per-frame blocks/extraCBretains/new waits",
+    "budgets": {
+      "CB_value_rows": 8192,
+      "global_routes": 256,
+      "owner_pending_including_taken_callbacks": 256
+    },
+    "identity": "immutable submission,batchindex,batchsize registered before anycommit; callbacks take/removeglobal route then unlock beforetypedgetters andownerlock; never queue lock incallback",
+    "failures": "pointerconflict/capacity/unsupportedhelper/FFIattacherror/callbackerror/zero-or-invalidtiming/finalclose-before-callback become finite missingrows; requiredcompletion/semaphore/commit behavior unchanged",
+    "close": "deviceDestroy plusdriverfinally/failure fallback removebookkeeping; successfulWaitIdle alone not observer-publication proof",
+    "limitations": [
+      "rawpointer routing relies on single-submit nativeCB andvalidcallbackargumentlifetime; no arbitrary stale syntheticduplicate-after-addressreuse guarantee",
+      "8192CB ring fits observedtwo-CB\u00d73723 submits; moreCBs orlonger runs canevict, report explicitly andaggregate onlycompletebatches",
+      "Ignored counts onlycallbacks routedtoowner beforeclose; globalunmatchedcallbacksbypass it",
+      "PreCommitHostSeconds is a sample beforediagnosticattach/requiredcompletionattach/commit; not exactcommitinstant",
+      "GPU timestamps andCPUsourcework overlap; sum andbatchenvelope differ andnotadditive toCPUdurations"
+    ]
+  },
+  "independent_review": {
+    "resolved_findings": [
+      "typedunsignedstatus getter",
+      "missingrowGPUfields normalized tozero forJSONNaN/Inf safety",
+      "ownerpendingbound independentof globalroutes",
+      "typedvoidattachment error cancels onlyowner/token route"
+    ],
+    "recheck": "allfourresolved; preservedsource andmanifesthashesverified; no newblocker"
+  },
+  "tests": {
+    "focused_Metal_race_log": "/tmp/nanolathe-gputiming-tests-final.log",
+    "focused_Metal_race": "passed includingexistingowned-preflight/completion contracts",
+    "new_contracts": [
+      "nonfiniteJSONreport preservation",
+      "taken-unpublishedownercap",
+      "globalcap/pointerconflict",
+      "firstpreflightbeforeobserver",
+      "close/completionrace",
+      "attachfailurecancel/stalepublishrefusal",
+      "positiveorderednativeCACurrentMediaTime",
+      "tenforced-GCnativeBlockcopy/release/ObjCcopyroot checks"
+    ],
+    "actual_foreign_thread_forced_GC": {
+      "artifact": "/tmp/nanolathe-gputiming-stress",
+      "report_sha256": "9f5eb3639687410e34835a28cb19b58d9dc66bfd28e733f2de80a39c5dbd3b6e",
+      "measured_rows": 120,
+      "measured_expected_batch_size_values": [
+        2
+      ],
+      "measured_valid_CB_rows": 240,
+      "summary": {
+        "Enabled": true,
+        "Closed": true,
+        "Requested": 485,
+        "Completed": 485,
+        "Missing": 0,
+        "Evicted": 0,
+        "Ignored": 0,
+        "Outstanding": 0,
+        "RegistryOutstanding": 0,
+        "HighWater": 4,
+        "PermanentBlocks": 1,
+        "ExtraNativeRetains": 0,
+        "Scope": "completed Metal command-buffer host timestamps; all HAL Submit batch buffers including upload copies; bounded value ring and routes; no new waits/retains; pre-commit and encode clock samples are observations, not exact submission instants; CPU/GPU overlap is not additive"
+      },
+      "submission_close": {
+        "completed": 243,
+        "submitted": 243
+      },
+      "example_batch": [
+        {
+          "Ordinal": 243,
+          "Submission": 122,
+          "BatchIndex": 0,
+          "BatchSize": 2,
+          "PreCommitHostSeconds": 1538614.3513839587,
+          "GPUStartSeconds": 1538614.3518092502,
+          "GPUEndSeconds": 1538614.3518406667,
+          "Status": 4,
+          "Reason": "completed"
+        },
+        {
+          "Ordinal": 244,
+          "Submission": 122,
+          "BatchIndex": 1,
+          "BatchSize": 2,
+          "PreCommitHostSeconds": 1538614.3513858754,
+          "GPUStartSeconds": 1538614.3518412502,
+          "GPUEndSeconds": 1538614.353842,
+          "Status": 4,
+          "Reason": "completed"
+        }
+      ],
+      "stress_policy": "GPU_GC_STRESS1 triggersruntimeGC beforeobserverattachment atsubmissionmultiples120; not a performance run"
+    }
+  },
+  "build": {
+    "directory": "/tmp/nanolathe-gputiming-fixed",
+    "manifest_sha256": "fd7f65925ebdb48a18dc211301534f93363f79735a9baa13de924534fe096216",
+    "binary_sha256": "d3f63773683084ba481948cfaf9468f0bc36cecaf6e3cdcc8d788877869d92fd",
+    "source_state": "candidatecore froma938 withnew guardedGPU diagnostic; exactpatch/source digests recorded",
+    "patch_manifest": "patches/gpu-timing-manifest.json"
+  },
+  "remaining_gates": [
+    "samebinaryA/B timings-off/on stablecameraNoShakeboth, nonstress;verifyallcompleteCBbatches matchsource/present",
+    "quantifyobserverCPU/presentationoverhead in matchedtickwindows",
+    "existingnativeUV/growth andfixedCoastimage/state/sidecar controls",
+    "choose directbodyversusCPUpublication frommeasuredcriticalpath; no hardwarelimit or optimizationconclusion yet"
+  ]
+}

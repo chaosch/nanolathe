@@ -80,3 +80,15 @@ shared-event block code is unchanged. Native forced-GC copy/dispatch, live
 callbacks, registry races and Coast output equality are qualified in
 PRESENT_HANDLER_MEASUREMENTS.json. No general GPU timing, native resize/occlusion
 stress, other-platform runtime or shipping/default dependency adoption is claimed.
+
+
+GPU command-buffer timings are a separate default-off diagnostic. Build with
+`tools/build-play NEW_EXTERNAL_DIRECTORY --gpu-timing`, then explicitly select
+`run-play --fast --gpu-timing`. The guarded patch follows the presented-handler
+patch and preserves all required completion/semaphore behavior. One permanent
+completion block,8192-row value ring and256-route/owner bounds add no waits or
+native retains. Read only complete batches; the native callback scope excludes
+Present/WaitIdle/private HAL fallback command buffers. Missing/invalid values
+remain finite records rather than inferred zero GPU work. Native callback/GC
+qualification is in GPU_TIMING_MEASUREMENTS.json; dense overhead and state/pixel
+controls remain pending. Existing fast launches leave this diagnostic disabled.

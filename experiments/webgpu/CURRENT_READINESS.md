@@ -64,3 +64,12 @@ reported a duplicate positive presentation timestamp, recorded explicitly.
 Baseline and unsupported-platform writes remain unchanged; --no-chunked-uploads
 restores the fast profile's control. TAIL_PROFILE_MEASUREMENTS.json records the
 CPU evidence, workload matching and attribution/accounting limits.
+
+
+A separate guarded `--gpu-timing` build/runtime diagnostic reads official Metal
+command-buffer start/end doubles only from completed callbacks and records
+immutable submission/batch identity. Native forced-GC smoke produced485 valid
+CB observations, including both buffers for120 measured rows,243/243 queue drain
+and0 outstanding routes. It adds no waits or extra native retains and stays off
+in normal fast launches. Dense overhead, complete-batch analysis and pixel/state
+controls remain pending; no CPU-versus-GPU or direct-body conclusion follows yet.

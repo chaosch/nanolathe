@@ -1,0 +1,619 @@
+--- a/hal/metal/queue.go
++++ b/hal/metal/queue.go
+@@ -24,6 +24,8 @@
+ 
+ // Queue implements hal.Queue for Metal.
+ type Queue struct {
++	gpuTimingInit     sync.Once
++	gpuTiming         *gpuTiming
+ 	presentInit       sync.Once
+ 	presentDiagnostic *presentTelemetry
+ 	device            *Device
+@@ -57,7 +59,9 @@
+ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
+ 	pool := NewAutoreleasePool()
+ 	defer pool.Drain()
+-	return q.submitWithRuntime(commandBuffers, nativeSubmissionRuntime())
++	rt := nativeSubmissionRuntime()
++	rt.observe = q.observeGPUCommands
++	return q.submitWithRuntime(commandBuffers, rt)
+ }
+ 
+ // PollCompleted returns the highest submission index known to be completed by the GPU.
+--- a/hal/metal/submission_owned.go
++++ b/hal/metal/submission_owned.go
+@@ -13,6 +13,7 @@
+ // Dependency-local seam permits failure tests without native calls or mutable
+ // process-global hooks. Production supplies the initialized ObjC runtime.
+ type metalSubmissionRuntime struct {
++	observe    func([]hal.CommandBuffer, uint64)
+ 	gpuBlock   func(*atomic.Uint64, uint64) uintptr
+ 	frameBlock func(chan struct{}) uintptr
+ 	discard    func(uintptr)
+@@ -68,6 +69,9 @@
+ 	if q.frameSemaphore != nil {
+ 		<-q.frameSemaphore
+ 	}
++	if rt.observe != nil {
++		rt.observe(buffers, index)
++	}
+ 	last := buffers[len(buffers)-1].(*CommandBuffer).raw
+ 	rt.attach(last, gpu)
+ 	if frame != 0 {
+--- a/hal/metal/device.go
++++ b/hal/metal/device.go
+@@ -1460,6 +1460,7 @@
+ func (d *Device) Destroy() {
+ 	if d.queue != nil {
+ 		d.queue.NativePresentationTelemetry(true)
++		d.queue.NativeGPUTiming(true)
+ 	}
+ 	hal.Logger().Debug("metal: device destroyed")
+ 	d.releaseIndexedICBTranslators()
+--- /dev/null
++++ b/hal/metal/gpu_timing.go
+@@ -0,0 +1,315 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"math"
++	"os"
++	"runtime"
++	"sort"
++	"sync"
++	"sync/atomic"
++	"unsafe"
++
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++	"github.com/gogpu/wgpu/hal"
++)
++
++const gpuTimingRowLimit = 8192
++const gpuTimingRouteLimit = 256
++
++type gpuTimingRow struct {
++	Ordinal, Submission                                  uint64
++	BatchIndex, BatchSize                                int
++	PreCommitHostSeconds, GPUStartSeconds, GPUEndSeconds float64
++	Status                                               uint64
++	Reason                                               string
++}
++type gpuTimingEntry struct {
++	owner *gpuTiming
++	token uint64
++}
++type gpuTimingRouter struct {
++	mu      sync.Mutex
++	entries map[uintptr]gpuTimingEntry
++}
++
++var gpuTimings = gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++
++func (r *gpuTimingRouter) register(key uintptr, e gpuTimingEntry) bool {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	if len(r.entries) >= gpuTimingRouteLimit {
++		return false
++	}
++	if _, ok := r.entries[key]; ok {
++		return false
++	}
++	r.entries[key] = e
++	return true
++}
++func (r *gpuTimingRouter) take(key uintptr) (gpuTimingEntry, bool) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	e, ok := r.entries[key]
++	if ok {
++		delete(r.entries, key)
++	}
++	return e, ok
++}
++func (r *gpuTimingRouter) remove(key uintptr, owner *gpuTiming, token uint64) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	if e, ok := r.entries[key]; ok && e.owner == owner && e.token == token {
++		delete(r.entries, key)
++	}
++}
++func (r *gpuTimingRouter) count() int { r.mu.Lock(); defer r.mu.Unlock(); return len(r.entries) }
++
++// Global blocks and their descriptors are process roots, including after close.
++// The callback borrows the command-buffer argument only during native delivery.
++// Routes hold Go bookkeeping, never extra native retains or command operands.
++var permanentGPU struct {
++	once       sync.Once
++	block      *blockLiteral
++	descriptor *blockDescriptor
++	pointer    atomic.Uintptr
++}
++
++func permanentGPUBlock() uintptr {
++	permanentGPU.once.Do(func() {
++		class, err := ffi.GetSymbol(objcLib, "_NSConcreteGlobalBlock")
++		if err != nil || class == nil {
++			return
++		}
++		invoke := ffi.NewCallback(func(_ uintptr, raw uintptr) {
++			e, ok := gpuTimings.take(raw)
++			if !ok {
++				return
++			}
++			status := uint64(MsgSendUint(ID(raw), Sel("status")))
++			var start, end float64
++			var valid bool
++			// The official properties are valid after GPU completion; error status is
++			// diagnostic missing data, never a replacement completion signal.
++			if status == 4 {
++				a := msgSend(ID(raw), Sel("GPUStartTime"), types.DoubleTypeDescriptor, unsafe.Pointer(&start))
++				b := msgSend(ID(raw), Sel("GPUEndTime"), types.DoubleTypeDescriptor, unsafe.Pointer(&end))
++				valid = a == nil && b == nil
++			}
++			e.owner.complete(e.token, raw, status, start, end, valid)
++		})
++		if invoke == 0 {
++			return
++		}
++		permanentGPU.descriptor = &blockDescriptor{size: uint64(unsafe.Sizeof(blockLiteral{}))}
++		permanentGPU.block = &blockLiteral{isa: uintptr(class), flags: blockIsGlobal, invoke: invoke, descriptor: uintptr(unsafe.Pointer(permanentGPU.descriptor))}
++		permanentGPU.pointer.Store(uintptr(unsafe.Pointer(permanentGPU.block)))
++	})
++	return permanentGPU.pointer.Load()
++}
++
++var gpuHostClock struct {
++	once            sync.Once
++	mu              sync.Mutex
++	library, symbol unsafe.Pointer
++	cif             types.CallInterface
++	ready           bool
++}
++
++func gpuHostSeconds() float64 {
++	gpuHostClock.once.Do(func() {
++		var err error
++		gpuHostClock.library, err = ffi.LoadLibrary("/System/Library/Frameworks/QuartzCore.framework/QuartzCore")
++		if err != nil {
++			return
++		}
++		gpuHostClock.symbol, err = ffi.GetSymbol(gpuHostClock.library, "CACurrentMediaTime")
++		if err != nil {
++			return
++		}
++		gpuHostClock.ready = ffi.PrepareCallInterface(&gpuHostClock.cif, types.DefaultCall, types.DoubleTypeDescriptor, nil) == nil
++	})
++	if !gpuHostClock.ready {
++		return 0
++	}
++	gpuHostClock.mu.Lock()
++	defer gpuHostClock.mu.Unlock()
++	var value float64
++	if _, err := ffi.CallFunction(&gpuHostClock.cif, gpuHostClock.symbol, unsafe.Pointer(&value), nil); err != nil {
++		return 0
++	}
++	if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
++		return 0
++	}
++	return value
++}
++
++type pendingGPUTiming struct {
++	key uintptr
++	row gpuTimingRow
++}
++type gpuTiming struct {
++	mu                                            sync.Mutex
++	router                                        *gpuTimingRouter
++	pending                                       map[uint64]pendingGPUTiming
++	rows                                          []gpuTimingRow
++	next                                          int
++	ordinal, completed, missing, evicted, ignored uint64
++	highWater                                     int
++	stressGC                                      bool
++	closed                                        bool
++}
++
++func newGPUTiming(r *gpuTimingRouter) *gpuTiming {
++	return &gpuTiming{router: r, stressGC: os.Getenv("NANOLATHE_WEBGPU_GPU_GC_STRESS") == "1", pending: make(map[uint64]pendingGPUTiming), rows: make([]gpuTimingRow, 0, gpuTimingRowLimit)}
++}
++func (t *gpuTiming) append(row gpuTimingRow) {
++	if len(t.rows) < gpuTimingRowLimit {
++		t.rows = append(t.rows, row)
++		return
++	}
++	t.rows[t.next] = row
++	t.next = (t.next + 1) % gpuTimingRowLimit
++	t.evicted++
++}
++func (t *gpuTiming) register(key uintptr, row gpuTimingRow, available bool) uint64 {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if t.closed {
++		return 0
++	}
++	t.ordinal++
++	row.Ordinal = t.ordinal
++	if !available || key == 0 {
++		row.Reason = "native-helper-or-selector-unavailable"
++		t.missing++
++		t.append(row)
++		return 0
++	}
++	if len(t.pending) >= gpuTimingRouteLimit {
++		row.Reason = "owner-pending-budget"
++		t.missing++
++		t.append(row)
++		return 0
++	}
++	token := row.Ordinal
++	if !t.router.register(key, gpuTimingEntry{t, token}) {
++		row.Reason = "route-budget-or-pointer-conflict"
++		t.missing++
++		t.append(row)
++		return 0
++	}
++	t.pending[token] = pendingGPUTiming{key, row}
++	t.highWater = max(t.highWater, len(t.pending))
++	return token
++}
++func (t *gpuTiming) complete(token uint64, key uintptr, status uint64, start, end float64, gettersOK bool) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	p, ok := t.pending[token]
++	if t.closed || !ok || p.key != key {
++		t.ignored++
++		return
++	}
++	delete(t.pending, token)
++	p.row.Status = status
++	p.row.GPUStartSeconds = start
++	p.row.GPUEndSeconds = end
++	p.row.Reason = "completed"
++	if status != 4 {
++		p.row.Reason = "command-buffer-error-or-incomplete"
++	} else if !gettersOK {
++		p.row.Reason = "typed-getter-error"
++	} else if math.IsNaN(start) || math.IsNaN(end) || math.IsInf(start, 0) || math.IsInf(end, 0) || start <= 0 || end <= 0 || end < start {
++		p.row.Reason = "zero-or-invalid-timing"
++	}
++	if p.row.Reason == "completed" {
++		t.completed++
++	} else {
++		t.missing++
++		p.row.GPUStartSeconds, p.row.GPUEndSeconds = 0, 0
++	}
++	t.append(p.row)
++}
++func (t *gpuTiming) cancel(token uint64, reason string) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	p, ok := t.pending[token]
++	if !ok {
++		return
++	}
++	t.router.remove(p.key, t, token)
++	delete(t.pending, token)
++	p.row.Reason = reason
++	t.missing++
++	t.append(p.row)
++}
++func (t *gpuTiming) snapshot(close bool) any {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	if close && !t.closed {
++		t.closed = true
++		for token, p := range t.pending {
++			t.router.remove(p.key, t, token)
++			p.row.Reason = "closed-before-callback"
++			t.missing++
++			t.append(p.row)
++			delete(t.pending, token)
++		}
++	}
++	rows := append([]gpuTimingRow(nil), t.rows...)
++	sort.Slice(rows, func(i, j int) bool { return rows[i].Ordinal < rows[j].Ordinal })
++	blocks := 0
++	if permanentGPU.pointer.Load() != 0 {
++		blocks = 1
++	}
++	return struct {
++		Enabled, Closed                                                                  bool
++		Requested, Completed, Missing, Evicted, Ignored                                  uint64
++		Outstanding, RegistryOutstanding, HighWater, PermanentBlocks, ExtraNativeRetains int
++		Rows                                                                             []gpuTimingRow
++		Scope                                                                            string
++	}{true, t.closed, t.ordinal, t.completed, t.missing, t.evicted, t.ignored, len(t.pending), t.router.count(), t.highWater, blocks, 0, rows, "completed Metal command-buffer host timestamps; all HAL Submit batch buffers including upload copies; bounded value ring and routes; no new waits/retains; pre-commit and encode clock samples are observations, not exact submission instants; CPU/GPU overlap is not additive"}
++}
++func (q *Queue) gpuTimingDiagnostic() *gpuTiming {
++	q.gpuTimingInit.Do(func() {
++		if runtime.GOARCH == "arm64" && os.Getenv("NANOLATHE_WEBGPU_GPU_TIMING") == "1" {
++			q.gpuTiming = newGPUTiming(&gpuTimings)
++		}
++	})
++	return q.gpuTiming
++}
++func (q *Queue) observeGPUCommands(buffers []hal.CommandBuffer, index uint64) {
++	t := q.gpuTimingDiagnostic()
++	if t == nil {
++		return
++	}
++	block := permanentGPUBlock()
++	for i, buffer := range buffers {
++		raw := buffer.(*CommandBuffer).raw
++		available := block != 0 && msgSendBool(raw, Sel("respondsToSelector:"), argPointer(uintptr(Sel("GPUStartTime")))) && msgSendBool(raw, Sel("respondsToSelector:"), argPointer(uintptr(Sel("GPUEndTime"))))
++		row := gpuTimingRow{Submission: index, BatchIndex: i, BatchSize: len(buffers), PreCommitHostSeconds: gpuHostSeconds()}
++		if token := t.register(uintptr(raw), row, available); token != 0 {
++			if t.stressGC && index%120 == 0 {
++				runtime.GC()
++			}
++			if err := msgSend(raw, Sel("addCompletedHandler:"), types.VoidTypeDescriptor, nil, argPointer(block)); err != nil {
++				t.cancel(token, "native-handler-attach-error")
++			}
++		}
++	}
++}
++func (q *Queue) NativeGPUTiming(close bool) any {
++	if t := q.gpuTimingDiagnostic(); t != nil {
++		return t.snapshot(close)
++	}
++	return struct{ Enabled bool }{false}
++}
++func (q *Queue) NativeGPUClockSeconds() float64 {
++	if q.gpuTimingDiagnostic() == nil {
++		return 0
++	}
++	return gpuHostSeconds()
++}
+--- /dev/null
++++ b/hal/metal/gpu_timing_test.go
+@@ -0,0 +1,152 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"encoding/json"
++	"github.com/gogpu/wgpu/hal"
++	"math"
++	"sync"
++	"sync/atomic"
++	"testing"
++)
++
++func TestGPUTimingRoutesBoundsFailuresAndClose(t *testing.T) {
++	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++	a := newGPUTiming(r)
++	b := newGPUTiming(r)
++	tok := a.register(1, gpuTimingRow{Submission: 7, BatchIndex: 0, BatchSize: 2}, true)
++	if tok == 0 || b.register(1, gpuTimingRow{Submission: 8}, true) != 0 {
++		t.Fatal("route replaced on pointer conflict")
++	}
++	e, ok := r.take(1)
++	if !ok || e.owner != a || e.token != tok {
++		t.Fatal("wrong immutable route")
++	}
++	a.complete(tok, 1, 4, 2, 3, true)
++	if a.completed != 1 || a.rows[0].Submission != 7 || a.rows[0].BatchSize != 2 {
++		t.Fatal("completion identity changed")
++	}
++	for i, v := range []struct {
++		status     uint64
++		start, end float64
++		ok         bool
++	}{{5, 2, 3, true}, {4, 0, 3, true}, {4, 3, 2, true}, {4, math.NaN(), 4, true}, {4, 2, math.Inf(1), true}, {4, 2, 3, false}} {
++		key := uintptr(i + 10)
++		token := a.register(key, gpuTimingRow{}, true)
++		r.take(key)
++		a.complete(token, key, v.status, v.start, v.end, v.ok)
++	}
++	if a.missing != 6 {
++		t.Fatalf("invalid measurements counted as valid: %d", a.missing)
++	}
++	token := a.register(99, gpuTimingRow{}, true)
++	a.snapshot(true)
++	if r.count() != 0 || len(a.pending) != 0 {
++		t.Fatal("close retained routes")
++	}
++	a.complete(token, 99, 4, 1, 2, true)
++	if a.ignored != 1 {
++		t.Fatal("late callback published after close")
++	}
++	b.snapshot(true)
++}
++func TestGPUTimingBoundedUnknownGraph(t *testing.T) {
++	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++	a := newGPUTiming(r)
++	for i := 0; i < gpuTimingRouteLimit+10; i++ {
++		a.register(uintptr(i+1), gpuTimingRow{}, true)
++	}
++	if len(a.pending) != gpuTimingRouteLimit || r.count() != gpuTimingRouteLimit || a.missing != 10 {
++		t.Fatal("unknown graph exceeded route budget")
++	}
++	a.snapshot(true)
++	for i := 0; i < gpuTimingRowLimit+10; i++ {
++		a.append(gpuTimingRow{Ordinal: uint64(i + 1)})
++	}
++	if len(a.rows) != gpuTimingRowLimit {
++		t.Fatal("value ring unbounded")
++	}
++}
++func TestGPUTimingCompletionCloseRace(t *testing.T) {
++	for round := 0; round < 20; round++ {
++		r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++		a := newGPUTiming(r)
++		for i := 1; i <= 100; i++ {
++			a.register(uintptr(i), gpuTimingRow{}, true)
++		}
++		var w sync.WaitGroup
++		w.Add(2)
++		go func() {
++			defer w.Done()
++			for i := 1; i <= 100; i++ {
++				e, ok := r.take(uintptr(i))
++				if ok {
++					e.owner.complete(e.token, uintptr(i), 4, 2, 3, true)
++				}
++			}
++		}()
++		go func() { defer w.Done(); a.snapshot(true) }()
++		w.Wait()
++		if r.count() != 0 || len(a.pending) != 0 {
++			t.Fatal("close race retained routes")
++		}
++	}
++}
++func TestGPUTimingObserverOnlyAfterOwnedPreflight(t *testing.T) {
++	q := &Queue{}
++	observed, commits := 0, 0
++	rt := metalSubmissionRuntime{gpuBlock: func(*atomic.Uint64, uint64) uintptr { return 1 }, attach: func(ID, uintptr) {}, commit: func(ID) { commits++ }, observe: func(b []hal.CommandBuffer, index uint64) {
++		observed++
++		if commits != 0 || index != 1 || len(b) != 2 {
++			t.Fatal("observer ran after commit or guessed identity")
++		}
++	}}
++	if _, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{}}, rt); err == nil || observed != 0 {
++		t.Fatal("invalid submission reached observer")
++	}
++	if _, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{raw: 2}}, rt); err != nil || observed != 1 || commits != 2 {
++		t.Fatal("valid submit changed", err)
++	}
++}
++
++func TestGPUTimingMissingRecordsRemainJSONSerializable(t *testing.T) {
++	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++	a := newGPUTiming(r)
++	for i, x := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
++		key := uintptr(i + 1)
++		token := a.register(key, gpuTimingRow{}, true)
++		r.take(key)
++		a.complete(token, key, 4, x, x, true)
++	}
++	if _, err := json.Marshal(a.snapshot(true)); err != nil {
++		t.Fatal("invalid timestamp poisoned failure report", err)
++	}
++}
++func TestGPUTimingTakenCallbacksDoNotEscapeOwnerBudget(t *testing.T) {
++	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++	a := newGPUTiming(r)
++	for i := 0; i < gpuTimingRouteLimit+10; i++ {
++		key := uintptr(i + 1)
++		a.register(key, gpuTimingRow{}, true)
++		r.take(key)
++	}
++	if len(a.pending) != gpuTimingRouteLimit || a.missing != 10 {
++		t.Fatal("taken unpublished callbacks bypassed owner bound")
++	}
++	a.snapshot(true)
++}
++
++func TestGPUTimingAttachFailureCancelsOnlyDiagnosticRoute(t *testing.T) {
++	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
++	a := newGPUTiming(r)
++	token := a.register(1, gpuTimingRow{Submission: 9}, true)
++	a.cancel(token, "native-handler-attach-error")
++	if r.count() != 0 || len(a.pending) != 0 || a.missing != 1 || a.rows[0].Reason != "native-handler-attach-error" {
++		t.Fatal("failed attachment retained diagnostic ownership")
++	}
++	a.complete(token, 1, 4, 2, 3, true)
++	if a.ignored != 1 {
++		t.Fatal("cancelled route accepted stale callback")
++	}
++}
+--- /dev/null
++++ b/hal/metal/gpu_timing_root_native_test.go
+@@ -0,0 +1,68 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++	"runtime"
++	"testing"
++	"unsafe"
++)
++
++func TestPermanentGPUBlockSurvivesGCAndNativeCopy(t *testing.T) {
++	if err := Init(); err != nil {
++		t.Fatal(err)
++	}
++	pointer := permanentGPUBlock()
++	if pointer == 0 {
++		t.Fatal("native permanent helper unavailable")
++	}
++	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
++	if err != nil {
++		t.Fatal(err)
++	}
++	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
++	if err != nil {
++		t.Fatal(err)
++	}
++	var copyCIF, releaseCIF types.CallInterface
++	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
++	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	for i := 0; i < 10; i++ {
++		runtime.GC()
++		var copied uintptr
++		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
++		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
++			t.Fatal(err)
++		}
++		if copied != pointer {
++			t.Fatal("global block copy moved the immutable literal")
++		}
++		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
++			t.Fatal(err)
++		}
++		if permanentGPU.pointer.Load() != pointer || permanentGPU.block == nil || permanentGPU.descriptor == nil {
++			t.Fatal("permanent roots changed")
++		}
++		// A valid block class also supports Objective-C dispatch. This distinguishes
++		// the inherited class-address bug from a GC lifetime failure.
++		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
++			t.Fatal("Objective-C global block copy changed its identity")
++		}
++		Release(ID(pointer))
++	}
++}
++
++func TestNativeGPUClockUsesPositiveHostTime(t *testing.T) {
++	a := gpuHostSeconds()
++	b := gpuHostSeconds()
++	if a <= 0 || b < a {
++		t.Fatalf("native host clock unavailable or regressed: %v %v", a, b)
++	}
++}
+--- /dev/null
++++ b/gpu_timing_native.go
+@@ -0,0 +1,20 @@
++//go:build !rust && !(js && wasm)
++
++package wgpu
++
++func (d *Device) NativeGPUTiming(close bool) any {
++	if d != nil && d.queue != nil {
++		if p, ok := d.queue.hal.(interface{ NativeGPUTiming(bool) any }); ok {
++			return p.NativeGPUTiming(close)
++		}
++	}
++	return nil
++}
++func (d *Device) NativeGPUClockSeconds() float64 {
++	if d != nil && d.queue != nil {
++		if p, ok := d.queue.hal.(interface{ NativeGPUClockSeconds() float64 }); ok {
++			return p.NativeGPUClockSeconds()
++		}
++	}
++	return 0
++}
