@@ -78,6 +78,14 @@ async simulation, `--fast` + late acquisition):
   pass 1.81 ms, model shadow silhouettes 1.28 + mask 0.62 ms, body atlas
   1.18 ms, final pass 0.95 ms, glow 0.61 ms, ground light 0.26 ms.
 
+- GOMAXPROCS: with the host overlaps, 4 -> 6 -> 8 Ps cut 1440p zoomed-out
+  late frames 4.1% -> 3.0% -> 2.0% (tick-frame source p95 9.8 -> 8.4 ms);
+  `run-play`'s prepare-ahead profiles now use min(8, cores).
+- Deferring renderer queue writes until after the source handoff
+  (`NANOLATHE_WEBGPU_DEFER_WRITES=1`) was slower: zoomed-out late frames
+  1.0% -> 4.4%. It stays opt-in; the render-thread profile that motivated it
+  (half of preparation inside the queue's pending-write setup) still stands.
+
 ## Next
 
 - Model shadows are the largest model GPU cost; the body atlas is not.
