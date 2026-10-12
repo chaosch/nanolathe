@@ -99,3 +99,20 @@ exact controls, workloads, profiles, allocation totals and timing scope.
 The qualified build is /tmp/nanolathe-retained-blend-current/run-play --fast;
 GPU timing stays off unless explicitly requested. Its private simulation timing
 overlays were used only in matched measurement binaries.
+
+
+Two longer12000-frame sessions preserve complete correlation in their final3600
+rows despite expected bounded-ring evictions earlier. Both drain12123/12123,
+with24246/24246 completed GPU observations, zero outstanding routes and no window
+pipeline growth. Final-window rates118.29/119.02Hz still do not establish steady120.
+The evolving scene has GPU means~7ms andp99~8.6–9.0ms; the earlier~4.18ms GPU result
+is not an all-scene budget guarantee. Source means~5.05–5.10ms,p99~10.2–11.0ms.
+Most late same-row presentations have source<=8.333ms; some also have observedGPU
+within budget. Slow source rows largely coincide with world rebuilds. Individual
+effect batches are small, and ordinary simulation joins are short with rare
+outliers. Whole-session presentation Missing3/6 remains unknown despite complete
+final windows. LONG_DENSE_PHASE_MEASUREMENTS.json records the conditional phase
+metrics and scope limits. No further production change is justified yet: the
+next attribution step is a bounded execution trace and separate Present-CB/queue
+timing before another source, renderer or pacing change. The qualified launcher
+remains unchanged.

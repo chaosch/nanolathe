@@ -1006,3 +1006,41 @@ this bounded adoption while retaining rare source/display/simulation maxima.
 RETAINED_BLEND_MEASUREMENTS.json records exact data, hashes, private telemetry,
 profiles and limits. The next concrete step is a longer repeated presentation
 soak and attribution of remaining >8.333ms source rows before another rewrite.
+
+
+## Longer dense phase attribution
+
+Two12000-frame sessions use the qualified pooled blend, same fixed camera,
+speed10 settings and normal zoom, plus private phase and nativeGPU probes.
+Source/presentation/GPU rings remain8192/4096/8192; only the final3600 sorted
+source identities are fully correlated. Each window has3600 unique positive
+presentations and complete two-CB batches. Older evictions are expected. Both
+queues drain12123/12123, all24246 GPU observations complete and no routes remain.
+Whole-session presentation Missing3/6 remains recorded unknowns outside the
+fully correlated windows, not a proved frame-drop count.
+
+Final rates118.290/119.024Hz have46/28 intervals over12ms. Source means5.049/5.102ms
+andp9910.952/10.215ms coexist with GPU means7.140/6.962ms,p998.983/8.610ms.
+Only16/8 late rows also have source>8.333ms;18/17 late rows have both same-row
+source and observedGPU within that budget. Largest L1 gap41.664ms has source
+3.999ms/GPU7.278ms and observedGPU-end→present55.73ms. This exposes work or waiting
+outside the observedGPU scope; it does not identify pure compositor cost.
+
+Slow-source rows rebuild the world95.3–98.3% of the time. Their conditional
+host-step/world means~3.26/~1.95ms must not be confused with whole-window
+~0.83/~0.53ms. World unit and sprite work lead rebuilds. Retained effect record
+averages~2.1ms: individual producer batches are smaller, with~1.05ms residual
+including interpolation/history/preparation, not a pure blend duration. Simulation
+batch means~14.4ms,p99~19.8ms; waitp99~0.002ms has rare6–8ms maxima. One measuredGC
+per entire session has~0.46ms totalSTWpause; sampled L2GC~0.08s does not locate
+individual stalls. Counts and allocation totals cover their stated windows only.
+
+Independent review supports mixed attribution and no further production change.
+Long-scene GPU pressure prevents treating early~4.18ms GPU data as an all-scene
+CPU-first conclusion. Next collect a bounded execution trace with a trace-off
+control, then separately bounded nativePresent-CB/queue timestamps. A third CB
+record per frame would exceed the present8192 GPU ring for3600 complete batches;
+use a separate bounded phase ring if instrumented. LONG_DENSE_PHASE_MEASUREMENTS.json
+preserves exact commands, hashes, profiles, probe source, ownership and nested
+phase caveats. The qualified launcher and shared pure-Go architecture remain
+unchanged.
