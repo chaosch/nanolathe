@@ -102,7 +102,7 @@ func runMetal(opts Options, cs *contentSet) error {
 		return err
 	}
 	prepareMetalScene(scene, sess.World)
-	host := &metalBattleHost{worldGamma: worldGamma, fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
+	host := &metalBattleHost{fieldCamera: os.Getenv("NANOLATHE_HOST_FIELD_CAMERA") == "1", worldGamma: worldGamma, fps: metalFPS{target: 1000.0 / 120}, scene: scene, shell: shell, cl: cl, battle: battle, sess: sess, world: retained, hud: metalhud.New(cl.PaletteTables(), logicalW, logicalH), input: newMetalInput(cl, 2), width: logicalW, height: logicalH}
 	host.visuals.worldPalette = &display
 	scene.Live = host
 	scene.Metadata["logical_surface"] = []int{logicalW, logicalH}
@@ -177,6 +177,10 @@ type metalBattleHost struct {
 	steps, inputs                 uint64
 	cursorX, cursorY              int
 	cursorObserved                bool
+	// fieldCamera pins the pointer at the view centre for comparable
+	// measurements (NANOLATHE_HOST_FIELD_CAMERA): every executor then sees the
+	// same input, and the real OS pointer cannot edge-scroll the camera.
+	fieldCamera bool
 }
 
 func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.LiveFrame, error) {
@@ -191,6 +195,15 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.due = now
 	}
 	h.fps.observe(time.Now(), in.Timing)
+	if h.fieldCamera {
+		events := in.Events[:0:0]
+		for _, event := range in.Events {
+			if event.Kind != 1 && event.Kind != 2 && event.Kind != 3 && event.Kind != 9 {
+				events = append(events, event)
+			}
+		}
+		in.Events = append(events, meshscene.NativeEvent{Kind: 1, X: float32(h.width), Y: float32(h.height)})
+	}
 	h.events = append(h.events, in.Events...)
 	for _, event := range in.Events {
 		if event.Kind == 1 || event.Kind == 2 || event.Kind == 3 || event.Kind == 9 {
