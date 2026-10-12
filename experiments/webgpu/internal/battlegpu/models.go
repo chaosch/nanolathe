@@ -1146,7 +1146,9 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		}
 		m.counters.Dispatches++
 	}
-	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}, {View: m.atlas.metadataView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
+	// Body depth is local to this pass and cleared before every use. Only
+	// color/metadata feed later passes; the separate shadow height keys store.
+	pass, e := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: m.atlas.colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}, {View: m.atlas.metadataView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: m.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpDiscard, DepthClearValue: 1, StencilReadOnly: true}})
 	if e != nil {
 		return e
 	}
