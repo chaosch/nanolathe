@@ -963,3 +963,46 @@ arithmetic/cachekey and avoids simulationjoin removal or an unqualified direct
 body rewrite. Implementation, nativeparity and measuredCPU/presentation adoption
 are nextunit gates. GPU_TIMING_MEASUREMENTS.json preserves perrun/tick metrics,
 correlations and scope/clock/accounting limitations.
+
+
+## Joined retained unit blending
+
+The retained-effects recorder now creates/borrows the existing persistent pool
+before its first presentationFrame read. Only disjoint unit/pose blend slots run
+on helpers. History lookup/preparation, projectile/effect/CRT work and painter
+consumption retain their serial order, and all helpers join before consumption.
+The pool's active participants respect GOMAXPROCS even after a larger existing
+pool encounters a reduced budget. Stock WASM retains serial blending. Independent
+ownership review found no blocker; the previous snapshot/close requirements stay
+in force.
+
+Focused race tests and tools/check ./internal/client pass. A negative source
+overlay proves the reduced-budget test catches eight awakened participants with
+GOMAXPROCS=2. Native WebGPU/classic/modern controls preserve pixels and state,
+including simulation and CRT draw counts. WebGPU final fields, initial source
+JSON (41520 vertices,17098 with nonzero explicit UVs) and18 GPU sidecars are
+byte-identical. Client test binaries compile for Linux/Windows/WASM; these builds
+do not establish runtime/browser behavior.
+
+A1 B1 B2 A2 uses120 warmup plus3600 measured frames, one fixed camera/NoShake,
+seed7, speed10 isolated settings,1920x1080 and the same private external-library
+build. Identical private overlays measure simulation joins/batches on their
+serial source owner. Control source means6.029/6.005ms andp9912.543/12.516ms fall
+to pooled5.591/5.544ms and11.861/11.766ms. Common full100-tick body/triangle mean
+spreads stay below0.073%; evolving alpha/frame states are not exact pairs.
+Source-worker join tails improve. Simulation batch mean/p99 do not worsen,
+but B1 has a7.213ms simulation join maximum, versus3.641/1.856ms in controls
+and3.356ms in B2. No data supports reserving a simulation slot or adapting the
+helper policy yet. Joined-batch times and newly released tick counts describe
+different batches and are never divided into a same-row tick duration.
+
+All3600 presentations are unique in every run; all queues drain3723/3723 with
+zero capacity pipeline builds. Display ranges118.746–118.811Hz control versus
+118.681–119.535Hz pooled overlap. Aggregate sampledCPU A2/B2=36.09/36.24s and
+pthread signals rise: this is a source wall-latency adoption, not lower aggregate
+CPU consumption or proof of sustained120 FPS. Allocation totals include evolving
+simulation and establish no allocation gain. Independent result review supports
+this bounded adoption while retaining rare source/display/simulation maxima.
+RETAINED_BLEND_MEASUREMENTS.json records exact data, hashes, private telemetry,
+profiles and limits. The next concrete step is a longer repeated presentation
+soak and attribution of remaining >8.333ms source rows before another rewrite.

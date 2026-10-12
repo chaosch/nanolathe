@@ -190,6 +190,11 @@ func (p *recordPool) forEach(n, chunk int, fn func(lo, hi int)) {
 	// The caller takes a chunk too, so only the chunks beyond its first need
 	// helpers (recordHelpers).
 	helpers := p.helpers((n+chunk-1)/chunk - 1)
+	// Blend helpers share the active Go budget with the presenter/simulation.
+	// Existing larger pools keep parked helpers; synthetic stress may wake all.
+	if !p.wakeAll {
+		helpers = min(helpers, max(0, runtime.GOMAXPROCS(0)-1))
+	}
 	p.done.Add(helpers)
 	for _, wake := range p.wake[:helpers] {
 		wake <- struct{}{}

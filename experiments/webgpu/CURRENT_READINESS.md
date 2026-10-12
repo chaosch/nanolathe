@@ -76,7 +76,26 @@ encoding slowdown within variance. Mean observedGPU batches~4.18ms andp99~6.9ms
 usually fit8.33ms while sourcep99~12.3ms. Rare GPU outliers remain. The~25ms
 post-observedGPU→present gap includes unobservednativework/queue/display; it is
 not pure compositor cost. UV/growth andfixedCoastimage/state controls preserve
-allrawfiles/sidecars. The next chosenfix is pooled interpolation on thefirst
-retained-effects read, withboundedparticipants andunchangedserialhistory/effects;
-implementationandmeasuredadoptionremainpending. The timingdiagnostic stays off
+allrawfiles/sidecars. Pooled interpolation on the first retained-effects read is now qualified below;
+lookup/history preparation and effects remain serial. The timingdiagnostic stays off
 in ordinaryfast launches.
+
+
+The first retained-effects read now lends the existing joined unit-blend pool
+before interpolation. New pools and blend helper dispatch respect active
+GOMAXPROCS, including previously larger pools; stock WASM remains serial.
+Focused race tests, the affected client gate, and a negative dispatch control
+pass. WebGPU/classic/modern fixed coastal pixels and state match; WebGPU fields,
+initial mesh/UV source JSON and all18 GPU sidecars match, with nonzero CRT use.
+Linux/Windows/WASM client test binaries compile; runtime claims remain unchanged.
+
+Four matched dense runs reduce average source preparation6.017→5.567ms (~7.5%)
+and average sourcep9912.530→11.814ms (~5.7%). Simulation batch means/p99 do not
+worsen, although one pooled trial has a7.21ms join outlier. Aggregate sampled CPU
+is unchanged within this comparison and helper wake costs rise. Presentation
+ranges118.75–118.81Hz control versus118.68–119.54Hz pooled overlap; steady120 and
+an isolated FPS gain remain unproven. RETAINED_BLEND_MEASUREMENTS.json preserves
+exact controls, workloads, profiles, allocation totals and timing scope.
+The qualified build is /tmp/nanolathe-retained-blend-current/run-play --fast;
+GPU timing stays off unless explicitly requested. Its private simulation timing
+overlays were used only in matched measurement binaries.

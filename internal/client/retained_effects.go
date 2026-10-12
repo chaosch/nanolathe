@@ -1,6 +1,7 @@
 package client
 
 import (
+	"runtime"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
@@ -76,6 +77,12 @@ func (c *Client) RecordRetainedEffectsInto(storage *RetainedEffectStorage) Retai
 	if committed == nil || c.screenOnly(committed) {
 		return out
 	}
+	// The first retained read owns the full interpolation; later recorders reuse
+	// its existing blend key. Lend the same joined pool before that first read.
+	wasParallel := c.parallelRecord
+	c.parallelRecord = runtime.GOARCH != "wasm"
+	defer func() { c.parallelRecord = wasParallel }()
+	c.prepareRetainedBlendPool(len(committed.Units))
 	cur := c.presentationFrame()
 	if cur == nil {
 		return out
@@ -83,10 +90,10 @@ func (c *Client) RecordRetainedEffectsInto(storage *RetainedEffectStorage) Retai
 	if cur != committed && c.beginCameraBlend() {
 		defer c.endCameraBlend(true)
 	}
-	wasGeometry, wasOnly, wasParallel := c.recordModelGeometry, c.geometryOnlyModels, c.parallelRecord
+	wasGeometry, wasOnly := c.recordModelGeometry, c.geometryOnlyModels
 	c.recordModelGeometry, c.geometryOnlyModels, c.parallelRecord = true, true, true
 	defer func() {
-		c.recordModelGeometry, c.geometryOnlyModels, c.parallelRecord = wasGeometry, wasOnly, wasParallel
+		c.recordModelGeometry, c.geometryOnlyModels = wasGeometry, wasOnly
 	}()
 	c.modelScratch.reset()
 	c.modelScratch.active = true
@@ -189,4 +196,18 @@ func (c *Client) RecordRetainedEffectsInto(storage *RetainedEffectStorage) Retai
 		storage.Timings[7] = float64(time.Since(lights)) / 1e6
 	}
 	return out
+}
+
+// Retained recording does not run the unit-body recorder that normally creates
+// this pool. Keep stock WASM serial, and bound new participants by actual Go
+// parallelism rather than waking one helper per hardware thread. Lookup/history
+// preparation remains serial; blendUnitRange writes disjoint slots and joins.
+func (c *Client) prepareRetainedBlendPool(units int) {
+	if c.recordPool != nil || !c.interpolation || units < parallelBlendFloor || runtime.GOARCH == "wasm" {
+		return
+	}
+	participants := min(recordPoolSize(), runtime.GOMAXPROCS(0))
+	if participants > 1 {
+		c.recordPool = newRecordPool(participants)
+	}
 }
