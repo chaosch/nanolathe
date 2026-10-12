@@ -34,6 +34,7 @@ type deferredWrite struct {
 // so the arena is free for the next frame as soon as flush returns.
 type deferredQueue struct {
 	q         *wgpu.Queue
+	enabled   bool
 	deferring bool
 	writes    []deferredWrite
 	arena     []byte
@@ -74,7 +75,7 @@ func (d *deferredQueue) WriteTexture(dst *wgpu.ImageCopyTexture, data []byte, la
 
 // begin starts recording a frame's writes.
 func (d *deferredQueue) begin() {
-	d.deferring = true
+	d.deferring = d.enabled
 	d.writes = d.writes[:0]
 	d.arena = d.arena[:0]
 }
