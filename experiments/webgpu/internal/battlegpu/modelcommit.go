@@ -34,11 +34,18 @@ func modelCommitShadowHelpers() string {
 	).Replace("const modelShadowCorners=" + tail)
 }
 
-func modelCommitShaderSource(capacities [2]int) string {
-	return strings.NewReplacer(
+func modelCommitShaderSource(capacities [2]int, runtime ...bool) string {
+	source := strings.NewReplacer(
 		"__SLOTS__", strconv.Itoa(capacities[0]), "__SUBJECTS__", strconv.Itoa(capacities[1]),
 		"__BODY_HELPERS__", modelCommitBodyHelpers(), "__SHADOW_HELPERS__", modelCommitShadowHelpers(),
 	).Replace(modelCommitShader)
+	if len(runtime) > 0 && runtime[0] {
+		source = runtimeStorageArrays(source)
+		source = strings.Replace(source, "const modelCommitSlotCapacity:u32="+strconv.Itoa(capacities[0])+"u;", "__RUNTIME_CAPACITY_FUNCTION__", 1)
+		source = strings.ReplaceAll(source, "modelCommitSlotCapacity", "modelCommitSlotCapacity()")
+		source = strings.Replace(source, "__RUNTIME_CAPACITY_FUNCTION__", "fn modelCommitSlotCapacity()->u32{return arrayLength(&slots);}", 1)
+	}
+	return source
 }
 
 func modelCommitCapacities(slotBytes, subjectBytes uint64) [2]int {
@@ -81,13 +88,14 @@ func (p *modelCommitPipeline) modelReplace(build func(*modelCommitPipeline) erro
 
 func (m *Models) modelPrepareCommitPipeline() error {
 	capacities := modelCommitCapacities(m.slots.size, m.shadowRecords.size)
-	if m.commitWork.module != nil && capacities == m.commitWork.capacities {
+	if m.commitWork.module != nil && (m.runtimeArrays || capacities == m.commitWork.capacities) {
+		m.commitWork.capacities = capacities
 		return nil
 	}
 	if err := m.commitWork.modelReplace(func(next *modelCommitPipeline) error {
 		next.capacities = capacities
 		var err error
-		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelCommitShaderSource(capacities)})
+		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelCommitShaderSource(capacities, m.runtimeArrays)})
 		if next.module != nil {
 			next.releases[0] = next.module.Release
 		}

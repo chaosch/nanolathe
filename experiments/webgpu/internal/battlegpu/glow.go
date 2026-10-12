@@ -50,6 +50,7 @@ type Glow struct {
 	closed, enabled           bool
 	width, height, vertices   int
 	vertexCapacity            int
+	runtimeArrays             bool
 	uniform, vertexBuffer     *wgpu.Buffer
 	source                    *wgpu.RenderPipeline
 	sourceModule              *wgpu.ShaderModule
@@ -152,7 +153,7 @@ func (g *Glow) glowLayout(entries []gputypes.BindGroupLayoutEntry) (*wgpu.BindGr
 }
 
 func NewGlow(d *wgpu.Device, q *wgpu.Queue, scene *meshscene.Scene) (g *Glow, err error) {
-	g = &Glow{d: d, q: q}
+	g = &Glow{runtimeArrays: runtimeArraysEnabled(d), d: d, q: q}
 	defer func() {
 		if err != nil {
 			g.Close()
@@ -480,15 +481,18 @@ func (g *Glow) glowShareAtlas(view *wgpu.TextureView) {
 
 // Render HAL does not bind runtime size metadata. Fixed capacities follow the
 // current uploaded tier; completion precedes Prepare and pipeline replacement.
-func glowSourceShader(capacity int) string {
+func glowSourceShader(capacity int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(glowShader)
+	}
 	return strings.Replace(glowShader, "array<GlowVertex,1>", "array<GlowVertex,"+strconv.Itoa(max(capacity, 1))+">", 1)
 }
 func (g *Glow) glowPrepareSourcePipeline() error {
 	capacity := max(g.vertexCapacity/glowVertexSize, 1)
-	if g.source != nil && g.sourceCapacity == capacity {
+	if g.source != nil && (g.runtimeArrays || g.sourceCapacity == capacity) {
 		return nil
 	}
-	shader, err := g.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowSourceShader(capacity)})
+	shader, err := g.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: glowSourceShader(capacity, g.runtimeArrays)})
 	if err != nil {
 		return err
 	}

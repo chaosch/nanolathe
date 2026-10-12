@@ -63,7 +63,10 @@ func modelBodyCapacities(bytes [8]uint64) (capacities [8]int) {
 	return
 }
 
-func modelBodyShaderSource(capacities [8]int) string {
+func modelBodyShaderSource(capacities [8]int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(modelBodyShader)
+	}
 	var replacements [16]string
 	for i, record := range modelBodyArrays {
 		prefix := record.name + ":array<" + record.element + ","
@@ -93,13 +96,13 @@ func modelBodyLayoutEntries() []gputypes.BindGroupLayoutEntry {
 
 func (m *Models) modelPrepareBodyPipelines() error {
 	capacities := modelBodyCapacities([8]uint64{m.vertices.Size(), m.poses.size, m.instances.size, m.materialData.Size(), m.frameData.Size(), m.selected.size, m.lights.size, m.centers.Size()})
-	if m.bodyWork.module != nil && capacities == m.bodyWork.capacities {
+	if m.bodyWork.module != nil && (m.runtimeArrays || capacities == m.bodyWork.capacities) {
 		return nil
 	}
 	err := m.bodyWork.modelReplace(func(next *modelBodyPipelines) error {
 		next.capacities = capacities
 		var err error
-		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelBodyShaderSource(capacities)})
+		next.module, err = m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelBodyShaderSource(capacities, m.runtimeArrays)})
 		if next.module != nil {
 			next.releases[0] = next.module.Release
 		}

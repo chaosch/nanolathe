@@ -104,6 +104,7 @@ type Models struct {
 	format                                                                      gputypes.TextureFormat
 	owned                                                                       []modelRelease
 	closed, prepared                                                            bool
+	runtimeArrays                                                               bool
 	state                                                                       *battleRenderState
 	meshes                                                                      []modelMesh
 	materials                                                                   []meshscene.Material
@@ -425,7 +426,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if d == nil || q == nil || scene == nil {
 		return nil, modelError("device, queue and retained scene")
 	}
-	m = &Models{d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
+	m = &Models{runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames)}
 	defer func() {
 		if err != nil {
 			m.Close()
@@ -787,7 +788,10 @@ func (p *modelGroupWork) modelPrepare(f meshscene.LiveFrame) error {
 	return nil
 }
 
-func modelGroupShaderSource(capacities [3]int) string {
+func modelGroupShaderSource(capacities [3]int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(modelGroupsShader)
+	}
 	return strings.NewReplacer("__GROUPS__", strconv.Itoa(capacities[0]), "__MEMBERS__", strconv.Itoa(capacities[1]), "__SLOTS__", strconv.Itoa(capacities[2])).Replace(modelGroupsShader)
 }
 func (m *Models) modelPrepareMergePipeline() error {
@@ -795,12 +799,12 @@ func (m *Models) modelPrepareMergePipeline() error {
 		return nil
 	}
 	capacities := [3]int{int(m.groups.size / modelGroupStride), int(m.members.size / modelMemberStride), int(m.slots.size / modelSlotStride)}
-	if capacities == m.mergeCapacities && m.mergePipeline != nil {
+	if (m.runtimeArrays || capacities == m.mergeCapacities) && m.mergePipeline != nil {
 		return nil
 	}
 	// Fixed arrays match geometric buffer capacities. The pinned render compiler
 	// does not bind runtime-array size metadata; this stage never needs it.
-	module, e := m.modelModule(modelGroupShaderSource(capacities))
+	module, e := m.modelModule(modelGroupShaderSource(capacities, m.runtimeArrays))
 	if e != nil {
 		return e
 	}

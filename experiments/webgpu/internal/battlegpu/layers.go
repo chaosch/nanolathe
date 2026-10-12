@@ -76,6 +76,7 @@ type layerDraw struct{ kind, first, count, mode uint32 }
 // it never makes emitters or simulation state of its own.
 type Layers struct {
 	reserveStorage                                                                              bool
+	runtimeArrays                                                                               bool
 	d                                                                                           *wgpu.Device
 	q                                                                                           *wgpu.Queue
 	format, outputFormat                                                                        gputypes.TextureFormat
@@ -364,7 +365,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	return newLayersFormats(d, q, format, format, scene)
 }
 func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputypes.TextureFormat, scene *meshscene.Scene) (l *Layers, err error) {
-	l = &Layers{reserveStorage: storageReserveEnabled(), d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
+	l = &Layers{runtimeArrays: runtimeArraysEnabled(d), reserveStorage: storageReserveEnabled(), d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
 	defer func() {
 		if err != nil {
 			l.Close()

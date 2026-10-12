@@ -1,7 +1,7 @@
 {
   "date": "2026-10-12",
   "base_commit": "4a8bbfecd1cad042786a82f621534ccce7dc00ef",
-  "renderer_adopted": false,
+  "renderer_adopted": true,
   "backend_patch_sha256": "0daff28eaa1eb0134696a10c3f42d20bca0185ca78e350d3eedf21897410ca5c",
   "qualified": {
     "native_count_pixel_cases": 70,
@@ -55,8 +55,7 @@
     "measured": 720
   },
   "limits": [
-    "Previous full-battle binary rebinds metadata before every draw; current backend patch reuses unchanged per-pass metadata and has passed native tests but awaits full-scene requalification",
-    "Renderer candidate is preserved as a patch and is not adopted into default or optional source yet",
+    "Metadata reuse fully requalified on the listed native model/Coast/dense cases; CPU encoding remains above the reservation reference, no FPS improvement claimed",
     "Shared modules require all globals to have layout resources; annotation derives only its existing canonical annotation equations",
     "ICB disabled for runtime pipelines; native indirect paths checked",
     "Actual WebGPU display/GPU timestamps remain unavailable; callback cadence cannot establish presentation",
@@ -70,6 +69,51 @@
     "growth_result": "/tmp/nanolathe-runtimearray-model-growth/result.json",
     "dense_report": "/tmp/nanolathe-runtimearray-dense2/report.json",
     "coast_report": "/tmp/nanolathe-runtimearray-coast/webgpu-report.json",
-    "native_log": "/tmp/nanolathe-runtimearray-all-metal-tests.log"
+    "native_log": "/tmp/nanolathe-runtimearray-all-metal-tests.log",
+    "reuse_growth_result": "/tmp/nanolathe-runtimearray-model-growth3/result.json",
+    "reuse_dense_report": "/tmp/nanolathe-runtimearray-dense3/report.json",
+    "reuse_coast_report": "/tmp/nanolathe-runtimearray-coast3/webgpu-report.json"
+  },
+  "renderer_default_enabled": false,
+  "metadata_reuse_qualification": {
+    "dense_rows": 720,
+    "unique_tick_alpha": 720,
+    "dense_callback_hz": 119.59247949722062,
+    "dense_timings_ms": {
+      "CallbackMS": {
+        "mean": 8.361729802777777,
+        "p95": 8.496916,
+        "p99": 9.467041
+      },
+      "EncodeMS": {
+        "mean": 1.7699748791666665,
+        "p95": 2.566416,
+        "p99": 3.034541
+      },
+      "SourceMS": {
+        "mean": 4.118470136111111,
+        "p95": 9.393834,
+        "p99": 9.944583
+      },
+      "JoinMS": {
+        "mean": 0.27935738055555553,
+        "p95": 2.044791,
+        "p99": 2.808542
+      }
+    },
+    "model_pipeline_creates": 0,
+    "layer_pipeline_creates": 0,
+    "close": {
+      "submitted": 843,
+      "completed": 843
+    },
+    "growth_cases": 19,
+    "growth_pipeline_creates": [
+      0,
+      0,
+      0
+    ],
+    "coast_png_fields_state_equal": true,
+    "coast_gpu_sidecars_equal": 18
   }
 }

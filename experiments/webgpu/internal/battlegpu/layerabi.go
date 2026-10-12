@@ -11,7 +11,10 @@ import (
 // The pinned Metal render HAL does not bind Naga's runtime-array size argument.
 // Fixed declarations use the bound allocation tier, retaining every declaration
 // so native buffer/texture indices still match the shared group (C-G3, C-G7).
-func layerABIOverlaySource(capacities [5]int) string {
+func layerABIOverlaySource(capacities [5]int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(layerOverlayShader)
+	}
 	source := layerOverlayShader
 	for i, name := range [...]string{"LayerQuad", "LayerVertex", "LayerGround", "LayerSmoke", "LayerLight"} {
 		source = strings.Replace(source, "array<"+name+",1>", "array<"+name+","+strconv.Itoa(max(capacities[i], 1))+">", 1)
@@ -19,8 +22,36 @@ func layerABIOverlaySource(capacities [5]int) string {
 	return source
 }
 
-func layerABISpriteSource(capacity int) string {
+func layerABISpriteSource(capacity int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(layerSpriteShader)
+	}
 	return strings.Replace(layerSpriteShader, "array<LayerSprite,1>", "array<LayerSprite,"+strconv.Itoa(max(capacity, 1))+">", 1)
+}
+
+// Annotation's existing layout contains only uniforms and quads. Derive its
+// unchanged equations from the canonical shared source while excluding other
+// entrypoints and globals that this layout cannot bind.
+func layerABIAnnotationRuntimeSource() string {
+	prefix, _, ok := strings.Cut(layerOverlayShader, "fn layerTexel(")
+	if !ok {
+		return ""
+	}
+	lines := strings.Split(prefix, "\n")
+	var kept []string
+	for _, line := range lines {
+		unused := false
+		for binding := 2; binding <= 9; binding++ {
+			if strings.HasPrefix(line, "@group(0) @binding("+strconv.Itoa(binding)+")") {
+				unused = true
+				break
+			}
+		}
+		if !unused {
+			kept = append(kept, line)
+		}
+	}
+	return runtimeStorageArrays(strings.Join(kept, "\n"))
 }
 
 type layerABIKey struct {
@@ -92,13 +123,13 @@ func (l *Layers) layerABIPipeline(b *layerABIBundle, slot int, shader *wgpu.Shad
 }
 
 func (l *Layers) layerABISpriteKey() layerABIKey {
-	return layerABIKey{capacities: [5]int{max(l.sprites.size/96, 1)}, seabed: l.seabed.active || l.seabed.sprite != nil}
+	return runtimeLayerKey(layerABIKey{capacities: [5]int{max(l.sprites.size/96, 1)}, seabed: l.seabed.active || l.seabed.sprite != nil}, l.runtimeArrays)
 }
 
 func (l *Layers) layerUpdateSpritePipelines() error {
 	key := l.layerABISpriteKey()
 	return layerABIReplace(&l.layerABI.sprite, key, func(b *layerABIBundle) error {
-		shader, err := l.layerABIModule(b, layerABISpriteSource(key.capacities[0]))
+		shader, err := l.layerABIModule(b, layerABISpriteSource(key.capacities[0], l.runtimeArrays))
 		if err != nil {
 			return err
 		}
@@ -125,8 +156,13 @@ func (l *Layers) layerABIOverlayCapacities(quads *layerBuffer) [5]int {
 
 func (l *Layers) layerUpdateOverlayPipelines() error {
 	annotation := layerABIKey{capacities: [5]int{max(l.annotations.size/64, 1), 1, 1, 1, 1}}
+	annotation = runtimeLayerKey(annotation, l.runtimeArrays)
 	if err := layerABIReplace(&l.layerABI.annotation, annotation, func(b *layerABIBundle) error {
-		shader, err := l.layerABIModule(b, layerABIOverlaySource(annotation.capacities))
+		source := layerABIOverlaySource(annotation.capacities)
+		if l.runtimeArrays {
+			source = layerABIAnnotationRuntimeSource()
+		}
+		shader, err := l.layerABIModule(b, source)
 		if err != nil {
 			return err
 		}
@@ -135,8 +171,9 @@ func (l *Layers) layerUpdateOverlayPipelines() error {
 		return err
 	}
 	foreground := layerABIKey{capacities: l.layerABIOverlayCapacities(&l.overlayQuads)}
+	foreground = runtimeLayerKey(foreground, l.runtimeArrays)
 	if err := layerABIReplace(&l.layerABI.foreground, foreground, func(b *layerABIBundle) error {
-		shader, err := l.layerABIModule(b, layerABIOverlaySource(foreground.capacities))
+		shader, err := l.layerABIModule(b, layerABIOverlaySource(foreground.capacities, l.runtimeArrays))
 		if err != nil {
 			return err
 		}
@@ -150,8 +187,9 @@ func (l *Layers) layerUpdateOverlayPipelines() error {
 		return err
 	}
 	effects := layerABIKey{capacities: l.layerABIOverlayCapacities(&l.effectQuads)}
+	effects = runtimeLayerKey(effects, l.runtimeArrays)
 	return layerABIReplace(&l.layerABI.effects, effects, func(b *layerABIBundle) error {
-		shader, err := l.layerABIModule(b, layerABIOverlaySource(effects.capacities))
+		shader, err := l.layerABIModule(b, layerABIOverlaySource(effects.capacities, l.runtimeArrays))
 		if err != nil {
 			return err
 		}

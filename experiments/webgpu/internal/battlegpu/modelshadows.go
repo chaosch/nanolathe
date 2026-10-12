@@ -306,7 +306,10 @@ func modelShadowProjectLayoutEntries() []gputypes.BindGroupLayoutEntry {
 	}
 }
 
-func modelShadowShaderSource(capacities [4]int) string {
+func modelShadowShaderSource(capacities [4]int, runtime ...bool) string {
+	if len(runtime) > 0 && runtime[0] {
+		return runtimeStorageArrays(modelShadowsShader)
+	}
 	return strings.NewReplacer("__VERTICES__", strconv.Itoa(capacities[0]), "__POSES__", strconv.Itoa(capacities[1]), "__INSTANCES__", strconv.Itoa(capacities[2]), "__SUBJECTS__", strconv.Itoa(capacities[3])).Replace(modelShadowsShader)
 }
 
@@ -374,8 +377,8 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 		return
 	}
 	capacities := [4]int{p.vertexCount, int(m.poses.size / modelPoseStride), int(m.instances.size / modelInstanceStride), int(m.shadowRecords.size / modelShadowStride)}
-	if capacities != p.capacities {
-		projectModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities)})
+	if p.projectPipeline == nil || (!m.runtimeArrays && capacities != p.capacities) {
+		projectModule, e := m.d.CreateShaderModule(&wgpu.ShaderModuleDescriptor{WGSL: modelShadowShaderSource(capacities, m.runtimeArrays)})
 		if e != nil {
 			return e
 		}
