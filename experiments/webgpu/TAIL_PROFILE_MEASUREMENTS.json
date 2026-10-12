@@ -1,6 +1,6 @@
 {
   "base_commit": "f374f44c5df2341052c060159b692e3bbff48468",
-  "status": "native pixel/UV correctness qualified; performance comparison pending; default-off",
+  "status": "adopted in explicit --fast profile for measured CPU benefit; baseline and unsupported-capability uploads unchanged; sustained120 unproven",
   "original_soak": {
     "path": "/tmp/nanolathe-profile-soak/webgpu-report.json",
     "sha256": "e646d7b8b617b523d56794ed48b921632c52f1a9be25a9dd20b397de8ba819a8",
@@ -29,11 +29,11 @@
   },
   "candidate": {
     "method": "split only mutable model uploads into<=256KiB writes using pinned existing completion-safe reusable staging belt",
-    "enabled": "--fast --chunked-uploads explicit; runtime envNANOLATHE_WEBGPU_CHUNKED_UPLOADS=1; Darwinarm64 andCompletionSafeUploads gate; defaultoff",
+    "enabled": "run-play --fast enables chunks on qualifiedDarwinarm64 owned-upload build; --no-chunked-uploads selects control; baseline0; device capability gate preserved",
     "fallback": "immutable meshes/UV/load-time buffers unchanged; all other platform builds use original writes",
     "counter_scope": "UploadWrites attempted API calls;ChunkedUploadBytes attempted full large payloads, not successful GPU-copy bytes",
-    "fresh_build": "/tmp/nanolathe-chunked-current",
-    "build_manifest": "/tmp/nanolathe-chunked-current/build-manifest.json"
+    "fresh_build": "/tmp/nanolathe-fast-ready",
+    "build_manifest": "/tmp/nanolathe-fast-ready/build-manifest.json"
   },
   "qualification": {
     "experiment_tools_check": "passed tests,vet,native/Rust/wasm builds andNode mockedbrowser telemetry",
@@ -44,7 +44,72 @@
     "raw_pixel_files_each": 38,
     "all_raw_files_byte_equal": true,
     "pose_growth": "40000-pose grow/shrink andtailpose readback passed both",
-    "independent_review": "no safety blocker; immutablepathunchanged; aligned contiguous slices staged synchronously; attemptedcounters explicit; newNoShakecontrol requires newmatchedpair"
+    "independent_review": "no safety blocker; immutablepathunchanged; aligned contiguous slices staged synchronously; attemptedcounters explicit; newNoShakecontrol requires newmatchedpair",
+    "fixed_coast": {
+      "artifact": "/tmp/nanolathe-chunked-coast",
+      "reference": "/tmp/nanolathe-hull-coast",
+      "equalities": {
+        "battle.png": true,
+        "final-fields.json": true,
+        "benchmark-state.json": true
+      },
+      "sidecar_count": 18,
+      "sidecar_equalities": {
+        ".color.png": true,
+        ".glow-octaves.rgba16f": true,
+        ".glow.rgba16f": true,
+        ".ground.png": true,
+        ".instances.bin": true,
+        ".keys.png": true,
+        ".keys.png.rgba8": true,
+        ".poses.bin": true,
+        ".reflection-color.png": true,
+        ".reflection-flags.r32u": true,
+        ".reflection-soft.png": true,
+        ".seabed.rgba16f": true,
+        ".shadow-body.png": true,
+        ".shadow-depth.f32": true,
+        ".shadow-mask.r8": true,
+        ".slots.bin": true,
+        ".source.png": true,
+        ".world.rgba16f": true
+      },
+      "mode_all_rows": [
+        true
+      ],
+      "chunked_attempted_payload_bytes": 1271342848,
+      "close": {
+        "completed": 963,
+        "submitted": 963
+      },
+      "report_sha256": "101c04f4d311fe8544684edc795d3fa595e4f952b110e8d2c77c8490b74e9a6a",
+      "command_correction": "Firstrequestusedunsupported--size flag andstoppedbeforeexecution; correctedexistingcoastalfixture isexpandedconfluence,--shot-size1920x1080,120TPS,720frames,300preticks,seed7,NoShakeoff"
+    },
+    "ready_package": {
+      "directory": "/tmp/nanolathe-fast-ready",
+      "manifest_sha256": "2907312d1d6fe4e2f2904f37279ed76ce9e1a5668233d249020d90f3c3592297",
+      "binary_sha256": "bfaf21be1d5978f24b21a5bdac52408bf5c9a0d06d25bd4b766c69d2d6f43b17",
+      "launcher_sha256": "a46768c3210b504e7989a8055628006e706979bf28a6a6db025d08f1fb5df8c5",
+      "manifest_repository_commit": "9c4c237158a3bd9adba55a71360a386ffdbdcbcf",
+      "scope": "Same GPU source as qualified9c4c23715 candidate; launcherdefaultadoptionrecordedbyexacthash",
+      "dryrun_controls": [
+        "baselineforces0",
+        "fastdefaults1",
+        "fastno-chunkedforces0",
+        "fastexplicitchunked1",
+        "chunkedwithoutfastrejected",
+        "settingsselectionpreserved"
+      ],
+      "actual_default_fast_smoke": {
+        "measured_rows": 120,
+        "chunked_all_rows": true,
+        "close": {
+          "completed": 243,
+          "submitted": 243
+        },
+        "report_sha256": "0ea9ff9c3ab4a71096316b4df2edf4cb5e2594e6cbb6051d581c3ba4be713709"
+      }
+    }
   },
   "host_observation": {
     "model": "Mac15,7",
@@ -57,5 +122,4792 @@
     ],
     "thermal": "pmset reports no recorded thermal/performance warning; no CPU power status recorded; does not prove no throttling"
   },
-  "next_step": "samebinaryA1/B1/B2/A2 3600frame runswithstablecameraNoShake onboth, isolatedfixedsettings;comparematchedtickwindows andprofiles beforeadoption"
+  "next_step": "Beforeselectivedirectbodyrewrite,collectboundednativeMetalcommand-bufferGPUstart/enddurations andalignexistingnativepresentation observationswithCPU criticalpath;potentiallocaldiagnostic,notwaitingforupstream. Timing/framepolicy remainsunqualifieduntilactuallyimplemented/tested.",
+  "paired_comparison": {
+    "artifact": "/tmp/nanolathe-chunked-pairs",
+    "sequence": [
+      "A1",
+      "B1",
+      "B2",
+      "A2",
+      "B3",
+      "A3"
+    ],
+    "same_binary_sha256": "00e7fa1e6fd7719548acef473bdd0d9215cb9dadc5cf7b0130132fe82d34cd9d",
+    "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+    "analysis_script": "/tmp/analyze_nanolathe_chunked_pairs.py",
+    "analysis_script_sha256": "00e0bad36650dc2d195dc691c5ead2ef80406a3fe364fe36f63084055452dd1b",
+    "analysis_sha256": "2817ebeed60ec37788843bfc388b44861c976aa3c1de44533f17ec59557fcbdc",
+    "run_metadata": [
+      {
+        "name": "A1",
+        "chunked_uploads": false,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/A1-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/A1",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 40.11682933289558,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:02  up 18 days,  6:10, 10 users, load averages: 6.06 4.71 4.00"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:02  up 18 days,  6:10, 10 users, load averages: 5.57 4.78 4.06"
+        }
+      },
+      {
+        "name": "B1",
+        "chunked_uploads": true,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--chunked-uploads",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/B1-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/B1",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 37.14287666603923,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:02  up 18 days,  6:10, 10 users, load averages: 5.57 4.78 4.06"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:03  up 18 days,  6:11, 10 users, load averages: 4.58 4.61 4.03"
+        }
+      },
+      {
+        "name": "B2",
+        "chunked_uploads": true,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--chunked-uploads",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/B2-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/B2",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 37.14557024999522,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:03  up 18 days,  6:11, 10 users, load averages: 4.58 4.61 4.03"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:04  up 18 days,  6:12, 10 users, load averages: 3.82 4.43 3.99"
+        }
+      },
+      {
+        "name": "A2",
+        "chunked_uploads": false,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/A2-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/A2",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 39.18811874999665,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:04  up 18 days,  6:12, 10 users, load averages: 3.82 4.43 3.99"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:04  up 18 days,  6:12, 10 users, load averages: 3.40 4.23 3.94"
+        }
+      },
+      {
+        "name": "B3",
+        "chunked_uploads": true,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--chunked-uploads",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/B3-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/B3",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 38.77031849999912,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:06  up 18 days,  6:14, 10 users, load averages: 2.43 3.76 3.78"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:06  up 18 days,  6:14, 10 users, load averages: 4.51 4.16 3.93"
+        }
+      },
+      {
+        "name": "A3",
+        "chunked_uploads": false,
+        "command": [
+          "/tmp/nanolathe-chunked-current/run-play",
+          "--fast",
+          "--telemetry",
+          "--neutral-pointer",
+          "--",
+          "--root=/Users/daniel/TotalAnnihilation",
+          "--map=Town & Country",
+          "--live-trace=/tmp/nanolathe-chunked-pairs/A3-trace",
+          "--live-scene=field:1000",
+          "--live-seconds=50",
+          "--webgpu-report=/tmp/nanolathe-chunked-pairs/A3",
+          "--webgpu-size=1920x1080",
+          "--webgpu-frames=3600",
+          "--zoom=1",
+          "--seed=7"
+        ],
+        "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+        "settings_unchanged": true,
+        "elapsed_seconds": 38.75049487501383,
+        "watchdog": false,
+        "exit_code": 0,
+        "before": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:06  up 18 days,  6:14, 10 users, load averages: 4.51 4.16 3.93"
+        },
+        "after": {
+          "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+          "load": "20:07  up 18 days,  6:15, 10 users, load averages: 6.48 4.68 4.13"
+        }
+      }
+    ],
+    "fixture": "three1000-unit armies;Town & Country;1920x1080;seed7; normalzoom1 camera2; speed10 isolatedsettings;120warmup+3600measured; GOMAXPROCS4; async/reserve/prepare1 runtimearrays0; sameNoShakeonboth; sequentialwithoutotherbuilds/tests",
+    "matching": {
+      "camera_all": [
+        3192,
+        4536,
+        2
+      ],
+      "common_full_tick_windows": [
+        100,
+        899
+      ],
+      "max_within_window_mean_instance_spread_percent": 0.1372834679439683,
+      "max_within_window_mean_triangle_spread_percent": 0.24706641990306832,
+      "limit": "Advancing real-time simulation; alpha samples and finalticks differ. Partial900 windows are not equivalentfull-window controls. No exact workload-equivalence or isolateddisplayFPSclaim."
+    },
+    "summary": {
+      "A": {
+        "display_hz_range": [
+          111.61096162934841,
+          118.24189400089614
+        ],
+        "display_hz_values": [
+          118.24189400089614,
+          111.61096162934841,
+          114.41862512188116
+        ],
+        "late_interval_counts": [
+          45,
+          268,
+          142
+        ],
+        "median_run_encode_mean_ms": 1.571328,
+        "median_run_encode_p99_ms": 2.718105,
+        "median_run_model_upload_mean_ms": 0.398791
+      },
+      "B": {
+        "display_hz_range": [
+          116.86608066894973,
+          119.10603934592935
+        ],
+        "display_hz_values": [
+          119.10603934592935,
+          118.22572424064212,
+          116.86608066894973
+        ],
+        "late_interval_counts": [
+          25,
+          51,
+          90
+        ],
+        "median_run_encode_mean_ms": 1.339825,
+        "median_run_encode_p99_ms": 2.139006,
+        "median_run_model_upload_mean_ms": 0.153324
+      }
+    },
+    "cpu_reduction_percent": {
+      "median_run_encode_mean_ms": 14.732951999837084,
+      "median_run_encode_p99_ms": 21.305247589773014,
+      "median_run_model_upload_mean_ms": 61.55279331780306
+    },
+    "runs": [
+      {
+        "name": "A1",
+        "report_sha256": "61e44d0bb43ab68c9a26cc2f7af27b37f35537bdbdb4bee46825a8dad8e210ac",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          40,
+          953
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3600,
+        "duplicate_timestamp_pairs": 0,
+        "positive_consecutive_pairs": 3599,
+        "display_hz": 118.24189400089614,
+        "display_intervals_ms": {
+          "mean": 8.457239,
+          "median": 8.333375,
+          "p95": 8.33925,
+          "p99": 16.666212,
+          "max": 33.333417
+        },
+        "intervals_over12ms": 45,
+        "chunked_enabled_values": [
+          false
+        ],
+        "upload_bytes": {
+          "mean": 2330706.463333,
+          "median": 2226648.0,
+          "p95": 3093652.8,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 8.253889,
+          "median": 8.0,
+          "p95": 9.0,
+          "p99": 9.0,
+          "max": 9
+        },
+        "chunked_attempted_bytes": {
+          "mean": 0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0
+        },
+        "body_instances": {
+          "mean": 553.331111,
+          "median": 558.0,
+          "p95": 606.05,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31343.341111,
+          "median": 32709.0,
+          "p95": 35171.2,
+          "p99": 35903.0,
+          "max": 36204
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 897423976,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3284206120,
+          "go_sys_bytes_start": 3272311848,
+          "heap_bytes_end": 2850312312,
+          "heap_bytes_start": 1952888336,
+          "mallocs": 5701387,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3720,
+          "Missing": 3,
+          "Callbacks": 3722,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 5.994444,
+            "median": 5.211062,
+            "p95": 11.645694,
+            "p99": 12.627984,
+            "max": 33.568666
+          },
+          "JoinMS": {
+            "mean": 1.071425,
+            "median": 0.0005,
+            "p95": 4.653977,
+            "p99": 8.050435,
+            "max": 29.961958
+          },
+          "EncodeMS": {
+            "mean": 1.531967,
+            "median": 1.484271,
+            "p95": 1.935432,
+            "p99": 2.718105,
+            "max": 23.5945
+          },
+          "CallbackMS": {
+            "mean": 8.453659,
+            "median": 8.333917,
+            "p95": 8.609063,
+            "p99": 13.012479,
+            "max": 35.002375
+          },
+          "PaceMS": {
+            "mean": 0.262799,
+            "median": 0.052562,
+            "p95": 0.50054,
+            "p99": 5.295763,
+            "max": 5.467583
+          },
+          "SourceSampleAgeMS": {
+            "mean": 2.533157,
+            "median": 0.728959,
+            "p95": 10.105619,
+            "p99": 11.902722,
+            "max": 33.663125
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.376592,
+            "median": 0.224646,
+            "p95": 4.939442,
+            "p99": 6.177884,
+            "max": 14.555167
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 0.95057,
+            "median": 0.000625,
+            "p95": 3.807133,
+            "p99": 4.185445,
+            "max": 13.395375
+          },
+          "pin_presentation": {
+            "mean": 0.002368,
+            "median": 0.002125,
+            "p95": 0.004,
+            "p99": 0.006626,
+            "max": 0.0155
+          },
+          "world_build_or_recull": {
+            "mean": 0.51505,
+            "median": 0.00075,
+            "p95": 2.212719,
+            "p99": 2.471724,
+            "max": 5.308458
+          },
+          "visuals": {
+            "mean": 3.402529,
+            "median": 3.620063,
+            "p95": 4.831918,
+            "p99": 5.543441,
+            "max": 12.335459
+          },
+          "foreground_hud": {
+            "mean": 0.311692,
+            "median": 0.251417,
+            "p95": 0.508835,
+            "p99": 0.568255,
+            "max": 1.246792
+          },
+          "frame_policy_projection": {
+            "mean": 0.261115,
+            "median": 0.218688,
+            "p95": 0.407173,
+            "p99": 0.449172,
+            "max": 1.26425
+          },
+          "composition_selection": {
+            "mean": 0.345688,
+            "median": 0.347875,
+            "p95": 0.410877,
+            "p99": 0.477355,
+            "max": 1.449625
+          },
+          "shadows": {
+            "mean": 0.204708,
+            "median": 0.208812,
+            "p95": 0.260504,
+            "p99": 0.312876,
+            "max": 1.242333
+          },
+          "visual_record_adapter": {
+            "mean": 3.247754,
+            "median": 3.468896,
+            "p95": 4.613144,
+            "p99": 5.269524,
+            "max": 12.052125
+          },
+          "visual_lighting_sources": {
+            "mean": 0.102796,
+            "median": 0.101875,
+            "p95": 0.149297,
+            "p99": 0.16539,
+            "max": 0.73025
+          },
+          "visual_record": {
+            "mean": 2.553335,
+            "median": 2.797438,
+            "p95": 3.803346,
+            "p99": 4.447255,
+            "max": 9.134625
+          },
+          "visual_adapt": {
+            "mean": 0.692998,
+            "median": 0.702937,
+            "p95": 1.163262,
+            "p99": 1.284925,
+            "max": 6.902
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.396012,
+            "median": 0.396729,
+            "p95": 0.453669,
+            "p99": 0.490256,
+            "max": 2.277375
+          },
+          "1": {
+            "mean": 0.000279,
+            "median": 0.000208,
+            "p95": 0.000375,
+            "p99": 0.0005,
+            "max": 0.246
+          },
+          "2": {
+            "mean": 0.00027,
+            "median": 0.00025,
+            "p95": 0.000416,
+            "p99": 0.000625,
+            "max": 0.001834
+          },
+          "3": {
+            "mean": 0.000434,
+            "median": 0.000375,
+            "p95": 0.000708,
+            "p99": 0.001084,
+            "max": 0.009041
+          },
+          "4": {
+            "mean": 0.390943,
+            "median": 0.320375,
+            "p95": 0.636479,
+            "p99": 0.779562,
+            "max": 21.838541
+          },
+          "5": {
+            "mean": 0.003548,
+            "median": 0.002458,
+            "p95": 0.003667,
+            "p99": 0.008042,
+            "max": 2.810541
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 396,
+            "hz": 118.79667837069,
+            "late": 4,
+            "source_ms": {
+              "mean": 4.297507,
+              "median": 3.439687,
+              "p95": 7.058667,
+              "p99": 8.128997,
+              "max": 9.810042
+            },
+            "join_ms": {
+              "mean": 0.017712,
+              "median": 0.000209,
+              "p95": 0.000542,
+              "p99": 0.488248,
+              "max": 1.760791
+            },
+            "encode_ms": {
+              "mean": 1.35566,
+              "median": 1.333646,
+              "p95": 1.685125,
+              "p99": 1.948142,
+              "max": 2.235958
+            },
+            "visual_ms": {
+              "mean": 1.904252,
+              "median": 1.83027,
+              "p95": 2.536052,
+              "p99": 2.745196,
+              "max": 2.983625
+            },
+            "instances": {
+              "mean": 526.732323,
+              "median": 519.0,
+              "p95": 599.25,
+              "p99": 601.05,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27503.371212,
+              "median": 27347.0,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 398,
+            "hz": 119.39815958762874,
+            "late": 2,
+            "source_ms": {
+              "mean": 5.534534,
+              "median": 4.377187,
+              "p95": 8.380441,
+              "p99": 10.413222,
+              "max": 14.561625
+            },
+            "join_ms": {
+              "mean": 0.333951,
+              "median": 0.000292,
+              "p95": 2.157108,
+              "p99": 3.179973,
+              "max": 7.542958
+            },
+            "encode_ms": {
+              "mean": 1.649245,
+              "median": 1.577563,
+              "p95": 2.052862,
+              "p99": 3.16557,
+              "max": 3.834541
+            },
+            "visual_ms": {
+              "mean": 2.994443,
+              "median": 3.034104,
+              "p95": 3.462658,
+              "p99": 3.830132,
+              "max": 6.58775
+            },
+            "instances": {
+              "mean": 589.218593,
+              "median": 594.0,
+              "p95": 612.0,
+              "p99": 614.18,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27535.580402,
+              "median": 27661.0,
+              "p95": 28593.9,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 396,
+            "hz": 118.79645804395044,
+            "late": 3,
+            "source_ms": {
+              "mean": 6.008036,
+              "median": 5.937229,
+              "p95": 8.461906,
+              "p99": 9.216926,
+              "max": 13.471333
+            },
+            "join_ms": {
+              "mean": 0.42153,
+              "median": 0.000292,
+              "p95": 1.815364,
+              "p99": 4.102508,
+              "max": 7.957334
+            },
+            "encode_ms": {
+              "mean": 1.496488,
+              "median": 1.397854,
+              "p95": 1.79926,
+              "p99": 2.854667,
+              "max": 23.5945
+            },
+            "visual_ms": {
+              "mean": 3.510555,
+              "median": 3.511354,
+              "p95": 4.278697,
+              "p99": 4.578971,
+              "max": 7.042125
+            },
+            "instances": {
+              "mean": 511.012626,
+              "median": 510.0,
+              "p95": 537.0,
+              "p99": 539.05,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28103.568182,
+              "median": 27383.0,
+              "p95": 30477.0,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 399,
+            "hz": 119.69893762551182,
+            "late": 1,
+            "source_ms": {
+              "mean": 5.758412,
+              "median": 4.535542,
+              "p95": 7.991987,
+              "p99": 9.935365,
+              "max": 14.390417
+            },
+            "join_ms": {
+              "mean": 0.212182,
+              "median": 0.000291,
+              "p95": 0.9722,
+              "p99": 3.668728,
+              "max": 6.576166
+            },
+            "encode_ms": {
+              "mean": 1.368984,
+              "median": 1.3175,
+              "p95": 1.670709,
+              "p99": 1.82996,
+              "max": 3.423459
+            },
+            "visual_ms": {
+              "mean": 3.235966,
+              "median": 3.157083,
+              "p95": 3.97332,
+              "p99": 4.20255,
+              "max": 6.148334
+            },
+            "instances": {
+              "mean": 537.809524,
+              "median": 529,
+              "p95": 572.0,
+              "p99": 573.02,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33043.112782,
+              "median": 33125,
+              "p95": 34705.0,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 392,
+            "hz": 117.59337194679533,
+            "late": 7,
+            "source_ms": {
+              "mean": 6.519938,
+              "median": 5.190563,
+              "p95": 11.565683,
+              "p99": 12.961552,
+              "max": 13.831792
+            },
+            "join_ms": {
+              "mean": 1.476191,
+              "median": 0.526833,
+              "p95": 5.295929,
+              "p99": 8.996494,
+              "max": 12.112292
+            },
+            "encode_ms": {
+              "mean": 1.632458,
+              "median": 1.530312,
+              "p95": 2.003635,
+              "p99": 3.326279,
+              "max": 10.380042
+            },
+            "visual_ms": {
+              "mean": 3.835024,
+              "median": 3.768312,
+              "p95": 4.833873,
+              "p99": 5.975266,
+              "max": 7.357583
+            },
+            "instances": {
+              "mean": 597.336735,
+              "median": 600.0,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34611.403061,
+              "median": 34526.0,
+              "p95": 36082.0,
+              "p99": 36132.0,
+              "max": 36204
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 399,
+            "hz": 119.69886112480788,
+            "late": 1,
+            "source_ms": {
+              "mean": 6.771031,
+              "median": 5.156875,
+              "p95": 12.023625,
+              "p99": 12.297111,
+              "max": 12.786541
+            },
+            "join_ms": {
+              "mean": 1.979204,
+              "median": 1.957167,
+              "p95": 4.712804,
+              "p99": 5.019705,
+              "max": 5.581
+            },
+            "encode_ms": {
+              "mean": 1.609155,
+              "median": 1.5505,
+              "p95": 1.930425,
+              "p99": 1.983326,
+              "max": 2.213875
+            },
+            "visual_ms": {
+              "mean": 4.161027,
+              "median": 4.086708,
+              "p95": 4.832099,
+              "p99": 5.0204,
+              "max": 5.300916
+            },
+            "instances": {
+              "mean": 599.779449,
+              "median": 600,
+              "p95": 607.0,
+              "p99": 610.02,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34410.972431,
+              "median": 34608,
+              "p95": 35482.0,
+              "p99": 35762.52,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 384,
+            "hz": 114.89962801396904,
+            "late": 13,
+            "source_ms": {
+              "mean": 7.006248,
+              "median": 5.374042,
+              "p95": 12.007481,
+              "p99": 16.065049,
+              "max": 33.568666
+            },
+            "join_ms": {
+              "mean": 2.022728,
+              "median": 1.074104,
+              "p95": 5.840912,
+              "p99": 12.177771,
+              "max": 29.961958
+            },
+            "encode_ms": {
+              "mean": 1.635037,
+              "median": 1.511916,
+              "p95": 1.937578,
+              "p99": 4.08105,
+              "max": 10.686792
+            },
+            "visual_ms": {
+              "mean": 4.206931,
+              "median": 4.042604,
+              "p95": 5.047081,
+              "p99": 6.960299,
+              "max": 12.335459
+            },
+            "instances": {
+              "mean": 565.807292,
+              "median": 564.0,
+              "p95": 585.85,
+              "p99": 587.17,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33914.401042,
+              "median": 33970.0,
+              "p95": 34720.0,
+              "p99": 35048.0,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 385,
+            "hz": 115.63307332033277,
+            "late": 12,
+            "source_ms": {
+              "mean": 7.188738,
+              "median": 7.261208,
+              "p95": 10.188184,
+              "p99": 14.286125,
+              "max": 18.830583
+            },
+            "join_ms": {
+              "mean": 2.309312,
+              "median": 1.514583,
+              "p95": 6.355717,
+              "p99": 11.949881,
+              "max": 16.984291
+            },
+            "encode_ms": {
+              "mean": 1.710534,
+              "median": 1.618875,
+              "p95": 2.043483,
+              "p99": 3.801006,
+              "max": 6.101292
+            },
+            "visual_ms": {
+              "mean": 4.393219,
+              "median": 4.143958,
+              "p95": 5.321958,
+              "p99": 7.000209,
+              "max": 8.53475
+            },
+            "instances": {
+              "mean": 550.241558,
+              "median": 550,
+              "p95": 564.8,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33510.345455,
+              "median": 33664,
+              "p95": 34414.2,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 212,
+            "hz": 119.43375381974704,
+            "late": 1,
+            "source_ms": {
+              "mean": 6.99579,
+              "median": 5.400208,
+              "p95": 12.026909,
+              "p99": 12.329157,
+              "max": 12.627667
+            },
+            "join_ms": {
+              "mean": 1.863571,
+              "median": 1.343687,
+              "p95": 4.772898,
+              "p99": 5.098439,
+              "max": 5.733666
+            },
+            "encode_ms": {
+              "mean": 1.532795,
+              "median": 1.490312,
+              "p95": 1.870313,
+              "p99": 1.958747,
+              "max": 2.01175
+            },
+            "visual_ms": {
+              "mean": 4.387972,
+              "median": 4.234479,
+              "p95": 5.070252,
+              "p99": 5.392481,
+              "max": 5.7425
+            },
+            "instances": {
+              "mean": 565.188679,
+              "median": 564.0,
+              "p95": 584.0,
+              "p99": 586.0,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32430.099057,
+              "median": 32509.0,
+              "p95": 32915.55,
+              "p99": 32975.79,
+              "max": 32977
+            }
+          }
+        ]
+      },
+      {
+        "name": "B1",
+        "report_sha256": "434afbd7d24cb2b28f2a09f45b3c3d371608f6b1c270629cf45b3360576dba4c",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          40,
+          946
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3600,
+        "duplicate_timestamp_pairs": 0,
+        "positive_consecutive_pairs": 3599,
+        "display_hz": 119.10603934592935,
+        "display_intervals_ms": {
+          "mean": 8.39588,
+          "median": 8.333375,
+          "p95": 8.33925,
+          "p99": 8.339918,
+          "max": 29.16675
+        },
+        "intervals_over12ms": 25,
+        "chunked_enabled_values": [
+          true
+        ],
+        "upload_bytes": {
+          "mean": 2328479.054444,
+          "median": 2225848.0,
+          "p95": 3092388.8,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 16.133333,
+          "median": 16.0,
+          "p95": 20.0,
+          "p99": 20.0,
+          "max": 20
+        },
+        "chunked_attempted_bytes": {
+          "mean": 2286075.493333,
+          "median": 2181504.0,
+          "p95": 3057560.0,
+          "p99": 3168967.52,
+          "max": 3289504
+        },
+        "body_instances": {
+          "mean": 553.200278,
+          "median": 557.0,
+          "p95": 606.0,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31344.822778,
+          "median": 32749.5,
+          "p95": 35168.15,
+          "p99": 35874.22,
+          "max": 36222
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 896762976,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3347157560,
+          "go_sys_bytes_start": 3335001144,
+          "heap_bytes_end": 2849641032,
+          "heap_bytes_start": 1952878056,
+          "mallocs": 5707699,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3719,
+          "Missing": 4,
+          "Callbacks": 3722,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 5.95367,
+            "median": 5.029229,
+            "p95": 11.822515,
+            "p99": 12.483749,
+            "max": 17.708417
+          },
+          "JoinMS": {
+            "mean": 1.118313,
+            "median": 0.000542,
+            "p95": 4.442666,
+            "p99": 6.118436,
+            "max": 16.14
+          },
+          "EncodeMS": {
+            "mean": 1.311297,
+            "median": 1.30073,
+            "p95": 1.650984,
+            "p99": 1.909951,
+            "max": 5.6795
+          },
+          "CallbackMS": {
+            "mean": 8.394408,
+            "median": 8.333334,
+            "p95": 8.495967,
+            "p99": 10.762774,
+            "max": 24.274959
+          },
+          "PaceMS": {
+            "mean": 0.346835,
+            "median": 0.000125,
+            "p95": 2.552817,
+            "p99": 2.755503,
+            "max": 4.765833
+          },
+          "SourceSampleAgeMS": {
+            "mean": 2.059468,
+            "median": 0.58183,
+            "p95": 7.553246,
+            "p99": 11.555725,
+            "max": 16.201301
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.582038,
+            "median": 0.362,
+            "p95": 5.130731,
+            "p99": 6.489928,
+            "max": 11.689042
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 0.953947,
+            "median": 0.000584,
+            "p95": 3.889325,
+            "p99": 4.146756,
+            "max": 7.855334
+          },
+          "pin_presentation": {
+            "mean": 0.002254,
+            "median": 0.002042,
+            "p95": 0.003833,
+            "p99": 0.006001,
+            "max": 0.048834
+          },
+          "world_build_or_recull": {
+            "mean": 0.498301,
+            "median": 0.000709,
+            "p95": 2.158082,
+            "p99": 2.442414,
+            "max": 3.234333
+          },
+          "visuals": {
+            "mean": 3.34562,
+            "median": 3.59775,
+            "p95": 4.677233,
+            "p99": 5.188666,
+            "max": 9.151833
+          },
+          "foreground_hud": {
+            "mean": 0.314768,
+            "median": 0.278458,
+            "p95": 0.488619,
+            "p99": 0.541669,
+            "max": 1.378166
+          },
+          "frame_policy_projection": {
+            "mean": 0.264467,
+            "median": 0.220791,
+            "p95": 0.412387,
+            "p99": 0.453306,
+            "max": 0.870708
+          },
+          "composition_selection": {
+            "mean": 0.353273,
+            "median": 0.354041,
+            "p95": 0.425552,
+            "p99": 0.467506,
+            "max": 0.966334
+          },
+          "shadows": {
+            "mean": 0.220346,
+            "median": 0.223333,
+            "p95": 0.282588,
+            "p99": 0.334418,
+            "max": 2.085459
+          },
+          "visual_record_adapter": {
+            "mean": 3.190655,
+            "median": 3.445709,
+            "p95": 4.470176,
+            "p99": 4.995299,
+            "max": 9.013875
+          },
+          "visual_lighting_sources": {
+            "mean": 0.103504,
+            "median": 0.102833,
+            "p95": 0.150002,
+            "p99": 0.165755,
+            "max": 0.44775
+          },
+          "visual_record": {
+            "mean": 2.484716,
+            "median": 2.729146,
+            "p95": 3.645729,
+            "p99": 4.120956,
+            "max": 8.255625
+          },
+          "visual_adapt": {
+            "mean": 0.704503,
+            "median": 0.719917,
+            "p95": 1.190415,
+            "p99": 1.307676,
+            "max": 1.727083
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.40284,
+            "median": 0.405021,
+            "p95": 0.462296,
+            "p99": 0.493846,
+            "max": 2.957209
+          },
+          "1": {
+            "mean": 0.000293,
+            "median": 0.000208,
+            "p95": 0.000375,
+            "p99": 0.000459,
+            "max": 0.34925
+          },
+          "2": {
+            "mean": 0.000265,
+            "median": 0.00025,
+            "p95": 0.000375,
+            "p99": 0.000542,
+            "max": 0.006417
+          },
+          "3": {
+            "mean": 0.000403,
+            "median": 0.000375,
+            "p95": 0.000625,
+            "p99": 0.000917,
+            "max": 0.007583
+          },
+          "4": {
+            "mean": 0.149665,
+            "median": 0.105499,
+            "p95": 0.311797,
+            "p99": 0.35931,
+            "max": 1.15375
+          },
+          "5": {
+            "mean": 0.002831,
+            "median": 0.002541,
+            "p95": 0.003667,
+            "p99": 0.009334,
+            "max": 0.324375
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 399,
+            "hz": 119.69902912138735,
+            "late": 1,
+            "source_ms": {
+              "mean": 4.306673,
+              "median": 2.918667,
+              "p95": 9.214704,
+              "p99": 9.622652,
+              "max": 9.857667
+            },
+            "join_ms": {
+              "mean": 0.311206,
+              "median": 0.00025,
+              "p95": 1.652887,
+              "p99": 2.15281,
+              "max": 2.460709
+            },
+            "encode_ms": {
+              "mean": 1.183546,
+              "median": 1.135333,
+              "p95": 1.57252,
+              "p99": 1.684185,
+              "max": 1.849708
+            },
+            "visual_ms": {
+              "mean": 1.888756,
+              "median": 1.822416,
+              "p95": 2.473725,
+              "p99": 2.555627,
+              "max": 2.876291
+            },
+            "instances": {
+              "mean": 526.649123,
+              "median": 519,
+              "p95": 599.1,
+              "p99": 601.02,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27501.293233,
+              "median": 27347,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 398,
+            "hz": 119.09963525562956,
+            "late": 3,
+            "source_ms": {
+              "mean": 5.527998,
+              "median": 4.111646,
+              "p95": 10.646181,
+              "p99": 11.719467,
+              "max": 13.56325
+            },
+            "join_ms": {
+              "mean": 0.843553,
+              "median": 0.000333,
+              "p95": 3.479014,
+              "p99": 4.543782,
+              "max": 6.994791
+            },
+            "encode_ms": {
+              "mean": 1.463237,
+              "median": 1.382709,
+              "p95": 1.872908,
+              "p99": 2.273171,
+              "max": 5.6795
+            },
+            "visual_ms": {
+              "mean": 2.990102,
+              "median": 3.092833,
+              "p95": 3.480811,
+              "p99": 3.774589,
+              "max": 5.52025
+            },
+            "instances": {
+              "mean": 589.125628,
+              "median": 594.0,
+              "p95": 612.0,
+              "p99": 614.18,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27532.467337,
+              "median": 27661.0,
+              "p95": 28593.9,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 396,
+            "hz": 119.09505995627123,
+            "late": 2,
+            "source_ms": {
+              "mean": 6.048987,
+              "median": 4.766751,
+              "p95": 11.151407,
+              "p99": 11.821973,
+              "max": 17.272958
+            },
+            "join_ms": {
+              "mean": 0.619794,
+              "median": 0.000833,
+              "p95": 3.721687,
+              "p99": 4.270785,
+              "max": 9.668584
+            },
+            "encode_ms": {
+              "mean": 1.264143,
+              "median": 1.233583,
+              "p95": 1.580197,
+              "p99": 1.673848,
+              "max": 3.078792
+            },
+            "visual_ms": {
+              "mean": 3.510487,
+              "median": 3.497333,
+              "p95": 4.157833,
+              "p99": 4.708249,
+              "max": 9.151833
+            },
+            "instances": {
+              "mean": 511.090909,
+              "median": 510.0,
+              "p95": 537.0,
+              "p99": 539.05,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28106.55303,
+              "median": 27478.0,
+              "p95": 30464.0,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 398,
+            "hz": 119.39809226696046,
+            "late": 2,
+            "source_ms": {
+              "mean": 5.780413,
+              "median": 4.254542,
+              "p95": 10.792188,
+              "p99": 11.467107,
+              "max": 15.853416
+            },
+            "join_ms": {
+              "mean": 0.700264,
+              "median": 0.000333,
+              "p95": 3.207231,
+              "p99": 4.664909,
+              "max": 8.021042
+            },
+            "encode_ms": {
+              "mean": 1.183466,
+              "median": 1.151979,
+              "p95": 1.411397,
+              "p99": 1.516754,
+              "max": 4.9285
+            },
+            "visual_ms": {
+              "mean": 3.208236,
+              "median": 3.147521,
+              "p95": 3.837256,
+              "p99": 4.07278,
+              "max": 5.145084
+            },
+            "instances": {
+              "mean": 537.70603,
+              "median": 529.0,
+              "p95": 572.0,
+              "p99": 573.03,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33037.492462,
+              "median": 33105.0,
+              "p95": 34704.0,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 396,
+            "hz": 118.79649080259013,
+            "late": 4,
+            "source_ms": {
+              "mean": 6.528831,
+              "median": 5.015542,
+              "p95": 12.018104,
+              "p99": 13.561156,
+              "max": 17.708417
+            },
+            "join_ms": {
+              "mean": 1.253801,
+              "median": 0.356792,
+              "p95": 4.730927,
+              "p99": 6.967346,
+              "max": 16.14
+            },
+            "encode_ms": {
+              "mean": 1.402294,
+              "median": 1.354812,
+              "p95": 1.702605,
+              "p99": 2.515202,
+              "max": 4.5435
+            },
+            "visual_ms": {
+              "mean": 3.771514,
+              "median": 3.683666,
+              "p95": 4.611552,
+              "p99": 5.824037,
+              "max": 7.496334
+            },
+            "instances": {
+              "mean": 597.308081,
+              "median": 600.0,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34604.209596,
+              "median": 34477.0,
+              "p95": 36082.0,
+              "p99": 36133.3,
+              "max": 36222
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 397,
+            "hz": 119.09735184610011,
+            "late": 3,
+            "source_ms": {
+              "mean": 6.803897,
+              "median": 5.180083,
+              "p95": 11.927109,
+              "p99": 12.121677,
+              "max": 13.605166
+            },
+            "join_ms": {
+              "mean": 1.600842,
+              "median": 1.187625,
+              "p95": 4.465625,
+              "p99": 4.998174,
+              "max": 7.660458
+            },
+            "encode_ms": {
+              "mean": 1.401666,
+              "median": 1.368709,
+              "p95": 1.638575,
+              "p99": 1.765306,
+              "max": 3.627667
+            },
+            "visual_ms": {
+              "mean": 4.104581,
+              "median": 4.044042,
+              "p95": 4.827675,
+              "p99": 5.215118,
+              "max": 6.190333
+            },
+            "instances": {
+              "mean": 599.803526,
+              "median": 600,
+              "p95": 607.0,
+              "p99": 610.04,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34411.010076,
+              "median": 34608,
+              "p95": 35482.0,
+              "p99": 35763.04,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 394,
+            "hz": 118.19508585544176,
+            "late": 5,
+            "source_ms": {
+              "mean": 6.843077,
+              "median": 5.168729,
+              "p95": 12.306788,
+              "p99": 13.234176,
+              "max": 15.639917
+            },
+            "join_ms": {
+              "mean": 2.042681,
+              "median": 1.35875,
+              "p95": 5.568531,
+              "p99": 8.391701,
+              "max": 12.956083
+            },
+            "encode_ms": {
+              "mean": 1.372177,
+              "median": 1.350042,
+              "p95": 1.591866,
+              "p99": 1.820473,
+              "max": 2.526875
+            },
+            "visual_ms": {
+              "mean": 4.11163,
+              "median": 4.025375,
+              "p95": 4.962973,
+              "p99": 5.653705,
+              "max": 7.42875
+            },
+            "instances": {
+              "mean": 565.77665,
+              "median": 564.0,
+              "p95": 585.35,
+              "p99": 587.07,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33902.908629,
+              "median": 33945.0,
+              "p95": 34720.0,
+              "p99": 35048.0,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 398,
+            "hz": 119.0995950582934,
+            "late": 3,
+            "source_ms": {
+              "mean": 6.933123,
+              "median": 5.204854,
+              "p95": 11.937556,
+              "p99": 12.556988,
+              "max": 13.772209
+            },
+            "join_ms": {
+              "mean": 1.83985,
+              "median": 1.899417,
+              "p95": 4.714917,
+              "p99": 5.719218,
+              "max": 9.04725
+            },
+            "encode_ms": {
+              "mean": 1.413464,
+              "median": 1.373209,
+              "p95": 1.642033,
+              "p99": 1.787789,
+              "max": 2.786084
+            },
+            "visual_ms": {
+              "mean": 4.223784,
+              "median": 4.068125,
+              "p95": 4.869277,
+              "p99": 5.294753,
+              "max": 6.308
+            },
+            "instances": {
+              "mean": 550.309045,
+              "median": 550.0,
+              "p95": 564.15,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33511.494975,
+              "median": 33664.0,
+              "p95": 34420.3,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 186,
+            "hz": 119.35445049750776,
+            "late": 1,
+            "source_ms": {
+              "mean": 6.928456,
+              "median": 5.282834,
+              "p95": 12.122032,
+              "p99": 12.503302,
+              "max": 13.525292
+            },
+            "join_ms": {
+              "mean": 1.859191,
+              "median": 1.751833,
+              "p95": 4.646281,
+              "p99": 6.153483,
+              "max": 6.633125
+            },
+            "encode_ms": {
+              "mean": 1.312492,
+              "median": 1.299271,
+              "p95": 1.579083,
+              "p99": 1.664679,
+              "max": 1.832166
+            },
+            "visual_ms": {
+              "mean": 4.306589,
+              "median": 4.18002,
+              "p95": 4.930073,
+              "p99": 5.090123,
+              "max": 5.489041
+            },
+            "instances": {
+              "mean": 563.602151,
+              "median": 563.0,
+              "p95": 584.0,
+              "p99": 586.0,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32388.650538,
+              "median": 32399.0,
+              "p95": 32959.0,
+              "p99": 32977.0,
+              "max": 32977
+            }
+          }
+        ]
+      },
+      {
+        "name": "B2",
+        "report_sha256": "74d8816c9ca25f2f52e87f6eba07de97802c4541a4787307ebd172381f7335fe",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          40,
+          953
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3600,
+        "duplicate_timestamp_pairs": 0,
+        "positive_consecutive_pairs": 3599,
+        "display_hz": 118.22572424064212,
+        "display_intervals_ms": {
+          "mean": 8.458396,
+          "median": 8.333375,
+          "p95": 8.339333,
+          "p99": 16.665316,
+          "max": 33.329917
+        },
+        "intervals_over12ms": 51,
+        "chunked_enabled_values": [
+          true
+        ],
+        "upload_bytes": {
+          "mean": 2330835.672222,
+          "median": 2226712.0,
+          "p95": 3093652.8,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 16.140278,
+          "median": 16.0,
+          "p95": 20.0,
+          "p99": 20.0,
+          "max": 20
+        },
+        "chunked_attempted_bytes": {
+          "mean": 2288347.986667,
+          "median": 2183472.0,
+          "p95": 3058751.2,
+          "p99": 3168967.52,
+          "max": 3289504
+        },
+        "body_instances": {
+          "mean": 553.338333,
+          "median": 558.0,
+          "p95": 606.0,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31343.483889,
+          "median": 32740.0,
+          "p95": 35171.2,
+          "p99": 35903.0,
+          "max": 36204
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 902883944,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3103343080,
+          "go_sys_bytes_start": 3090858984,
+          "heap_bytes_end": 2855798936,
+          "heap_bytes_start": 1952914992,
+          "mallocs": 5777683,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3719,
+          "Missing": 4,
+          "Callbacks": 3722,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 6.040913,
+            "median": 5.136688,
+            "p95": 10.792955,
+            "p99": 12.912162,
+            "max": 21.197041
+          },
+          "JoinMS": {
+            "mean": 0.860487,
+            "median": 0.000417,
+            "p95": 4.457656,
+            "p99": 6.749392,
+            "max": 18.06075
+          },
+          "EncodeMS": {
+            "mean": 1.339825,
+            "median": 1.325187,
+            "p95": 1.672792,
+            "p99": 2.139006,
+            "max": 7.485709
+          },
+          "CallbackMS": {
+            "mean": 8.45568,
+            "median": 8.333834,
+            "p95": 8.566662,
+            "p99": 14.685694,
+            "max": 33.104
+          },
+          "PaceMS": {
+            "mean": 0.207688,
+            "median": 0.05477,
+            "p95": 0.605633,
+            "p99": 3.442337,
+            "max": 4.063792
+          },
+          "SourceSampleAgeMS": {
+            "mean": 2.013457,
+            "median": 0.525263,
+            "p95": 7.621654,
+            "p99": 11.31099,
+            "max": 32.351125
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.539416,
+            "median": 0.343021,
+            "p95": 5.188782,
+            "p99": 6.477919,
+            "max": 20.373125
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 0.979829,
+            "median": 0.000666,
+            "p95": 3.951836,
+            "p99": 4.16564,
+            "max": 7.614667
+          },
+          "pin_presentation": {
+            "mean": 0.002438,
+            "median": 0.002208,
+            "p95": 0.004083,
+            "p99": 0.006208,
+            "max": 0.049209
+          },
+          "world_build_or_recull": {
+            "mean": 0.540103,
+            "median": 0.000791,
+            "p95": 2.327313,
+            "p99": 2.551306,
+            "max": 5.151833
+          },
+          "visuals": {
+            "mean": 3.373287,
+            "median": 3.573396,
+            "p95": 4.809225,
+            "p99": 5.456634,
+            "max": 14.744209
+          },
+          "foreground_hud": {
+            "mean": 0.316847,
+            "median": 0.259,
+            "p95": 0.522642,
+            "p99": 0.567725,
+            "max": 2.087375
+          },
+          "frame_policy_projection": {
+            "mean": 0.267711,
+            "median": 0.223104,
+            "p95": 0.414752,
+            "p99": 0.46326,
+            "max": 2.489167
+          },
+          "composition_selection": {
+            "mean": 0.351763,
+            "median": 0.349812,
+            "p95": 0.424506,
+            "p99": 0.482387,
+            "max": 1.112708
+          },
+          "shadows": {
+            "mean": 0.208204,
+            "median": 0.20952,
+            "p95": 0.271052,
+            "p99": 0.317093,
+            "max": 1.726958
+          },
+          "visual_record_adapter": {
+            "mean": 3.214738,
+            "median": 3.423604,
+            "p95": 4.597866,
+            "p99": 5.230874,
+            "max": 14.500667
+          },
+          "visual_lighting_sources": {
+            "mean": 0.104978,
+            "median": 0.104708,
+            "p95": 0.151708,
+            "p99": 0.167757,
+            "max": 1.348667
+          },
+          "visual_record": {
+            "mean": 2.503626,
+            "median": 2.694604,
+            "p95": 3.786699,
+            "p99": 4.545955,
+            "max": 13.710875
+          },
+          "visual_adapt": {
+            "mean": 0.709716,
+            "median": 0.721979,
+            "p95": 1.200521,
+            "p99": 1.331431,
+            "max": 1.6165
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.409485,
+            "median": 0.412521,
+            "p95": 0.470682,
+            "p99": 0.524708,
+            "max": 4.912542
+          },
+          "1": {
+            "mean": 0.000279,
+            "median": 0.000167,
+            "p95": 0.000375,
+            "p99": 0.0005,
+            "max": 0.300375
+          },
+          "2": {
+            "mean": 0.000273,
+            "median": 0.00025,
+            "p95": 0.000416,
+            "p99": 0.000542,
+            "max": 0.014375
+          },
+          "3": {
+            "mean": 0.000406,
+            "median": 0.000375,
+            "p95": 0.000667,
+            "p99": 0.001042,
+            "max": 0.014125
+          },
+          "4": {
+            "mean": 0.153324,
+            "median": 0.108958,
+            "p95": 0.311591,
+            "p99": 0.369543,
+            "max": 2.174541
+          },
+          "5": {
+            "mean": 0.003145,
+            "median": 0.00275,
+            "p95": 0.004,
+            "p99": 0.012292,
+            "max": 0.26675
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 398,
+            "hz": 119.69786089063624,
+            "late": 1,
+            "source_ms": {
+              "mean": 4.412346,
+              "median": 3.233062,
+              "p95": 8.214566,
+              "p99": 8.574529,
+              "max": 11.562625
+            },
+            "join_ms": {
+              "mean": 0.078846,
+              "median": 0.00025,
+              "p95": 0.597114,
+              "p99": 1.699082,
+              "max": 3.815291
+            },
+            "encode_ms": {
+              "mean": 1.201836,
+              "median": 1.164041,
+              "p95": 1.522644,
+              "p99": 1.743042,
+              "max": 2.30575
+            },
+            "visual_ms": {
+              "mean": 1.931066,
+              "median": 1.871834,
+              "p95": 2.601244,
+              "p99": 2.806983,
+              "max": 4.669333
+            },
+            "instances": {
+              "mean": 526.693467,
+              "median": 519.0,
+              "p95": 599.15,
+              "p99": 601.03,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27501.20603,
+              "median": 27347.0,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 398,
+            "hz": 119.39831519798861,
+            "late": 2,
+            "source_ms": {
+              "mean": 5.676135,
+              "median": 4.701542,
+              "p95": 8.4057,
+              "p99": 10.226986,
+              "max": 13.537417
+            },
+            "join_ms": {
+              "mean": 0.368587,
+              "median": 0.000333,
+              "p95": 1.853679,
+              "p99": 3.846273,
+              "max": 8.07425
+            },
+            "encode_ms": {
+              "mean": 1.49172,
+              "median": 1.453604,
+              "p95": 1.800054,
+              "p99": 2.120214,
+              "max": 7.485709
+            },
+            "visual_ms": {
+              "mean": 3.040377,
+              "median": 3.095167,
+              "p95": 3.589415,
+              "p99": 4.065299,
+              "max": 4.739834
+            },
+            "instances": {
+              "mean": 589.281407,
+              "median": 594.0,
+              "p95": 612.0,
+              "p99": 614.18,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27538.484925,
+              "median": 27661.0,
+              "p95": 28616.0,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 397,
+            "hz": 118.79970449212871,
+            "late": 2,
+            "source_ms": {
+              "mean": 6.027582,
+              "median": 4.641958,
+              "p95": 10.655267,
+              "p99": 11.080983,
+              "max": 14.365292
+            },
+            "join_ms": {
+              "mean": 0.58111,
+              "median": 0.000334,
+              "p95": 3.081409,
+              "p99": 3.641331,
+              "max": 6.972458
+            },
+            "encode_ms": {
+              "mean": 1.252341,
+              "median": 1.213833,
+              "p95": 1.568092,
+              "p99": 1.646746,
+              "max": 1.71225
+            },
+            "visual_ms": {
+              "mean": 3.48253,
+              "median": 3.466084,
+              "p95": 4.157441,
+              "p99": 4.465233,
+              "max": 6.8895
+            },
+            "instances": {
+              "mean": 511.125945,
+              "median": 510,
+              "p95": 537.0,
+              "p99": 539.04,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28110.390428,
+              "median": 27478,
+              "p95": 30464.0,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 394,
+            "hz": 118.49189068858858,
+            "late": 5,
+            "source_ms": {
+              "mean": 5.944575,
+              "median": 4.716396,
+              "p95": 8.562662,
+              "p99": 10.726337,
+              "max": 17.873208
+            },
+            "join_ms": {
+              "mean": 0.303425,
+              "median": 0.000292,
+              "p95": 2.157348,
+              "p99": 4.139253,
+              "max": 10.257834
+            },
+            "encode_ms": {
+              "mean": 1.232412,
+              "median": 1.169979,
+              "p95": 1.497957,
+              "p99": 2.222839,
+              "max": 3.868625
+            },
+            "visual_ms": {
+              "mean": 3.278076,
+              "median": 3.11773,
+              "p95": 3.971652,
+              "p99": 4.855636,
+              "max": 14.233167
+            },
+            "instances": {
+              "mean": 537.847716,
+              "median": 529.0,
+              "p95": 572.0,
+              "p99": 573.07,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33048.360406,
+              "median": 33125.0,
+              "p95": 34704.0,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 396,
+            "hz": 118.49964005632695,
+            "late": 5,
+            "source_ms": {
+              "mean": 6.548964,
+              "median": 5.400229,
+              "p95": 9.194864,
+              "p99": 13.305008,
+              "max": 15.841375
+            },
+            "join_ms": {
+              "mean": 1.007395,
+              "median": 0.500563,
+              "p95": 4.532927,
+              "p99": 8.195885,
+              "max": 11.963375
+            },
+            "encode_ms": {
+              "mean": 1.414681,
+              "median": 1.349562,
+              "p95": 1.687407,
+              "p99": 2.595746,
+              "max": 3.954875
+            },
+            "visual_ms": {
+              "mean": 3.774985,
+              "median": 3.604438,
+              "p95": 4.709,
+              "p99": 5.924536,
+              "max": 7.832792
+            },
+            "instances": {
+              "mean": 597.204545,
+              "median": 600.0,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34597.128788,
+              "median": 34437.0,
+              "p95": 36082.0,
+              "p99": 36132.0,
+              "max": 36204
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 397,
+            "hz": 119.39662343230312,
+            "late": 2,
+            "source_ms": {
+              "mean": 6.952625,
+              "median": 5.278292,
+              "p95": 12.499742,
+              "p99": 12.940472,
+              "max": 15.115542
+            },
+            "join_ms": {
+              "mean": 2.258381,
+              "median": 2.096208,
+              "p95": 5.170116,
+              "p99": 7.589037,
+              "max": 11.012958
+            },
+            "encode_ms": {
+              "mean": 1.461125,
+              "median": 1.427375,
+              "p95": 1.670917,
+              "p99": 1.915413,
+              "max": 2.648458
+            },
+            "visual_ms": {
+              "mean": 4.203047,
+              "median": 4.12425,
+              "p95": 4.963675,
+              "p99": 5.16667,
+              "max": 7.396459
+            },
+            "instances": {
+              "mean": 599.783375,
+              "median": 600,
+              "p95": 607.0,
+              "p99": 610.04,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34413.125945,
+              "median": 34612,
+              "p95": 35452.4,
+              "p99": 35763.04,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 384,
+            "hz": 115.18758740800526,
+            "late": 16,
+            "source_ms": {
+              "mean": 6.916659,
+              "median": 5.276917,
+              "p95": 12.423072,
+              "p99": 15.268537,
+              "max": 15.761
+            },
+            "join_ms": {
+              "mean": 1.40474,
+              "median": 0.751979,
+              "p95": 4.954205,
+              "p99": 7.845965,
+              "max": 11.321667
+            },
+            "encode_ms": {
+              "mean": 1.412384,
+              "median": 1.365625,
+              "p95": 1.674538,
+              "p99": 2.034701,
+              "max": 3.272917
+            },
+            "visual_ms": {
+              "mean": 4.099742,
+              "median": 3.901708,
+              "p95": 5.013919,
+              "p99": 6.653478,
+              "max": 11.393375
+            },
+            "instances": {
+              "mean": 565.713542,
+              "median": 564.0,
+              "p95": 585.85,
+              "p99": 587.17,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33876.549479,
+              "median": 33909.5,
+              "p95": 34717.0,
+              "p99": 34967.49,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 394,
+            "hz": 118.19531394779307,
+            "late": 5,
+            "source_ms": {
+              "mean": 6.920069,
+              "median": 8.319688,
+              "p95": 8.948488,
+              "p99": 10.084149,
+              "max": 21.197041
+            },
+            "join_ms": {
+              "mean": 1.127414,
+              "median": 0.936458,
+              "p95": 2.897571,
+              "p99": 5.53762,
+              "max": 18.06075
+            },
+            "encode_ms": {
+              "mean": 1.425722,
+              "median": 1.375001,
+              "p95": 1.654502,
+              "p99": 1.854401,
+              "max": 3.234458
+            },
+            "visual_ms": {
+              "mean": 4.182097,
+              "median": 3.928625,
+              "p95": 4.832254,
+              "p99": 6.089479,
+              "max": 14.744209
+            },
+            "instances": {
+              "mean": 550.111675,
+              "median": 550.0,
+              "p95": 564.35,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33527.142132,
+              "median": 33667.5,
+              "p95": 34401.85,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 205,
+            "hz": 114.92919165826005,
+            "late": 9,
+            "source_ms": {
+              "mean": 7.15528,
+              "median": 6.586791,
+              "p95": 9.687866,
+              "p99": 14.328808,
+              "max": 16.398834
+            },
+            "join_ms": {
+              "mean": 1.389856,
+              "median": 0.931292,
+              "p95": 5.189858,
+              "p99": 8.139917,
+              "max": 10.874708
+            },
+            "encode_ms": {
+              "mean": 1.381259,
+              "median": 1.305958,
+              "p95": 1.717299,
+              "p99": 2.821036,
+              "max": 4.247542
+            },
+            "visual_ms": {
+              "mean": 4.344479,
+              "median": 4.091334,
+              "p95": 5.338783,
+              "p99": 6.220193,
+              "max": 8.131583
+            },
+            "instances": {
+              "mean": 565.258537,
+              "median": 564,
+              "p95": 584.0,
+              "p99": 586.0,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32433.487805,
+              "median": 32550,
+              "p95": 32880.0,
+              "p99": 32976.56,
+              "max": 32977
+            }
+          }
+        ]
+      },
+      {
+        "name": "A2",
+        "report_sha256": "0d2040f195ed1cc87278e93cfb5741ccfc2417e5d71b452ee88ac8060571b0f4",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          39,
+          1007
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3600,
+        "duplicate_timestamp_pairs": 0,
+        "positive_consecutive_pairs": 3599,
+        "display_hz": 111.61096162934841,
+        "display_intervals_ms": {
+          "mean": 8.959693,
+          "median": 8.333417,
+          "p95": 16.664125,
+          "p99": 16.66675,
+          "max": 25.000375
+        },
+        "intervals_over12ms": 268,
+        "chunked_enabled_values": [
+          false
+        ],
+        "upload_bytes": {
+          "mean": 2341216.872222,
+          "median": 2220320.0,
+          "p95": 3093905.6,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 8.269167,
+          "median": 8.0,
+          "p95": 9.0,
+          "p99": 9.0,
+          "max": 9
+        },
+        "chunked_attempted_bytes": {
+          "mean": 0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0
+        },
+        "body_instances": {
+          "mean": 552.435,
+          "median": 557.0,
+          "p95": 606.0,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31341.45,
+          "median": 32864.0,
+          "p95": 35168.0,
+          "p99": 35903.0,
+          "max": 36204
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 927465464,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3191923208,
+          "go_sys_bytes_start": 3179111432,
+          "heap_bytes_end": 2880339792,
+          "heap_bytes_start": 1952874328,
+          "mallocs": 5889754,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3719,
+          "Missing": 4,
+          "Callbacks": 3721,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 6.120798,
+            "median": 4.9585,
+            "p95": 11.926131,
+            "p99": 12.789944,
+            "max": 19.846834
+          },
+          "JoinMS": {
+            "mean": 1.316263,
+            "median": 0.001292,
+            "p95": 4.681084,
+            "p99": 5.76765,
+            "max": 18.067542
+          },
+          "EncodeMS": {
+            "mean": 1.571328,
+            "median": 1.539271,
+            "p95": 1.955796,
+            "p99": 2.398001,
+            "max": 13.758792
+          },
+          "CallbackMS": {
+            "mean": 8.958427,
+            "median": 8.33675,
+            "p95": 16.553898,
+            "p99": 16.82217,
+            "max": 32.428166
+          },
+          "PaceMS": {
+            "mean": 0.145793,
+            "median": 0.000125,
+            "p95": 0.80166,
+            "p99": 1.714288,
+            "max": 7.449
+          },
+          "SourceSampleAgeMS": {
+            "mean": 4.112571,
+            "median": 3.90986,
+            "p95": 11.703222,
+            "p99": 13.023327,
+            "max": 24.625137
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.730707,
+            "median": 0.055625,
+            "p95": 7.263762,
+            "p99": 8.154388,
+            "max": 13.193791
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 1.031664,
+            "median": 0.000625,
+            "p95": 3.92413,
+            "p99": 4.194219,
+            "max": 8.171834
+          },
+          "pin_presentation": {
+            "mean": 0.002326,
+            "median": 0.002042,
+            "p95": 0.003875,
+            "p99": 0.005667,
+            "max": 0.088583
+          },
+          "world_build_or_recull": {
+            "mean": 0.52331,
+            "median": 0.00075,
+            "p95": 2.184017,
+            "p99": 2.437184,
+            "max": 5.576834
+          },
+          "visuals": {
+            "mean": 3.418812,
+            "median": 3.628541,
+            "p95": 4.859845,
+            "p99": 5.337052,
+            "max": 12.268208
+          },
+          "foreground_hud": {
+            "mean": 0.320376,
+            "median": 0.291166,
+            "p95": 0.511811,
+            "p99": 0.559546,
+            "max": 1.202333
+          },
+          "frame_policy_projection": {
+            "mean": 0.267159,
+            "median": 0.221312,
+            "p95": 0.410085,
+            "p99": 0.451518,
+            "max": 0.931667
+          },
+          "composition_selection": {
+            "mean": 0.349442,
+            "median": 0.350729,
+            "p95": 0.411252,
+            "p99": 0.464342,
+            "max": 0.719541
+          },
+          "shadows": {
+            "mean": 0.206986,
+            "median": 0.209896,
+            "p95": 0.263273,
+            "p99": 0.296918,
+            "max": 0.797042
+          },
+          "visual_record_adapter": {
+            "mean": 3.264561,
+            "median": 3.481479,
+            "p95": 4.658929,
+            "p99": 5.091575,
+            "max": 11.944333
+          },
+          "visual_lighting_sources": {
+            "mean": 0.10344,
+            "median": 0.103042,
+            "p95": 0.148295,
+            "p99": 0.15996,
+            "max": 0.25475
+          },
+          "visual_record": {
+            "mean": 2.570552,
+            "median": 2.774084,
+            "p95": 3.919481,
+            "p99": 4.388588,
+            "max": 10.791417
+          },
+          "visual_adapt": {
+            "mean": 0.692549,
+            "median": 0.702896,
+            "p95": 1.197259,
+            "p99": 1.300422,
+            "max": 5.62675
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.408472,
+            "median": 0.414542,
+            "p95": 0.461293,
+            "p99": 0.499452,
+            "max": 1.007625
+          },
+          "1": {
+            "mean": 0.000286,
+            "median": 0.000208,
+            "p95": 0.000375,
+            "p99": 0.0005,
+            "max": 0.291333
+          },
+          "2": {
+            "mean": 0.000281,
+            "median": 0.00025,
+            "p95": 0.000416,
+            "p99": 0.000583,
+            "max": 0.003
+          },
+          "3": {
+            "mean": 0.000375,
+            "median": 0.000334,
+            "p95": 0.000625,
+            "p99": 0.000916,
+            "max": 0.003542
+          },
+          "4": {
+            "mean": 0.398791,
+            "median": 0.331042,
+            "p95": 0.636425,
+            "p99": 0.739428,
+            "max": 12.270209
+          },
+          "5": {
+            "mean": 0.002905,
+            "median": 0.002625,
+            "p95": 0.003708,
+            "p99": 0.009292,
+            "max": 0.229042
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 399,
+            "hz": 119.69890612668924,
+            "late": 1,
+            "source_ms": {
+              "mean": 4.431486,
+              "median": 3.119625,
+              "p95": 9.3176,
+              "p99": 9.729156,
+              "max": 11.992542
+            },
+            "join_ms": {
+              "mean": 0.316624,
+              "median": 0.00025,
+              "p95": 1.963534,
+              "p99": 2.595561,
+              "max": 3.522708
+            },
+            "encode_ms": {
+              "mean": 1.420341,
+              "median": 1.340542,
+              "p95": 1.890467,
+              "p99": 2.039352,
+              "max": 2.646042
+            },
+            "visual_ms": {
+              "mean": 1.978374,
+              "median": 1.903167,
+              "p95": 2.527316,
+              "p99": 2.647577,
+              "max": 6.068333
+            },
+            "instances": {
+              "mean": 526.631579,
+              "median": 519,
+              "p95": 599.1,
+              "p99": 601.02,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27501.428571,
+              "median": 27347,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 399,
+            "hz": 119.69887612822517,
+            "late": 1,
+            "source_ms": {
+              "mean": 5.633851,
+              "median": 4.180541,
+              "p95": 10.459733,
+              "p99": 11.38999,
+              "max": 14.453042
+            },
+            "join_ms": {
+              "mean": 0.82101,
+              "median": 0.001041,
+              "p95": 3.377138,
+              "p99": 4.471086,
+              "max": 7.34725
+            },
+            "encode_ms": {
+              "mean": 1.708715,
+              "median": 1.643,
+              "p95": 2.141508,
+              "p99": 2.346012,
+              "max": 3.156459
+            },
+            "visual_ms": {
+              "mean": 3.051914,
+              "median": 3.148,
+              "p95": 3.482896,
+              "p99": 3.940056,
+              "max": 4.483625
+            },
+            "instances": {
+              "mean": 589.18797,
+              "median": 594,
+              "p95": 612.0,
+              "p99": 614.12,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27535.824561,
+              "median": 27661,
+              "p95": 28592.6,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 399,
+            "hz": 119.69899162951891,
+            "late": 1,
+            "source_ms": {
+              "mean": 6.049693,
+              "median": 4.594125,
+              "p95": 11.106046,
+              "p99": 11.399115,
+              "max": 12.209625
+            },
+            "join_ms": {
+              "mean": 1.05349,
+              "median": 0.000459,
+              "p95": 3.796516,
+              "p99": 4.107226,
+              "max": 4.82525
+            },
+            "encode_ms": {
+              "mean": 1.470265,
+              "median": 1.4355,
+              "p95": 1.841008,
+              "p99": 1.964671,
+              "max": 2.093958
+            },
+            "visual_ms": {
+              "mean": 3.57143,
+              "median": 3.548583,
+              "p95": 4.146605,
+              "p99": 4.59088,
+              "max": 5.893667
+            },
+            "instances": {
+              "mean": 511.055138,
+              "median": 510,
+              "p95": 537.0,
+              "p99": 539.02,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28128.120301,
+              "median": 27668,
+              "p95": 30469.2,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 397,
+            "hz": 119.09757720124327,
+            "late": 3,
+            "source_ms": {
+              "mean": 5.902576,
+              "median": 4.325833,
+              "p95": 10.92685,
+              "p99": 11.978155,
+              "max": 14.617375
+            },
+            "join_ms": {
+              "mean": 0.842712,
+              "median": 0.000375,
+              "p95": 3.520242,
+              "p99": 4.520782,
+              "max": 5.996708
+            },
+            "encode_ms": {
+              "mean": 1.44453,
+              "median": 1.373833,
+              "p95": 1.751492,
+              "p99": 2.211559,
+              "max": 2.692542
+            },
+            "visual_ms": {
+              "mean": 3.315068,
+              "median": 3.245375,
+              "p95": 3.910651,
+              "p99": 4.152315,
+              "max": 4.723417
+            },
+            "instances": {
+              "mean": 537.712846,
+              "median": 529,
+              "p95": 572.0,
+              "p99": 573.04,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33041.700252,
+              "median": 33125,
+              "p95": 34704.0,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 391,
+            "hz": 117.14606063981653,
+            "late": 8,
+            "source_ms": {
+              "mean": 6.626625,
+              "median": 4.855834,
+              "p95": 11.674875,
+              "p99": 14.809084,
+              "max": 19.846834
+            },
+            "join_ms": {
+              "mean": 1.94834,
+              "median": 1.611667,
+              "p95": 4.781354,
+              "p99": 8.7147,
+              "max": 18.067542
+            },
+            "encode_ms": {
+              "mean": 1.673282,
+              "median": 1.57125,
+              "p95": 2.075521,
+              "p99": 3.285088,
+              "max": 7.362875
+            },
+            "visual_ms": {
+              "mean": 3.883551,
+              "median": 3.74275,
+              "p95": 4.737813,
+              "p99": 6.979938,
+              "max": 12.268208
+            },
+            "instances": {
+              "mean": 597.076726,
+              "median": 600,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34609.933504,
+              "median": 34552,
+              "p95": 36082.0,
+              "p99": 36134.6,
+              "max": 36204
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 329,
+            "hz": 98.64639897969062,
+            "late": 71,
+            "source_ms": {
+              "mean": 7.107865,
+              "median": 5.10175,
+              "p95": 12.171683,
+              "p99": 12.906787,
+              "max": 16.498833
+            },
+            "join_ms": {
+              "mean": 2.307883,
+              "median": 2.702417,
+              "p95": 4.935883,
+              "p99": 5.67108,
+              "max": 9.131625
+            },
+            "encode_ms": {
+              "mean": 1.702325,
+              "median": 1.634333,
+              "p95": 1.95235,
+              "p99": 2.821388,
+              "max": 4.714375
+            },
+            "visual_ms": {
+              "mean": 4.145007,
+              "median": 3.952792,
+              "p95": 4.897233,
+              "p99": 5.118445,
+              "max": 9.334667
+            },
+            "instances": {
+              "mean": 600.167173,
+              "median": 601,
+              "p95": 607.0,
+              "p99": 610.72,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34472.009119,
+              "median": 34648,
+              "p95": 35507.0,
+              "p99": 35780.72,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 367,
+            "hz": 110.62933557968377,
+            "late": 31,
+            "source_ms": {
+              "mean": 7.04222,
+              "median": 5.602375,
+              "p95": 11.945516,
+              "p99": 13.808444,
+              "max": 16.862958
+            },
+            "join_ms": {
+              "mean": 1.677753,
+              "median": 1.109334,
+              "p95": 5.110367,
+              "p99": 6.898194,
+              "max": 10.107375
+            },
+            "encode_ms": {
+              "mean": 1.706429,
+              "median": 1.608708,
+              "p95": 2.014446,
+              "p99": 3.001041,
+              "max": 9.200792
+            },
+            "visual_ms": {
+              "mean": 4.176067,
+              "median": 3.995916,
+              "p95": 5.094213,
+              "p99": 6.391112,
+              "max": 9.523042
+            },
+            "instances": {
+              "mean": 565.253406,
+              "median": 564,
+              "p95": 582.0,
+              "p99": 587.0,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33888.675749,
+              "median": 33879,
+              "p95": 34717.0,
+              "p99": 34995.2,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 332,
+            "hz": 99.54855407575532,
+            "late": 68,
+            "source_ms": {
+              "mean": 7.188588,
+              "median": 5.203083,
+              "p95": 12.079185,
+              "p99": 12.353131,
+              "max": 13.404375
+            },
+            "join_ms": {
+              "mean": 1.942784,
+              "median": 1.539375,
+              "p95": 4.797198,
+              "p99": 5.092721,
+              "max": 6.132334
+            },
+            "encode_ms": {
+              "mean": 1.663596,
+              "median": 1.628792,
+              "p95": 1.898037,
+              "p99": 1.975099,
+              "max": 2.101125
+            },
+            "visual_ms": {
+              "mean": 4.239663,
+              "median": 4.046251,
+              "p95": 4.909656,
+              "p99": 5.005034,
+              "max": 5.54125
+            },
+            "instances": {
+              "mean": 549.753012,
+              "median": 549.0,
+              "p95": 564.0,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33571.614458,
+              "median": 33697.0,
+              "p95": 34446.55,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 321,
+            "hz": 96.2401142718667,
+            "late": 78,
+            "source_ms": {
+              "mean": 7.471965,
+              "median": 5.339,
+              "p95": 12.589458,
+              "p99": 13.744792,
+              "max": 15.7535
+            },
+            "join_ms": {
+              "mean": 2.191024,
+              "median": 1.598834,
+              "p95": 5.354166,
+              "p99": 7.995608,
+              "max": 10.494959
+            },
+            "encode_ms": {
+              "mean": 1.672439,
+              "median": 1.521125,
+              "p95": 1.97325,
+              "p99": 3.259925,
+              "max": 13.758792
+            },
+            "visual_ms": {
+              "mean": 4.395213,
+              "median": 4.165834,
+              "p95": 5.263541,
+              "p99": 5.895342,
+              "max": 7.081042
+            },
+            "instances": {
+              "mean": 562.962617,
+              "median": 563,
+              "p95": 579.0,
+              "p99": 585.0,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32889.006231,
+              "median": 32880,
+              "p95": 33900.0,
+              "p99": 34202.0,
+              "max": 34202
+            }
+          }
+        ]
+      },
+      {
+        "name": "B3",
+        "report_sha256": "4cbbd25e724f214d4e998e77e3fd396f43af8968b2aeb2154cd6078e1825a8f0",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          42,
+          966
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3600,
+        "duplicate_timestamp_pairs": 0,
+        "positive_consecutive_pairs": 3599,
+        "display_hz": 116.86608066894973,
+        "display_intervals_ms": {
+          "mean": 8.556803,
+          "median": 8.333375,
+          "p95": 8.339667,
+          "p99": 16.666708,
+          "max": 33.332792
+        },
+        "intervals_over12ms": 90,
+        "chunked_enabled_values": [
+          true
+        ],
+        "upload_bytes": {
+          "mean": 2335768.227778,
+          "median": 2226712.0,
+          "p95": 3093607.2,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 16.158889,
+          "median": 16.0,
+          "p95": 20.0,
+          "p99": 20.0,
+          "max": 20
+        },
+        "chunked_attempted_bytes": {
+          "mean": 2294314.204444,
+          "median": 2183472.0,
+          "p95": 3058751.2,
+          "p99": 3168967.52,
+          "max": 3289504
+        },
+        "body_instances": {
+          "mean": 553.889444,
+          "median": 559.0,
+          "p95": 606.0,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31372.115556,
+          "median": 32795.5,
+          "p95": 35168.15,
+          "p99": 35903.0,
+          "max": 36204
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 908408160,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3359605288,
+          "go_sys_bytes_start": 3347776552,
+          "heap_bytes_end": 2861435288,
+          "heap_bytes_start": 1953027128,
+          "mallocs": 5787711,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3719,
+          "Missing": 4,
+          "Callbacks": 3721,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 6.25001,
+            "median": 5.118834,
+            "p95": 11.506506,
+            "p99": 13.222674,
+            "max": 42.5675
+          },
+          "JoinMS": {
+            "mean": 1.273512,
+            "median": 0.116292,
+            "p95": 4.818507,
+            "p99": 8.353052,
+            "max": 34.160541
+          },
+          "EncodeMS": {
+            "mean": 1.382596,
+            "median": 1.356792,
+            "p95": 1.740129,
+            "p99": 2.287331,
+            "max": 12.283291
+          },
+          "CallbackMS": {
+            "mean": 8.554285,
+            "median": 8.335104,
+            "p95": 8.724594,
+            "p99": 16.508742,
+            "max": 35.942792
+          },
+          "PaceMS": {
+            "mean": 0.509134,
+            "median": 0.000167,
+            "p95": 2.939065,
+            "p99": 4.242132,
+            "max": 5.191667
+          },
+          "SourceSampleAgeMS": {
+            "mean": 2.852914,
+            "median": 1.436522,
+            "p95": 8.960416,
+            "p99": 12.60698,
+            "max": 40.962269
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.402056,
+            "median": 0.036167,
+            "p95": 5.074921,
+            "p99": 6.404437,
+            "max": 17.583875
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 1.013777,
+            "median": 0.000667,
+            "p95": 4.033375,
+            "p99": 4.43268,
+            "max": 15.586417
+          },
+          "pin_presentation": {
+            "mean": 0.002654,
+            "median": 0.002416,
+            "p95": 0.004333,
+            "p99": 0.006833,
+            "max": 0.039083
+          },
+          "world_build_or_recull": {
+            "mean": 0.55655,
+            "median": 0.00075,
+            "p95": 2.388142,
+            "p99": 2.635103,
+            "max": 9.384125
+          },
+          "visuals": {
+            "mean": 3.494973,
+            "median": 3.669605,
+            "p95": 4.997535,
+            "p99": 5.863861,
+            "max": 15.156625
+          },
+          "foreground_hud": {
+            "mean": 0.32643,
+            "median": 0.270667,
+            "p95": 0.533133,
+            "p99": 0.605353,
+            "max": 2.183042
+          },
+          "frame_policy_projection": {
+            "mean": 0.274078,
+            "median": 0.228292,
+            "p95": 0.423179,
+            "p99": 0.473527,
+            "max": 2.006042
+          },
+          "composition_selection": {
+            "mean": 0.364288,
+            "median": 0.355959,
+            "p95": 0.431224,
+            "p99": 0.503748,
+            "max": 3.429458
+          },
+          "shadows": {
+            "mean": 0.216481,
+            "median": 0.216146,
+            "p95": 0.27325,
+            "p99": 0.33263,
+            "max": 1.572833
+          },
+          "visual_record_adapter": {
+            "mean": 3.333927,
+            "median": 3.511979,
+            "p95": 4.794914,
+            "p99": 5.623117,
+            "max": 14.856708
+          },
+          "visual_lighting_sources": {
+            "mean": 0.107387,
+            "median": 0.107583,
+            "p95": 0.152335,
+            "p99": 0.166877,
+            "max": 0.519625
+          },
+          "visual_record": {
+            "mean": 2.608843,
+            "median": 2.777145,
+            "p95": 4.01369,
+            "p99": 4.812137,
+            "max": 13.790625
+          },
+          "visual_adapt": {
+            "mean": 0.723585,
+            "median": 0.724187,
+            "p95": 1.239842,
+            "p99": 1.362007,
+            "max": 4.099375
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.414954,
+            "median": 0.418354,
+            "p95": 0.469629,
+            "p99": 0.534648,
+            "max": 2.594208
+          },
+          "1": {
+            "mean": 0.000294,
+            "median": 0.000208,
+            "p95": 0.000375,
+            "p99": 0.0005,
+            "max": 0.304875
+          },
+          "2": {
+            "mean": 0.000287,
+            "median": 0.000291,
+            "p95": 0.000417,
+            "p99": 0.000584,
+            "max": 0.007042
+          },
+          "3": {
+            "mean": 0.000473,
+            "median": 0.000417,
+            "p95": 0.000752,
+            "p99": 0.001167,
+            "max": 0.004417
+          },
+          "4": {
+            "mean": 0.160242,
+            "median": 0.1115,
+            "p95": 0.324625,
+            "p99": 0.409837,
+            "max": 6.04
+          },
+          "5": {
+            "mean": 0.003065,
+            "median": 0.002583,
+            "p95": 0.003708,
+            "p99": 0.009751,
+            "max": 0.526708
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 398,
+            "hz": 119.69805186906859,
+            "late": 1,
+            "source_ms": {
+              "mean": 4.588023,
+              "median": 3.193792,
+              "p95": 9.819956,
+              "p99": 10.392303,
+              "max": 11.009041
+            },
+            "join_ms": {
+              "mean": 0.369763,
+              "median": 0.000334,
+              "p95": 2.239263,
+              "p99": 2.926147,
+              "max": 3.635958
+            },
+            "encode_ms": {
+              "mean": 1.294662,
+              "median": 1.226687,
+              "p95": 1.646425,
+              "p99": 1.836879,
+              "max": 2.132125
+            },
+            "visual_ms": {
+              "mean": 2.004,
+              "median": 1.943646,
+              "p95": 2.654755,
+              "p99": 2.989139,
+              "max": 3.298292
+            },
+            "instances": {
+              "mean": 526.703518,
+              "median": 519.0,
+              "p95": 599.15,
+              "p99": 601.03,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27500.163317,
+              "median": 27347.0,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 398,
+            "hz": 119.09965014661985,
+            "late": 3,
+            "source_ms": {
+              "mean": 5.818652,
+              "median": 4.302146,
+              "p95": 10.514403,
+              "p99": 10.929535,
+              "max": 13.018542
+            },
+            "join_ms": {
+              "mean": 0.749931,
+              "median": 0.000375,
+              "p95": 3.341871,
+              "p99": 4.540305,
+              "max": 6.161792
+            },
+            "encode_ms": {
+              "mean": 1.53483,
+              "median": 1.488521,
+              "p95": 1.886744,
+              "p99": 2.294006,
+              "max": 3.237542
+            },
+            "visual_ms": {
+              "mean": 3.121513,
+              "median": 3.212104,
+              "p95": 3.675552,
+              "p99": 3.984255,
+              "max": 6.22075
+            },
+            "instances": {
+              "mean": 589.29397,
+              "median": 594.0,
+              "p95": 612.0,
+              "p99": 614.18,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27538.160804,
+              "median": 27661.0,
+              "p95": 28593.9,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 391,
+            "hz": 117.4400891180477,
+            "late": 5,
+            "source_ms": {
+              "mean": 6.371187,
+              "median": 5.019958,
+              "p95": 10.782979,
+              "p99": 11.231508,
+              "max": 42.5675
+            },
+            "join_ms": {
+              "mean": 0.82535,
+              "median": 0.00075,
+              "p95": 3.250563,
+              "p99": 3.867287,
+              "max": 34.160541
+            },
+            "encode_ms": {
+              "mean": 1.324659,
+              "median": 1.275667,
+              "p95": 1.630688,
+              "p99": 1.743733,
+              "max": 12.283291
+            },
+            "visual_ms": {
+              "mean": 3.676003,
+              "median": 3.639458,
+              "p95": 4.480917,
+              "p99": 5.075771,
+              "max": 12.697292
+            },
+            "instances": {
+              "mean": 511.506394,
+              "median": 513,
+              "p95": 537.0,
+              "p99": 539.1,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28136.319693,
+              "median": 27668,
+              "p95": 30490.0,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 398,
+            "hz": 119.3982643227538,
+            "late": 2,
+            "source_ms": {
+              "mean": 5.887953,
+              "median": 4.316042,
+              "p95": 11.026422,
+              "p99": 11.900596,
+              "max": 13.952625
+            },
+            "join_ms": {
+              "mean": 0.744403,
+              "median": 0.000375,
+              "p95": 3.385431,
+              "p99": 4.37111,
+              "max": 6.334042
+            },
+            "encode_ms": {
+              "mean": 1.194106,
+              "median": 1.158167,
+              "p95": 1.436696,
+              "p99": 1.523215,
+              "max": 2.140208
+            },
+            "visual_ms": {
+              "mean": 3.280847,
+              "median": 3.215229,
+              "p95": 3.8896,
+              "p99": 4.173005,
+              "max": 4.839125
+            },
+            "instances": {
+              "mean": 537.753769,
+              "median": 529.0,
+              "p95": 572.0,
+              "p99": 573.03,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33042.022613,
+              "median": 33115.0,
+              "p95": 34704.0,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 389,
+            "hz": 116.39952130840511,
+            "late": 11,
+            "source_ms": {
+              "mean": 6.778563,
+              "median": 5.002875,
+              "p95": 12.8227,
+              "p99": 15.561002,
+              "max": 21.140708
+            },
+            "join_ms": {
+              "mean": 2.145153,
+              "median": 1.132334,
+              "p95": 6.329842,
+              "p99": 11.235368,
+              "max": 15.983083
+            },
+            "encode_ms": {
+              "mean": 1.445922,
+              "median": 1.365833,
+              "p95": 1.8156,
+              "p99": 2.474115,
+              "max": 8.5005
+            },
+            "visual_ms": {
+              "mean": 3.914194,
+              "median": 3.7725,
+              "p95": 5.081433,
+              "p99": 5.973014,
+              "max": 7.490083
+            },
+            "instances": {
+              "mean": 597,
+              "median": 600,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34614.866324,
+              "median": 34526,
+              "p95": 36070.0,
+              "p99": 36135.12,
+              "max": 36204
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 394,
+            "hz": 118.19503845597693,
+            "late": 6,
+            "source_ms": {
+              "mean": 7.058023,
+              "median": 5.438063,
+              "p95": 12.297181,
+              "p99": 13.263053,
+              "max": 15.474416
+            },
+            "join_ms": {
+              "mean": 2.214755,
+              "median": 1.998146,
+              "p95": 5.513284,
+              "p99": 7.56093,
+              "max": 14.303416
+            },
+            "encode_ms": {
+              "mean": 1.466331,
+              "median": 1.410104,
+              "p95": 1.719181,
+              "p99": 2.123885,
+              "max": 4.512333
+            },
+            "visual_ms": {
+              "mean": 4.266024,
+              "median": 4.138687,
+              "p95": 5.243181,
+              "p99": 6.308051,
+              "max": 7.764417
+            },
+            "instances": {
+              "mean": 599.804569,
+              "median": 600.0,
+              "p95": 607.0,
+              "p99": 610.07,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34409.345178,
+              "median": 34612.0,
+              "p95": 35445.0,
+              "p99": 35763.82,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 383,
+            "hz": 115.61114082034727,
+            "late": 14,
+            "source_ms": {
+              "mean": 7.122204,
+              "median": 5.933125,
+              "p95": 10.204233,
+              "p99": 12.655922,
+              "max": 24.7105
+            },
+            "join_ms": {
+              "mean": 1.820568,
+              "median": 1.012625,
+              "p95": 6.011283,
+              "p99": 8.867193,
+              "max": 21.191167
+            },
+            "encode_ms": {
+              "mean": 1.472784,
+              "median": 1.385041,
+              "p95": 1.913683,
+              "p99": 3.005618,
+              "max": 4.011167
+            },
+            "visual_ms": {
+              "mean": 4.218981,
+              "median": 4.084667,
+              "p95": 5.213821,
+              "p99": 6.211278,
+              "max": 8.1635
+            },
+            "instances": {
+              "mean": 565.710183,
+              "median": 564,
+              "p95": 585.0,
+              "p99": 587.0,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33897.067885,
+              "median": 33922,
+              "p95": 34717.0,
+              "p99": 35048.0,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 388,
+            "hz": 116.39046696024367,
+            "late": 11,
+            "source_ms": {
+              "mean": 7.043932,
+              "median": 5.461542,
+              "p95": 11.925504,
+              "p99": 12.668269,
+              "max": 20.880208
+            },
+            "join_ms": {
+              "mean": 1.405628,
+              "median": 1.133437,
+              "p95": 4.611023,
+              "p99": 5.392564,
+              "max": 13.524083
+            },
+            "encode_ms": {
+              "mean": 1.433644,
+              "median": 1.393438,
+              "p95": 1.646092,
+              "p99": 1.786095,
+              "max": 2.435875
+            },
+            "visual_ms": {
+              "mean": 4.264497,
+              "median": 4.048334,
+              "p95": 5.072975,
+              "p99": 5.761785,
+              "max": 8.97425
+            },
+            "instances": {
+              "mean": 550.507732,
+              "median": 550.0,
+              "p95": 564.65,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33508.092784,
+              "median": 33660.0,
+              "p95": 34391.0,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 238,
+            "hz": 106.31737942795458,
+            "late": 31,
+            "source_ms": {
+              "mean": 7.612987,
+              "median": 5.872937,
+              "p95": 13.078879,
+              "p99": 17.217479,
+              "max": 24.879083
+            },
+            "join_ms": {
+              "mean": 2.23852,
+              "median": 1.558354,
+              "p95": 5.890511,
+              "p99": 10.338938,
+              "max": 19.951375
+            },
+            "encode_ms": {
+              "mean": 1.421574,
+              "median": 1.356688,
+              "p95": 1.85896,
+              "p99": 2.368738,
+              "max": 2.798625
+            },
+            "visual_ms": {
+              "mean": 4.58744,
+              "median": 4.283313,
+              "p95": 5.629406,
+              "p99": 8.433345,
+              "max": 15.156625
+            },
+            "instances": {
+              "mean": 565.130252,
+              "median": 563.5,
+              "p95": 581.45,
+              "p99": 586.0,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32536.109244,
+              "median": 32572.0,
+              "p95": 33153.0,
+              "p99": 33347.0,
+              "max": 33550
+            }
+          }
+        ]
+      },
+      {
+        "name": "A3",
+        "report_sha256": "33f3fa7371fc7575c0d650409aa5450ea3fe3fa92ed2432f1607a7cb69f81061",
+        "rows": 3600,
+        "unique_tick_alpha": 3600,
+        "cameras": [
+          [
+            3192,
+            4536,
+            2
+          ]
+        ],
+        "tick_range": [
+          40,
+          983
+        ],
+        "matched_presentations": 3600,
+        "unique_positive_timestamps": 3599,
+        "duplicate_timestamp_pairs": 1,
+        "positive_consecutive_pairs": 3598,
+        "display_hz": 114.41862512188116,
+        "display_intervals_ms": {
+          "mean": 8.739836,
+          "median": 8.333375,
+          "p95": 8.339798,
+          "p99": 16.66675,
+          "max": 41.66675
+        },
+        "intervals_over12ms": 142,
+        "chunked_enabled_values": [
+          false
+        ],
+        "upload_bytes": {
+          "mean": 2336085.33,
+          "median": 2222808.0,
+          "p95": 3093752.0,
+          "p99": 3195930.72,
+          "max": 3317936
+        },
+        "model_upload_writes": {
+          "mean": 8.261944,
+          "median": 8.0,
+          "p95": 9.0,
+          "p99": 9.0,
+          "max": 9
+        },
+        "chunked_attempted_bytes": {
+          "mean": 0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0
+        },
+        "body_instances": {
+          "mean": 552.826111,
+          "median": 558.0,
+          "p95": 606.0,
+          "p99": 612.0,
+          "max": 620
+        },
+        "body_triangles": {
+          "mean": 31367.681389,
+          "median": 32864.0,
+          "p95": 35161.0,
+          "p99": 35896.07,
+          "max": 36204
+        },
+        "pipeline_creates": 0,
+        "memory": {
+          "alloc_bytes": 914950304,
+          "gc": 0,
+          "gc_pause_ns": 0,
+          "go_sys_bytes_end": 3355873848,
+          "go_sys_bytes_start": 3343389752,
+          "heap_bytes_end": 2867890544,
+          "heap_bytes_start": 1952940240,
+          "mallocs": 5816658,
+          "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+        },
+        "close": {
+          "completed": 3723,
+          "submitted": 3723
+        },
+        "handler": {
+          "Enabled": true,
+          "Closed": true,
+          "Retains": 0,
+          "Releases": 0,
+          "Outstanding": 0,
+          "HighWater": 4,
+          "RegistryOutstanding": 0,
+          "PermanentBlocks": 1,
+          "Requested": 3723,
+          "Presented": 3719,
+          "Missing": 4,
+          "Callbacks": 3722,
+          "ValueEvictions": 0,
+          "IgnoredAfterClose": 0,
+          "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+        },
+        "row_fields": {
+          "SourceMS": {
+            "mean": 6.218334,
+            "median": 5.16125,
+            "p95": 10.749595,
+            "p99": 13.714487,
+            "max": 36.101166
+          },
+          "JoinMS": {
+            "mean": 1.334801,
+            "median": 0.227834,
+            "p95": 4.858054,
+            "p99": 9.474231,
+            "max": 34.633416
+          },
+          "EncodeMS": {
+            "mean": 1.61314,
+            "median": 1.5615,
+            "p95": 1.977439,
+            "p99": 2.901104,
+            "max": 32.113333
+          },
+          "CallbackMS": {
+            "mean": 8.72886,
+            "median": 8.336062,
+            "p95": 10.115788,
+            "p99": 16.814516,
+            "max": 37.869834
+          },
+          "PaceMS": {
+            "mean": 0.115282,
+            "median": 0.000125,
+            "p95": 0.537802,
+            "p99": 0.756265,
+            "max": 7.553042
+          },
+          "SourceSampleAgeMS": {
+            "mean": 3.137022,
+            "median": 1.748174,
+            "p95": 10.247433,
+            "p99": 13.441139,
+            "max": 35.811792
+          },
+          "SourceReadyAgeMS": {
+            "mean": 1.375489,
+            "median": 0.036291,
+            "p95": 5.020551,
+            "p99": 7.840756,
+            "max": 19.611959
+          }
+        },
+        "source_stages": {
+          "host_step": {
+            "mean": 1.036942,
+            "median": 0.000667,
+            "p95": 3.961973,
+            "p99": 4.642021,
+            "max": 18.316
+          },
+          "pin_presentation": {
+            "mean": 0.002618,
+            "median": 0.002334,
+            "p95": 0.004458,
+            "p99": 0.006833,
+            "max": 0.027542
+          },
+          "world_build_or_recull": {
+            "mean": 0.577267,
+            "median": 0.000792,
+            "p95": 2.383932,
+            "p99": 2.676005,
+            "max": 10.240041
+          },
+          "visuals": {
+            "mean": 3.439978,
+            "median": 3.606979,
+            "p95": 4.936761,
+            "p99": 5.95269,
+            "max": 30.410417
+          },
+          "foreground_hud": {
+            "mean": 0.322053,
+            "median": 0.257667,
+            "p95": 0.536089,
+            "p99": 0.605646,
+            "max": 1.830292
+          },
+          "frame_policy_projection": {
+            "mean": 0.269161,
+            "median": 0.221625,
+            "p95": 0.419877,
+            "p99": 0.46409,
+            "max": 1.907792
+          },
+          "composition_selection": {
+            "mean": 0.356476,
+            "median": 0.35175,
+            "p95": 0.426502,
+            "p99": 0.499229,
+            "max": 2.202375
+          },
+          "shadows": {
+            "mean": 0.213076,
+            "median": 0.212229,
+            "p95": 0.277096,
+            "p99": 0.345802,
+            "max": 2.961375
+          },
+          "visual_record_adapter": {
+            "mean": 3.278898,
+            "median": 3.456291,
+            "p95": 4.725654,
+            "p99": 5.672871,
+            "max": 27.814375
+          },
+          "visual_lighting_sources": {
+            "mean": 0.106736,
+            "median": 0.105271,
+            "p95": 0.150214,
+            "p99": 0.16522,
+            "max": 2.536708
+          },
+          "visual_record": {
+            "mean": 2.569034,
+            "median": 2.736292,
+            "p95": 3.988352,
+            "p99": 4.681674,
+            "max": 26.643667
+          },
+          "visual_adapt": {
+            "mean": 0.708386,
+            "median": 0.717,
+            "p95": 1.193642,
+            "p99": 1.308767,
+            "max": 6.735916
+          }
+        },
+        "model_stages": {
+          "0": {
+            "mean": 0.413264,
+            "median": 0.413396,
+            "p95": 0.46475,
+            "p99": 0.528713,
+            "max": 5.2825
+          },
+          "1": {
+            "mean": 0.000294,
+            "median": 0.000208,
+            "p95": 0.000375,
+            "p99": 0.000542,
+            "max": 0.258625
+          },
+          "2": {
+            "mean": 0.000276,
+            "median": 0.00025,
+            "p95": 0.000417,
+            "p99": 0.000625,
+            "max": 0.006958
+          },
+          "3": {
+            "mean": 0.000476,
+            "median": 0.000458,
+            "p95": 0.00075,
+            "p99": 0.001166,
+            "max": 0.00725
+          },
+          "4": {
+            "mean": 0.414244,
+            "median": 0.339021,
+            "p95": 0.651492,
+            "p99": 0.952248,
+            "max": 14.488292
+          },
+          "5": {
+            "mean": 0.002958,
+            "median": 0.002625,
+            "p95": 0.004041,
+            "p99": 0.00796,
+            "max": 0.252917
+          }
+        },
+        "tick_windows": [
+          {
+            "ticks": [
+              100,
+              199
+            ],
+            "rows": 397,
+            "hz": 119.3967074331659,
+            "late": 2,
+            "source_ms": {
+              "mean": 4.463137,
+              "median": 3.542084,
+              "p95": 7.181108,
+              "p99": 7.522559,
+              "max": 12.852167
+            },
+            "join_ms": {
+              "mean": 0.029841,
+              "median": 0.00025,
+              "p95": 0.000758,
+              "p99": 1.084573,
+              "max": 5.385709
+            },
+            "encode_ms": {
+              "mean": 1.41373,
+              "median": 1.37775,
+              "p95": 1.761808,
+              "p99": 1.871829,
+              "max": 2.010542
+            },
+            "visual_ms": {
+              "mean": 1.949326,
+              "median": 1.885583,
+              "p95": 2.580475,
+              "p99": 2.739866,
+              "max": 4.044917
+            },
+            "instances": {
+              "mean": 526.667506,
+              "median": 519,
+              "p95": 599.2,
+              "p99": 601.04,
+              "max": 602
+            },
+            "triangles": {
+              "mean": 27502.853904,
+              "median": 27347,
+              "p95": 28381.0,
+              "p99": 28686.0,
+              "max": 28686
+            }
+          },
+          {
+            "ticks": [
+              200,
+              299
+            ],
+            "rows": 382,
+            "hz": 114.58599231356818,
+            "late": 9,
+            "source_ms": {
+              "mean": 5.917912,
+              "median": 4.7125,
+              "p95": 8.840483,
+              "p99": 22.753782,
+              "max": 35.545291
+            },
+            "join_ms": {
+              "mean": 0.758708,
+              "median": 0.000375,
+              "p95": 3.515202,
+              "p99": 15.889434,
+              "max": 27.227166
+            },
+            "encode_ms": {
+              "mean": 1.816713,
+              "median": 1.639292,
+              "p95": 2.170387,
+              "p99": 4.958574,
+              "max": 19.038
+            },
+            "visual_ms": {
+              "mean": 3.077724,
+              "median": 3.091333,
+              "p95": 3.653098,
+              "p99": 5.204755,
+              "max": 8.3875
+            },
+            "instances": {
+              "mean": 588.89267,
+              "median": 594.0,
+              "p95": 612.0,
+              "p99": 615.14,
+              "max": 620
+            },
+            "triangles": {
+              "mean": 27548.819372,
+              "median": 27661.0,
+              "p95": 28614.7,
+              "p99": 28686.0,
+              "max": 28712
+            }
+          },
+          {
+            "ticks": [
+              300,
+              399
+            ],
+            "rows": 398,
+            "hz": 119.39835559721993,
+            "late": 2,
+            "source_ms": {
+              "mean": 6.119018,
+              "median": 4.706874,
+              "p95": 10.784373,
+              "p99": 12.051305,
+              "max": 19.859292
+            },
+            "join_ms": {
+              "mean": 0.928742,
+              "median": 0.091729,
+              "p95": 3.423264,
+              "p99": 4.462182,
+              "max": 12.738208
+            },
+            "encode_ms": {
+              "mean": 1.506538,
+              "median": 1.458125,
+              "p95": 1.884452,
+              "p99": 2.349594,
+              "max": 6.744833
+            },
+            "visual_ms": {
+              "mean": 3.540649,
+              "median": 3.466646,
+              "p95": 4.317462,
+              "p99": 4.502763,
+              "max": 7.746
+            },
+            "instances": {
+              "mean": 511.115578,
+              "median": 511.0,
+              "p95": 537.0,
+              "p99": 539.03,
+              "max": 540
+            },
+            "triangles": {
+              "mean": 28131.326633,
+              "median": 27668.0,
+              "p95": 30471.8,
+              "p99": 31466.0,
+              "max": 31466
+            }
+          },
+          {
+            "ticks": [
+              400,
+              499
+            ],
+            "rows": 397,
+            "hz": 119.09729513633236,
+            "late": 3,
+            "source_ms": {
+              "mean": 5.904672,
+              "median": 4.329292,
+              "p95": 10.845483,
+              "p99": 11.948663,
+              "max": 14.349625
+            },
+            "join_ms": {
+              "mean": 0.65605,
+              "median": 0.000458,
+              "p95": 3.368925,
+              "p99": 4.365414,
+              "max": 4.8105
+            },
+            "encode_ms": {
+              "mean": 1.437298,
+              "median": 1.3835,
+              "p95": 1.7222,
+              "p99": 1.900832,
+              "max": 2.1505
+            },
+            "visual_ms": {
+              "mean": 3.269437,
+              "median": 3.195667,
+              "p95": 3.981426,
+              "p99": 4.260015,
+              "max": 5.837417
+            },
+            "instances": {
+              "mean": 537.768262,
+              "median": 529,
+              "p95": 572.0,
+              "p99": 574.0,
+              "max": 574
+            },
+            "triangles": {
+              "mean": 33042.433249,
+              "median": 33125,
+              "p95": 34683.2,
+              "p99": 34784.0,
+              "max": 34784
+            }
+          },
+          {
+            "ticks": [
+              500,
+              599
+            ],
+            "rows": 392,
+            "hz": 117.59383170502211,
+            "late": 6,
+            "source_ms": {
+              "mean": 6.67164,
+              "median": 5.484938,
+              "p95": 9.153325,
+              "p99": 12.739762,
+              "max": 27.140542
+            },
+            "join_ms": {
+              "mean": 1.441027,
+              "median": 0.770188,
+              "p95": 4.637308,
+              "p99": 8.451806,
+              "max": 26.382917
+            },
+            "encode_ms": {
+              "mean": 1.697852,
+              "median": 1.586792,
+              "p95": 1.983735,
+              "p99": 2.702247,
+              "max": 15.831792
+            },
+            "visual_ms": {
+              "mean": 3.878366,
+              "median": 3.691584,
+              "p95": 4.840817,
+              "p99": 5.773929,
+              "max": 18.816917
+            },
+            "instances": {
+              "mean": 597.530612,
+              "median": 600.0,
+              "p95": 612.0,
+              "p99": 615.0,
+              "max": 615
+            },
+            "triangles": {
+              "mean": 34586.780612,
+              "median": 34435.0,
+              "p95": 36082.0,
+              "p99": 36134.34,
+              "max": 36204
+            }
+          },
+          {
+            "ticks": [
+              600,
+              699
+            ],
+            "rows": 378,
+            "hz": 112.79956008099224,
+            "late": 17,
+            "source_ms": {
+              "mean": 7.202204,
+              "median": 8.178062,
+              "p95": 10.505458,
+              "p99": 13.723361,
+              "max": 18.754083
+            },
+            "join_ms": {
+              "mean": 3.152667,
+              "median": 2.866917,
+              "p95": 7.945873,
+              "p99": 10.350419,
+              "max": 13.581875
+            },
+            "encode_ms": {
+              "mean": 1.834122,
+              "median": 1.673459,
+              "p95": 2.089509,
+              "p99": 2.562937,
+              "max": 32.113333
+            },
+            "visual_ms": {
+              "mean": 4.255482,
+              "median": 4.042583,
+              "p95": 5.085786,
+              "p99": 6.034859,
+              "max": 8.112917
+            },
+            "instances": {
+              "mean": 599.589947,
+              "median": 600.0,
+              "p95": 607.0,
+              "p99": 609.23,
+              "max": 611
+            },
+            "triangles": {
+              "mean": 34387.050265,
+              "median": 34516.0,
+              "p95": 35376.3,
+              "p99": 35767.98,
+              "max": 35788
+            }
+          },
+          {
+            "ticks": [
+              700,
+              799
+            ],
+            "rows": 371,
+            "hz": 111.83844584162739,
+            "late": 22,
+            "source_ms": {
+              "mean": 7.224146,
+              "median": 8.068792,
+              "p95": 9.812083,
+              "p99": 15.392413,
+              "max": 36.101166
+            },
+            "join_ms": {
+              "mean": 1.933877,
+              "median": 1.219291,
+              "p95": 5.483459,
+              "p99": 12.457338,
+              "max": 34.633416
+            },
+            "encode_ms": {
+              "mean": 1.763042,
+              "median": 1.622375,
+              "p95": 2.063229,
+              "p99": 3.986008,
+              "max": 12.427625
+            },
+            "visual_ms": {
+              "mean": 4.261789,
+              "median": 4.081917,
+              "p95": 5.308625,
+              "p99": 6.486958,
+              "max": 30.410417
+            },
+            "instances": {
+              "mean": 565.113208,
+              "median": 564,
+              "p95": 582.0,
+              "p99": 587.0,
+              "max": 588
+            },
+            "triangles": {
+              "mean": 33928.978437,
+              "median": 33970,
+              "p95": 34720.0,
+              "p99": 35048.0,
+              "max": 35048
+            }
+          },
+          {
+            "ticks": [
+              800,
+              899
+            ],
+            "rows": 394,
+            "hz": 118.04709553254933,
+            "late": 5,
+            "source_ms": {
+              "mean": 6.936926,
+              "median": 6.422083,
+              "p95": 9.139385,
+              "p99": 12.269877,
+              "max": 17.598
+            },
+            "join_ms": {
+              "mean": 1.546775,
+              "median": 1.371,
+              "p95": 3.633585,
+              "p99": 5.717545,
+              "max": 12.658042
+            },
+            "encode_ms": {
+              "mean": 1.660745,
+              "median": 1.595584,
+              "p95": 1.960755,
+              "p99": 2.089505,
+              "max": 3.682416
+            },
+            "visual_ms": {
+              "mean": 4.198116,
+              "median": 3.959167,
+              "p95": 5.029352,
+              "p99": 5.579381,
+              "max": 6.550583
+            },
+            "instances": {
+              "mean": 550.106599,
+              "median": 550.0,
+              "p95": 564.35,
+              "p99": 568.0,
+              "max": 568
+            },
+            "triangles": {
+              "mean": 33526.555838,
+              "median": 33667.5,
+              "p95": 34401.85,
+              "p99": 34531.0,
+              "max": 34531
+            }
+          },
+          {
+            "ticks": [
+              900,
+              999
+            ],
+            "rows": 253,
+            "hz": 90.5387215621659,
+            "late": 73,
+            "source_ms": {
+              "mean": 7.957766,
+              "median": 5.345834,
+              "p95": 13.320534,
+              "p99": 25.682923,
+              "max": 28.058041
+            },
+            "join_ms": {
+              "mean": 3.019912,
+              "median": 2.642209,
+              "p95": 6.290334,
+              "p99": 23.723674,
+              "max": 25.764459
+            },
+            "encode_ms": {
+              "mean": 1.700605,
+              "median": 1.559541,
+              "p95": 2.177592,
+              "p99": 4.045678,
+              "max": 5.373416
+            },
+            "visual_ms": {
+              "mean": 4.505785,
+              "median": 4.155125,
+              "p95": 5.851241,
+              "p99": 9.765753,
+              "max": 10.665667
+            },
+            "instances": {
+              "mean": 564.652174,
+              "median": 563,
+              "p95": 579.0,
+              "p99": 585.48,
+              "max": 586
+            },
+            "triangles": {
+              "mean": 32672.893281,
+              "median": 32731,
+              "p95": 33345.0,
+              "p99": 33468.0,
+              "max": 33550
+            }
+          }
+        ]
+      }
+    ],
+    "resource_bounds": {
+      "all_close_completed_submitted": [
+        3723,
+        3723
+      ],
+      "measured_model_layer_pipeline_creates_each": 0,
+      "selected_postclose_descriptor_bytes_each": 0,
+      "max_observed_previous_submission_minus_completed": 2,
+      "handler_owner_and_registry_outstanding_each": 0,
+      "scope": "Selected descriptors andqueue indices arepartialaccounting; no totalnativeGPUheap orpoolhighwater instrumentation. No wholeGPUleakfreedomclaim."
+    },
+    "display_anomaly": {
+      "run": "A3",
+      "matched_positive_rows": 3600,
+      "unique_positive_timestamps": 3599,
+      "duplicate_pairs": 1,
+      "native_submissions": [
+        2382,
+        2383
+      ],
+      "cpu_frame_index": 2381,
+      "method": "Zero interval recordedexplicitly; excluded fromrate numerator andpositiveintervaldistribution;3598positiveconsecutivepairs. One positive timestamp is not proof of two unique visible frames."
+    },
+    "limits": [
+      "Observed display rangesoverlap; sourcep99 remainsabout12.5\u201313.7ms. No sustained120 or end-to-endlatency guarantee",
+      "No recordedthermal/performancewarning is not measurement of chiptemperature/frequency; machine loadvaried2.43\u20136.48",
+      "Allocation/memorytotalsinclude advancing source/simulation; noisolatedallocationbenefitclaim",
+      "NoShake suppressesRequestShake andchangesCRT chronology versusoldshakenfixture;RNGSimunaffected; bothcontrolsuseidenticalpolicy",
+      "No GPU execution orqueue-submit timestamps;CPU preparation/encoding overlapnotadditive"
+    ],
+    "independent_review": "No ownership/orderingblocker;CPUbenefit supports explicitfastadoption afterCoastpixel/statepass; displayvariance andduplicate/accountinglimits retained"
+  },
+  "source_sha256": {
+    "internal/battlegpu/modeluploads.go": "9a71b125d05509e39425f679d6dc210251b553c180f9da2fc06df90b7d2c33a0",
+    "internal/battlegpu/models.go": "23102aea26bccfc82682d9eb515d117736f9570a58098731c9884b8f7f38d9fe",
+    "tools/run-play": "a46768c3210b504e7989a8055628006e706979bf28a6a6db025d08f1fb5df8c5",
+    "tools/build-play": "9d1b63465a6fa2a21146ee21097445e6bd1b8f7400ce63723de23ab18b2df6ba"
+  },
+  "primary_timing_docs": [
+    "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpustarttime",
+    "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpuendtime",
+    "https://developer.apple.com/documentation/metal/mtlcommandbuffer/addcompletedhandler(_:)"
+  ]
 }

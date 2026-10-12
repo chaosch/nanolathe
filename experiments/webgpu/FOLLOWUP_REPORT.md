@@ -898,3 +898,38 @@ The explicit run-play --fast profile replaces the environment list, verifies its
 One actual width drag recovered at1700×1080. A minimize/fresh-binding/Raise sequence returned to a visible battle. Both UI sessions ended through bounded watchdog SIGTERM and drained4910/4910 and2813/2813 with no run error or handler routes left; their requested frame budgets were not completed. This supports the observed UI actions, not general minimized scheduling or compositor occlusion.
 
 An unattended packaged-launcher run completed3600 unique source identities and3600 positive display observations, no model/layer pipeline builds and drain3723/3723. Actual cadence was114.22336Hz, with178 intervals above12ms and a33.3335ms maximum. Visible body triangles stayed26,270–38,374 as the battle advanced. The longer growing workload invalidates any sustained120 claim from the shorter captures. Goheap rose1.953GB→2.883GB beforeGC; the post-measurement sampled heap was2.019GB, near but above the starting live heap. Selected post-close descriptors and handler routes are0; this is partial bounded-run accounting, not proof of complete native leak freedom. Exact per-window tails, memory and launcher hashes are in PRACTICAL_PROFILE_MEASUREMENTS.json. Further optimization should use these longer-window phase profiles; other backend/OS/display claims still need supported controlled environments.
+
+
+## Mutable model staging reuse
+
+The explicit fast profile now splits mutable model uploads into the pinned
+queue's256KiB reusable completion-owned staging chunks; immutable geometry/UVs
+and all render/shadow/group ordering stay unchanged. One same-binary series
+A1 B1 B2 A2 B3 A3 used120 warmup plus3600 measured frames per run, one camera,
+seed7, isolated speed10 settings and identical NoShake policy. Median model
+upload CPU preparation fell0.399→0.153ms, median average encoding1.571→1.340ms
+and median encodingp992.718→2.139ms. Common full100-tick windows100..899 differ
+in mean body census by<0.14% and mean triangles by<0.25%; alpha samples and
+final ticks differ, so this is matched evolving workload rather than exact
+state/frame equivalence. Display ranges111.61–118.24/116.87–119.11Hz overlap;
+no isolated FPS gain or sustained120 guarantee is claimed. One control has
+3600 matched positive observations but3599 unique timestamps; its one zero
+interval is recorded explicitly and excluded from the display-rate numerator.
+
+All six runs drain3723/3723 with0 capacity pipeline creations,0 outstanding
+handler routes and0 selected post-close descriptor bytes. These are partial
+accounting, not GPU-heap leak proof. CPU allocation totals include the advancing
+simulation and do not establish an allocation improvement. No recorded thermal
+warning does not establish stable chip clocks. NoShake also changes diagnostic
+CRT chronology, so the old shaken soak is not a matched control.
+
+Native19-case UV/grow/shrink/tail-pose checks preserve all38 raw image files.
+The fixed coastal fixture preserves final image/fields/state and18 GPU sidecars
+byte-for-byte. Independent code/results review supports CPU-only adoption in
+`run-play --fast`; `--no-chunked-uploads` retains its control. Baseline and
+unsupported-platform uploads remain unchanged. A fresh external package in
+/tmp/nanolathe-fast-ready passed actual default-fast execution and243/243 drain.
+TAIL_PROFILE_MEASUREMENTS.json preserves exact commands/hashes, all run/tick
+summaries, display duplicate and accounting limits. Native GPU start/end
+durations are the next concrete attribution check before any direct-body
+rewrite; collecting them locally need not wait for an upstream release.

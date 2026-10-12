@@ -3,8 +3,8 @@
 import argparse, hashlib, json, os, pathlib, platform, sys
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build',type=pathlib.Path,help='build directory; packaged launcher defaults to its own directory')
-parser.add_argument('--fast',action='store_true',help='explicitly enable the qualified fixed-array reservation/owned-upload/prepare profile')
-parser.add_argument('--chunked-uploads',action='store_true',help='qualified fast-profile diagnostic; reuse completed staging chunks for mutable model writes')
+parser.add_argument('--fast',action='store_true',help='explicitly enable the qualified fixed-array reservation/owned-upload/prepare/chunked-model-upload profile')
+parser.add_argument('--chunked-uploads',action=argparse.BooleanOptionalAction,default=None,help='mutable model staging chunks, enabled by --fast; --no-chunked-uploads selects the diagnostic control')
 parser.add_argument('--telemetry',action='store_true',help='enable bounded native presented-handler observations')
 parser.add_argument('--neutral-pointer',action='store_true',help='bounded interactive field diagnostic only; center camera/pointer and suppress shake for reproducible workload')
 parser.add_argument('--dry-run',action='store_true',help='print command and managed environment without launching')
@@ -24,7 +24,7 @@ env=dict(os.environ)
 for key in list(env):
  if key.startswith('NANOLATHE_WEBGPU_'):del env[key]
 managed={'NANOLATHE_WEBGPU_ASYNC_UPLOADS':'1' if opts.fast else '0','NANOLATHE_WEBGPU_PREPARE_AHEAD':'1' if opts.fast else '0','NANOLATHE_WEBGPU_RESERVE_STORAGE':'1' if opts.fast else '0','NANOLATHE_WEBGPU_RUNTIME_ARRAYS':'0','NANOLATHE_WEBGPU_PRESENT_TELEMETRY':'1' if opts.telemetry else '0'}
-managed['NANOLATHE_WEBGPU_CHUNKED_UPLOADS']='1' if opts.chunked_uploads else '0'
+managed['NANOLATHE_WEBGPU_CHUNKED_UPLOADS']='1' if opts.fast and opts.chunked_uploads is not False else '0'
 if opts.fast:managed['GOMAXPROCS']='4'
 if opts.neutral_pointer:managed['NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER']='1'
 env.update(managed)

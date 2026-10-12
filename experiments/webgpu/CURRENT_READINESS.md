@@ -51,10 +51,16 @@ A 3600-frame unattended profile soak verified every presentation row, zero
 capacity pipeline rebuilds and clean close, but measured114.22Hz under a growing
 dense workload. This does not establish sustained120FPS or whole-GPU leak freedom.
 
-A new default-off mutable model upload candidate splits large writes into the
+The explicit fast profile now splits large mutable model writes into the
 pinned queue's reusable256KiB staging chunks. Native19-case UV/growth checks and
 all38 raw pixel files match the original path. The original3600-frame soak used
 1786 camera positions due to explosion shake, so it is not a fixed-camera
 performance control. The bounded neutral-pointer field diagnostic now uses the
-existing NoShake gate on both A/B paths. Matched timing comparison is pending;
-TAIL_PROFILE_MEASUREMENTS.json records the CPU evidence and its attribution limits.
+existing NoShake gate on both A/B paths; this also changes diagnostic CRT shake
+chronology. Six same-binary runs show median model upload preparation0.399→0.153ms
+and median average encoding1.571→1.340ms. Display ranges overlap:111.61–118.24Hz
+control versus116.87–119.11Hz chunked, so sustained120 is unproven. One control
+reported a duplicate positive presentation timestamp, recorded explicitly.
+Baseline and unsupported-platform writes remain unchanged; --no-chunked-uploads
+restores the fast profile's control. TAIL_PROFILE_MEASUREMENTS.json records the
+CPU evidence, workload matching and attribution/accounting limits.

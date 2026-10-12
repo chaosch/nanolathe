@@ -460,7 +460,7 @@ A fresh `tools/build-play ... --present-handler` output includes `run-play`.
 Use the packaged launcher to avoid an environment-variable list:
 
 ```sh
-/tmp/nanolathe-profile-current/run-play --fast --telemetry -- \
+/tmp/nanolathe-fast-ready/run-play --fast --telemetry -- \
   --root="$HOME/TotalAnnihilation" --map='Town & Country' --zoom=1
 ```
 
@@ -486,3 +486,15 @@ layer pipeline creation. This lower long-window cadence limits any120FPS claim.
 Go heap grew before GC and a post-measurement heap sample returned to about1.88GiB;
 selected post-close descriptors and handler routes drained. This is bounded
 short-run accounting, not an all-native-memory leak proof.
+
+
+The explicit `run-play --fast` profile also uses completion-owned reusable
+staging chunks for mutable model uploads. Six3600-frame same-binary controls at
+one camera and seed reduced median average CPU encoding1.571→1.340ms; they do
+not establish sustained120FPS. `--no-chunked-uploads` selects the diagnostic
+control while retaining the other fast modes. Ordinary baseline launches and
+unsupported-platform fallbacks retain original uploads. The bounded
+`--neutral-pointer` field control also suppresses shake via the existing NoShake
+switch, affecting diagnostic CRT chronology; compare both sides with the same
+control. See TAIL_PROFILE_MEASUREMENTS.json for exact source/build hashes,
+presentation duplicates, matched tick windows and partial memory accounting.
