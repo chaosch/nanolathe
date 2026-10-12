@@ -107,7 +107,7 @@ for original in sorted((engine/'cmd/nanolathe').rglob('*')):
      ('h.fps.observe(time.Now(), in.Timing)',0),
      ('h.cl.SetCameraFraction(float32(now.Sub(h.updated).Seconds() * 30))',1),
      ('previous, cur := h.cl.PresentedFramePair()',2),
-     ('if err := h.visuals.Prepare(h.cl, &h.frame, h.width, h.height, 2); err != nil {',3),
+     ('visualsErr := h.visuals.Prepare(h.cl, &visuals, h.width, h.height, 2)',3),
      ('list := h.cl.RecordRetainedForeground()',4),
      ('prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2, &h.subjects)',5),
      ('if h.composer == nil {',6),

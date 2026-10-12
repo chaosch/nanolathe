@@ -219,6 +219,12 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.ditheredFog = dithered
 		h.cached = false
 	}
+	// A new pair rebuilds the retained world on its own goroutine while this
+	// one records the effects: the build reads only the immutable committed
+	// pair and the retained source, the recorder only the client, so the two
+	// share no mutable state. The tick frame's source cost becomes the larger
+	// of the two rather than their sum.
+	var rebuilt chan meshscene.LiveFrame
 	if cur != nil {
 		stale := !h.cached || h.cachedTick != cur.Tick || h.cachedFrame != cur || h.cachedPrevious != previous
 		// A camera-only change keeps the build's models while its culling
@@ -236,13 +242,30 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 			if !blend {
 				sourcePrevious = cur
 			}
-			h.frame = h.world.Frame(sourcePrevious, cur, camera)
+			rebuilt = make(chan meshscene.LiveFrame, 1)
+			world := h.world
+			go func() { rebuilt <- world.Frame(sourcePrevious, cur, camera) }()
 			h.cached = true
 			h.cachedTick = cur.Tick
 			h.cachedFrame = cur
 			h.cachedPrevious = previous
 		}
 	}
+	var visuals meshscene.LiveFrame
+	visuals.Camera = camera
+	visualsErr := h.visuals.Prepare(h.cl, &visuals, h.width, h.height, 2)
+	if rebuilt != nil {
+		h.frame = <-rebuilt
+	}
+	if visualsErr != nil {
+		return meshscene.LiveFrame{}, visualsErr
+	}
+	h.frame.WaterObjectScales = visuals.WaterObjectScales
+	h.frame.TerrainFlags = visuals.TerrainFlags
+	h.frame.Lighting.Lights = visuals.Lighting.Lights
+	h.frame.LightControls |= visuals.LightControls
+	h.frame.WaterSources = visuals.WaterSources
+	h.frame.StockEffects = visuals.StockEffects
 	h.frame.Camera = camera
 	h.frame.Alpha = float32(fraction) / 65536
 	// The world art keeps its load-time palette; a later gamma factor scales
@@ -262,9 +285,6 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 		h.displayPalette = display
 		h.atlasEpoch += h.atlasLocalVersion + 1
 		h.atlasLocalVersion = 0
-	}
-	if err := h.visuals.Prepare(h.cl, &h.frame, h.width, h.height, 2); err != nil {
-		return meshscene.LiveFrame{}, err
 	}
 	list := h.cl.RecordRetainedForeground()
 	if h.cursorObserved {
