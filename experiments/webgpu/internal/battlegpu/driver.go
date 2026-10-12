@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -355,6 +356,15 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				queue.mu.Unlock()
 			}
 			graphicsBackend = ctx.Backend()
+			// GoGPU falls back to its CPU rasterizer when the requested backend
+			// offers no adapter (for example MoltenVK hidden by the Vulkan loader).
+			// Name that instead of failing later on its unsupported compute passes.
+			// Browser adapters carry no backend identity and also report Empty.
+			if runtime.GOOS != "js" && (strings.HasSuffix(graphicsBackend, "(Empty)") || strings.HasSuffix(graphicsBackend, "(Software)")) {
+				failure = fmt.Errorf("WebGPU battle requires a hardware adapter; GoGPU selected %s because the requested backend offered none", graphicsBackend)
+				app.Quit()
+				return
+			}
 			p := app.DeviceProvider()
 			nativeDevice = p.Device()
 			surfaceFormat = p.SurfaceFormat()

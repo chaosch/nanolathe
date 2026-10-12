@@ -3,7 +3,7 @@
 import hashlib, json, os, pathlib, plistlib, shutil, subprocess, sys, re
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
 patch_flags=('--metal-cache','--owned-submission','--render-runtime','--present-handler','--gpu-timing')
-if len(sys.argv)<2 or any(a not in patch_flags and not a.startswith(('--engine-source=','--engine-revision=','--presentation-overlay=','--goos=','--goarch=')) for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--goos=GOOS --goarch=GOARCH] [--metal-cache] [--owned-submission] [--render-runtime] [--present-handler] [--gpu-timing] [--engine-source=ARCHIVE --engine-revision=SHA] [--presentation-overlay=JSON]')
+if len(sys.argv)<2 or any(a not in patch_flags+('--vulkan-proxy',) and not a.startswith(('--engine-source=','--engine-revision=','--presentation-overlay=','--goos=','--goarch=')) for a in sys.argv[2:]):sys.exit('usage: tools/build-play NEW_OUTPUT_DIRECTORY [--goos=GOOS --goarch=GOARCH] [--vulkan-proxy] [--metal-cache] [--owned-submission] [--render-runtime] [--present-handler] [--gpu-timing] [--engine-source=ARCHIVE --engine-revision=SHA] [--presentation-overlay=JSON]')
 # The target defaults to the host toolchain's. Every non-darwin target builds
 # the same production host with its darwin constraint removed (see below).
 host_target=subprocess.check_output(['go','env','GOOS','GOARCH'],env=dict(os.environ,GOWORK='off'),text=True).split()
@@ -16,6 +16,12 @@ if (goos,goarch) not in supported_targets:sys.exit(f'unsupported target {goos}/{
 portable_host=goos!='darwin'
 # Every dependency patch edits the Metal HAL or the macOS GoGPU host.
 if portable_host and any(a in patch_flags for a in sys.argv[2:]):sys.exit(f'dependency patch flags are macOS-only; {goos}/{goarch} builds the stock pinned GoGPU/wgpu')
+# The pinned GoGPU links only Metal on macOS and ignores GOGPU_GRAPHICS_API
+# there. This diagnostic overlay links the stock Vulkan HAL beside Metal and
+# lets GOGPU_GRAPHICS_API=vulkan select it, so MoltenVK can stand in for the
+# Linux/Windows Vulkan path. It edits one upstream file at build time only.
+vulkan_proxy='--vulkan-proxy' in sys.argv[2:]
+if vulkan_proxy and (goos!='darwin' or any(a in patch_flags for a in sys.argv[2:])):sys.exit('--vulkan-proxy is a stock-dependency macOS diagnostic; it cannot combine with other targets or patch flags')
 gpu_timing='--gpu-timing' in sys.argv[2:]
 present_handler='--present-handler' in sys.argv[2:] or gpu_timing
 render_runtime='--render-runtime' in sys.argv[2:] or present_handler
@@ -80,6 +86,22 @@ if gpu_timing:
  subprocess.run([sys.executable,str(exp/'tools/apply-gpu-timing'),str(fork)],cwd=exp,check=True)
 (work/'go.sum').write_text((engine/'go.sum').read_text()+(exp/'go.sum').read_text())
 overlay=dict(presentation_overlay);sources=[]
+dependency_overlays={}
+if vulkan_proxy:
+ # Go refuses overlays beneath GOMODCACHE, so edit an exact private copy.
+ module=json.loads(subprocess.check_output(['go','list','-mod=mod','-m','-json','github.com/gogpu/gogpu'],cwd=work,env=dict(os.environ,GOWORK='off'),text=True))
+ if module.get('Version')!='v0.54.1-0.20260901095536-12620c9d5007' or module.get('Replace'):sys.exit('--vulkan-proxy requires the exact unmodified pinned GoGPU')
+ copy=work/'vulkan-proxy/gogpu';shutil.copytree(module['Dir'],copy)
+ for path in [copy,*copy.rglob('*')]:path.chmod(0o755 if path.is_dir() else 0o644)
+ selector=copy/'gpu/backend/native/hal_metal.go';original=selector.read_bytes()
+ if hashlib.sha256(original).hexdigest()!='8eec348f9b1f77958acf8454c4cda129aa6f79813fc67f0e84bd9bb2ce99e53e':sys.exit('--vulkan-proxy requires the reviewed pinned GoGPU backend selector')
+ text=original.decode()
+ for old,new_text in (('\t_ "github.com/gogpu/wgpu/hal/software"\n','\t_ "github.com/gogpu/wgpu/hal/software"\n\t// Nanolathe diagnostic edit: the stock Vulkan HAL, reached through MoltenVK.\n\t_ "github.com/gogpu/wgpu/hal/vulkan"\n'),('\tdefault: // Metal (default on macOS)\n','\tcase types.GraphicsAPIVulkan:\n\t\treturn "Pure Go (Vulkan)", gputypes.BackendsVulkan\n\tdefault: // Metal (default on macOS)\n')):
+  if text.count(old)!=1:sys.exit('--vulkan-proxy selector edit does not apply')
+  text=text.replace(old,new_text)
+ selector.write_text(text)
+ with (work/'go.mod').open('a') as f:f.write(f'\nreplace github.com/gogpu/gogpu => {copy}\n')
+ dependency_overlays['github.com/gogpu/gogpu/gpu/backend/native/hal_metal.go']=dict(source_sha256=hashlib.sha256(original).hexdigest(),build_sha256=hashlib.sha256(selector.read_bytes()).hexdigest(),rewrites=['link the stock Vulkan HAL beside Metal','GOGPU_GRAPHICS_API=vulkan selects BackendsVulkan'])
 # The !darwin stubs that report "requires macOS" give way to the real host.
 portable_dropped=('metal_host_other.go','metal_benchmark_other.go')
 portable_host_file=re.compile(r'metal_[a-z_]+_darwin\.go')
@@ -218,6 +240,6 @@ if goos=='js':
  loader=next((p for p in (goroot/'lib/wasm/wasm_exec.js',goroot/'misc/wasm/wasm_exec.js') if p.is_file()),None)
  if loader is None:sys.exit('toolchain wasm_exec.js not found under GOROOT')
  shutil.copy2(loader,out/'wasm_exec.js')
-(out/'build-manifest.json').write_text(json.dumps(dict(target=dict(goos=goos,goarch=goarch,binary=binary_name,portable_host=portable_host),engine_source=str(engine),engine_revision=engine_revision or subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),presentation_overlay_sha256=hashlib.sha256(presentation_overlay_path.read_bytes()).hexdigest() if presentation_overlay_path else None,presentation_overlay_sources={str(pathlib.Path(k).relative_to(engine)):hashlib.sha256(pathlib.Path(v).read_bytes()).hexdigest() for k,v in presentation_overlay.items()},launcher_sha256=hashlib.sha256((exp/'tools/run-play').read_bytes()).hexdigest(),repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOOS=goos,GOARCH=goarch,GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),dependency_diagnostic=dict(deferred_acquire=owned_submission,deferred_acquire_patch_sha256=hashlib.sha256((exp/'patches/gogpu-deferred-acquire.patch').read_bytes()).hexdigest() if owned_submission else None,gpu_timing=gpu_timing,gpu_timing_patch_sha256=hashlib.sha256((exp/'patches/wgpu-gpu-timing.patch').read_bytes()).hexdigest() if gpu_timing else None,present_handler=present_handler,present_handler_patch_sha256=hashlib.sha256((exp/'patches/wgpu-present-handler.patch').read_bytes()).hexdigest() if present_handler else None,render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='generated prototype command/source overlay; shared client and culling improvements in worktree, root module and shipping native renderer unchanged'),indent=2)+'\n')
+(out/'build-manifest.json').write_text(json.dumps(dict(target=dict(goos=goos,goarch=goarch,binary=binary_name,portable_host=portable_host),engine_source=str(engine),engine_revision=engine_revision or subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),presentation_overlay_sha256=hashlib.sha256(presentation_overlay_path.read_bytes()).hexdigest() if presentation_overlay_path else None,presentation_overlay_sources={str(pathlib.Path(k).relative_to(engine)):hashlib.sha256(pathlib.Path(v).read_bytes()).hexdigest() for k,v in presentation_overlay.items()},launcher_sha256=hashlib.sha256((exp/'tools/run-play').read_bytes()).hexdigest(),repository_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),command=cmd,dependency_overlays=dependency_overlays,build_environment=dict(CGO_ENABLED=env['CGO_ENABLED'],GOWORK=env['GOWORK'],GOOS=goos,GOARCH=goarch,GOMAXPROCS=env['GOMAXPROCS']),sources=sources,experiment_source_sha256={str(p.relative_to(exp)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(exp.rglob('*')) if p.is_file() and p.suffix in ('.go','.wgsl')},modules=subprocess.check_output(['go','list','-m','all'],cwd=work,env=env,text=True),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),dependency_diagnostic=dict(deferred_acquire=owned_submission,deferred_acquire_patch_sha256=hashlib.sha256((exp/'patches/gogpu-deferred-acquire.patch').read_bytes()).hexdigest() if owned_submission else None,gpu_timing=gpu_timing,gpu_timing_patch_sha256=hashlib.sha256((exp/'patches/wgpu-gpu-timing.patch').read_bytes()).hexdigest() if gpu_timing else None,present_handler=present_handler,present_handler_patch_sha256=hashlib.sha256((exp/'patches/wgpu-present-handler.patch').read_bytes()).hexdigest() if present_handler else None,render_runtime=render_runtime,render_runtime_patch_sha256=hashlib.sha256((exp/'patches/wgpu-render-runtime.patch').read_bytes()).hexdigest() if render_runtime else None,owned_submission=owned_submission,owned_patch_sha256={name:hashlib.sha256((exp/'patches'/(name+'-owned-submission.patch')).read_bytes()).hexdigest() for name in ('wgpu','gogpu')} if owned_submission else {},enabled=metal_cache,patch_sha256=hashlib.sha256((exp/'patches/metal-pointercache-diagnostic.patch').read_bytes()).hexdigest() if metal_cache else None,scope='macOS arm64 private source diagnostics; not an adopted dependency or other-platform runtime qualification'),scope='generated prototype command/source overlay; shared client and culling improvements in worktree, root module and shipping native renderer unchanged'),indent=2)+'\n')
 shutil.copy2(exp/'tools/run-play',out/'run-play')
 print(binary)
