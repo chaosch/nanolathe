@@ -119,20 +119,20 @@ fn glint(source:vec3<f32>,lit:vec3<f32>,strength:f32,normal:vec3<f32>)->vec3<f32
 struct Fragment { @location(0) color:vec4<f32>,@location(1) metadata:vec4<f32>,@builtin(frag_depth) depth:f32 }
 fn modelShade(input:Out)->Fragment {
  let i=instances[input.instance];let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=modelBlue(i,key);
- if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
- let tex=texel(input.uv,blue);var erased=tex.a<0.02||ruled&&clipped(i,key);
+ if ((input.position.xy<i.atlas.xy).x||(input.position.xy<i.atlas.xy).y)||((input.position.xy>=i.atlas.xy+i.atlas.zw).x||(input.position.xy>=i.atlas.xy+i.atlas.zw).y){discard;}
+ let tex=texel(input.uv,blue);var erased=tex.a<0.02||(ruled&&clipped(i,key));
  var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);erased=erased||rule.w< -1.5;}
  if erased&&i.groupOperand.x==0&&i.counts.w==0u{discard;}
  var source=tex.rgb*input.color;if blue&&input.params.x>1.5{source=textureLoad(palette,vec2<i32>(i32(input.params.w),1),0).rgb;}
  let shade=select(min(0.06875*floor(input.shade),2.0),1.0,input.shade<0.0);var color=source*shade;
- if (u32(u.timing.z)&1u)!=0u{if any(input.irradiance!=vec3<f32>(0.0)){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
+ if (u32(u.timing.z)&1u)!=0u{if ((input.irradiance!=vec3<f32>(0.0)).x||(input.irradiance!=vec3<f32>(0.0)).y||(input.irradiance!=vec3<f32>(0.0)).z){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
  if rule.w<0.0{color=finish(source,color,u32(input.params.y),input.faceNormal);color=glint(source,color,input.params.z,input.faceNormal);}else{color=rule.rgb;if blue{color=textureLoad(palette,vec2<i32>(i32(rule.w),1),0).rgb;}}
  let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
  var out:Fragment;out.color=select(vec4<f32>(color*tex.a,tex.a),vec4<f32>(0.0),erased);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
 }
 fn modelOutline(input:Out)->Fragment {
  let i=instances[input.instance];let outline=select(i.outline,i.ruleOutline,i.counts.z>0u);if i.state.z<=0.0||outline.a<=0.0{discard;}
- if any(input.position.xy<i.atlas.xy)||any(input.position.xy>=i.atlas.xy+i.atlas.zw){discard;}
+ if ((input.position.xy<i.atlas.xy).x||(input.position.xy<i.atlas.xy).y)||((input.position.xy>=i.atlas.xy+i.atlas.zw).x||(input.position.xy>=i.atlas.xy+i.atlas.zw).y){discard;}
  let key=wrappedKey(input.key);var color=outline.rgb;if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}
  var out:Fragment;out.color=vec4<f32>(color*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
 }
@@ -164,12 +164,12 @@ fn directTexel(uv:vec2<f32>,blue:bool)->vec4<f32> {
 }
 fn directSample(input:Out,i:Instance,uv:vec2<f32>)->vec4<f32> {
  let key=wrappedKey(input.key);let ruled=i.counts.z>0u;let blue=modelBlue(i,key);
- let tex=directTexel(uv,blue);var erased=tex.a<0.02||ruled&&clipped(i,key);
+ let tex=directTexel(uv,blue);var erased=tex.a<0.02||(ruled&&clipped(i,key));
  var rule=vec4<f32>(0.0,0.0,0.0,-1.0);if ruled&&i.reveal.z>0.5{rule=verdict(i,key);erased=erased||rule.w< -1.5;}
  if erased{return vec4<f32>(0.0);}
  var source=tex.rgb*input.color;if blue&&input.params.x>1.5{source=textureLoad(palette,vec2<i32>(i32(input.params.w),1),0).rgb;}
  let shade=select(min(0.06875*floor(input.shade),2.0),1.0,input.shade<0.0);var color=source*shade;
- if (u32(u.timing.z)&1u)!=0u{if any(input.irradiance!=vec3<f32>(0.0)){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
+ if (u32(u.timing.z)&1u)!=0u{if ((input.irradiance!=vec3<f32>(0.0)).x||(input.irradiance!=vec3<f32>(0.0)).y||(input.irradiance!=vec3<f32>(0.0)).z){color=min(color+source*input.irradiance,vec3<f32>(1.0));}}
  if rule.w<0.0{color=finish(source,color,u32(input.params.y),input.faceNormal);color=glint(source,color,input.params.z,input.faceNormal);}else{color=rule.rgb;if blue{color=textureLoad(palette,vec2<i32>(i32(rule.w),1),0).rgb;}}
  let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
  return vec4<f32>(color*tex.a,tex.a);

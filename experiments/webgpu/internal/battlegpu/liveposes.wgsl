@@ -32,9 +32,9 @@ fn rotation(q:vec4<f32>)->mat4x4<f32>{
  if a[3].w<0.5 || b[3].w<0.5{poses[at].matrix=mat4x4<f32>();return;}
  let t=clamp(uniforms.camera.w,0.0,1.0);var m=a;
  if t>=1.0{m=b;}else if t>0.0{
-  let same=all(a[0].xyz==b[0].xyz)&&all(a[1].xyz==b[1].xyz)&&all(a[2].xyz==b[2].xyz);
+  let same=((a[0].xyz==b[0].xyz).x&&(a[0].xyz==b[0].xyz).y&&(a[0].xyz==b[0].xyz).z)&&((a[1].xyz==b[1].xyz).x&&(a[1].xyz==b[1].xyz).y&&(a[1].xyz==b[1].xyz).z)&&((a[2].xyz==b[2].xyz).x&&(a[2].xyz==b[2].xyz).y&&(a[2].xyz==b[2].xyz).z);
   if !same{m=rotation(slerp(quaternion(a),quaternion(b),t));}
-  var position=b[3].xyz;if !all(a[3].xyz==b[3].xyz){position=mix(a[3].xyz,b[3].xyz,t);}
+  var position=b[3].xyz;if !((a[3].xyz==b[3].xyz).x&&(a[3].xyz==b[3].xyz).y&&(a[3].xyz==b[3].xyz).z){position=mix(a[3].xyz,b[3].xyz,t);}
   m[3]=vec4<f32>(position,b[3].w);
  }
  m[0]=vec4<f32>(m[0].xyz,b[0].w);m[3]=vec4<f32>(m[3].xyz,b[3].w);

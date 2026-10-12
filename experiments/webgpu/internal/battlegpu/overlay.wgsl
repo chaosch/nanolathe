@@ -6,7 +6,7 @@ struct LayerUniform {
 struct LayerQuad {rect:vec4<f32>,uv:vec4<f32>,color:vec4<f32>,params:vec4<f32>}
 struct LayerVertex {positionUV:vec4<f32>,color:vec4<f32>,bounds:vec4<f32>,light:vec4<f32>}
 struct LayerGround {centreAxis:vec4<f32>,crossKind:vec4<f32>,values:vec4<f32>,mapping:vec4<f32>,clip:vec4<f32>}
-struct LayerSmoke {quad:LayerQuad,selection:vec4<f32>,bounds:vec4<f32>,indices0:vec4<u32>,indices1:vec4<u32>,meta:vec4<u32>}
+struct LayerSmoke {quad:LayerQuad,selection:vec4<f32>,bounds:vec4<f32>,indices0:vec4<u32>,indices1:vec4<u32>,smokeMeta:vec4<u32>}
 struct LayerLight {positionRadius:vec4<f32>,colorGroundGain:vec4<f32>,groundAgeFadeKind:vec4<f32>,flags:vec4<u32>}
 @group(0) @binding(0) var<uniform> layerU:LayerUniform;
 @group(0) @binding(1) var<storage,read> layerQuads:array<LayerQuad,1>;
@@ -130,14 +130,14 @@ fn layerGroundNoise(p:vec2<f32>)->f32 {
 }
 struct LayerSmokeOut {
  @builtin(position) position:vec4<f32>,@location(0) uv:vec2<f32>,@location(1) irradiance:vec3<f32>,
- @location(2) @interpolate(flat) bounds:vec4<f32>,@location(3) @interpolate(flat) filter:f32,
+ @location(2) @interpolate(flat) bounds:vec4<f32>,@location(3) @interpolate(flat) sampleFilter:f32,
 }
 @vertex fn layer_smoke_vertex(@builtin(vertex_index) v:u32,@builtin(instance_index) iid:u32)->LayerSmokeOut {
  let s=layerSmokes[iid];let c=layerCorner(v);var o:LayerSmokeOut;let p=s.quad.rect.xy+c*s.quad.rect.zw;
- o.position=layerPosition(p);o.uv=mix(s.quad.uv.xy,s.quad.uv.zw,c);o.bounds=s.bounds;o.filter=s.quad.params.x;
+ o.position=layerPosition(p);o.uv=mix(s.quad.uv.xy,s.quad.uv.zw,c);o.bounds=s.bounds;o.sampleFilter=s.quad.params.x;
  let receiver=s.quad.rect.xy+c*s.quad.params.yz;let height=s.selection.w;let physical=vec3<f32>(receiver.x,receiver.y+height*0.5,height);
  var rgb=vec3<f32>(0);
- for(var i=0u;i<s.meta.x;i++){
+ for(var i=0u;i<s.smokeMeta.x;i++){
   var index=0u;if(i<4u){index=s.indices0[i];}else{index=s.indices1[i-4u];}
   let light=layerLights[index];let d=light.positionRadius.xyz-physical;let d2=dot(d,d);let r2=light.positionRadius.w*light.positionRadius.w;
   if(d2>=r2){continue;}var f=1-d2/r2;f*=f;rgb+=light.colorGroundGain.rgb*(f*0.8*2.5);
@@ -150,7 +150,7 @@ fn layerSmokeTexel(uv:vec2<f32>,bounds:vec4<f32>)->vec4<f32> {
 }
 @fragment fn layer_smoke_fragment(in:LayerSmokeOut)->@location(0) vec4<f32> {
  var source:vec4<f32>;
- if(in.filter>0.5){
+ if(in.sampleFilter>0.5){
   let size=vec2<f32>(textureDimensions(layerAtlas));let q=in.uv*size-0.5;let b=floor(q);let f=q-b;let o=(b+0.5)/size;let step=1/size;
   source=mix(mix(layerSmokeTexel(o,in.bounds),layerSmokeTexel(o+vec2<f32>(step.x,0),in.bounds),f.x),mix(layerSmokeTexel(o+vec2<f32>(0,step.y),in.bounds),layerSmokeTexel(o+step,in.bounds),f.x),f.y);
   source=vec4<f32>(min(source.rgb+(vec3<f32>(0.2)*source.a+source.rgb*0.8)*in.irradiance,vec3<f32>(source.a)),source.a);

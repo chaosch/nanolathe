@@ -451,9 +451,9 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 	if err != nil {
 		return err
 	}
+	pass.SetPipeline(p.bodyPipeline)
 	pass.SetBindGroup(0, p.atlas.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
-	pass.SetPipeline(p.bodyPipeline)
 	for first := 0; first < len(m.shadowDraws); {
 		draw := m.shadowDraws[first]
 		end := modelDrawRun(m.shadowDraws, first, false, !m.disableModelBatching)

@@ -246,6 +246,12 @@ func (l *Layers) layerUpdateTexture(dst *layerTexture, t meshscene.Texture, vers
 }
 
 func layerBufferEntry(binding uint32, stages gputypes.ShaderStages, kind gputypes.BufferBindingType, size uint64) gputypes.BindGroupLayoutEntry {
+	// Read-only storage arrays are specialized to their buffer's capacity, so
+	// a one-record minimum understates what the shader reads (browsers reject
+	// it); zero leaves the check to the bound buffer at draw time.
+	if kind == gputypes.BufferBindingTypeReadOnlyStorage {
+		size = 0
+	}
 	return gputypes.BindGroupLayoutEntry{Binding: binding, Visibility: stages, Buffer: &gputypes.BufferBindingLayout{Type: kind, MinBindingSize: size}}
 }
 func layerTextureEntry(binding uint32, integer bool) gputypes.BindGroupLayoutEntry {
@@ -386,6 +392,13 @@ func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputyp
 		{&l.terrainImage, scene.Terrain, "terrain-fallback"}, {&l.spriteAtlas, scene.SpriteAtlas, "sprites"}, {&l.spriteDetail, scene.SpriteDetailAtlas, "sprite-detail"}, {&l.overlayAtlas, scene.OverlayAtlas, "hud-atlas"}, {&l.fogAtlas, scene.FogAtlas, "fog-masks"}, {&l.waterMask, scene.WaterMask, "water-mask"},
 		{&l.tileAtlas, white, "empty-tiles"}, {&l.tileDetail, white, "empty-detail"}, {&l.lookup, empty, "empty-lookup"}, {&l.effectAtlas, white, "empty-effects"}, {&l.fogGrid, empty, "empty-fog"},
 	} {
+		// The retained terrain tiles replace these placeholders below. Never
+		// create one only to release it before the first submit: a backend
+		// that stages texture writes (Vulkan, DX12, discrete Metal) still
+		// holds its pending write.
+		if t := scene.TerrainTiles; t != nil && (item.dst == &l.tileAtlas || item.dst == &l.lookup || item.dst == &l.tileDetail && t.Detail.Width > 0) {
+			continue
+		}
 		src := item.src
 		if src.Width == 0 && src.Height == 0 && len(src.RGBA) == 0 {
 			src = white

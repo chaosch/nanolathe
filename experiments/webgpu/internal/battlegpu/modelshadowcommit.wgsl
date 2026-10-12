@@ -21,14 +21,14 @@ struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) 
  out.position=vec4<f32>(out.screen.x/u.extent.x*2.0-1.0,1.0-out.screen.y/u.extent.y*2.0,0.5,1.0);return out;
 }
 fn modelShadowTap(p:vec2<f32>,rect:vec4<f32>)->f32 {
- let at=vec2<i32>(floor(p));if any(vec2<f32>(at)<rect.xy)||any(vec2<f32>(at)>=rect.xy+rect.zw){return 0.0;}return textureLoad(body,at,0).a;
+ let at=vec2<i32>(floor(p));if ((vec2<f32>(at)<rect.xy).x||(vec2<f32>(at)<rect.xy).y)||((vec2<f32>(at)>=rect.xy+rect.zw).x||(vec2<f32>(at)>=rect.xy+rect.zw).y){return 0.0;}return textureLoad(body,at,0).a;
 }
 fn modelShadowCoverage(p:vec2<f32>,rect:vec4<f32>)->f32 {
  let a=floor(p-vec2<f32>(0.5))+vec2<f32>(0.5);let f=fract(p-vec2<f32>(0.5));
  return mix(mix(modelShadowTap(a,rect),modelShadowTap(a+vec2<f32>(1,0),rect),f.x),mix(modelShadowTap(a+vec2<f32>(0,1),rect),modelShadowTap(a+vec2<f32>(1,1),rect),f.x),f.y);
 }
 fn modelShadowLiquidTap(at:vec2<i32>)->f32 {
- if any(at<vec2<i32>(0))||any(at>=vec2<i32>(textureDimensions(liquid))){return 0.0;}return textureLoad(liquid,at,0).r;
+ if ((at<vec2<i32>(0)).x||(at<vec2<i32>(0)).y)||((at>=vec2<i32>(textureDimensions(liquid))).x||(at>=vec2<i32>(textureDimensions(liquid))).y){return 0.0;}return textureLoad(liquid,at,0).r;
 }
 fn modelShadowLiquid(p:vec2<f32>)->f32 {
  let q=p-vec2<f32>(0.5);let f=fract(q);let a=vec2<i32>(floor(q));
@@ -57,7 +57,7 @@ fn modelShadowWeight(at:i32)->f32 {if at==2{return 6.0;}if at==1||at==3{return 4
    let coverage=modelShadowTap(bp,s.body);
    if s.params.x<1.5{
     let mp=s.mask.xy+(screen-s.placement.zw)*raster;
-    if all(mp>=s.mask.xy)&&all(mp<s.mask.xy+s.mask.zw){if textureLoad(mask,vec2<i32>(mp),0).r>0.5{cover+=1.0;}}
+    if ((mp>=s.mask.xy).x&&(mp>=s.mask.xy).y)&&((mp<s.mask.xy+s.mask.zw).x&&(mp<s.mask.xy+s.mask.zw).y){if textureLoad(mask,vec2<i32>(mp),0).r>0.5{cover+=1.0;}}
     if coverage>0.5{punch+=1.0;}
    }else if coverage>0.5{
     let key=256.0-round(textureLoad(keys,vec2<i32>(bp),0)*257.0);if s.params.y<0.5||key>s.params.y{cover+=1.0;}

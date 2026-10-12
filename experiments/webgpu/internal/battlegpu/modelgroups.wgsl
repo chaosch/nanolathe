@@ -44,7 +44,7 @@ fn modelGroupAdmit(prior:u32,key:u32,delta:i32,strict:bool)->bool {
  var group=groups[input.index];var color=vec4<f32>(0.0);var key=0u;
  for(var j=0u;j<group.counts.x;j++) {
   var member=members[group.info.w+j];var slot=slots[member.slot-1u];let local=modelGroupLocal(slot,input.screen);
-  if any(local<vec2<f32>(0.0))||any(local>=slot.atlas.zw){continue;}
+  if ((local<vec2<f32>(0.0)).x||(local<vec2<f32>(0.0)).y)||((local>=slot.atlas.zw).x||(local>=slot.atlas.zw).y){continue;}
   let at=vec2<i32>(slot.atlas.xy+floor(local));let nextColor=textureLoad(sourceColor,at,0);let metadata=textureLoad(sourceMetadata,at,0);
   let ownKey=u32(round(metadata.r*255.0));let keyed=group.counts.z!=0u;
   var delta=0;if keyed{delta=member.delta;}

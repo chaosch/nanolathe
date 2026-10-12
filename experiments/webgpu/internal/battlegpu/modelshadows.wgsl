@@ -24,5 +24,5 @@ struct ModelShadowProjectOut {@builtin(position) position:vec4<f32>,@location(0)
  out.position=vec4<f32>(pixel.x/u.extent.z*2.0-1.0,1.0-pixel.y/u.extent.w*2.0,0.5,1.0);return out;
 }
 @fragment fn model_shadow_project_fragment(input:ModelShadowProjectOut)->@location(0) f32 {
- if any(input.position.xy<input.rect.xy)||any(input.position.xy>=input.rect.xy+input.rect.zw){discard;}return 1.0;
+ if ((input.position.xy<input.rect.xy).x||(input.position.xy<input.rect.xy).y)||((input.position.xy>=input.rect.xy+input.rect.zw).x||(input.position.xy>=input.rect.xy+input.rect.zw).y){discard;}return 1.0;
 }

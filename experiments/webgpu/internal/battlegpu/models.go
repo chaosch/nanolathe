@@ -1173,6 +1173,8 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	if e != nil {
 		return e
 	}
+	// Select a pipeline before binding: Vulkan binds through its layout.
+	pass.SetPipeline(m.bodyPipeline)
 	pass.SetBindGroup(0, m.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
 	if m.batchWork.independent {
@@ -1232,8 +1234,8 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 		if e != nil {
 			return e
 		}
-		pass.SetBindGroup(0, m.atlas.mergeGroup, nil)
 		pass.SetPipeline(m.copyPipeline)
+		pass.SetBindGroup(0, m.atlas.mergeGroup, nil)
 		for first := 0; first < len(m.copySlots); {
 			end := modelSlotRun(m.copySlots, first, !m.disableModelBatching)
 			pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: uint32(end - first), FirstInstance: m.copySlots[first] - 1})
