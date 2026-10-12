@@ -53,6 +53,12 @@ func (c *Client) HullModel(name string) *compiledmodel.Model {
 		return nil
 	}
 	if c.modelTextures != nil {
+		// Committed views carry the authored name already bound at load time.
+		// Avoid normalizing it again for every candidate in every pointer pass;
+		// other spellings keep the existing case/whitespace lookup contract.
+		if m, ok := c.modelTextures.hullByName[name]; ok {
+			return m
+		}
 		return c.modelTextures.hullByName[ckey(name)]
 	}
 	m := c.unitModelFor(name)

@@ -222,8 +222,14 @@ func (r *ModelTextureRegistry) bindUnitModels(cat *content.Catalog) error {
 		// Picking needs only immutable authored geometry. Keep its name lookup
 		// separate from the per-definition animation identity [07 R-REV-01 §1].
 		name := ckey(def.ObjectName)
-		if m != nil && r.hullByName[name] == nil {
-			r.hullByName[name] = m.compiled
+		if m != nil {
+			if r.hullByName[name] == nil {
+				r.hullByName[name] = m.compiled
+			}
+			// Exact authored aliases all resolve to the first canonical hull,
+			// including duplicate definitions with different name casing.
+			// The registry is built before presentation; picking never mutates it.
+			r.hullByName[def.ObjectName] = r.hullByName[name]
 		}
 		key := def.CanonicalKey
 		if key == "" {

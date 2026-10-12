@@ -1,0 +1,23 @@
+{
+  "scope": "Next isolated native diagnostic unit; not implemented in this commit",
+  "mechanism": "Schedule public PrimaryWindow.SetSize requests and Hide/Show on the UI OnUpdate owner using wall-time steps; do not count render frames while hidden. Preserve actual resize events and handler surface generation, not synthetic row changes.",
+  "steps": [
+    "Boundedvisible settling at originalsize",
+    "Three resize/restorecycles withsettledvisibleintervals",
+    "BriefHide/Show pressure; actualocclusion/minimize restoration requires verifiednativeUIaction, not assumed from Show",
+    "Close immediately following final resize; external watchdog bounds anyhang"
+  ],
+  "checks": [
+    "Positive finite timestamps correlate pointer+drawableID/surface generation/acquisition/submission",
+    "Report hidden/missing/zero status as unknown; cadence only settled visible intervals",
+    "One permanent block, zero extra retains, owner/globalregistry0 afterclose, no resource/timeout/run errors",
+    "Visible camera/workload and rendered target dimensions follow actual resize",
+    "Do not compare fixed-state pixel files across different extents; restoreextent then capture control"
+  ],
+  "source_refs": [
+    "/tmp/nanolathe-runtimearray-repro-build/build/owned-dependencies/gogpu/window_manager.go:131-179",
+    "/tmp/nanolathe-wgpu-present-handler/hal/metal/surface.go",
+    "/tmp/nanolathe-wgpu-present-handler/hal/metal/present_telemetry.go"
+  ],
+  "blockers": "No public restore-from-minimize method established; qualify via supported native UI or separate tested private hook before claiming minimize coverage."
+}

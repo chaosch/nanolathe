@@ -1,0 +1,975 @@
+{
+  "date": "2026-10-12",
+  "base_commit": "e5a9ccefdf353d4fe84f290612098e5ec98505ab",
+  "change": "Pre-bind exact authored model-name aliases to the first canonical hull at immutable registry construction; exact lookup before unchanged Unicode lowercase/whitespace fallback. No simulation/picking geometry changes, runtime cache, new dependency or platform branch.",
+  "source_sha256": {
+    "internal/client/hover_hull.go": "d04cf9e8e4f2ffd03ca66a628381b2b7df19cd05a0874d2e72b7e59c6cb9f7e6",
+    "internal/client/model_textures.go": "477c57e371e860a37c566fd9028a85303f894cbe9e3403289419e7dfc542cbaa",
+    "internal/client/newmodel_texture_binding_test.go": "8ef97cc88448e8b1a57709eaf3ed4938a0906cf81c31880c58f41465faa66149"
+  },
+  "binaries": {
+    "A": {
+      "path": "/tmp/nanolathe-handler-build/nanolathe-webgpu4",
+      "sha256": "cd3401f0f1670bf016e3d822290ce913a82541f5f4498118bf6850eabda32583"
+    },
+    "B": {
+      "path": "/tmp/nanolathe-handler-build/nanolathe-webgpu-hull",
+      "sha256": "f6f0a6bb70bbe0775d57b3afe5ab1d3bedc1eefc6544d30508fffb24c072e6c7"
+    },
+    "shared_renderer_candidate": {
+      "path": "/tmp/nanolathe-hull-native",
+      "sha256": "57e69556dc4085be71a2853df3876ded29cfeffe777d58f714bbbfd00c70d859"
+    },
+    "native_uv_oracle": {
+      "path": "/tmp/nanolathe-hull-coverage",
+      "sha256": "a8e76a2b82b24aa10ca6317392df42cd996f8861893ae7de284c9cbbd1e22c02"
+    }
+  },
+  "settings_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+  "fixture": "Same private speed10 settings, Town & Country field:1000 (three 1000-unit armies),1920x1080,normal zoom1/camera scale2,seed7,neutral pointer,GOMAXPROCS4,owned async uploads+prepare-ahead+optional runtime arrays+isolated handler.120warmup+720measured. A1 B1 B2 A2 A3 B3 sequential, no builds/tests overlap. Bothbinaries use identical tested handler with class-address fix.",
+  "sequence": [
+    {
+      "name": "A1",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu4",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/A1-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/A1",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 12.805284023284912,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 118.84256351442365,
+      "display_over12": 7,
+      "encode_mean": 1.8229521222222222,
+      "source_mean": 4.1791753541666665,
+      "mallocs": 5093964
+    },
+    {
+      "name": "B1",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu-hull",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/B1-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/B1",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 13.285956144332886,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 119.50096711705217,
+      "display_over12": 3,
+      "encode_mean": 1.760696925,
+      "source_mean": 4.057614304166667,
+      "mallocs": 2351884
+    },
+    {
+      "name": "B2",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu-hull",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/B2-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/B2",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 12.509634733200073,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 119.5009638106162,
+      "display_over12": 3,
+      "encode_mean": 1.8028489027777779,
+      "source_mean": 4.051565755555556,
+      "mallocs": 2378509
+    },
+    {
+      "name": "A2",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu4",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/A2-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/A2",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 12.427443981170654,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 119.66663189499796,
+      "display_over12": 2,
+      "encode_mean": 1.7999111847222222,
+      "source_mean": 4.158944102777777,
+      "mallocs": 5056098
+    },
+    {
+      "name": "A3",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu4",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/A3-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/A3",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 12.308466911315918,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 119.17085098475061,
+      "display_over12": 5,
+      "encode_mean": 1.7505294263888889,
+      "source_mean": 4.156556311111111,
+      "mallocs": 5088675
+    },
+    {
+      "name": "B3",
+      "command": [
+        "/tmp/nanolathe-handler-build/nanolathe-webgpu-hull",
+        "--root=/Users/daniel/TotalAnnihilation",
+        "--webgpu",
+        "--map=Town & Country",
+        "--live-trace=/tmp/nanolathe-hull-pairs/B3-trace",
+        "--live-scene=field:1000",
+        "--live-seconds=10",
+        "--webgpu-report=/tmp/nanolathe-hull-pairs/B3",
+        "--webgpu-size=1920x1080",
+        "--webgpu-frames=720",
+        "--zoom=1",
+        "--seed=7"
+      ],
+      "seconds": 12.454769134521484,
+      "source_rows": 720,
+      "matched_presentations": 720,
+      "display_hz": 119.50096546614634,
+      "display_over12": 3,
+      "encode_mean": 1.8405217194444445,
+      "source_mean": 4.157227251388889,
+      "mallocs": 2396316
+    }
+  ],
+  "runs": {
+    "A1": {
+      "artifact": "/tmp/nanolathe-hull-pairs/A1",
+      "report_sha256": "d3edcc70fea0e4d37f878a90912ff618e1fe7f407d9f07da8fa7defd43a2db2a",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.414493683305917,
+        "median": 8.333374978974462,
+        "p95": 8.339083520695567,
+        "p99": 8.339992482215166,
+        "max": 16.666791634634137
+      },
+      "display_hz": 118.84256351442365,
+      "display_intervals_over12ms": 7,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.1791753541666665,
+          "median": 3.178979,
+          "p95": 9.742881249999998,
+          "p99": 10.584762289999997,
+          "max": 14.998208
+        },
+        "EncodeMS": {
+          "mean": 1.8229521222222222,
+          "median": 1.8531875,
+          "p95": 2.6595621999999994,
+          "p99": 4.112412289999988,
+          "max": 8.522042
+        },
+        "JoinMS": {
+          "mean": 0.3774486444444444,
+          "median": 0.00025,
+          "p95": 2.5414223,
+          "p99": 3.5976813099999956,
+          "max": 7.637458
+        },
+        "SourceSampleAgeMS": {
+          "mean": 1.2086281513888888,
+          "median": 0.0945385,
+          "p95": 4.57792895,
+          "p99": 7.637337559999974,
+          "max": 16.52816
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.207785247222222,
+          "median": 3.772354,
+          "p95": 6.31962145,
+          "p99": 6.909661269999989,
+          "max": 14.665375
+        }
+      },
+      "host_step_ms": {
+        "mean": 1.0711546680555555,
+        "median": 0.000583,
+        "p95": 4.2570815500000005,
+        "p99": 5.290915979999988,
+        "max": 9.031625
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 378582432,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3351385144,
+        "go_sys_bytes_start": 3347584056,
+        "heap_bytes_end": 2331309080,
+        "heap_bytes_start": 1952726648,
+        "mallocs": 5093964,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 839,
+        "Missing": 4,
+        "Callbacks": 842,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "B1": {
+      "artifact": "/tmp/nanolathe-hull-pairs/B1",
+      "report_sha256": "048bf1fb773a6ac70a3bd7d975ef22e529f8908d95afe3adb142c490506d73f2",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.368133113270053,
+        "median": 8.333374978974462,
+        "p95": 8.339254162274301,
+        "p99": 8.339950805529952,
+        "max": 16.666749957948923
+      },
+      "display_hz": 119.50096711705217,
+      "display_intervals_over12ms": 3,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.057614304166667,
+          "median": 3.122021,
+          "p95": 8.98745655,
+          "p99": 9.738134249999996,
+          "max": 13.50025
+        },
+        "EncodeMS": {
+          "mean": 1.760696925,
+          "median": 1.7467915,
+          "p95": 2.5229642500000002,
+          "p99": 2.8171674999999996,
+          "max": 7.559042
+        },
+        "JoinMS": {
+          "mean": 0.2400771986111111,
+          "median": 0.000209,
+          "p95": 1.721977699999996,
+          "p99": 2.4295205399999995,
+          "max": 6.756334
+        },
+        "SourceSampleAgeMS": {
+          "mean": 0.6569307069444444,
+          "median": 0.0899935,
+          "p95": 2.3460265999999996,
+          "p99": 7.244410979999998,
+          "max": 10.013278
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.300352484722222,
+          "median": 3.854146,
+          "p95": 6.2034746499999995,
+          "p99": 6.510158459999999,
+          "max": 14.265334
+        }
+      },
+      "host_step_ms": {
+        "mean": 0.9614154902777777,
+        "median": 0.000542,
+        "p95": 3.8561026999999997,
+        "p99": 4.10739375,
+        "max": 7.144375
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 357383792,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3350139960,
+        "go_sys_bytes_start": 3347584056,
+        "heap_bytes_end": 2310082040,
+        "heap_bytes_start": 1952698248,
+        "mallocs": 2351884,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 839,
+        "Missing": 4,
+        "Callbacks": 841,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "B2": {
+      "artifact": "/tmp/nanolathe-hull-pairs/B2",
+      "report_sha256": "34e336f313f9b059a8cc4f8cc62b048aa07d69ff06fe392a45eceed354704c98",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.368133344805393,
+        "median": 8.333374978974462,
+        "p95": 8.339170808903873,
+        "p99": 8.33970820531249,
+        "max": 16.666791634634137
+      },
+      "display_hz": 119.5009638106162,
+      "display_intervals_over12ms": 3,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.051565755555556,
+          "median": 3.1324375,
+          "p95": 9.1099202,
+          "p99": 9.78464708,
+          "max": 12.703
+        },
+        "EncodeMS": {
+          "mean": 1.8028489027777779,
+          "median": 1.7688540000000001,
+          "p95": 2.56741905,
+          "p99": 4.555335959999971,
+          "max": 6.687
+        },
+        "JoinMS": {
+          "mean": 0.2556197375,
+          "median": 0.00025,
+          "p95": 1.837760749999998,
+          "p99": 2.6066174999999996,
+          "max": 3.496042
+        },
+        "SourceSampleAgeMS": {
+          "mean": 1.0394003541666668,
+          "median": 0.12656250000000002,
+          "p95": 7.018314549999996,
+          "p99": 9.00536586999994,
+          "max": 11.432641
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.2883236069444446,
+          "median": 3.8299374999999998,
+          "p95": 6.261075299999998,
+          "p99": 6.700172999999998,
+          "max": 13.947375
+        }
+      },
+      "host_step_ms": {
+        "mean": 0.9429869361111111,
+        "median": 0.000542,
+        "p95": 3.8199395999999997,
+        "p99": 4.075550539999999,
+        "max": 6.885334
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 359868680,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3132212200,
+        "go_sys_bytes_start": 3128869864,
+        "heap_bytes_end": 2312738832,
+        "heap_bytes_start": 1952870152,
+        "mallocs": 2378509,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 838,
+        "Missing": 5,
+        "Callbacks": 841,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "A2": {
+      "artifact": "/tmp/nanolathe-hull-pairs/A2",
+      "report_sha256": "c28fb0d1e6c654d2ad25e410628426175dee745cf8a3fda7fd64b8bca0cd6ee7",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.356548389173806,
+        "median": 8.333333535119891,
+        "p95": 8.339333347976208,
+        "p99": 8.339859950356185,
+        "max": 16.666791634634137
+      },
+      "display_hz": 119.66663189499796,
+      "display_intervals_over12ms": 2,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.158944102777777,
+          "median": 3.2211875,
+          "p95": 9.912129799999999,
+          "p99": 10.552480229999997,
+          "max": 11.447958
+        },
+        "EncodeMS": {
+          "mean": 1.7999111847222222,
+          "median": 1.7549584999999999,
+          "p95": 2.67781105,
+          "p99": 3.814258059999995,
+          "max": 5.484334
+        },
+        "JoinMS": {
+          "mean": 0.3540116263888889,
+          "median": 0.000292,
+          "p95": 2.7148690499999986,
+          "p99": 3.4131817299999985,
+          "max": 4.437667
+        },
+        "SourceSampleAgeMS": {
+          "mean": 1.9177734152777777,
+          "median": 0.367916,
+          "p95": 5.165565599999999,
+          "p99": 5.78943344,
+          "max": 13.910911
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.1656608527777776,
+          "median": 3.59375,
+          "p95": 6.25921635,
+          "p99": 6.5667525,
+          "max": 13.350042
+        }
+      },
+      "host_step_ms": {
+        "mean": 1.0417718527777777,
+        "median": 0.0005205,
+        "p95": 4.25948335,
+        "p99": 4.505162559999999,
+        "max": 5.347208
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 378118776,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3363640376,
+        "go_sys_bytes_start": 3360166968,
+        "heap_bytes_end": 2330733448,
+        "heap_bytes_start": 1952614672,
+        "mallocs": 5056098,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 839,
+        "Missing": 4,
+        "Callbacks": 842,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "A3": {
+      "artifact": "/tmp/nanolathe-hull-pairs/A3",
+      "report_sha256": "3c4f0abd41728324d48d995a622eb6cee04738b4aa75ec7315ba9f6e490ae992",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.391313746076735,
+        "median": 8.333374978974462,
+        "p95": 8.339379192329943,
+        "p99": 8.33991658873856,
+        "max": 16.670958371832967
+      },
+      "display_hz": 119.17085098475061,
+      "display_intervals_over12ms": 5,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.156556311111111,
+          "median": 3.226771,
+          "p95": 9.64746665,
+          "p99": 10.124979999999997,
+          "max": 11.379042
+        },
+        "EncodeMS": {
+          "mean": 1.7505294263888889,
+          "median": 1.7525835,
+          "p95": 2.5346215,
+          "p99": 2.6887904799999993,
+          "max": 6.283834
+        },
+        "JoinMS": {
+          "mean": 0.3062936972222222,
+          "median": 0.000292,
+          "p95": 2.529953849999999,
+          "p99": 3.099050269999998,
+          "max": 9.642
+        },
+        "SourceSampleAgeMS": {
+          "mean": 1.5712730652777778,
+          "median": 0.193621,
+          "p95": 7.8496172999999985,
+          "p99": 8.929192439999998,
+          "max": 9.921625
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.2094311916666665,
+          "median": 3.7379795,
+          "p95": 6.24117115,
+          "p99": 6.49577727,
+          "max": 11.426125
+        }
+      },
+      "host_step_ms": {
+        "mean": 1.0574857458333333,
+        "median": 0.0005,
+        "p95": 4.21248065,
+        "p99": 4.435524979999999,
+        "max": 7.40325
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 377858880,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3095254008,
+        "go_sys_bytes_start": 3091190776,
+        "heap_bytes_end": 2330585464,
+        "heap_bytes_start": 1952726584,
+        "mallocs": 5088675,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 839,
+        "Missing": 4,
+        "Callbacks": 842,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    },
+    "B3": {
+      "artifact": "/tmp/nanolathe-hull-pairs/B3",
+      "report_sha256": "2fa9d65237b6ca9de61ebfa1423e54cd46fe38af00aa3c0cea0491c7e5720dd4",
+      "source_rows": 720,
+      "unique_tick_alpha": 720,
+      "matched_unique_display_rows": 720,
+      "display_consecutive_pairs": 719,
+      "display_interval_ms": {
+        "mean": 8.368133228875811,
+        "median": 8.333333535119891,
+        "p95": 8.339295838959515,
+        "p99": 8.339916779659688,
+        "max": 16.666708514094353
+      },
+      "display_hz": 119.50096546614634,
+      "display_intervals_over12ms": 3,
+      "timings_ms": {
+        "SourceMS": {
+          "mean": 4.157227251388889,
+          "median": 3.4405205,
+          "p95": 9.532837799999998,
+          "p99": 10.208764939999998,
+          "max": 11.02575
+        },
+        "EncodeMS": {
+          "mean": 1.8405217194444445,
+          "median": 1.7968959999999998,
+          "p95": 2.6867806,
+          "p99": 3.1336745799999934,
+          "max": 7.44725
+        },
+        "JoinMS": {
+          "mean": 0.25075056944444446,
+          "median": 0.000291,
+          "p95": 2.344897949999999,
+          "p99": 3.09455173,
+          "max": 6.281833
+        },
+        "SourceSampleAgeMS": {
+          "mean": 0.5962594527777778,
+          "median": 0.23131049999999997,
+          "p95": 2.7209293999999984,
+          "p99": 7.547717769999997,
+          "max": 14.835703
+        },
+        "SourceReadyAgeMS": {
+          "mean": 3.1645098847222224,
+          "median": 3.4900624999999996,
+          "p95": 6.19312085,
+          "p99": 6.377728479999997,
+          "max": 19.949625
+        }
+      },
+      "host_step_ms": {
+        "mean": 0.9577510375,
+        "median": 0.000625,
+        "p95": 3.8414877999999995,
+        "p99": 4.170067499999996,
+        "max": 7.013417
+      },
+      "body_triangles": [
+        26970,
+        30046
+      ],
+      "pipeline_creates": {
+        "Models": 0,
+        "Layers": 0
+      },
+      "memory": {
+        "alloc_bytes": 361699104,
+        "gc": 0,
+        "gc_pause_ns": 0,
+        "go_sys_bytes_end": 3358790712,
+        "go_sys_bytes_start": 3356234808,
+        "heap_bytes_end": 2314624832,
+        "heap_bytes_start": 1952925728,
+        "mallocs": 2396316,
+        "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"
+      },
+      "submission_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "handler_close": {
+        "Enabled": true,
+        "Closed": true,
+        "Retains": 0,
+        "Releases": 0,
+        "Outstanding": 0,
+        "HighWater": 4,
+        "RegistryOutstanding": 0,
+        "PermanentBlocks": 1,
+        "Requested": 843,
+        "Presented": 839,
+        "Missing": 4,
+        "Callbacks": 841,
+        "ValueEvictions": 0,
+        "IgnoredAfterClose": 0,
+        "Scope": "MTLDrawable presented handler; one permanently rooted process block, bounded pointer+drawableID registry, zero extra drawable retains; timestamp0/missing is no display proof; no GPU timestamps or new waits"
+      },
+      "run_error": null
+    }
+  },
+  "summary": {
+    "A": {
+      "display_hz_range": [
+        118.84256351442365,
+        119.66663189499796
+      ],
+      "median_display_hz": 119.17085098475061,
+      "display_over12_counts": [
+        7,
+        2,
+        5
+      ],
+      "median_mallocs": 5088675,
+      "median_alloc_bytes": 378118776,
+      "median_host_step_p99_ms": 4.505162559999999,
+      "median_source_p99_ms": 10.552480229999997,
+      "median_join_p99_ms": 3.4131817299999985,
+      "median_encode_p99_ms": 3.814258059999995,
+      "median_source_sample_age_p99_ms": 7.637337559999974
+    },
+    "B": {
+      "display_hz_range": [
+        119.5009638106162,
+        119.50096711705217
+      ],
+      "median_display_hz": 119.50096546614634,
+      "display_over12_counts": [
+        3,
+        3,
+        3
+      ],
+      "median_mallocs": 2378509,
+      "median_alloc_bytes": 359868680,
+      "median_host_step_p99_ms": 4.10739375,
+      "median_source_p99_ms": 9.78464708,
+      "median_join_p99_ms": 2.6066174999999996,
+      "median_encode_p99_ms": 3.1336745799999934,
+      "median_source_sample_age_p99_ms": 7.547717769999997
+    }
+  },
+  "profile_evidence": {
+    "baseline": "/tmp/nanolathe-handler-dense-on4/cpu.pprof and alloc.pprof minus alloc-base.pprof",
+    "baseline_ckey_HullModel_sampled_alloc_objects": 1376277,
+    "baseline_sampled_alloc_objects_total": 3550437,
+    "baseline_cpu_ToLower_cum_seconds": 0.46,
+    "baseline_cpu_samples_seconds": 5.66,
+    "baseline_HullModel_ToLower_cum_seconds": 0.43,
+    "candidate": "/tmp/nanolathe-hull-pairs/B1/cpu.pprof and allocation delta",
+    "candidate_ckey_allocation_profile": "No matching ckey sampled allocation node after change; exact aliases zero allocations in authored contract test. Sampling absence is not an absolute zero claim."
+  },
+  "coast": {
+    "equalities": {
+      "battle.png": true,
+      "final-fields.json": true,
+      "benchmark-state.json": true,
+      "sidecar_count": 18,
+      "sidecars": {
+        ".color.png": true,
+        ".glow-octaves.rgba16f": true,
+        ".glow.rgba16f": true,
+        ".ground.png": true,
+        ".instances.bin": true,
+        ".keys.png": true,
+        ".keys.png.rgba8": true,
+        ".poses.bin": true,
+        ".reflection-color.png": true,
+        ".reflection-flags.r32u": true,
+        ".reflection-soft.png": true,
+        ".seabed.rgba16f": true,
+        ".shadow-body.png": true,
+        ".shadow-depth.f32": true,
+        ".shadow-mask.r8": true,
+        ".slots.bin": true,
+        ".source.png": true,
+        ".world.rgba16f": true
+      }
+    },
+    "submission_close": {
+      "completed": 963,
+      "submitted": 963
+    }
+  },
+  "shared_renderers": {
+    "classic": {
+      "battle.png": true,
+      "benchmark-state.json": true,
+      "artifact": "/tmp/nanolathe-hull-shared-renderers2"
+    },
+    "modern": {
+      "battle.png": true,
+      "benchmark-state.json": true,
+      "artifact": "/tmp/nanolathe-hull-shared-renderers2"
+    }
+  },
+  "native_uv": {
+    "artifact": "/tmp/nanolathe-hull-uv/result.json",
+    "summary": {
+      "pose_growth": true,
+      "growth_checks": [
+        {
+          "case": "growth-before",
+          "pose_records": 3,
+          "pose_buffer_bytes": 2097152,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        },
+        {
+          "case": "growth-beyond-reservation",
+          "pose_records": 40000,
+          "pose_buffer_bytes": 4194304,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        },
+        {
+          "case": "growth-after",
+          "pose_records": 3,
+          "pose_buffer_bytes": 4194304,
+          "pipeline_builds": 0,
+          "last_pose_checked": true
+        }
+      ],
+      "passed": true,
+      "completed_cases": 19,
+      "expected_cases": 19,
+      "output_size": [
+        12,
+        8
+      ],
+      "compact_packing": false,
+      "source_batching": true,
+      "world_format": "RGBA16Float",
+      "backend": "Pure Go (Metal)",
+      "adapter": {
+        "Name": "Apple M3 Pro",
+        "Vendor": "Apple",
+        "VendorID": 4203,
+        "DeviceID": 1020,
+        "DeviceType": 2,
+        "Driver": "Metal",
+        "DriverInfo": "Metal API",
+        "Backend": 2
+      },
+      "host_surface_size": [
+        128,
+        128
+      ],
+      "scope": "authored native hardware raster and retained model resolve; no retail span-raster, timing or scanout claim",
+      "framework_errors": null
+    },
+    "case_count": 19,
+    "raw_atlas_world_file_count": 38,
+    "raw_atlas_world_files_equal_fixed_baseline": true,
+    "fixed_baseline": "/tmp/nanolathe-reserve-native-growth2"
+  },
+  "tests": {
+    "affected_package_gate": "/tmp/nanolathe-hull-client-gate.log",
+    "focused_contracts": "/tmp/nanolathe-hull-alias-tests.log",
+    "independent_read_only_review": "First canonical precedence, unchanged Unicode/whitespace fallback, nil/empty geometry rejected during registry construction, no concurrent mutation; no blocker found.",
+    "cross_compile_cgo_disabled": {
+      "linux_amd64": "passed /tmp/nanolathe-hull-linux-build.log",
+      "windows_amd64": "passed /tmp/nanolathe-hull-windows-build.log",
+      "js_wasm": "passed /tmp/nanolathe-hull-js-build.log"
+    },
+    "focused_race_pass": true
+  },
+  "limits": [
+    "Display rate ranges overlap and baseline A2 exceeded all candidate runs: no repeatable FPS gain claimed",
+    "Source/encode/age quantiles vary; improvement is allocation count and host-step/preparation-join tails, not complete tail removal",
+    "Sample age is sample-to-encode age, not source-to-display latency; no GPU/compositor timing or end-to-end latency bridge",
+    "Real-time tick/alpha/census differ across runs while fixture, camera and visible dense body workload remain matched; fixed Coast state/pixels provide exact correctness control",
+    "First shared-renderer attempt self-blocked on nested wrapper/runtime benchmark locks, was stopped before measurement and excluded; successful controls use runtime own lock",
+    "Full root merge gates and other-platform runtime are not claimed; no main/push/merge/deploy"
+  ],
+  "visible_workload_inspection": {
+    "image": "/tmp/nanolathe-hull-pairs/B3/final.png",
+    "inspected": true,
+    "observation": "Full viewport shows dense textured tank bodies, aircraft, projectiles and explosions at normal zoom; no strategic-icons substitution."
+  },
+  "reproduce": "Build baseline at e5a9cce with tools/build-play --render-runtime; apply preserved handler/driver patches only to exact manifest-matched private copies. Build candidate with the same overlay/dependencies after this common-client diff. Use recorded sequence commands and private speed10 settings hash; run sequentially with no compile/tests overlap. Native shared-renderer commands acquire their own benchmark lock; do not wrap them with tools/host-run."
+}

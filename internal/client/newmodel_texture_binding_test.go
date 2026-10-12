@@ -326,3 +326,41 @@ func TestModelTextureRegistryKeepsDuplicateAndEmptyUnitIdentity(t *testing.T) {
 		t.Fatal("empty basename lost model or picking geometry")
 	}
 }
+
+// The first canonical model owns picking geometry even when distinct definition
+// loads use different authored casing. Exact committed names need no per-pick
+// lowercase allocation; ad-hoc spellings retain the normalization fallback.
+func TestHullModelAuthoredAliasesPreserveFirstGeometryWithoutAllocations(t *testing.T) {
+	fs, cat, terrain, _, _ := modelTextureBindingFixture(t)
+	alpha, _ := cat.Unit("alpha")
+	beta, _ := cat.Unit("beta")
+	alpha.ObjectName = "sHaReD"
+	beta.ObjectName = "SHARED"
+	r, err := NewModelTextureRegistry(fs, cat, terrain, len(terrain.FeatureDefs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := r.unitModel("alpha", 1, "sHaReD")
+	second := r.unitModel("beta", 2, "SHARED")
+	if first == nil || second == nil || first == second {
+		t.Fatal("fixture lost distinct definition loads")
+	}
+	cl := &Client{modelTextures: r}
+	for _, name := range []string{"sHaReD", "SHARED", "shared", " Shared ", "sHArEd"} {
+		if got := cl.HullModel(name); got != first.compiled {
+			t.Fatalf("HullModel(%q) = %p, want first geometry %p", name, got, first.compiled)
+		}
+	}
+	if got := cl.HullModel("missing"); got != nil {
+		t.Fatal("missing model acquired geometry")
+	}
+	for _, name := range []string{alpha.ObjectName, beta.ObjectName} {
+		if n := testing.AllocsPerRun(1000, func() {
+			if cl.HullModel(name) != first.compiled {
+				panic("hull changed")
+			}
+		}); n != 0 {
+			t.Fatalf("authored %q allocates %v times per pick", name, n)
+		}
+	}
+}
