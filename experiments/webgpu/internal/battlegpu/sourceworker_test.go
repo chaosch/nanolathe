@@ -43,7 +43,7 @@ func TestSourceWorkerSerialJoinAndClose(t *testing.T) {
 	}
 	close(f.release)
 	p := <-joined
-	if p.err != nil || p.frame.Tick != 7 || p.frame.Alpha != .25 {
+	if p.err != nil || p.frame.Tick != 7 || p.frame.Alpha != .25 || !p.sampleAt.Equal(want) || p.readyAt.IsZero() {
 		t.Fatalf("result=%+v", p)
 	}
 	if err := w.close(); err != nil {

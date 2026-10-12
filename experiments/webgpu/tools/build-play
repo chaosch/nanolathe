@@ -55,6 +55,47 @@ for original in sorted((repo/'cmd/nanolathe').rglob('*')):
    text=text.replace('"native_scope"] = "retained Metal world with production foreground; native fidelity approximations remain in report.json"','"native_scope"] = "isolated WebGPU retained world and production foreground; prototype fidelity limits remain in report.json"')
    text=text.replace('"prepare_ahead"] = "all"','"prepare_ahead"] = "configured source worker; see report.json for actual prepare_ahead and asynchronous_uploads"')
    text=text.replace('"timing_scope": "host wall work and start-of-work cadence; PaceWait brackets deadline computation and sleep; Submit includes native backpressure; native GPU and presented timestamps live in report.json and frames.csv"','"timing_scope": "host source and encoding CPU, callback cadence and deadline pacing; queue submission, GPU execution and scanout unavailable through borrowed context; historical Submit field is encode-only"')
+   if original.name=='metal_host_darwin.go':
+    entry='battle.placeEntryCamera(logicalW, logicalH)'
+    if text.count(entry)!=1:sys.exit('diagnostic camera overlay requires exactly one entry placement')
+    text=text.replace(entry,entry+'''
+	// A bounded field diagnostic restores the already staged field camera
+	// after entry placement; ordinary play and fixed benchmarks keep their contract.
+	if os.Getenv("NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER") == "1" {
+		diagnosticScene, err := parseLiveScene(opts.LiveScene)
+		if err != nil || diagnosticScene.Kind != "field" {
+			return fmt.Errorf("neutral pointer diagnostic requires a staged field scene")
+		}
+		battle.cam.JumpToBattleViewCenter(liveFieldCentre[0], liveFieldCentre[1])
+	}''')
+    rewrites.append('opt-in bounded field diagnostic restores staged camera after entry placement')
+    text+='\n// PublicationTick reads only the existing synchronized committed snapshot metadata.\nfunc (h *metalBattleHost) PublicationTick() (uint32,bool) { return h.sess.Snapshot.PublishedTick() }\n'
+    source_markers=[
+     ('h.fps.observe(time.Now(), in.Timing)',0),
+     ('h.cl.SetCameraFraction(float32(now.Sub(h.updated).Seconds() * 30))',1),
+     ('previous, cur := h.cl.PresentedFramePair()',2),
+     ('if err := h.visuals.Prepare(h.cl, &h.frame, h.width, h.height, 2); err != nil {',3),
+     ('list := h.cl.RecordRetainedForeground()',4),
+     ('prepareMetalFrame(h.cl, h.world, h.scene, &h.frame, cur, h.width*2, h.height*2, &h.subjects)',5),
+     ('if h.composer == nil {',6),
+     ('if h.shadows == nil {',7),
+    ]
+    # Match each source seam exactly; a changed production host fails the build.
+    for marker,index in source_markers:
+     if text.count(marker)!=1:sys.exit('phase overlay requires exactly one '+marker)
+     prefix=''
+     if index==0:prefix='h.diagnosticStages = [12]float64{}\n\tdiagnosticMark := time.Now()\n\tdiagnosticSplit := func(i int) { t := time.Now(); h.diagnosticStages[i]=float64(t.Sub(diagnosticMark))/1e6; diagnosticMark=t }\n\t'
+     else:prefix='diagnosticSplit('+str(index-1)+')\n\t'
+     text=text.replace(marker,prefix+marker)
+    final='return h.frame, nil'
+    if text.count(final)!=1:sys.exit('phase overlay requires exactly one completed source result')
+    text=text.replace(final,'diagnosticSplit(7)\n\tcopy(h.diagnosticStages[8:],h.visuals.parts[:])\n\t'+final)
+    host='type metalBattleHost struct {'
+    if text.count(host)!=1:sys.exit('phase overlay requires exactly one source owner')
+    text=text.replace(host,host+'\n\tdiagnosticStages [12]float64')
+    text+='\nfunc (h *metalBattleHost) PreparationTimings() [12]float64 { return h.diagnosticStages }\n'
+    rewrites.append('experimental CPU source phase telemetry copied on the serial source owner')
+    rewrites.append('experimental read-only publication tick telemetry')
    rewrites.append('reuse production host with experimental renderer and honest observation labels')
   if text!=before:
    source=out/'overrides'/relative;source.parent.mkdir(parents=True,exist_ok=True);source.write_text(text)

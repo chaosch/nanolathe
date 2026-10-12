@@ -10,9 +10,11 @@ type sourceRequest struct {
 	input   meshscene.Input
 }
 type preparedSource struct {
-	frame        meshscene.LiveFrame
-	milliseconds float64
-	err          error
+	stages            [12]float64
+	frame             meshscene.LiveFrame
+	milliseconds      float64
+	err               error
+	sampleAt, readyAt time.Time
 }
 
 // sourceWorker has exactly one request in flight. LiveSource permits serial
@@ -34,7 +36,8 @@ func newSourceWorker(source meshscene.LiveSource) *sourceWorker {
 		for r := range requests {
 			start := time.Now()
 			f, err := source.Next(r.seconds, r.input)
-			results <- preparedSource{f, float64(time.Since(start).Nanoseconds()) / 1e6, err}
+			ready := time.Now()
+			results <- preparedSource{frame: f, milliseconds: float64(ready.Sub(start).Nanoseconds()) / 1e6, err: err, sampleAt: r.input.At, readyAt: ready, stages: sourcePreparationTimings(source)}
 		}
 	}()
 	return w
@@ -70,4 +73,12 @@ func (w *sourceWorker) close() error {
 // frame: callbacks/capture must observe the final consumed source state.
 func sourceAheadBoundary(next, warmup, frames int) bool {
 	return next != warmup && (frames <= 0 || next < warmup+frames)
+}
+
+// Optional diagnostic values are copied while this worker still owns Next.
+func sourcePreparationTimings(source meshscene.LiveSource) [12]float64 {
+	if diagnostic, ok := source.(interface{ PreparationTimings() [12]float64 }); ok {
+		return diagnostic.PreparationTimings()
+	}
+	return [12]float64{}
 }

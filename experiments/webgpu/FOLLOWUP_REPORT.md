@@ -796,3 +796,26 @@ read-only module cache; no cache permission was bypassed. The six measured
 binaries' source/patch digests match the preserved diagnostics. Default build
 metadata now points to report.json for both preparation and asynchronous upload
 policy. Main and native Metal implementation sources remain unchanged.
+
+
+## Bounded storage reservation and dense interactive control — 2026-10-12
+
+The stable-camera diagnostic restores the staged field camera after entry placement and appends a centered pointer sample. It is opt-in, bounded, requires a report directory, and leaves ordinary entry and fixed benchmark input unchanged. Normal zoom is required: `.5` uses production strategic icons and is not a body-throughput qualification. The host overlay and renderer now report copied source phase durations, requested-sample/ready ages, publication tick, camera, renderer preparation phases and actual pipeline-create counts. Ages are not a publication wall-age or presentation timestamp.
+
+Confirmed stalls include capacity-dependent fixed-array shader compilation: an instrumented unreserved run created 33 model and 48 layer pipelines during 720 measured frames. A split-pipeline experiment did not improve measured throughput and was restored to the baseline; its rejected patch is preserved only in `/tmp/nanolathe-layer-split-rejected.patch`.
+
+`NANOLATHE_WEBGPU_RESERVE_STORAGE=1` is an opt-in shared renderer diagnostic. It reserves separate endpoint, pose, instance, material, light, slot/group/member and effect buffer budgets before play and compiles the optional group family during setup. The combined initial mutable buffer tiers are below 24 MiB; textures and immutable mesh/UV data are unchanged. Ordinary geometric growth remains enabled. Defaults, dependency pins, shipping Metal and browser execution are unchanged.
+
+With a private settings snapshot at nominal game speed 10, the dense 3×1000-army scene at 1920×1080, normal zoom and seed 7 completed 720 measured draws with 26,970–30,046 body triangles every draw. GOMAXPROCS=2 measured 114.263 callback Hz, callback p95/p99 13.013/15.964 ms and encode p95/p99 1.944/2.126 ms. GOMAXPROCS=4 measured 119.700 callback Hz, callback p95/p99 8.565/8.740 ms and encode p95/p99 2.093/2.392 ms. Both created zero measured model/layer pipelines, consumed 720 unique tick/alpha identities, reported no run error and drained submitted/completed indices to 843/843. These are callback cadences, not WebGPU presentation measurements. The native Metal control produced 720 distinct real presentation timestamps at approximately 120 Hz, with GPU median/p95 4.786/5.668 ms. The control's host is temporarily instrumented; its native renderer is unchanged.
+
+The first larger reservation observed 2.42 s host/renderer initialization; the reduced plan observed 2.48 s in its initial run and 0.67 s on a subsequent run. Metal shader-cache state is uncontrolled, so these observations do not establish a stable cold-start cost. The reduced dense plan reports 70,747,472 current buffer descriptor bytes including immutable geometry; this is not actual GPU heap accounting. A matched Coast pair adds 17,308,864 descriptor bytes and leaves texture descriptor bytes identical.
+
+The user's saved game speed changed to 15 during investigation. A reference run then rejected 300 lead-in calls producing 450 ticks. No settings were changed in place: subsequent matched runs use a private snapshot with only speed changed to 10. Earlier unsnapshotted preference runs are observations, not matched causal timing comparisons.
+
+Fixed-state Coast qualification against the exact preserved `674428f3e` binary passes: final PNG, final fields, complete benchmark state and all 18 GPU sidecars are byte-identical, including poses/instances, source/key planes, shadows, HDR world, lighting, reflections and glow. This checks explicit resident UV/material output as rendered by the existing prototype; it does not claim retail span-raster equivalence. The exact reference benchmark clock still advances one 30 Hz tick per four 120 Hz draws.
+
+The native authored oracle passes 19/19 cases with `-pose-growth`: a 3-pose packet uses a 2 MiB pose buffer, 40,000 poses grow it to 4 MiB and create four replacement model pipelines, then shrinking to three poses retains that 4 MiB tier and creates no pipeline. Every authored atlas/world pixel and the last GPU-computed pose is checked after completion. Floors do not truncate growing workloads.
+
+The remaining clean architectural alternative is native render runtime-array size binding, which could remove capacity-dependent shader variants without reservation. The pinned Metal backend implements that metadata only for compute; current upstream main still calls render compilation with `bindSizes=false` (`hal/metal/device.go`), independently verified against the primary repository on 2026-10-12. A narrow local backend diagnostic can be qualified without waiting for a release. It must preserve native binding indices, effective bound ranges, robust out-of-bounds reads and pipeline/resource lifetime before replacing the fixed-array workaround.
+
+Raw evidence, binary/settings hashes, per-case quantiles and all pixel equality results are recorded in `STORAGE_RESERVATION_MEASUREMENTS.json`. Windows/Linux/browser runtime tests and WebGPU GPU/presentation timestamps remain unqualified.

@@ -1,0 +1,269 @@
+{
+  "date": "2026-10-12",
+  "scope": "bounded opt-in shared buffer reservation; no texture reservation or browser-specific execution; callback cadence is not GPU/presentation timing",
+  "settings_snapshot_sha256": "058d0148b7baaacd29c210aa6fca96d668ce3fc36add626e2709963dc0c240a6",
+  "settings_scope": "private snapshot, only gameSpeed set to nominal 10; saved user preferences untouched",
+  "maximum_initial_mutable_buffer_reservation_bytes": 25165824,
+  "candidate_build_manifest": "/tmp/nanolathe-reserved-trimmed-build/build-manifest.json",
+  "dense_cases": {
+    "normal": {
+      "report_path": "/tmp/nanolathe-stable-interactive-field3000-normal/report.json",
+      "report_sha256": "d374f7fc697db7d9f672b98321091ede390001f44590bd4fdf95c302d10afffa",
+      "gomaxprocs": 2,
+      "callback_hz": 114.26327482200793,
+      "cold_host_renderer_ms": 670.903417,
+      "timings": {
+        "SourceMS": {
+          "mean": 4.502636868055555,
+          "p95": 9.446459,
+          "p99": 14.959625
+        },
+        "EncodeMS": {
+          "mean": 1.4012607347222221,
+          "p95": 1.944334,
+          "p99": 2.1255
+        },
+        "CallbackMS": {
+          "mean": 8.739563194444445,
+          "p95": 13.012708,
+          "p99": 15.9635
+        },
+        "JoinMS": {
+          "mean": 2.2464767694444445,
+          "p95": 7.009292,
+          "p99": 11.894
+        }
+      },
+      "runtime_pipeline_builds": {
+        "models": 0,
+        "layers": 0
+      },
+      "body_triangles_min": 26970,
+      "body_triangles_max": 30046,
+      "unique_tick_alpha": 720,
+      "current_buffer_descriptor_bytes": 70747472,
+      "texture_descriptor_bytes": 1010167073,
+      "submission_indices_at_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "run_error": null,
+      "presentation_timing_available": false
+    },
+    "normal4": {
+      "report_path": "/tmp/nanolathe-stable-interactive-field3000-normal4/report.json",
+      "report_sha256": "4ad39f82c1c921f921b19e94cbd6515bfdcf9e4b2021c4ff31110c6b37d578cb",
+      "gomaxprocs": 4,
+      "callback_hz": 119.6996238659907,
+      "cold_host_renderer_ms": 671.965,
+      "timings": {
+        "SourceMS": {
+          "mean": 4.214200394444444,
+          "p95": 9.926959,
+          "p99": 10.462792
+        },
+        "EncodeMS": {
+          "mean": 1.4144322861111112,
+          "p95": 2.092792,
+          "p99": 2.392208
+        },
+        "CallbackMS": {
+          "mean": 8.34264201388889,
+          "p95": 8.564833,
+          "p99": 8.739958
+        },
+        "JoinMS": {
+          "mean": 0.3817749180555556,
+          "p95": 2.704375,
+          "p99": 3.330958
+        }
+      },
+      "runtime_pipeline_builds": {
+        "models": 0,
+        "layers": 0
+      },
+      "body_triangles_min": 26970,
+      "body_triangles_max": 30046,
+      "unique_tick_alpha": 720,
+      "current_buffer_descriptor_bytes": 70747472,
+      "texture_descriptor_bytes": 1010167073,
+      "submission_indices_at_close": {
+        "completed": 843,
+        "submitted": 843
+      },
+      "run_error": null,
+      "presentation_timing_available": false
+    }
+  },
+  "fixed_coast": {
+    "reference_commit": "674428f3ee9310c190e938f19064762e59c8371e",
+    "reference_binary": "/tmp/nanolathe-owned-build-retained/nanolathe-webgpu",
+    "candidate_binary": "/tmp/nanolathe-reserved-trimmed-build/nanolathe-webgpu",
+    "reference_binary_sha256": "5070becf03c76fe0e93116801aa367680ba2b19c271e36c17a6041f3f4d027b5",
+    "candidate_binary_sha256": "ba48dd3d751bcf1257eec909df0b2d9146764f4ee3e1e3d3c76dd1e6b2d14dad",
+    "reference_report": "/tmp/nanolathe-reserve-coast-baseline2/report.json",
+    "candidate_report": "/tmp/nanolathe-reserve-coast-trimmed/report.json",
+    "final_png_equal": true,
+    "final_fields_equal": true,
+    "benchmark_state_equal": true,
+    "gpu_readbacks": [
+      {
+        "suffix": ".color.png",
+        "sha256": "052ad8edcf2b1db2f1c18cff6700697c9764b00588b913ee905a5df41e7c4cbc",
+        "equal": true
+      },
+      {
+        "suffix": ".glow-octaves.rgba16f",
+        "sha256": "08b1998fa3f3cd2a76a8e3dff434a418ecb8b9800cbea6e7ac5210273641d65c",
+        "equal": true
+      },
+      {
+        "suffix": ".glow.rgba16f",
+        "sha256": "072cb33ecec783f5cf4009f59b851cde13c0a4ff5192aedc254fbdeba6d56b55",
+        "equal": true
+      },
+      {
+        "suffix": ".ground.png",
+        "sha256": "4c4c2b5c7f5be01bbc1dab5f15622bd2f4ec90578a4ed8955f936db7b1183284",
+        "equal": true
+      },
+      {
+        "suffix": ".instances.bin",
+        "sha256": "79f28b36bba0e118bb58603df6c7609014f5b2e39f2c6fa33dd130702264b7de",
+        "equal": true
+      },
+      {
+        "suffix": ".keys.png",
+        "sha256": "ffc04e561940b3ba9df1d60fc89b78d1fecb0afc9aa6caa4e5198a5f3281f343",
+        "equal": true
+      },
+      {
+        "suffix": ".keys.png.rgba8",
+        "sha256": "9bc8b655f3ac84287b7e8efe96e42264f19a2d23975f0d24e7e70c690a36c4cb",
+        "equal": true
+      },
+      {
+        "suffix": ".poses.bin",
+        "sha256": "18847ada67fbceeb6259d86412723c80d1ed502f35cf20eb021c6b335f4a731d",
+        "equal": true
+      },
+      {
+        "suffix": ".reflection-color.png",
+        "sha256": "2d8df56b1818bf1c031a7c75a12d4792e7b5b7ef672f579cc4e4a8f2aea6575e",
+        "equal": true
+      },
+      {
+        "suffix": ".reflection-flags.r32u",
+        "sha256": "1f93ca365a0cb01806413992dfce777e8d6fe74e240bcd697d460288758dfee4",
+        "equal": true
+      },
+      {
+        "suffix": ".reflection-soft.png",
+        "sha256": "340490dde9ed68211a5074d1dc33cdcbcaab0f55ed1724d837303bde21900dcd",
+        "equal": true
+      },
+      {
+        "suffix": ".seabed.rgba16f",
+        "sha256": "605ba0f8cb9a69691fb4a65ab4e16b9aba55edbc193dd925c49b0ccb14c90b24",
+        "equal": true
+      },
+      {
+        "suffix": ".shadow-body.png",
+        "sha256": "569699fb2b807bd0fed49d133601200be0b89cf7347b2d315ebac5f270df255e",
+        "equal": true
+      },
+      {
+        "suffix": ".shadow-depth.f32",
+        "sha256": "c5e9e0b96fc1a11bb0a0208b5315729303de37a7df98f0619b09faa00ed38458",
+        "equal": true
+      },
+      {
+        "suffix": ".shadow-mask.r8",
+        "sha256": "00cfae407a1de50d06b37236390e55d7fbee88943924488ebcaa2090adf63f6b",
+        "equal": true
+      },
+      {
+        "suffix": ".slots.bin",
+        "sha256": "1abb27d841dd3d59ac1de8f0228797c08cf3f4cad6b9f9778df0dfc075af8e5c",
+        "equal": true
+      },
+      {
+        "suffix": ".source.png",
+        "sha256": "b54436f37f92f6bbb4d8a359a282256ff6f4f9b96a7ea3b26fafcf8481119320",
+        "equal": true
+      },
+      {
+        "suffix": ".world.rgba16f",
+        "sha256": "efe0fe157f38602c7175bc853cc64b0112894a48d8714b5afbefcb25326d1a13",
+        "equal": true
+      }
+    ]
+  },
+  "native_metal_control": {
+    "report": "/tmp/nanolathe-stable-interactive-field3000-metal/report.json",
+    "presented_rows": 720,
+    "unique_presentations": 720,
+    "presentation_hz": 119.83309200987595,
+    "all_command_status_4": true,
+    "gpu_execution": {
+      "available": true,
+      "max_ms": 8.850999874994159,
+      "p50_ms": 4.786416655406356,
+      "p95_ms": 5.668416619300842,
+      "p99_ms": 6.337083410471678,
+      "samples": 720
+    },
+    "presentation_interval": {
+      "available": true,
+      "max_ms": 16.672000056132674,
+      "p50_ms": 8.333333535119891,
+      "p95_ms": 8.337999926880002,
+      "p99_ms": 8.339791791513562,
+      "samples": 719
+    },
+    "scope": "temporary stable-camera/neutral-pointer host overlay; native Metal renderer unchanged; saved settings not snapshotted in this earlier control"
+  },
+  "native_growth": {
+    "result_path": "/tmp/nanolathe-reserve-native-growth2/result.json",
+    "passed": true,
+    "completed_cases": 19,
+    "expected_cases": 19,
+    "growth_checks": [
+      {
+        "case": "growth-before",
+        "pose_records": 3,
+        "pose_buffer_bytes": 2097152,
+        "pipeline_builds": 0,
+        "last_pose_checked": true
+      },
+      {
+        "case": "growth-beyond-reservation",
+        "pose_records": 40000,
+        "pose_buffer_bytes": 4194304,
+        "pipeline_builds": 4,
+        "last_pose_checked": true
+      },
+      {
+        "case": "growth-after",
+        "pose_records": 3,
+        "pose_buffer_bytes": 4194304,
+        "pipeline_builds": 0,
+        "last_pose_checked": true
+      }
+    ]
+  },
+  "excluded_from_matched_causal_comparison": [
+    "earlier mutable saved-settings runs",
+    "strategic-view .5 zoom run",
+    "entry-camera commander view",
+    "failed lead-in with saved speed 15",
+    "unqualified split-pipeline experiment"
+  ],
+  "remaining_limits": [
+    "WebGPU presentation/GPU times unavailable",
+    "Windows/Linux/browser runtime qualification not done",
+    "growth beyond budgets legitimately recompiles fixed-array pipelines",
+    "pixel parity is against prototype checkpoint, not retail span raster",
+    "startup shader-cache state uncontrolled"
+  ]
+}

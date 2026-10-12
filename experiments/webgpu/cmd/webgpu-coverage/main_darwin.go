@@ -6,11 +6,13 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +27,8 @@ import (
 )
 
 type qualificationReport struct {
+	PoseGrowth      bool                 `json:"pose_growth"`
+	GrowthChecks    []growthCheck        `json:"growth_checks"`
 	Passed          bool                 `json:"passed"`
 	Completed       int                  `json:"completed_cases"`
 	Expected        int                  `json:"expected_cases"`
@@ -45,6 +49,7 @@ func main() {
 	runtime.LockOSThread()
 	out := flag.String("out", "", "new outside-repository directory for raw native pixels and result.json")
 	disableBatching := flag.Bool("disable-model-batching", false, "retain the original per-source draw sequence for native A/B qualification")
+	poseGrowth := flag.Bool("pose-growth", false, "qualify a 40000-pose grow-and-shrink sequence with GPU tail-pose readback")
 	compactPacking := flag.Bool("compact-slot-packing", false, "diagnose height-sorted atlas placement; production-packet edge rounding remains unqualified")
 	timeout := flag.Duration("timeout", 30*time.Second, "whole-process watchdog; stalled initialization/completion is a failure")
 	flag.Parse()
@@ -67,7 +72,7 @@ func main() {
 		os.Exit(1)
 	})
 	defer watchdog.Stop()
-	report, runError := runQualification(directory, !*disableBatching, *compactPacking)
+	report, runError := runQualification(directory, !*disableBatching, *compactPacking, *poseGrowth)
 	if runError != nil {
 		report.Failure = runError.Error()
 	}
@@ -134,7 +139,7 @@ func prepareOutput(path string) (string, error) {
 	return abs, nil
 }
 
-func runQualification(out string, batching, packing bool) (report qualificationReport, failure error) {
+func runQualification(out string, batching, packing, poseGrowth bool) (report qualificationReport, failure error) {
 	report = qualificationReport{SourceBatching: batching, CompactPacking: packing, Expected: len(coverageCases()), OutputSize: [2]int{fixtureWidth, fixtureHeight},
 		WorldFormat: "RGBA16Float", Scope: "authored native hardware raster and retained model resolve; no retail span-raster, timing or scanout claim"}
 	logErrors := &errorRecords{}
@@ -148,12 +153,19 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 	var d *wgpu.Device
 	var models *battlegpu.Models
 	var target *fixtureTarget
-	var atlasRead, worldRead *textureRead
+	var atlasRead, worldRead, poseRead *textureRead
+	var poseData []byte
+	var lastPose [16]float32
+	var growth growthCheck
 	var atlasData, worldData []byte
 	var slots []slotRecord
 	var fence *host.FrameFence
 	var submitted time.Time
 	cases := coverageCases()
+	if poseGrowth {
+		cases = coverageCasesWithPoseGrowth()
+	}
+	report.PoseGrowth, report.Expected = poseGrowth, len(cases)
 	index := 0
 	app.OnDraw(func(ctx *gogpu.Context) {
 		if index == len(cases) {
@@ -221,11 +233,23 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 			if failure == nil && worldData == nil {
 				worldData, _, failure = worldRead.poll()
 			}
+			if failure == nil && poseRead != nil && poseData == nil {
+				poseData, _, failure = poseRead.poll()
+			}
+			if failure == nil && poseData != nil {
+				for i, want := range lastPose {
+					got := math.Float32frombits(binary.LittleEndian.Uint32(poseData[i*4:]))
+					if math.IsNaN(float64(got)) || math.Abs(float64(got-want)) > 1e-6 {
+						failure = fmt.Errorf("%s: GPU tail pose lane %d got %g want %g", cases[index].Name, i, got, want)
+						break
+					}
+				}
+			}
 			if failure != nil {
 				app.Quit()
 				return
 			}
-			if atlasData == nil || worldData == nil {
+			if atlasData == nil || worldData == nil || poseRead != nil && poseData == nil {
 				return
 			}
 			comparison, compareError := comparePixels(cases[index], slots, atlasData, atlasRead.width, atlasRead.height, atlasRead.row, worldData, worldRead.row)
@@ -238,6 +262,13 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 			if err == nil {
 				fmt.Println("comparison=" + string(data))
 			}
+			if poseRead != nil && failure == nil {
+				growth.LastPoseChecked = true
+				report.GrowthChecks = append(report.GrowthChecks, growth)
+				failure = os.WriteFile(base+".pose-tail.bin", poseData[:80], 0644)
+			}
+			poseRead.close()
+			poseRead, poseData = nil, nil
 			atlasRead.close()
 			worldRead.close()
 			atlasRead, worldRead, atlasData, worldData, fence = nil, nil, nil, nil, nil
@@ -260,7 +291,12 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 		slots, failure = readSlots(packed, f)
 		base := filepath.Join(out, cases[index].Name)
 		failure = errors.Join(failure, os.WriteFile(base+".slots.bin", packed, 0644), os.WriteFile(base+".instances.bin", instances, 0644))
-		color, _, _, aw, ah, _ := models.DebugResources()
+		color, _, gpuPoses, aw, ah, _ := models.DebugResources()
+		if cases[index].GrowthSequence {
+			lastPose = f.Current[len(f.Current)-1]
+			growth = growthCheck{Case: cases[index].Name, PoseRecords: len(f.Current), PoseBufferBytes: gpuPoses.Size(), PipelineBuilds: models.Counters().PipelineBuilds}
+			poseRead, failure = newTextureRead(d, 1, 1, 80)
+		}
 		if failure == nil {
 			atlasRead, failure = newTextureRead(d, aw, ah, 4)
 		}
@@ -292,6 +328,9 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 		}
 		atlasRead.encode(enc, color, wgpu.TextureUsageTextureBinding)
 		worldRead.encode(enc, target.color, wgpu.TextureUsageRenderAttachment)
+		if poseRead != nil {
+			enc.CopyBufferToBuffer(gpuPoses, uint64((len(f.Current)-1)*80), poseRead.b, 0, 80)
+		}
 		// Framework owns Finish/Submit. Poll only in a later callback, and never
 		// Prepare or release these sources before this fence and both maps finish.
 		fence = host.NewFrameFence(d)
@@ -307,6 +346,7 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 		}
 		atlasRead.close()
 		worldRead.close()
+		poseRead.close()
 		target.close()
 		if models != nil {
 			models.Close()
@@ -323,4 +363,12 @@ func runQualification(out string, batching, packing bool) (report qualificationR
 	}
 	report.Passed = failure == nil && report.Completed == report.Expected
 	return
+}
+
+type growthCheck struct {
+	Case            string `json:"case"`
+	PoseRecords     int    `json:"pose_records"`
+	PoseBufferBytes uint64 `json:"pose_buffer_bytes"`
+	PipelineBuilds  int    `json:"pipeline_builds"`
+	LastPoseChecked bool   `json:"last_pose_checked"`
 }

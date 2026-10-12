@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"time"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
@@ -34,7 +35,10 @@ var layerOverlayShader string
 const layerUniformSize = 240
 const layerSmokeStride = 144
 
-type LayerCounters struct{ Draws, Sprites, SeabedSprites, Overlay, UploadBytes int }
+type LayerCounters struct {
+	Draws, Sprites, SeabedSprites, Overlay, UploadBytes, PipelineBuilds int
+	PreparationMS                                                       [7]float64
+}
 
 type layerTexture struct {
 	t    *wgpu.Texture
@@ -71,6 +75,7 @@ type layerDraw struct{ kind, first, count, mode uint32 }
 // Its stock operations replay the production packets (GPU design C-G3, C-G7);
 // it never makes emitters or simulation state of its own.
 type Layers struct {
+	reserveStorage                                                                              bool
 	d                                                                                           *wgpu.Device
 	q                                                                                           *wgpu.Queue
 	format, outputFormat                                                                        gputypes.TextureFormat
@@ -302,6 +307,7 @@ func (l *Layers) layerCreatePipeline(s *wgpu.ShaderModule, layout *wgpu.Pipeline
 		}
 		d.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthCompare: compare, DepthWriteEnabled: false}
 	}
+	l.counts.PipelineBuilds++
 	return l.d.CreateRenderPipeline(d)
 }
 func (l *Layers) layerModule(source string) (*wgpu.ShaderModule, error) {
@@ -324,6 +330,9 @@ func (l *Layers) layerGroup(dst **wgpu.BindGroup, layout *wgpu.BindGroupLayout, 
 }
 func (l *Layers) layerUpload(dst *layerBuffer, data []byte, minimum int) (bool, error) {
 	n := max(len(data), minimum)
+	if l.reserveStorage {
+		n = max(n, l.storageFloor(dst))
+	}
 	changed := false
 	if dst.b == nil || dst.size < n {
 		size := minimum
@@ -355,7 +364,7 @@ func NewLayers(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	return newLayersFormats(d, q, format, format, scene)
 }
 func newLayersFormats(d *wgpu.Device, q *wgpu.Queue, format, outputFormat gputypes.TextureFormat, scene *meshscene.Scene) (l *Layers, err error) {
-	l = &Layers{d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
+	l = &Layers{reserveStorage: storageReserveEnabled(), d: d, q: q, format: format, outputFormat: outputFormat, missing: make(map[string]int)}
 	defer func() {
 		if err != nil {
 			l.Close()
@@ -702,6 +711,8 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return layerError("positive viewport and camera zoom required")
 	}
 	l.counts = LayerCounters{}
+	mark := time.Now()
+	split := func(i int) { n := time.Now(); l.counts.PreparationMS[i] = float64(n.Sub(mark)) / 1e6; mark = n }
 	clear(l.missing)
 	layerVec(l.uniformBytes[:], 0, [4]float32{f.Camera[0], f.Camera[1], f.Camera[2], min(max(f.Alpha, 0), 1)})
 	layerVec(l.uniformBytes[:], 16, [4]float32{float32(width), float32(height), f.WorldGain, 1})
@@ -760,6 +771,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if err = l.layerUpdateSpritePipelines(); err != nil {
 		return err
 	}
+	split(0)
 	data, l.annotationRanges = layerPackAnnotations(f.Annotations, len(f.Composition.Slots))
 	changed, err = l.layerUpload(&l.annotations, data, 64)
 	if err != nil {
@@ -770,6 +782,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return err
 		}
 	}
+	split(1)
 	fogChanged := false
 	if len(f.Fog.RGBA) > 0 {
 		fogChanged, err = l.layerUpdateTexture(&l.fogGrid, meshscene.Texture{Width: f.Fog.Width, Height: f.Fog.Height, RGBA: f.Fog.RGBA}, f.Fog.Generation, &l.fogGeneration, [4]uint32{})
@@ -784,6 +797,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 			return err
 		}
 	}
+	split(2)
 	l.overlayBytes = layerBytes(l.overlayBytes, len(f.Overlay)*64)
 	data = l.overlayBytes
 	for i, q := range f.Overlay {
@@ -795,13 +809,16 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return err
 	}
 	overlayChanged = overlayChanged || changed
+	split(3)
 	effectChanged, err := l.layerPrepareEffects(f)
 	if err != nil {
 		return err
 	}
+	split(4)
 	if err = l.layerUpdateOverlayPipelines(); err != nil {
 		return err
 	}
+	split(5)
 	if fogChanged || effectChanged || overlayChanged {
 		if err = l.layerBindOverlay(false); err != nil {
 			return err
@@ -833,6 +850,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 			l.missing["bounded_terrain_lighting"]++
 		}
 	}
+	split(6)
 	return nil
 }
 

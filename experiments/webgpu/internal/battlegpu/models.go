@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
@@ -39,7 +40,10 @@ const (
 	modelCoreBufferLimit = 128 << 20
 )
 
-type ModelCounters struct{ Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes int }
+type ModelCounters struct {
+	Draws, Dispatches, Instances, Pieces, Triangles, UploadBytes, PipelineBuilds int
+	PreparationMS                                                                [6]float64
+}
 type modelMesh struct {
 	first, count         uint32
 	edgeFirst, edgeCount uint32
@@ -380,6 +384,7 @@ func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView,
 	return v, e
 }
 func (m *Models) modelCreatePipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth int, blend bool, topology gputypes.PrimitiveTopology) (*wgpu.RenderPipeline, error) {
+	m.counters.PipelineBuilds++
 	target := gputypes.ColorTargetState{Format: format, WriteMask: gputypes.ColorWriteMaskAll}
 	if blend {
 		target.Blend = &gputypes.BlendState{Color: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}, Alpha: gputypes.BlendComponent{SrcFactor: gputypes.BlendFactorOne, DstFactor: gputypes.BlendFactorOneMinusSrcAlpha, Operation: gputypes.BlendOperationAdd}}
@@ -557,6 +562,27 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if err = m.modelInitShadows(scene); err != nil {
 		return
 	}
+	if storageReserveEnabled() {
+		for i, u := range []struct {
+			b     *modelBuffer
+			label string
+			usage gputypes.BufferUsage
+		}{
+			{&m.endpoints, "reserved-pose-endpoints", wgpu.BufferUsageStorage},
+			{&m.poses, "reserved-rigid-poses", wgpu.BufferUsageStorage | wgpu.BufferUsageCopySrc},
+			{&m.instances, "reserved-model-instances", wgpu.BufferUsageStorage},
+			{&m.selected, "reserved-selected-materials", wgpu.BufferUsageStorage},
+			{&m.lights, "reserved-model-lights", wgpu.BufferUsageStorage},
+			{&m.slots, "reserved-model-slots", wgpu.BufferUsageStorage},
+			{&m.shadowRecords, "reserved-shadow-records", wgpu.BufferUsageStorage},
+			{&m.groups, "reserved-model-groups", wgpu.BufferUsageStorage},
+			{&m.members, "reserved-group-members", wgpu.BufferUsageStorage},
+		} {
+			if _, err = m.modelGrow(u.b, u.label, modelStorageReserveBytes[i], u.usage); err != nil {
+				return
+			}
+		}
+	}
 	if err = m.modelPrepareBodyPipelines(); err != nil {
 		return
 	}
@@ -570,6 +596,15 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	entries := []gputypes.BindGroupLayoutEntry{modelBufferEntry(0, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelGroupStride), modelBufferEntry(1, wgpu.ShaderStageFragment, gputypes.BufferBindingTypeReadOnlyStorage, modelMemberStride), modelBufferEntry(2, vf, gputypes.BufferBindingTypeReadOnlyStorage, modelSlotStride), modelBufferEntry(3, vf, gputypes.BufferBindingTypeUniform, 80), modelTextureEntry(4), modelTextureEntry(5)}
 	if m.mergeLayout, m.mergePipelineLayout, err = m.modelLayout(entries); err != nil {
 		return
+	}
+	if storageReserveEnabled() {
+		// Compile the optional group family before the first grouped subject.
+		m.groupWork.count = 1
+		err = m.modelPrepareMergePipeline()
+		m.groupWork.count = 0
+		if err != nil {
+			return
+		}
 	}
 	return
 }
@@ -815,6 +850,8 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	m.prepared = false
 	m.counters = ModelCounters{}
+	mark := time.Now()
+	split := func(i int) { n := time.Now(); m.counters.PreparationMS[i] = float64(n.Sub(mark)) / 1e6; mark = n }
 	if width <= 0 || height <= 0 || width > 8192 || height > 8192 || len(f.Previous) != len(f.Current) || !modelFinite(f.Alpha) || f.Alpha < 0 || f.Alpha > 1 || !modelFinite(f.Camera[0]+f.Camera[1]+f.Camera[2]) || f.Camera[2] <= 0 {
 		return modelError("finite frame, aligned endpoints and core viewport")
 	}
@@ -961,12 +998,14 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return e
 	}
 	m.modelBatchSources(f)
+	split(0)
 	if e = m.modelResizeAtlas(aw, ah); e != nil {
 		return e
 	}
 	if e = m.modelPrepareMergedAtlas(); e != nil {
 		return e
 	}
+	split(1)
 	changed := false
 	// A common entry statically reads both record families. Even with no active
 	// shadow, its one-record fixed declaration needs a full zeroed subject.
@@ -987,6 +1026,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		m.modelReleaseCommitGroup()
 		m.atlas.modelReleaseGroup()
 	}
+	split(2)
 	if e = m.modelPrepareBodyPipelines(); e != nil {
 		return e
 	}
@@ -996,6 +1036,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareMergePipeline(); e != nil {
 		return e
 	}
+	split(3)
 	if m.generation != f.Generation || f.Generation == 0 || len(m.poseBytes) != len(f.Current)*modelPoseStride*2 {
 		m.poseBytes = modelBytes(m.poseBytes, len(f.Current)*modelPoseStride*2)
 		for endpoint, poses := range [][]meshscene.Mat4{f.Previous, f.Current} {
@@ -1048,6 +1089,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 		m.counters.UploadBytes += len(u.data)
 	}
+	split(4)
 	if m.poseGroup == nil {
 		m.poseGroup, e = m.modelGroup(m.poseLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.endpoints.buffer}, {Binding: 1, Buffer: m.poses.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}})
 		if e != nil {
@@ -1072,6 +1114,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareCommitGroup(); e != nil {
 		return e
 	}
+	split(5)
 	m.counters.Instances, m.counters.Pieces = len(f.Instances), len(f.Current)
 	m.prepared = true
 	return nil

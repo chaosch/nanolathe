@@ -396,3 +396,12 @@ writes were already staged: the repairs cover mutable texture staging, pending
 copy lifetime, truthful completion and propagated/quarantined failures. One
 renderer can use queue-owned staging; a second application buffer ring is not
 intrinsically needed. Browser threading is deferred per user preference.
+
+
+### Optional bounded storage reservation
+
+`NANOLATHE_WEBGPU_RESERVE_STORAGE=1` moves capacity-dependent model/effect shader compilation to setup by reserving less than 24 MiB of mutable buffer tiers. Texture planes and resident geometry/explicit UVs are unchanged; larger workloads retain ordinary growth. It is opt-in. Use the reviewed ownership build for asynchronous uploads. `FOLLOWUP_REPORT.md` and `STORAGE_RESERVATION_MEASUREMENTS.json` contain the fixed-state pixel, native growth, memory and timing qualification.
+
+For repeatable native comparisons, point `NANOLATHE_SETTINGS` at a private settings snapshot with nominal `gameSpeed: 10`; do not edit saved preferences. The bounded interactive field diagnostic additionally uses `NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER=1`, `--live-scene=field:1000`, normal `--zoom=1`, and a fresh report directory. Callback Hz is not presentation Hz.
+
+The authored native oracle accepts `-pose-growth` to test 40,000-pose growth above the reservation and shrink-back, with exact pixel checks and GPU tail-pose readback. Standalone coverage uses CGO_ENABLED=0 without the combined game command's `nofakecgo` tag.

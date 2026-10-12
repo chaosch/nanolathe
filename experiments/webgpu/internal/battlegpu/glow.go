@@ -175,6 +175,13 @@ func NewGlow(d *wgpu.Device, q *wgpu.Queue, scene *meshscene.Scene) (g *Glow, er
 	if err != nil {
 		return
 	}
+	if storageReserveEnabled() {
+		g.vertexBuffer, err = d.CreateBuffer(&wgpu.BufferDescriptor{Label: "reserved-glow-sources", Size: glowStorageReserveBytes, Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst})
+		if err != nil {
+			return
+		}
+		g.vertexCapacity = glowStorageReserveBytes
+	}
 	if err = g.glowPrepareSourcePipeline(); err != nil {
 		return
 	}

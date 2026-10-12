@@ -7,6 +7,7 @@ import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
+	"time"
 )
 
 type Renderer struct {
@@ -27,13 +28,15 @@ type Renderer struct {
 	omitSeabed           bool
 }
 type Counters struct {
-	Models      ModelCounters
-	Layers      LayerCounters
-	Glow        GlowCounters
-	GroundLight GroundLightCounters
-	Distortions DistortionCounters
-	Lenses      LensCounters
-	Reflections ReflectionCounters
+	// Targets, models, glow, ground fields, layers, distortions, reflections, lenses/paint, command encoding.
+	PreparationMS [9]float64
+	Models        ModelCounters
+	Layers        LayerCounters
+	Glow          GlowCounters
+	GroundLight   GroundLightCounters
+	Distortions   DistortionCounters
+	Lenses        LensCounters
+	Reflections   ReflectionCounters
 }
 
 func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *meshscene.Scene) (r *Renderer, err error) {
@@ -122,12 +125,17 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if r == nil || r.models == nil || r.layers == nil {
 		return Counters{}, fmt.Errorf("incomplete battle renderer")
 	}
+	var phases [9]float64
+	mark := time.Now()
+	split := func(i int) { now := time.Now(); phases[i] = float64(now.Sub(mark)) / 1e6; mark = now }
 	if e := r.targets(width, height); e != nil {
 		return Counters{}, e
 	}
+	split(0)
 	if e := r.models.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
+	split(1)
 	if e := r.glow.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
@@ -135,6 +143,7 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if r.glow.Enabled() {
 		glowValues = [4]float32{f.StockEffects.Glow.Parameters.Blur[2], f.StockEffects.Glow.Parameters.Blur[3], 1, 0}
 	}
+	split(2)
 	if e := r.groundLight.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
@@ -145,10 +154,12 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if e := r.layers.SetFields(r.glow.Output(), r.groundLight.Output(), glowValues, r.groundLight.Rect(), lightValues); e != nil {
 		return Counters{}, e
 	}
+	split(3)
 	if e := r.layers.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
 	r.glow.glowShareAtlas(r.layers.effectAtlas.v)
+	split(4)
 	if e := r.distortions.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
@@ -156,6 +167,7 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 		return Counters{}, e
 	}
 	delete(r.layers.missing, "enhanced_distortion")
+	split(5)
 	if e := r.reflections.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
@@ -173,10 +185,12 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if f.Water.Mask[3] > .5 {
 		r.layers.missing["model_water_refraction"] = 1
 	}
+	split(6)
 	if e := r.lenses.Prepare(f, width, height); e != nil {
 		return Counters{}, e
 	}
 	r.paint = battlePaintOrder(r.paint, f)
+	split(7)
 	if sourceReady != nil {
 		sourceReady()
 	}
@@ -280,7 +294,8 @@ func (r *Renderer) encodeSourceReady(enc *wgpu.CommandEncoder, output *wgpu.Text
 	if e := final.End(); e != nil {
 		return Counters{}, e
 	}
-	return Counters{Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
+	split(8)
+	return Counters{PreparationMS: phases, Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
 }
 func (r *Renderer) Missing() map[string]int {
 	if r == nil || r.layers == nil {

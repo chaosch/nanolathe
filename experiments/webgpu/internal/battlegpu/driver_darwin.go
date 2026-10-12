@@ -38,6 +38,7 @@ type BenchmarkFrame struct {
 	PaceWait, OutsideDraw, DrawWork, Cadence, Source, Packing, Submit, Join float64
 }
 type drawRow struct {
+	SourceStagesMS                                           [12]float64
 	Index                                                    int
 	Warmup                                                   bool
 	Tick                                                     uint32
@@ -46,6 +47,10 @@ type drawRow struct {
 	JoinMS                                                   float64
 	PreparedAhead                                            bool
 	PreviousSubmission, CompletedSubmission                  uint64
+	Camera                                                   [3]float32
+	SourceSampleAgeMS, SourceReadyAgeMS                      float64
+	PublishedTick                                            uint32
+	PublishedTickAvailable                                   bool
 	Counters                                                 Counters
 	Missing                                                  map[string]int
 }
@@ -157,6 +162,20 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var last, next, timeStart, lastReturn time.Time
 	var rows []drawRow
 	var input []meshscene.NativeEvent
+	neutralPointer := os.Getenv("NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER") == "1"
+	if neutralPointer && (opts.Benchmark != nil || opts.Frames <= 0 || opts.OutputDir == "") {
+		return nil, fmt.Errorf("neutral pointer requires a bounded interactive diagnostic with output")
+	}
+	sampleInput := func() []meshscene.NativeEvent {
+		input = queue.drain(input)
+		if neutralPointer {
+			queue.mu.Lock()
+			mods := queue.mods
+			queue.mu.Unlock()
+			input = append(input, meshscene.NativeEvent{Kind: 1, X: float32(opts.Width) / 2, Y: float32(opts.Height) / 2, Modifiers: mods})
+		}
+		return input
+	}
 	var before, after runtime.MemStats
 	var cpu *os.File
 	startedMeasure := false
@@ -361,9 +380,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		prepared, ahead, joinMS := preparer.join()
 		if !ahead {
-			input = queue.drain(input)
+			input = sampleInput()
 			sourceStart := time.Now()
 			prepared.frame, prepared.err = scene.Live.Next(start.Sub(timeStart).Seconds(), meshscene.Input{Events: input, At: start})
+			prepared.readyAt = time.Now()
+			prepared.sampleAt = start
+			prepared.stages = sourcePreparationTimings(scene.Live)
 			prepared.milliseconds = float64(time.Since(sourceStart).Nanoseconds()) / 1e6
 		}
 		live, failure = prepared.frame, prepared.err
@@ -432,7 +454,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		var sourceReady func()
 		if prepareAhead && sourceAheadBoundary(nextDraw, opts.Warmup, opts.Frames) && opts.PrepareAhead(nextDraw) {
 			sourceReady = func() {
-				input = queue.drain(input)
+				input = sampleInput()
 				at := time.Now()
 				if next.After(at) {
 					at = next
@@ -451,7 +473,12 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		if !last.IsZero() {
 			callbackMS = float64(start.Sub(last).Nanoseconds()) / 1e6
 		}
-		row := drawRow{Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, PreviousSubmission: nativeDevice.Queue().LastSubmissionIndex(), CompletedSubmission: nativeDevice.Queue().Poll(), Counters: c, Missing: renderer.Missing()}
+		var publishedTick uint32
+		var publishedTickAvailable bool
+		if source, ok := scene.Live.(interface{ PublicationTick() (uint32, bool) }); ok {
+			publishedTick, publishedTickAvailable = source.PublicationTick()
+		}
+		row := drawRow{Index: draw, Warmup: draw < opts.Warmup, Tick: live.Tick, Alpha: live.Alpha, SourceMS: sourceMS, EncodeMS: encodeMS, CallbackMS: callbackMS, PaceMS: paceMS, CompletionWaitMS: completionMS, JoinMS: joinMS, PreparedAhead: ahead, Camera: live.Camera, SourceStagesMS: prepared.stages, SourceSampleAgeMS: float64(encodeStart.Sub(prepared.sampleAt).Nanoseconds()) / 1e6, SourceReadyAgeMS: float64(encodeStart.Sub(prepared.readyAt).Nanoseconds()) / 1e6, PublishedTick: publishedTick, PublishedTickAvailable: publishedTickAvailable, PreviousSubmission: nativeDevice.Queue().LastSubmissionIndex(), CompletedSubmission: nativeDevice.Queue().Poll(), Counters: c, Missing: renderer.Missing()}
 		if len(rows) >= 8192 {
 			rows[draw%len(rows)] = row
 		} else {
@@ -514,6 +541,10 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": prepareAhead, "source_ownership": "one serial worker; next source starts after all Prepare CPU reads/uploads and copied paint records, before command encoding; measurement boundaries and final capture stop preparation", "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "optional source preparation overlaps host submission/pacing; per-frame GPU completion still protects mutable-resource replacement", "hardware model triangles approximate production integer span coverage; doubled hardware outline lines lack whole-native-pixel row blocks", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"compact_slot_packing": compactSlotPacking, "authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens, "controlled_direct_light_stock_replacement": probeDirectLight, "controlled_direct_light_off": directLightFixture.disabled}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "model_batching": disableModelBatching, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
 	report["asynchronous_uploads"] = asyncUploads
+	report["storage_reservation"] = map[string]any{"enabled": storageReserveEnabled(), "model_buffer_floor_bytes": modelStorageReserveBytes, "glow_buffer_floor_bytes": glowStorageReserveBytes, "scope": "opt-in buffer reservation and fixed-array pipeline precompilation; normal growth retained, textures unchanged"}
+	report["diagnostic_neutral_pointer"] = neutralPointer
+	report["phase_timing_scope"] = map[string]any{"source_stages": []string{"host_step", "pin_presentation", "world_build_or_recull", "visuals", "foreground_hud", "frame_policy_projection", "composition_selection", "shadows", "visual_record_adapter", "visual_lighting_sources", "visual_record", "visual_adapt"}, "renderer_stages": []string{"targets", "models", "glow", "ground_fields", "layers", "distortions", "reflections", "lenses_paint", "commands"}, "scope": "CPU wall durations; source stages copied before starting next Next; overlapping source/render stages are not additive"}
+	report["source_age_scope"] = "requested source sample timestamp and preparation completion to encode start; negative sample age is predictive lead; publication tick is latest committed tick, not a wall-age timestamp"
 	report["submission_failure_contract"] = "stock dependencies log deferred failures; reviewed host patch returns first failure from Run"
 	report["submission_indices_at_close"] = map[string]uint64{"submitted": submittedAtClose, "completed": completedAtClose}
 	if asyncUploads {
@@ -558,9 +589,9 @@ func writeRows(path string, rows []drawRow) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	w.Write([]string{"frame", "warmup", "tick", "alpha", "source_ms", "encode_ms", "callback_ms", "pace_ms", "completion_wait_ms", "instances", "triangles", "model_draws", "sprite_draws", "upload_bytes", "gpu_ms", "presented_seconds", "prepared_ahead", "source_join_ms"})
+	w.Write([]string{"frame", "warmup", "tick", "alpha", "source_ms", "encode_ms", "callback_ms", "pace_ms", "completion_wait_ms", "instances", "triangles", "model_draws", "sprite_draws", "upload_bytes", "gpu_ms", "presented_seconds", "prepared_ahead", "source_join_ms", "camera_x", "camera_z", "camera_scale", "source_sample_age_ms", "source_ready_age_ms", "published_tick", "published_tick_available"})
 	for _, r := range rows {
-		w.Write([]string{strconv.Itoa(r.Index), strconv.FormatBool(r.Warmup), fmt.Sprint(r.Tick), fmt.Sprint(r.Alpha), fmt.Sprint(r.SourceMS), fmt.Sprint(r.EncodeMS), fmt.Sprint(r.CallbackMS), fmt.Sprint(r.PaceMS), fmt.Sprint(r.CompletionWaitMS), fmt.Sprint(r.Counters.Models.Instances), fmt.Sprint(r.Counters.Models.Triangles), fmt.Sprint(r.Counters.Models.Draws), fmt.Sprint(r.Counters.Layers.Draws), fmt.Sprint(r.Counters.Models.UploadBytes + r.Counters.Layers.UploadBytes), "", "", strconv.FormatBool(r.PreparedAhead), fmt.Sprint(r.JoinMS)})
+		w.Write([]string{strconv.Itoa(r.Index), strconv.FormatBool(r.Warmup), fmt.Sprint(r.Tick), fmt.Sprint(r.Alpha), fmt.Sprint(r.SourceMS), fmt.Sprint(r.EncodeMS), fmt.Sprint(r.CallbackMS), fmt.Sprint(r.PaceMS), fmt.Sprint(r.CompletionWaitMS), fmt.Sprint(r.Counters.Models.Instances), fmt.Sprint(r.Counters.Models.Triangles), fmt.Sprint(r.Counters.Models.Draws), fmt.Sprint(r.Counters.Layers.Draws), fmt.Sprint(r.Counters.Models.UploadBytes + r.Counters.Layers.UploadBytes), "", "", strconv.FormatBool(r.PreparedAhead), fmt.Sprint(r.JoinMS), fmt.Sprint(r.Camera[0]), fmt.Sprint(r.Camera[1]), fmt.Sprint(r.Camera[2]), fmt.Sprint(r.SourceSampleAgeMS), fmt.Sprint(r.SourceReadyAgeMS), fmt.Sprint(r.PublishedTick), strconv.FormatBool(r.PublishedTickAvailable)})
 	}
 	w.Flush()
 	return w.Error()

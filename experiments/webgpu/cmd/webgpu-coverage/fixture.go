@@ -11,11 +11,13 @@ import (
 const fixtureWidth, fixtureHeight = 12, 8
 
 type coverageCase struct {
-	Name        string
-	Repeated    bool
-	Grouped     bool
-	Supersample bool
-	Opacity     float32
+	GrowthSequence bool
+	ExtraPoses     int
+	Name           string
+	Repeated       bool
+	Grouped        bool
+	Supersample    bool
+	Opacity        float32
 }
 
 func coverageCases() []coverageCase {
@@ -118,6 +120,14 @@ func (c coverageCase) frame() meshscene.LiveFrame {
 			f.Composition.Groups = append(f.Composition.Groups, meshscene.ModelGroup{
 				ParentInstance: uint32(i), ParentSlot: uint32(i + len(f.Instances) + 1), FinalSlot: uint32(i + 1),
 				Members: []meshscene.ModelGroupMember{{Instance: uint32(i), Slot: uint32(i + len(f.Instances) + 1)}}})
+		}
+	}
+	if c.ExtraPoses > len(f.Current) {
+		extra := meshscene.Mat4{1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+		for len(f.Current) < c.ExtraPoses {
+			f.Previous = append(f.Previous, extra)
+			f.Current = append(f.Current, extra)
+			f.ModelProjections.PieceFlags = append(f.ModelProjections.PieceFlags, 0)
 		}
 	}
 	return f
@@ -288,4 +298,19 @@ func halfFloat(h uint16) float32 {
 		return float32(sign * math.Ldexp(float64(fraction), -24))
 	}
 	return float32(sign * math.Ldexp(float64(1024+fraction), exponent-25))
+}
+
+func coverageCasesWithPoseGrowth() []coverageCase {
+	cases := coverageCases()
+	base := cases[0]
+	for i, name := range []string{"growth-before", "growth-beyond-reservation", "growth-after"} {
+		c := base
+		c.Name = name
+		c.GrowthSequence = true
+		if i == 1 {
+			c.ExtraPoses = 40000
+		}
+		cases = append(cases, c)
+	}
+	return cases
 }
