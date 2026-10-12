@@ -1,5 +1,3 @@
-//go:build darwin
-
 package battlegpu
 
 import (
@@ -13,6 +11,7 @@ import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu"
 	"github.com/nanolathe-gg/nanolathe/internal/meshscene"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -85,8 +84,14 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	}
 	period := time.Second / time.Duration(fps)
 	_, sourceResizable := scene.Live.(physicalExtentSource)
-	cfg := gogpu.DefaultConfig().WithTitle("Nanolathe — WebGPU prototype").WithSize(opts.Width/2, opts.Height/2).WithResizable(sourceResizable && opts.Benchmark == nil).WithContinuousRender(true).WithVSync(opts.VSync)
+	// GoGPU sizes windows in logical units. The hint is the platform's usual
+	// scale; the first draw corrects the request if the actual scale differs.
+	hint := windowScaleHint()
+	logicalSize := func(physical int, scale float64) int { return int(math.Round(float64(physical) / scale)) }
+	cfg := gogpu.DefaultConfig().WithTitle("Nanolathe — WebGPU prototype").WithSize(logicalSize(opts.Width, hint), logicalSize(opts.Height, hint)).WithResizable(sourceResizable && opts.Benchmark == nil).WithContinuousRender(true).WithVSync(opts.VSync)
 	app := gogpu.NewApp(cfg)
+	runningApp.Store(app)
+	defer runningApp.CompareAndSwap(app, nil)
 	asyncUploads := os.Getenv("NANOLATHE_WEBGPU_ASYNC_UPLOADS") == "1"
 	lateAcquire := os.Getenv("NANOLATHE_WEBGPU_LATE_ACQUIRE") == "1"
 	if lateAcquire && !asyncUploads {
@@ -104,7 +109,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 	go func() { <-signalContext.Done(); app.Quit() }()
-	queue := eventQueue{scale: 2}
+	// Pointer input arrives in logical units; the host expects drawable pixels.
+	queue := eventQueue{scale: float32(hint)}
 	events := app.EventSource()
 	events.OnKeyPress(func(k gpucontext.Key, m gpucontext.Modifiers) { queue.key(4, k, m) })
 	events.OnKeyRelease(func(k gpucontext.Key, m gpucontext.Modifiers) { queue.key(5, k, m) })
@@ -154,6 +160,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		})
 	}
 	var actualW, actualH int
+	var extentWaits int
+	var deviceScale float64
+	var graphicsBackend string
 	var runtimeModeAtInit map[string]bool
 	var renderer *Renderer
 	var surfaceFormat gputypes.TextureFormat
@@ -322,15 +331,34 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 
 		if renderer == nil {
-			p := app.DeviceProvider()
-			nativeDevice = p.Device()
-			surfaceFormat = p.SurfaceFormat()
-			actualW, actualH = w, h
 			if w != opts.Width || h != opts.Height {
+				// The scale hint was wrong for this display: request the logical
+				// size that yields the requested drawable once, then allow the
+				// platform a bounded number of callbacks to apply it.
+				if extentWaits == 0 && ctx.ScaleFactor() > 0 && ctx.ScaleFactor() != hint {
+					app.RequestSize(logicalSize(opts.Width, ctx.ScaleFactor()), logicalSize(opts.Height, ctx.ScaleFactor()))
+					extentWaits = 1
+					return
+				}
+				if extentWaits > 0 && extentWaits < 120 {
+					extentWaits++
+					return
+				}
 				failure = fmt.Errorf("WebGPU physical extent %dx%d; expected %dx%d", w, h, opts.Width, opts.Height)
 				app.Quit()
 				return
 			}
+			if scale := ctx.ScaleFactor(); scale > 0 {
+				deviceScale = scale
+				queue.mu.Lock()
+				queue.scale = float32(scale)
+				queue.mu.Unlock()
+			}
+			graphicsBackend = ctx.Backend()
+			p := app.DeviceProvider()
+			nativeDevice = p.Device()
+			surfaceFormat = p.SurfaceFormat()
+			actualW, actualH = w, h
 			renderer, failure = New(p.Device(), p.Queue(), p.SurfaceFormat(), scene)
 			if renderer != nil && failure == nil {
 				renderer.omitSeabed = omitSeabed
@@ -428,7 +456,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		}
 		next, timeStart = startSourceTimeline(next, timeStart, entry)
 		paceStart := time.Now()
-		if wait := time.Until(next); wait > 0 {
+		if wait := time.Until(next); wait > 0 && hostPacesFrames {
 			time.Sleep(wait)
 		}
 		start := time.Now()
@@ -700,8 +728,11 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 		ordered := append([]drawRow(nil), rows[at:]...)
 		rows = append(ordered, rows[:at]...)
 	}
-	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": prepareAhead, "source_ownership": "one serial worker; next source starts after all Prepare CPU reads/uploads and copied paint records, before command encoding; measurement boundaries and final capture stop preparation", "device": map[string]any{"layer_contents_scale": 2, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "optional source preparation overlaps host submission/pacing; per-frame GPU completion still protects mutable-resource replacement", "hardware model triangles approximate production integer span coverage; doubled hardware outline lines lack whole-native-pixel row blocks", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"compact_slot_packing": compactSlotPacking, "authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens, "controlled_direct_light_stock_replacement": probeDirectLight, "controlled_direct_light_off": directLightFixture.disabled}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "model_batching": disableModelBatching, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
+	report := map[string]any{"backend": "WebGPU native Go", "gogpu_commit": "12620c9d50073b8591f075c97ba0c6f3b6ad92f7", "physical_surface": []int{actualW, actualH}, "target_draw_fps": fps, "draws": draw, "warmup": opts.Warmup, "cold_host_renderer_ms": coldMS, "rows": rows, "gpu_timing_available": false, "present_timing_available": false, "queue_submission_timing_available": false, "prepare_ahead": prepareAhead, "source_ownership": "one serial worker; next source starts after all Prepare CPU reads/uploads and copied paint records, before command encoding; measurement boundaries and final capture stop preparation", "device": map[string]any{"layer_contents_scale": deviceScale, "window_scale_hint": hint, "window_units": "logical DIP"}, "benchmark_memory": map[string]any{"alloc_bytes": after.TotalAlloc - before.TotalAlloc, "mallocs": after.Mallocs - before.Mallocs, "gc": after.NumGC - before.NumGC, "gc_pause_ns": after.PauseTotalNs - before.PauseTotalNs, "heap_bytes_start": before.HeapAlloc, "heap_bytes_end": after.HeapAlloc, "go_sys_bytes_start": before.Sys, "go_sys_bytes_end": after.Sys, "scope": "process-wide Go counters during measured source+encode callbacks; excludes final drain and readback"}, "limits": []string{"windowed one battle; fullscreen remains dependency-blocked", "native loss and GPU/presentation timestamps unverified", "pinned GoGPU logs deferred Finish/Submit errors without returning them; qualification requires clean logs and expected pixel readbacks", "debug JSON describes first packet; field texture diagnostics describe final packet", "relative pointer capture is blocked by pinned macOS SetCursorMode stub; native click count is absent from the public event API", "optional source preparation overlaps host submission/pacing; per-frame GPU completion still protects mutable-resource replacement", "hardware model triangles approximate production integer span coverage; doubled hardware outline lines lack whole-native-pixel row blocks", "immutable grouped source/key composition is active; cached/live seed chronology and exact integer coverage remain approximated", "projectile body barriers and retained solo/projected shadows are active; cached/live shadow chronology and offscreen shadow-only producer coverage remain incomplete", "water surface and radial distortion are active with RGBA16F world; stock reflections are active; model reflections/refraction and mixed source budget remain incomplete", "separate ground-light field clears its owned extent; production uses packed storage and partial clear"}, "input_overflow": queue.overflow, "diagnostic_sources": map[string]bool{"compact_slot_packing": compactSlotPacking, "authored_stock_lens": probeLens, "controlled_lens_stock_replacement": controlledLens, "controlled_direct_light_stock_replacement": probeDirectLight, "controlled_direct_light_off": directLightFixture.disabled}, "diagnostic_omissions": map[string]bool{"water_surface": omitWater, "distortion": omitDistortion, "state_cache": disableStateCache, "model_batching": disableModelBatching, "effect_coalescing": disableCoalesce, "stock_reflections": omitReflections, "seabed": omitSeabed, "model_shadows": omitShadows}}
 	report["resizable_source"] = sourceResizable && opts.Benchmark == nil
+	report["target"] = runtime.GOOS + "/" + runtime.GOARCH
+	report["graphics_backend"] = graphicsBackend
+	report["host_paces_frames"] = hostPacesFrames
 	report["late_acquire"] = map[string]any{"requested": lateAcquire, "frames": lateFrames, "recoveries": lateFallbacks, "scope": "opt-in owned preparation/source handoff before acquisition; lifecycle/resize/setup/final boundaries retain early acquire; deferred acquisition change drops unencoded frame and source sample, never replays borrowed data or input; host outdated retries deferred to a fresh callback"}
 	report["encode_timing_scope"] = "EncodeMS/common Submit/DrawWork include late acquisition but exclude upfront early acquisition; CommandEncodeMS excludes preparation/source handoff/acquisition; nested wall durations are not additive"
 	report["native_presentation_telemetry"] = presentationTelemetry
