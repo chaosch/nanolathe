@@ -254,7 +254,11 @@ out.
   fields change only per tick; splitting per-tick and per-frame fields would
   cut uploads further.
 - Effects capture and projectile/debris models on the CPU (CPU headroom).
-- Vulkan: V6 (MoltenVK buffer copy without memory) needs validation layers.
+- Vulkan: the MoltenVK proxy now plays a battle without errors (V4/V6 were
+  resources released with queue writes pending; PORTABILITY.md). Its ground
+  is black (V7, the R32Uint terrain lookup arrives filled); settle with
+  validation layers or a Linux/Windows machine. wgpu's Vulkan WriteBuffer
+  waits for the GPU before every write, an upstream cost for Linux/Windows.
 - Browser: the 3,000-unit field is simulation-bound and holds a 2.2 GB
   heap. (The missing Wind/Tidal and Game Time text was the harness's default
   settings: the "Wind/tide in game" readout, `weatherReport`, is off by
