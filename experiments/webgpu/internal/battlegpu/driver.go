@@ -268,9 +268,6 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			// The pinned multi-thread host can panic while quitting after a
 			// callback error. Preserve the actual renderer failure first.
 			if failure != nil && !callbackFailureLogged {
-				if abort, ok := any(app).(interface{ AbortFrame(error) }); ok {
-					abort.AbortFrame(failure)
-				}
 				fmt.Fprintf(os.Stderr, "nanolathe: WebGPU callback failed: logical path presentation/battle, providers searched [pinned GoGPU native host], expected a completed draw: %v\n", failure)
 				callbackFailureLogged = true
 			}
@@ -728,8 +725,8 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			}
 		}
 	}
-	// Quarantined native shutdown skips OnClose. CPU-only source/profiling
-	// cleanup must still finish before collecting the result.
+	// A host that ends without OnClose still needs its CPU-only source and
+	// profiling cleanup finished before the result is collected.
 	if e := preparer.close(); failure == nil {
 		failure = e
 	}
@@ -761,7 +758,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["native_gpu_timing"] = gpuTimingTelemetry
 	report["native_encode_clock_scope"] = "CACurrentMediaTime sampled immediately after Go encodeStart; per-frame clock bridge approximate by getter latency; source sample/ready time inferred from existing monotonic ages; no additional waits"
 	report["texture_uploads"] = "rewrites of textures earlier frames sampled are packed into one arena, uploaded with Queue.WriteBuffer and copied on the frame encoder before any pass; textures created this frame are written directly; no per-frame completion wait"
-	report["runtime_arrays"] = map[string]any{"requested": os.Getenv("NANOLATHE_WEBGPU_RUNTIME_ARRAYS") == "1", "enabled": runtimeModeAtInit["models"], "renderer_components_at_init": runtimeModeAtInit, "scope": "qualified macOS arm64 diagnostic; fixed arrays remain default and fallback"}
+	report["runtime_arrays"] = map[string]any{"requested": os.Getenv("NANOLATHE_WEBGPU_RUNTIME_ARRAYS") == "1", "enabled": runtimeModeAtInit["models"], "renderer_components_at_init": runtimeModeAtInit, "scope": "runtime-sized WGSL arrays need a render-size capability no stock wgpu provides; fixed arrays are used"}
 	report["storage_reservation"] = map[string]any{"enabled": storageReserveEnabled(), "model_buffer_floor_bytes": modelStorageReserveBytes, "glow_buffer_floor_bytes": glowStorageReserveBytes, "scope": "opt-in buffer reservation and fixed-array pipeline precompilation; normal growth retained, textures unchanged"}
 	report["diagnostic_neutral_pointer"] = neutralPointer
 	report["phase_timing_scope"] = map[string]any{"source_stages": []string{"host_step", "pin_presentation", "world_build_or_recull", "visuals", "foreground_hud", "frame_policy_projection", "composition_selection", "shadows", "visual_record_adapter", "visual_lighting_sources", "visual_record", "visual_adapt"}, "renderer_stages": []string{"targets", "models", "glow", "ground_fields", "layers", "distortions", "reflections", "lenses_paint", "commands"}, "scope": "CPU wall durations; source stages copied before starting next Next; overlapping source/render stages are not additive"}

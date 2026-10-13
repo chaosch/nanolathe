@@ -3,12 +3,10 @@
 import argparse, hashlib, json, os, pathlib, platform, sys
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build',type=pathlib.Path,help='build directory; packaged launcher defaults to its own directory')
-parser.add_argument('--fast',action='store_true',help='explicitly enable the qualified fixed-array reservation/owned-upload/prepare/chunked-model-upload profile')
-parser.add_argument('--stock-fast',action='store_true',help='source preparation ahead plus storage reservation; needs no dependency patch, so it is the speed profile for Linux, Windows and stock macOS builds')
-parser.add_argument('--late-acquire',action='store_true',help='opt-in owned preparation/source handoff before acquisition with conservative lifecycle fallback; requires --fast and deferred-host build')
-parser.add_argument('--chunked-uploads',action=argparse.BooleanOptionalAction,default=None,help='mutable model staging chunks, enabled by --fast; --no-chunked-uploads selects the diagnostic control')
-parser.add_argument('--gpu-timing',action='store_true',help='bounded Metal completed-command timing observations; also enables presented telemetry')
-parser.add_argument('--telemetry',action='store_true',help='enable bounded native presented-handler observations')
+parser.add_argument('--fast',action='store_true',help='source preparation ahead, storage reservation and late drawable acquisition on the stock pinned dependencies; every native target')
+parser.add_argument('--late-acquire',action=argparse.BooleanOptionalAction,default=None,help='acquire the drawable only after source preparation; on by default with --fast')
+parser.add_argument('--gpu-timing',action='store_true',help='bounded Metal completed-command timing observations; also enables presented telemetry; needs a --gpu-timing build')
+parser.add_argument('--telemetry',action='store_true',help='bounded native presented-handler observations; needs a --present-handler build')
 parser.add_argument('--neutral-pointer',action='store_true',help='bounded interactive field diagnostic only; center camera/pointer and suppress shake for reproducible workload')
 parser.add_argument('--dry-run',action='store_true',help='print command and managed environment without launching')
 parser.add_argument('game_args',nargs=argparse.REMAINDER)
@@ -23,11 +21,7 @@ if target['goos']=='js':parser.error('a js/wasm build runs in a browser; serve i
 host_os={'Darwin':'darwin','Linux':'linux','Windows':'windows'}.get(platform.system())
 if host_os!=target['goos']:parser.error(f"build targets {target['goos']}/{target['goarch']}; run it on that platform")
 if hashlib.sha256(binary.read_bytes()).hexdigest()!=manifest['binary_sha256']:parser.error('binary digest differs from its build manifest')
-if opts.fast and opts.stock_fast:parser.error('choose --fast or --stock-fast')
-if opts.fast and (platform.system()!='Darwin' or platform.machine()!='arm64'):parser.error('fast native profile is qualified only on macOS arm64; use --stock-fast elsewhere')
-if opts.fast and not (diagnostics.get('owned_submission') and diagnostics.get('enabled')):parser.error('--fast requires an owned-submission and Metal-cache build')
-if opts.late_acquire and (not opts.fast or not diagnostics.get('deferred_acquire')):parser.error('--late-acquire requires --fast and the reviewed deferred-host build')
-if opts.chunked_uploads and not opts.fast:parser.error('--chunked-uploads requires --fast and its reviewed owned-upload build')
+late=opts.fast if opts.late_acquire is None else opts.late_acquire
 if opts.gpu_timing and not diagnostics.get('gpu_timing'):parser.error('--gpu-timing requires a --gpu-timing build')
 if opts.gpu_timing:opts.telemetry=True
 if opts.telemetry and not diagnostics.get('present_handler'):parser.error('--telemetry requires a --present-handler build')
@@ -36,11 +30,10 @@ if opts.telemetry and not diagnostics.get('present_handler'):parser.error('--tel
 env=dict(os.environ)
 for key in list(env):
  if key.startswith('NANOLATHE_WEBGPU_'):del env[key]
-ahead=opts.fast or opts.stock_fast
-managed={'NANOLATHE_WEBGPU_ASYNC_UPLOADS':'1' if opts.fast else '0','NANOLATHE_WEBGPU_PREPARE_AHEAD':'1' if ahead else '0','NANOLATHE_WEBGPU_RESERVE_STORAGE':'1' if ahead else '0','NANOLATHE_WEBGPU_RUNTIME_ARRAYS':'0','NANOLATHE_WEBGPU_PRESENT_TELEMETRY':'1' if opts.telemetry else '0'}
-managed['NANOLATHE_WEBGPU_LATE_ACQUIRE']='1' if opts.late_acquire else '0'
+ahead=opts.fast
+managed={'NANOLATHE_WEBGPU_PREPARE_AHEAD':'1' if ahead else '0','NANOLATHE_WEBGPU_RESERVE_STORAGE':'1' if ahead else '0','NANOLATHE_WEBGPU_PRESENT_TELEMETRY':'1' if opts.telemetry else '0'}
+managed['NANOLATHE_WEBGPU_LATE_ACQUIRE']='1' if late else '0'
 managed['NANOLATHE_WEBGPU_GPU_TIMING']='1' if opts.gpu_timing else '0'
-managed['NANOLATHE_WEBGPU_CHUNKED_UPLOADS']='1' if opts.fast and opts.chunked_uploads is not False else '0'
 if ahead:managed['GOMAXPROCS']=str(min(8,max(4,os.cpu_count() or 4)))  # the host overlaps world, effects and foreground work
 if opts.neutral_pointer:managed['NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER']='1'
 env.update(managed)
@@ -59,7 +52,7 @@ if benchmark:
  prefix=[]
 else:prefix=[] if '--webgpu' in args else ['--webgpu']
 cmd=[str(binary),*prefix,*args]
-summary={'profile':'fast' if opts.fast else 'stock-fast' if opts.stock_fast else 'baseline','target':target,'telemetry':opts.telemetry,'late_acquire':opts.late_acquire,'command':cmd,'managed_environment':managed,'settings_selection_preserved':env.get('NANOLATHE_SETTINGS')==os.environ.get('NANOLATHE_SETTINGS'),'scope':'prototype environment only; no saved preferences changed; runtime arrays remain off'}
+summary={'profile':'fast' if opts.fast else 'baseline','target':target,'telemetry':opts.telemetry,'late_acquire':late,'command':cmd,'managed_environment':managed,'settings_selection_preserved':env.get('NANOLATHE_SETTINGS')==os.environ.get('NANOLATHE_SETTINGS'),'scope':'prototype environment only; no saved preferences changed'}
 if opts.dry_run:print(json.dumps(summary,indent=2));sys.exit(0)
-print('nanolathe: prototype profile '+summary['profile']+'; runtime arrays off; saved settings preserved',file=sys.stderr,flush=True)
+print('nanolathe: prototype profile '+summary['profile']+'; saved settings preserved',file=sys.stderr,flush=True)
 os.execve(cmd[0],cmd,env)

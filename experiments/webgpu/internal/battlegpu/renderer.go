@@ -95,6 +95,13 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		r.distortions.q, r.lenses.q, r.reflections.q = r.queue, r.queue, r.queue
 		r.uploads = newTextureUploads(d, r.queue)
 		r.layers.uploads, r.glow.uploads = r.uploads, r.uploads
+		// Stock wgpu stages every buffer write, reusing 256 KiB belt chunks but
+		// allocating a one-off staging buffer for each larger write. Splitting
+		// mutable model records at the chunk size keeps them on reused chunks
+		// (99.9 to 111.9 Hz on the zoomed-out 1440p field). Splitting changes
+		// only copy boundaries, so it is safe on every backend; =0 is the control.
+		// This overrides the older gate, which asked for a removed dependency patch.
+		r.models.chunkedUploads = os.Getenv("NANOLATHE_WEBGPU_CHUNKED_UPLOADS") != "0"
 	}
 	return
 }
