@@ -406,6 +406,16 @@ func modelAtlasExtent(need, current int) int {
 	return size
 }
 
+// Atlas planes are as narrow as their contents. Body and silhouette depth
+// holds only key ranks ((256-key)/257, or 0.5 unkeyed; models.wgsl), 1/257
+// apart, which sixteen bits keep distinct; the key plane carries the byte
+// key and a covered flag. Every atlas texel is 8 bytes instead of 12, which
+// shortens each frame's clear and store and the stall a growth costs.
+const (
+	modelAtlasDepthFormat = gputypes.TextureFormatDepth16Unorm
+	modelKeyFormat        = gputypes.TextureFormatRG8Unorm
+)
+
 // modelAtlasShrinkFrames is how long a much smaller extent must suffice
 // before an atlas is reallocated down to it. Render passes clear and store
 // whole attachments, so an atlas left at a past peak costs later frames
@@ -459,7 +469,7 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	if next.color, next.colorView, err = m.modelCreateTexture("battle-model-subject-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
 		return err
 	}
-	if next.depth, next.depthView, err = m.modelCreateTexture("battle-model-subject-depth", next.width, next.height, wgpu.TextureFormatDepth32Float, wgpu.TextureUsageRenderAttachment); err != nil {
+	if next.depth, next.depthView, err = m.modelCreateTexture("battle-model-subject-depth", next.width, next.height, modelAtlasDepthFormat, wgpu.TextureUsageRenderAttachment); err != nil {
 		return err
 	}
 	// DebugResources retains its legacy transparent shadow diagnostic plane.
@@ -470,7 +480,7 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 		return err
 	}
 	m.counters.UploadBytes += 4
-	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, modelKeyFormat, usage); err != nil {
 		return err
 	}
 	if m.groupWork.count > 0 || m.atlas.merged != nil {
@@ -516,13 +526,19 @@ func (m *Models) modelCreatePipeline(module *wgpu.ShaderModule, layout *wgpu.Pip
 	}
 	desc := &wgpu.RenderPipelineDescriptor{Layout: layout, Vertex: wgpu.VertexState{Module: module, EntryPoint: vertex}, Primitive: gputypes.PrimitiveState{Topology: topology, FrontFace: gputypes.FrontFaceCCW, CullMode: gputypes.CullModeNone}, Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xffffffff}, Fragment: &wgpu.FragmentState{Module: module, EntryPoint: fragment, Targets: []gputypes.ColorTargetState{target}}}
 	if fragment == "model_fragment" || fragment == "outline_fragment" {
-		desc.Fragment.Targets = append(desc.Fragment.Targets, gputypes.ColorTargetState{Format: wgpu.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll})
+		desc.Fragment.Targets = append(desc.Fragment.Targets, gputypes.ColorTargetState{Format: modelKeyFormat, WriteMask: gputypes.ColorWriteMaskAll})
 	}
 	if fragment == "model_shadow_fragment" {
 		desc.Primitive.FrontFace, desc.Primitive.CullMode = gputypes.FrontFaceCW, gputypes.CullModeBack
 	}
 	if depth == 1 {
-		desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionLessEqual}
+		// Atlas rasters order faces by key alone; direct subjects test the
+		// world's depth plane.
+		format := modelAtlasDepthFormat
+		if fragment == "model_direct_fragment" {
+			format = wgpu.TextureFormatDepth32Float
+		}
+		desc.DepthStencil = &wgpu.DepthStencilState{Format: format, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionLessEqual}
 	}
 	if depth == 2 {
 		desc.DepthStencil = &wgpu.DepthStencilState{Format: wgpu.TextureFormatDepth32Float, DepthCompare: gputypes.CompareFunctionAlways}

@@ -27,6 +27,9 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 			readW, readH = worldW, worldH
 		}
 		bytes, format, suffix, png := 4, wgpu.TextureFormatRGBA8Unorm, []string{".color.png", ".shadow.png", ".world.png", ".source.png", ".keys.png"}[i], true
+		if i == 4 {
+			bytes, format, suffix, png = 2, modelKeyFormat, ".keys.rg8", false
+		}
 		if i == 2 {
 			format = renderer.format
 			if format == gputypes.TextureFormatRGBA16Float {
@@ -57,7 +60,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 	}{
 		{bed, bedW, bedH, 8, gputypes.TextureFormatRGBA16Float, ".seabed.rgba16f", false},
 		{shadowBody, shadowW, shadowH, 4, gputypes.TextureFormatRGBA8Unorm, ".shadow-body.png", true},
-		{shadowDepth, shadowW, shadowH, 4, gputypes.TextureFormatDepth32Float, ".shadow-depth.f32", false},
+		{shadowDepth, shadowW, shadowH, 2, modelAtlasDepthFormat, ".shadow-depth.u16", false},
 		{shadowMask, shadowW, shadowH, 1, gputypes.TextureFormatR8Unorm, ".shadow-mask.r8", false},
 		{renderer.lenses.snapshot, renderer.lenses.textureWidth, renderer.lenses.textureHeight, 8, gputypes.TextureFormatRGBA16Float, ".lens-snapshot.rgba16f", false},
 		{renderer.reflections.color.t, renderer.reflections.width, renderer.reflections.height, 4, wgpu.TextureFormatRGBA8Unorm, ".reflection-color.png", true},
@@ -80,7 +83,7 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 			return
 		}
 		aspect := gputypes.TextureAspectAll
-		if field.format == gputypes.TextureFormatDepth32Float {
+		if field.format == modelAtlasDepthFormat {
 			aspect = gputypes.TextureAspectDepthOnly
 		}
 		e.TransitionTextures([]wgpu.TextureBarrier{{Texture: field.t, Range: wgpu.TextureRange{Aspect: aspect, MipLevelCount: 1, ArrayLayerCount: 1}, Usage: wgpu.TextureUsageTransition{OldUsage: wgpu.TextureUsageTextureBinding, NewUsage: wgpu.TextureUsageCopySrc}}})

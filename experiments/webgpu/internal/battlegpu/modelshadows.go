@@ -344,7 +344,7 @@ func (m *Models) modelInitShadows(scene *meshscene.Scene) (err error) {
 	if p.dummy.body, p.dummy.bodyView, err = m.modelCreateTexture("battle-shadow-empty-body", 1, 1, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
 		return
 	}
-	if p.dummy.depth, p.dummy.depthView, err = m.modelCreateTexture("battle-shadow-empty-key", 1, 1, wgpu.TextureFormatDepth32Float, usage); err != nil {
+	if p.dummy.depth, p.dummy.depthView, err = m.modelCreateTexture("battle-shadow-empty-key", 1, 1, modelAtlasDepthFormat, usage); err != nil {
 		return
 	}
 	if p.dummy.mask, p.dummy.maskView, err = m.modelCreateTexture("battle-shadow-empty-mask", 1, 1, gputypes.TextureFormatR8Unorm, usage); err != nil {
@@ -392,7 +392,7 @@ func (m *Models) modelResizeShadows(width, height int) (err error) {
 	if next.body, next.bodyView, err = m.modelCreateTexture("battle-shadow-solo-bodies", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
 		return
 	}
-	if next.depth, next.depthView, err = m.modelCreateTexture("battle-shadow-solo-keys", next.width, next.height, wgpu.TextureFormatDepth32Float, usage); err != nil {
+	if next.depth, next.depthView, err = m.modelCreateTexture("battle-shadow-solo-keys", next.width, next.height, modelAtlasDepthFormat, usage); err != nil {
 		return
 	}
 	if next.mask, next.maskView, err = m.modelCreateTexture("battle-shadow-projected-masks", next.width, next.height, gputypes.TextureFormatR8Unorm, usage); err != nil {
