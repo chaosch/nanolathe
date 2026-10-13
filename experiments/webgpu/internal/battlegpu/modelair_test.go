@@ -16,6 +16,9 @@ import (
 // kind in declaration order; the air layout must follow that order exactly.
 func TestModelAirShaderMetalLayout(t *testing.T) {
 	source := modelAirShaderSource([2]int{12, 7})
+	if _, err := naga.Compile(source); err != nil {
+		t.Fatal(err)
+	}
 	ast, err := naga.Parse(source)
 	if err != nil {
 		t.Fatal(err)

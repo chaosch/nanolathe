@@ -9,10 +9,13 @@ struct GroundUniform {extent:vec4<f32>}
 @group(0) @binding(0) var<storage,read> sources:array<GroundSource,64>;
 @group(0) @binding(1) var<storage,read> discs:array<GroundDisc,64>;
 @group(0) @binding(2) var<uniform> u:GroundUniform;
-const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+// Quad corners by vertex index (triangles 0,1,2 and 3,4,5), computed rather
+// than read from a module-scope const array: naga's SPIR-V writer emits such
+// an array as OpConstantNull, so on Vulkan every corner sat at the origin.
+fn groundCorner(v:u32)->vec2<f32>{return vec2<f32>(select(0.0,1.0,v==1u||v==4u||v==5u),select(0.0,1.0,v==2u||v==3u||v==5u));}
 struct GroundOut {@builtin(position) position:vec4<f32>,@location(0) @interpolate(flat) source:u32}
 @vertex fn ground_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->GroundOut {
- var corner=corners[vid];var disc=discs[iid];
+ var corner=groundCorner(vid);var disc=discs[iid];
  let pixel=disc.rect.xy+corner*disc.rect.zw;
  var out:GroundOut;
  out.position=vec4<f32>(pixel.x/u.extent.x*2.0-1.0,1.0-pixel.y/u.extent.y*2.0,0.0,1.0);

@@ -17,10 +17,13 @@ struct AirSlot {place:vec4<f32>,source:vec4<f32>}
 @group(0) @binding(9) var shadowSampler:sampler;
 @group(0) @binding(10) var airBlur:texture_2d<f32>;
 @group(0) @binding(11) var<storage,read> air:array<AirSlot,__SUBJECTS__>;
-const modelShadowCorners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+// Quad corners by vertex index (triangles 0,1,2 and 3,4,5), computed rather
+// than read from a module-scope const array: naga's SPIR-V writer emits such
+// an array as OpConstantNull, so on Vulkan every corner sat at the origin.
+fn modelShadowCorner(v:u32)->vec2<f32>{return vec2<f32>(select(0.0,1.0,v==1u||v==4u||v==5u),select(0.0,1.0,v==2u||v==3u||v==5u));}
 struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) screen:vec2<f32>,@location(1) @interpolate(flat) subject:u32,@location(2) wet:f32}
 @vertex fn model_shadow_commit_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->ModelShadowCommitOut {
- let s=subjects[iid];var corner=modelShadowCorners[vid];var out:ModelShadowCommitOut;
+ let s=subjects[iid];var corner=modelShadowCorner(vid);var out:ModelShadowCommitOut;
  out.screen=s.screen.xy+corner*s.screen.zw;out.subject=iid;
  // A soft subject's record carries its corners' water grade in place of a
  // mask rectangle; the rasterizer spreads it across the quad.

@@ -146,7 +146,7 @@ func TestModelSupersampleResolveEmittedMetal(t *testing.T) {
 	for _, pattern := range []string{
 		`\bu \[\[buffer\(2\)\]\]`, `\bbodies \[\[texture\(0\)\]\]`,
 		`if \(\(naga_f2u32\(_e[0-9]+\) & 8u\) != 0u\)`,
-		`metal::floor\(local \* 0\.5\) \* 2\.0`,
+		`metal::floor\(local(_[0-9]+)? \* 0\.5\) \* 2\.0`,
 		`metal::int2\(1, 0\)`, `metal::int2\(0, 1\)`, `metal::int2\(1, 1\)`,
 		`c00[_0-9]* = _e[0-9]+;`,
 	} {

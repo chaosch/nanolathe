@@ -11,7 +11,10 @@ struct Member {instance:u32,slot:u32,delta:i32,reserved:u32}
 @group(0) @binding(3) var<uniform> u:Uniforms;
 @group(0) @binding(4) var sourceColor:texture_2d<f32>;
 @group(0) @binding(5) var sourceMetadata:texture_2d<f32>;
-const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+// Quad corners by vertex index (triangles 0,1,2 and 3,4,5), computed rather
+// than read from a module-scope const array: naga's SPIR-V writer emits such
+// an array as OpConstantNull, so on Vulkan every corner sat at the origin.
+fn modelGroupCorner(v:u32)->vec2<f32>{return vec2<f32>(select(0.0,1.0,v==1u||v==4u||v==5u),select(0.0,1.0,v==2u||v==3u||v==5u));}
 struct Out {@builtin(position) position:vec4<f32>,@location(0) screen:vec2<f32>,@location(1) @interpolate(flat) index:u32}
 fn modelGroupVertex(slot:Slot,corner:vec2<f32>,index:u32)->Out {
  let pixel=slot.atlas.xy+corner*slot.atlas.zw;
@@ -19,10 +22,10 @@ fn modelGroupVertex(slot:Slot,corner:vec2<f32>,index:u32)->Out {
  out.screen=slot.screen.xy+corner*slot.screen.zw;out.index=index;return out;
 }
 @vertex fn group_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
- var group=groups[iid];var slot=slots[group.info.z-1u];var corner=corners[vid];return modelGroupVertex(slot,corner,iid);
+ var group=groups[iid];var slot=slots[group.info.z-1u];var corner=modelGroupCorner(vid);return modelGroupVertex(slot,corner,iid);
 }
 @vertex fn copy_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {
- var slot=slots[iid];var corner=corners[vid];return modelGroupVertex(slot,corner,iid);
+ var slot=slots[iid];var corner=modelGroupCorner(vid);return modelGroupVertex(slot,corner,iid);
 }
 fn modelGroupLocal(slot:Slot,screen:vec2<f32>)->vec2<f32> {return (screen-slot.screen.xy)*(slot.atlas.zw/slot.screen.zw);}
 // Current Modern/Metal retained groups saturate shifted keys before admission

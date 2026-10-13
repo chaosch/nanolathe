@@ -110,11 +110,15 @@ func (m *Models) modelPrepareBodyPipelines() error {
 			return err
 		}
 		for i, fragment := range [...]string{"model_fragment", "outline_fragment", "model_shadow_fragment", "model_shadow_outline"} {
-			topology := gputypes.PrimitiveTopologyTriangleList
+			// Outlines draw each ring as a quad whose fragments walk the
+			// ring's rows (outline_vertex): the pinned wgpu Metal backend
+			// issues every draw as triangles, so a line-list pipeline filled
+			// its edge pairs as triangles.
+			vertex := "model_vertex"
 			if i%2 != 0 {
-				topology = gputypes.PrimitiveTopologyLineList
+				vertex = "outline_vertex"
 			}
-			next.pipelines[i], err = m.modelCreatePipeline(next.module, m.bodyPipelineLayout, "model_vertex", fragment, wgpu.TextureFormatRGBA8Unorm, 1, false, topology)
+			next.pipelines[i], err = m.modelCreatePipeline(next.module, m.bodyPipelineLayout, vertex, fragment, wgpu.TextureFormatRGBA8Unorm, 1, false, gputypes.PrimitiveTopologyTriangleList)
 			if next.pipelines[i] != nil {
 				next.releases[i+1] = next.pipelines[i].Release
 			}

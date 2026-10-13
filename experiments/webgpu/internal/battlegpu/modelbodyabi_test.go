@@ -18,6 +18,11 @@ import (
 
 func modelBodyCompile(t *testing.T, source string) (*ir.Module, string, msl.TranslationInfo) {
 	t.Helper()
+	// Vulkan builds take the SPIR-V writer, which lacks some expressions the
+	// Metal writer accepts (relational all/any among them).
+	if _, err := naga.Compile(source); err != nil {
+		t.Fatal(err)
+	}
 	ast, err := naga.Parse(source)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +35,46 @@ func modelBodyCompile(t *testing.T, source string) (*ir.Module, string, msl.Tran
 	if err != nil {
 		t.Fatal(err)
 	}
+	if line := mslLooseTernary(code); line != "" {
+		t.Fatalf("select() inside arithmetic emits an unparenthesised ternary: %s", line)
+	}
 	return module, code, info
+}
+
+// mslLooseTernary returns the first line whose ternary condition, read back
+// to its enclosing bracket or assignment, is arithmetic with no comparison.
+// The pinned Metal writer emits select() as a bare ternary, so a select used
+// as an operand of arithmetic takes the whole product as its condition and
+// the Metal compiler rejects the library; such selects need their own let.
+func mslLooseTernary(code string) string {
+	for _, line := range strings.Split(code, "\n") {
+		for at := strings.Index(line, " ? "); at >= 0; {
+			depth, arithmetic, compare := 0, false, false
+			for i := at - 1; i >= 0 && depth >= 0; i-- {
+				switch c := line[i]; {
+				case c == ')' || c == ']':
+					depth++
+				case c == '(' || c == '[':
+					depth--
+				case depth == 0 && (c == '=' && (i == 0 || !strings.ContainsRune("=!<>", rune(line[i-1]))) && (i+1 >= len(line) || line[i+1] != '=') || c == ','):
+					depth = -1
+				case depth == 0 && strings.ContainsRune("<>!&|", rune(c)), depth == 0 && c == '=':
+					compare = true
+				case depth == 0 && strings.ContainsRune("+-*/", rune(c)) && i > 0 && line[i-1] == ' ':
+					arithmetic = true
+				}
+			}
+			if arithmetic && !compare {
+				return line
+			}
+			next := strings.Index(line[at+3:], " ? ")
+			if next < 0 {
+				break
+			}
+			at += 3 + next
+		}
+	}
+	return ""
 }
 
 func modelBodyEntry(t *testing.T, code, name string) string {
@@ -122,6 +166,7 @@ func TestModelBodyFixedCapacityEntryBindings(t *testing.T) {
 		resources []string
 	}{
 		{"model_vertex", []string{"vertices buffer 0", "poses buffer 1", "instances buffer 2", "u buffer 3", "materials buffer 4", "frames buffer 5", "selected buffer 6", "lights buffer 7", "centers buffer 8"}},
+		{"outline_vertex", []string{"vertices buffer 0", "poses buffer 1", "instances buffer 2", "u buffer 3", "centers buffer 8"}},
 		{"model_fragment", []string{"instances buffer 2", "u buffer 3", "atlas texture 0", "palette texture 1", "nearestSampler sampler 0"}},
 		{"outline_fragment", []string{"instances buffer 2", "palette texture 1"}},
 		{"model_shadow_fragment", []string{"instances buffer 2", "atlas texture 0", "nearestSampler sampler 0"}},

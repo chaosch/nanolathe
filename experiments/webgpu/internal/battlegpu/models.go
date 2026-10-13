@@ -59,8 +59,10 @@ type ModelCounters struct {
 	AtlasExtents [4]int
 }
 type modelMesh struct {
-	first, count         uint32
-	edgeFirst, edgeCount uint32
+	first, count uint32
+	// ringFirst is the mesh's first outline ring, counted in the centers
+	// buffer as two rings per record, and ringCount its outlined rings.
+	ringFirst, ringCount uint32
 	base                 int32
 	pieces, centers      int
 	selectedCount        int
@@ -210,6 +212,45 @@ func (w *modelWritten) write(m *Models, b *wgpu.Buffer, data []byte) error {
 	w.buffer, w.bytes = b, append(w.bytes[:0], data...)
 	m.counters.UploadBytes += len(data)
 	return nil
+}
+
+// modelOutlineDraw draws a mesh's outline rings as quads, six vertices each
+// (outline_vertex in models.wgsl).
+func modelOutlineDraw(mesh modelMesh, instances, first uint32) gputypes.DrawArgs {
+	return gputypes.DrawArgs{VertexCount: mesh.ringCount * 6, InstanceCount: instances, FirstVertex: mesh.ringFirst * 6, FirstInstance: first}
+}
+
+// modelOutlineCorners is the most ring corners outline_vertex carries to its
+// fragments. Retail models author at most 16; a longer ring is not outlined.
+const modelOutlineCorners = 16
+
+// modelOutlineRings splits authored outline edges, which close each ring
+// back on its first vertex, into (first vertex, corner count) rings, keeping
+// the rings the polygon-outline rows mark: three corners or more
+// [03 R-RAST-01 §1], up to modelOutlineCorners.
+func modelOutlineRings(edges []uint32, vertices int) ([][2]uint32, error) {
+	var rings [][2]uint32
+	for at := 0; at < len(edges); {
+		start, n := edges[at], uint32(0)
+		for {
+			if at+1 >= len(edges) || edges[at] != start+n || int(start+n) >= vertices {
+				return nil, modelError("authored outline rings of consecutive resident vertices")
+			}
+			end := edges[at+1]
+			at += 2
+			n++
+			if end == start {
+				break
+			}
+			if end != start+n {
+				return nil, modelError("authored outline rings of consecutive resident vertices")
+			}
+		}
+		if n >= 3 && n <= modelOutlineCorners {
+			rings = append(rings, [2]uint32{start, n})
+		}
+	}
+	return rings, nil
 }
 
 // modelDirectPaint is one direct subject's place in the world pass walk.
@@ -635,21 +676,27 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 			}
 			ib = binary.LittleEndian.AppendUint32(ib, index)
 		}
-		if len(mesh.EdgeIndices)%2 != 0 {
-			return m, modelError("authored outline edge pairs")
-		}
-		entry.edgeFirst, entry.edgeCount = uint32(len(ib)/4), uint32(len(mesh.EdgeIndices))
-		for _, index := range mesh.EdgeIndices {
-			if int(index) >= len(mesh.Vertices) {
-				return m, modelError("authored edge indices within resident vertices")
-			}
-			ib = binary.LittleEndian.AppendUint32(ib, index)
+		rings, e := modelOutlineRings(mesh.EdgeIndices, len(mesh.Vertices))
+		if e != nil {
+			return m, e
 		}
 		faces, e := modelFaceRecords(mesh, entry.centers)
 		if e != nil {
 			return m, e
 		}
 		cb = append(cb, faces...)
+		// Outline rings follow the mesh's face records in the centers buffer
+		// (a ninth storage buffer would exceed the default per-stage limit
+		// of eight): absolute first vertex and corner count, two rings per
+		// 16-byte record.
+		entry.ringFirst, entry.ringCount = uint32(len(cb)/16*2), uint32(len(rings))
+		for _, ring := range rings {
+			cb = binary.LittleEndian.AppendUint32(cb, uint32(entry.base)+ring[0])
+			cb = binary.LittleEndian.AppendUint32(cb, ring[1])
+		}
+		for len(cb)%16 != 0 {
+			cb = append(cb, 0)
+		}
 		m.meshes = append(m.meshes, entry)
 	}
 	mb := make([]byte, max(16, len(m.materials)*16))
@@ -1355,9 +1402,9 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 				for outlines < end && m.draws[outlines].outline {
 					outlines++
 				}
-				if mesh.edgeCount > 0 && outlines > first {
+				if mesh.ringCount > 0 && outlines > first {
 					pass.SetPipeline(m.outlinePipeline)
-					pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: uint32(outlines - first), FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: m.draws[first].instance})
+					pass.Draw(modelOutlineDraw(mesh, uint32(outlines-first), m.draws[first].instance))
 					m.counters.Draws++
 				}
 				pass.SetPipeline(m.bodyPipeline)
@@ -1375,12 +1422,12 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 			if mesh.count == 0 {
 				continue
 			}
-			if mesh.edgeCount > 0 && d.outline {
+			if mesh.ringCount > 0 && d.outline {
 				if m.state == nil || m.state.disabled || selected != m.outlinePipeline {
 					pass.SetPipeline(m.outlinePipeline)
 					selected = m.outlinePipeline
 				}
-				pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: 1, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: d.instance})
+				pass.Draw(modelOutlineDraw(mesh, 1, d.instance))
 				m.counters.Draws++
 			}
 			if m.state == nil || m.state.disabled || selected != m.bodyPipeline {

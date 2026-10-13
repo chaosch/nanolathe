@@ -2,6 +2,7 @@ package battlegpu
 
 import (
 	_ "embed"
+	"os"
 	"strconv"
 	"strings"
 
@@ -17,21 +18,21 @@ var modelCommitShader string
 // by the shared dispatcher. This keeps ordinary coverage (§17/§22) and shadow
 // filtering (§34) independent of the pipeline allocation change.
 func modelCommitBodyHelpers() string {
-	_, tail, _ := strings.Cut(modelResolveShader, "const corners=")
+	_, tail, _ := strings.Cut(modelResolveShader, "fn modelResolveCorner(")
 	return strings.NewReplacer(
 		"@vertex fn resolve_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)", "fn modelCommitBodyVertex(vid:u32,iid:u32)",
 		"@fragment fn resolve_fragment(input:Out)->@location(0) vec4<f32>", "fn modelCommitBodyFragment(input:Out)->vec4<f32>",
 		"u.", "mainU.",
-	).Replace("const corners=" + tail)
+	).Replace("fn modelResolveCorner(" + tail)
 }
 
 func modelCommitShadowHelpers() string {
-	_, tail, _ := strings.Cut(modelShadowCommitShader, "const modelShadowCorners=")
+	_, tail, _ := strings.Cut(modelShadowCommitShader, "fn modelShadowCorner(")
 	return strings.NewReplacer(
 		"@vertex fn model_shadow_commit_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)", "fn modelCommitShadowVertex(vid:u32,iid:u32)",
 		"@fragment fn model_shadow_commit_fragment(input:ModelShadowCommitOut)->@location(0) vec4<f32>", "fn modelCommitShadowFragment(input:ModelShadowCommitOut)->vec4<f32>",
 		"u.", "shadowU.",
-	).Replace("const modelShadowCorners=" + tail)
+	).Replace("fn modelShadowCorner(" + tail)
 }
 
 func modelCommitShaderSource(capacities [2]int, runtime ...bool) string {
@@ -39,6 +40,15 @@ func modelCommitShaderSource(capacities [2]int, runtime ...bool) string {
 		"__SLOTS__", strconv.Itoa(capacities[0]), "__SUBJECTS__", strconv.Itoa(capacities[1]),
 		"__BODY_HELPERS__", modelCommitBodyHelpers(), "__SHADOW_HELPERS__", modelCommitShadowHelpers(),
 	).Replace(modelCommitShader)
+	if m := os.Getenv("NANOLATHE_WEBGPU_DIAG_COMMIT"); m != "" {
+		// Temporary diagnostic: replace a family's fragment with solid red.
+		if m == "body" || m == "both" {
+			source = strings.Replace(source, "return modelCommitBodyFragment(value);", "return vec4<f32>(1.0,0.0,0.0,1.0);", 1)
+		}
+		if m == "shadow" || m == "both" {
+			source = strings.Replace(source, "return modelCommitShadowFragment(value);", "return vec4<f32>(1.0,0.0,0.0,1.0);", 1)
+		}
+	}
 	if len(runtime) > 0 && runtime[0] {
 		source = runtimeStorageArrays(source)
 		source = strings.Replace(source, "const modelCommitSlotCapacity:u32="+strconv.Itoa(capacities[0])+"u;", "__RUNTIME_CAPACITY_FUNCTION__", 1)

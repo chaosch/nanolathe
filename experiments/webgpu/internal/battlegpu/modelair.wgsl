@@ -21,14 +21,16 @@ struct AirUniforms {extent:vec4<f32>}
 @group(0) @binding(5) var body:texture_2d<f32>;
 @group(0) @binding(6) var across:texture_2d<f32>;
 @group(0) @binding(7) var airSampler:sampler;
-const airCorners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+// Quad corners by vertex index (triangles 0,1,2 and 3,4,5), computed rather
+// than read from a module-scope const array: naga's SPIR-V writer emits such
+// an array as OpConstantNull, so on Vulkan every corner sat at the origin.
+fn airCorner(v:u32)->vec2<f32>{return vec2<f32>(select(0.0,1.0,v==1u||v==4u||v==5u),select(0.0,1.0,v==2u||v==3u||v==5u));}
 struct AirOut {@builtin(position) position:vec4<f32>,@location(0) @interpolate(flat) subject:u32}
 @vertex fn air_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->AirOut {
  var out:AirOut;out.subject=iid;out.position=vec4<f32>(2.0,2.0,2.0,1.0);
  let s=subjects[iid];let a=air[iid];
  if s.params.x<2.5||a.place.z<=0.0{return out;}
- // Store the guarded corner load before arithmetic for the pinned writer.
- var corner=airCorners[vid];
+ var corner=airCorner(vid);
  let p=a.place.xy+corner*a.place.zw;
  out.position=vec4<f32>(p.x/u.extent.x*2.0-1.0,1.0-p.y/u.extent.y*2.0,0.5,1.0);return out;
 }

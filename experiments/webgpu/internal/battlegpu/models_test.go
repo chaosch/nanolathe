@@ -195,11 +195,17 @@ func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	loads, screenScales, atlasScales := 0, 0, 0
-	// Only the vertex scales the loaded corner. The fragment also scales a
-	// block coordinate in atlas space when selecting the four 2x samples.
+	loads, calls, screenScales, atlasScales := 0, 0, 0, 0
+	// Only the vertex scales the corner. The fragment also scales a block
+	// coordinate in atlas space when selecting the four 2x samples. The
+	// corner is computed (modelresolve.wgsl), not loaded from a const array:
+	// naga's SPIR-V writer nulls such arrays, and its Metal writer misplaced
+	// a guarded array read inside multiplication.
 	vertexCode := strings.Split(code, "fragment resolve_fragmentOutput")[0]
 	for _, line := range strings.Split(vertexCode, "\n") {
+		if strings.Contains(line, "= modelResolveCorner(vid)") {
+			calls++
+		}
 		if strings.Contains(line, "corners.inner[") {
 			loads++
 			// The pinned writer does not parenthesize a robust array-read
@@ -216,8 +222,8 @@ func TestModelResolveMetalScalesLoadedCorner(t *testing.T) {
 			atlasScales++
 		}
 	}
-	if loads != 1 || screenScales != 1 || atlasScales != 1 {
-		t.Fatalf("resolve scales: loads=%d screen=%d atlas=%d", loads, screenScales, atlasScales)
+	if loads != 0 || calls != 1 || screenScales != 1 || atlasScales != 1 {
+		t.Fatalf("resolve scales: loads=%d calls=%d screen=%d atlas=%d", loads, calls, screenScales, atlasScales)
 	}
 }
 
@@ -346,5 +352,31 @@ func TestModelOutlineUsesSelectedBluePalette(t *testing.T) {
 	at := strings.Index(modelBodyShader, "fn modelOutline(")
 	if at < 0 || !strings.Contains(modelBodyShader[at:], "if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}") {
 		t.Fatal("retained BLUE outline does not select the rule's palette row")
+	}
+}
+
+// Outline rings come back as (first vertex, corners) from edges that close
+// on their first vertex; two-corner lines and rings over the carried corner
+// limit are not outlined, and a ring that skips a vertex is malformed.
+func TestModelOutlineRings(t *testing.T) {
+	ring := func(start, n uint32) (edges []uint32) {
+		for i := range n {
+			edges = append(edges, start+i, start+(i+1)%n)
+		}
+		return edges
+	}
+	var edges []uint32
+	for _, r := range [][2]uint32{{0, 4}, {4, 2}, {6, 3}, {9, modelOutlineCorners + 1}, {26, modelOutlineCorners}} {
+		edges = append(edges, ring(r[0], r[1])...)
+	}
+	got, err := modelOutlineRings(edges, 42)
+	if err != nil || !reflect.DeepEqual(got, [][2]uint32{{0, 4}, {6, 3}, {26, modelOutlineCorners}}) {
+		t.Fatalf("rings=%v err=%v", got, err)
+	}
+	if _, err := modelOutlineRings([]uint32{0, 1, 2, 0}, 3); err == nil {
+		t.Fatal("a ring that skips a corner was accepted")
+	}
+	if _, err := modelOutlineRings(ring(0, 4), 3); err == nil {
+		t.Fatal("a ring beyond the resident vertices was accepted")
 	}
 }

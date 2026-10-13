@@ -43,3 +43,26 @@ func TestWGSLAvoidsReservedWords(t *testing.T) {
 		}
 	}
 }
+
+// Naga's SPIR-V writer emits a module-scope const array as OpConstantNull,
+// so every element reads zero on Vulkan (the model commits drew nothing);
+// its Metal writer keeps the values, so only a Vulkan run shows it. Tables
+// belong in function-local vars, or computed values.
+func TestWGSLAvoidsModuleConstArrays(t *testing.T) {
+	files, err := filepath.Glob("*.wgsl")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("shader sources: %v", err)
+	}
+	moduleArray := regexp.MustCompile(`^const\s+\w+\s*(:\s*array|=\s*array)`)
+	for _, name := range files {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if moduleArray.MatchString(line) {
+				t.Errorf("%s:%d declares a module-scope const array", name, i+1)
+			}
+		}
+	}
+}

@@ -19,11 +19,12 @@ struct AirSlot {place:vec4<f32>,source:vec4<f32>}
 @group(0) @binding(9) var shadowSampler:sampler;
 @group(0) @binding(10) var airBlur:texture_2d<f32>;
 @group(0) @binding(11) var<storage,read> air:array<AirSlot,1>;
-// Store the guarded corner load before arithmetic: the pinned Metal writer
-// otherwise scales only the robust-access fallback in its conditional.
-const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
+// Quad corners by vertex index (triangles 0,1,2 and 3,4,5), computed rather
+// than read from a module-scope const array: naga's SPIR-V writer emits such
+// an array as OpConstantNull, so on Vulkan every corner sat at the origin.
+fn modelResolveCorner(v:u32)->vec2<f32>{return vec2<f32>(select(0.0,1.0,v==1u||v==4u||v==5u),select(0.0,1.0,v==2u||v==3u||v==5u));}
 struct Out { @builtin(position) position:vec4<f32>,@location(0) pixel:vec2<f32>,@location(1) @interpolate(flat) index:u32 }
-@vertex fn resolve_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {let s=slots[iid];var corner=corners[vid];let pixel=s.screen.xy+corner*s.screen.zw;var out:Out;out.position=vec4<f32>(pixel.x/u.extent.x*2.0-1.0,1.0-pixel.y/u.extent.y*2.0,0.0,1.0);out.pixel=s.atlas.xy+corner*s.atlas.zw;out.index=iid;return out;}
+@vertex fn resolve_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {let s=slots[iid];var corner=modelResolveCorner(vid);let pixel=s.screen.xy+corner*s.screen.zw;var out:Out;out.position=vec4<f32>(pixel.x/u.extent.x*2.0-1.0,1.0-pixel.y/u.extent.y*2.0,0.0,1.0);out.pixel=s.atlas.xy+corner*s.atlas.zw;out.index=iid;return out;}
 @fragment fn resolve_fragment(input:Out)->@location(0) vec4<f32> {
  let s=slots[input.index];let local=input.pixel-s.atlas.xy;
  let at=clamp(vec2<i32>(s.atlas.xy+floor(local*0.5)*2.0),vec2<i32>(s.atlas.xy),vec2<i32>(s.atlas.xy+s.atlas.zw)-vec2<i32>(2));

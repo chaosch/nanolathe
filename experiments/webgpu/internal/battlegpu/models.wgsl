@@ -75,6 +75,87 @@ fn admitted(i:Instance,material:u32,m:mat4x4<f32>,flags:u32)->bool {
  return area>0.0;
 }
 @vertex fn model_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->Out {return modelVertex(vid,iid);}
+// Outlines follow retail's polygon-outline rows [03 R-RAST-01 §1]: each ring
+// of three corners or more walks its two chains down from its top corner;
+// on each raster row the chain edge spanning it (half-open in rows; a later
+// folded edge overrides) marks the pixel at its 16.16 step, and a row whose
+// right pixel is not right of its left marks nothing. One quad per ring
+// covers its raster bounds, six vertices (triangles 0,1,2 and 3,4,5): the
+// pinned wgpu Metal backend issues every draw as triangles, so outlines
+// cannot use a line-list pipeline. The vertex carries the ring's corners as
+// flat values and outline_fragment walks the chains.
+struct OutlineOut {
+ @builtin(position) position:vec4<f32>,@location(0) @interpolate(flat) instance:u32,
+ // Corner count, top corner, bottom corner.
+ @location(1) @interpolate(flat) ring:vec4<u32>,@location(2) @interpolate(flat) raster:vec3<f32>,
+ // Raster x and y biased by 8192 in the low and high halves, then each
+ // corner's height key, 16 corners each (modelOutlineCorners).
+ @location(3) @interpolate(flat) xy0:vec4<u32>,@location(4) @interpolate(flat) xy1:vec4<u32>,
+ @location(5) @interpolate(flat) xy2:vec4<u32>,@location(6) @interpolate(flat) xy3:vec4<u32>,
+ @location(7) @interpolate(flat) key0:vec4<f32>,@location(8) @interpolate(flat) key1:vec4<f32>,
+ @location(9) @interpolate(flat) key2:vec4<f32>,@location(10) @interpolate(flat) key3:vec4<f32>
+}
+@vertex fn outline_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->OutlineOut {
+ var out:OutlineOut;out.instance=iid;out.position=vec4<f32>(2.0,2.0,2.0,1.0);
+ // Rings are (absolute first vertex, corner count), two per centers record.
+ let index=vid/6u;let corner=vid%6u;let pair=bitcast<vec4<u32>>(centers[index/2u]);
+ let ring=select(pair.xy,pair.zw,(index&1u)!=0u);let i=instances[iid];
+ if ring.y<3u||ring.y>16u||i.counts.y==0u{return out;}
+ let pose=poses[i.ids.x+vertices[ring.x].piece];let m=pose.matrix;if m[3].w<0.5{return out;}
+ let r=outlineRaster(i,pose.flags.x);let origin=select(i.bounds.w,m[1].w,m[2].w>0.5);
+ var xy:array<u32,16>;var keys:array<f32,16>;var lo=vec2<f32>(0.0);var hi=vec2<f32>(0.0);var top=0u;var bottom=0u;
+ for(var j=0u;j<ring.y;j++){
+  let world=(m*vec4<f32>(vertices[ring.x+j].position.xyz,1.0)).xyz;
+  let at=round((projection(world,i,pose.flags.x)-r.yz)/r.x);
+  // Outside the biased domain, or not finite: the ring is not outlined.
+  // Component tests: the pinned SPIR-V writer cannot emit all().
+  if !(at.x>=-8192.0&&at.y>=-8192.0&&at.x<=24575.0&&at.y<=24575.0){return out;}
+  if j==0u{lo=at;hi=at;}else{if at.y<lo.y{top=j;}if at.y>hi.y{bottom=j;}lo=min(lo,at);hi=max(hi,at);}
+  xy[j]=u32(at.x+8192.0)|(u32(at.y+8192.0)<<16u);keys[j]=floor(world.y-origin)+i.clip.w;
+ }
+ if hi.y<=lo.y{return out;}
+ var q=vec2<f32>(lo.x,lo.y);
+ if corner==1u||corner==4u||corner==5u{q.x=hi.x+1.0;}
+ if corner==2u||corner==3u||corner==5u{q.y=hi.y;}
+ let p=outlineToAtlas(i,r,q);
+ out.position=vec4<f32>(p.x/u.extent.z*2.0-1.0,1.0-p.y/u.extent.w*2.0,0.5,1.0);
+ out.ring=vec4<u32>(ring.y,top,bottom,0u);out.raster=r;
+ out.xy0=vec4<u32>(xy[0],xy[1],xy[2],xy[3]);out.xy1=vec4<u32>(xy[4],xy[5],xy[6],xy[7]);
+ out.xy2=vec4<u32>(xy[8],xy[9],xy[10],xy[11]);out.xy3=vec4<u32>(xy[12],xy[13],xy[14],xy[15]);
+ out.key0=vec4<f32>(keys[0],keys[1],keys[2],keys[3]);out.key1=vec4<f32>(keys[4],keys[5],keys[6],keys[7]);
+ out.key2=vec4<f32>(keys[8],keys[9],keys[10],keys[11]);out.key3=vec4<f32>(keys[12],keys[13],keys[14],keys[15]);
+ return out;
+}
+// outlineRaster is the scale and offset taking a raster pixel to a screen
+// point: the record projection's own pixels, or screen pixels when the
+// instance projects through the camera.
+fn outlineRaster(i:Instance,flags:u32)->vec3<f32> {
+ if (u32(i.origin.w)&1u)==0u || (flags&2u)!=0u {return vec3<f32>(1.0,0.0,0.0);}
+ return vec3<f32>(select(0.5,1.0,i.control.y<=0.5)*i.control.z,u.projection.zw);
+}
+fn outlineFromAtlas(i:Instance,r:vec3<f32>,p:vec2<f32>)->vec2<f32> {return ((p-i.atlas.xy)*(i.screen.zw/i.atlas.zw)+i.screen.xy-r.yz)/r.x;}
+fn outlineToAtlas(i:Instance,r:vec3<f32>,p:vec2<f32>)->vec2<f32> {return (p*r.x+r.yz-i.screen.xy)*(i.atlas.zw/i.screen.zw)+i.atlas.xy;}
+fn outlineCorner(v:u32)->vec2<i32> {return vec2<i32>(i32(v&0xffffu)-8192,i32(v>>16u)-8192);}
+// outlineChain walks one chain from the top corner to the bottom corner and
+// returns (found, pixel x, height key) for raster row y. Biased coordinates
+// keep every signed 16.16 product in i32.
+fn outlineChain(corners:array<u32,16>,heights:array<f32,16>,ring:vec4<u32>,left:bool,y:i32)->vec3<f32> {
+ var xy=corners;var keys=heights;var cur=ring.y;var found=vec3<f32>(0.0);
+ for(var n=0u;n<=ring.x;n++){
+  var next=cur+1u;if next==ring.x{next=0u;}
+  if left{next=ring.x-1u;if cur>0u{next=cur-1u;}}
+  let a=outlineCorner(xy[cur]);let b=outlineCorner(xy[next]);
+  if b.y>a.y&&y>=a.y&&y<b.y{
+   let rows=b.y-a.y;let m=y-a.y;let step=((b.x-a.x)*65536)/rows;
+   let x=(((a.x+8192)*65536+65535+step*m)>>16u)-8192;
+   let delta=keys[next]-keys[cur];let fraction=f32(m)/f32(rows);
+   found=vec3<f32>(1.0,f32(x),floor(keys[cur]+delta*fraction));
+  }
+  if next==ring.z{break;}
+  cur=next;
+ }
+ return found;
+}
 fn modelVertex(vid:u32,iid:u32)->Out {
  let v=vertices[vid];let i=instances[iid];let p=poses[i.ids.x+v.piece];let m=p.matrix;var out:Out;out.instance=iid;
  out.position=vec4<f32>(2.0,2.0,2.0,1.0);if m[3].w<0.5||i.counts.y==0u{return out;}
@@ -130,15 +211,21 @@ fn modelShade(input:Out)->Fragment {
  let emission=i.emission.rgb*max(i.emission.w,0.0);color=vec3<f32>(1.0)-(vec3<f32>(1.0)-color)*(vec3<f32>(1.0)-clamp(emission,vec3<f32>(0.0),vec3<f32>(1.0)));
  var out:Fragment;out.color=select(vec4<f32>(color*tex.a,tex.a),vec4<f32>(0.0),erased);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
 }
-fn modelOutline(input:Out)->Fragment {
+fn modelOutline(input:OutlineOut)->Fragment {
  let i=instances[input.instance];let outline=select(i.outline,i.ruleOutline,i.counts.z>0u);if i.state.z<=0.0||outline.a<=0.0{discard;}
  if ((input.position.xy<i.atlas.xy).x||(input.position.xy<i.atlas.xy).y)||((input.position.xy>=i.atlas.xy+i.atlas.zw).x||(input.position.xy>=i.atlas.xy+i.atlas.zw).y){discard;}
- let key=wrappedKey(input.key);var color=outline.rgb;if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}
+ let p=vec2<i32>(floor(outlineFromAtlas(i,input.raster,input.position.xy)));
+ let xy=array<u32,16>(input.xy0.x,input.xy0.y,input.xy0.z,input.xy0.w,input.xy1.x,input.xy1.y,input.xy1.z,input.xy1.w,input.xy2.x,input.xy2.y,input.xy2.z,input.xy2.w,input.xy3.x,input.xy3.y,input.xy3.z,input.xy3.w);
+ let keys=array<f32,16>(input.key0.x,input.key0.y,input.key0.z,input.key0.w,input.key1.x,input.key1.y,input.key1.z,input.key1.w,input.key2.x,input.key2.y,input.key2.z,input.key2.w,input.key3.x,input.key3.y,input.key3.z,input.key3.w);
+ let l=outlineChain(xy,keys,input.ring,true,p.y);let r=outlineChain(xy,keys,input.ring,false,p.y);
+ if l.x<0.5||r.x<0.5||r.y<=l.y{discard;}
+ var raw=r.z;if f32(p.x)==l.y{raw=l.z;}else if f32(p.x)!=r.y{discard;}
+ let key=wrappedKey(raw);var color=outline.rgb;if modelBlue(i,key){color=textureLoad(palette,vec2<i32>(i32(i.shadow.w),1),0).rgb;}
  var out:Fragment;out.color=vec4<f32>(color*outline.a,outline.a);out.metadata=vec4<f32>(key/255.0,1.0,0.0,0.0);out.depth=select(0.5,(256.0-key)/257.0,i.counts.z>0u&&i.reveal.w>0.5);return out;
 }
 
 @fragment fn model_fragment(input:Out)->Fragment {return modelShade(input);}
-@fragment fn outline_fragment(input:Out)->Fragment {return modelOutline(input);}
+@fragment fn outline_fragment(input:OutlineOut)->Fragment {return modelOutline(input);}
 struct ModelShadowFragment {@location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32}
 // Shadow silhouettes need only coverage and the height key: red carries the
 // byte key the commit tests (128 for an unkeyed subject, whose depth is
@@ -154,7 +241,7 @@ struct ModelShadowFragment {@location(0) color:vec4<f32>,@builtin(frag_depth) de
  let keyed=ruled&&i.reveal.w>0.5;
  var out:ModelShadowFragment;out.color=vec4<f32>(select(128.0,key,keyed)/255.0,0.0,0.0,select(a,0.0,erased));out.depth=select(0.5,(256.0-key)/257.0,keyed);return out;
 }
-@fragment fn model_shadow_outline(input:Out)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>((256.0-round(shaded.depth*257.0))/255.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
+@fragment fn model_shadow_outline(input:OutlineOut)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>((256.0-round(shaded.depth*257.0))/255.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
 
 // Direct subjects: an opaque single-member subject outside the effects phase
 // draws straight into the world in its paint position instead of through the

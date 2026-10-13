@@ -579,14 +579,14 @@ func (m *Models) modelDrawShadowBodies(enc *wgpu.CommandEncoder) error {
 		count := uint32(end - first)
 		first = end
 		mesh := m.meshes[draw.mesh]
-		if !draw.outline || mesh.edgeCount == 0 {
+		if !draw.outline || mesh.ringCount == 0 {
 			continue
 		}
 		if !selected || m.state == nil || m.state.disabled {
 			pass.SetPipeline(p.outlinePipeline)
 			selected = true
 		}
-		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: count, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: draw.instance})
+		pass.Draw(modelOutlineDraw(mesh, count, draw.instance))
 		m.counters.Draws++
 	}
 	return pass.End()

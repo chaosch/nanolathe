@@ -21,6 +21,9 @@ func modelCommitCompile(t *testing.T, capacities [2]int) (*ir.Module, string) {
 	if strings.Contains(source, "__") {
 		t.Fatal("unexpanded common commit capacity or helpers")
 	}
+	if _, err := naga.Compile(source); err != nil {
+		t.Fatal(err)
+	}
 	ast, err := naga.Parse(source)
 	if err != nil {
 		t.Fatal(err)
@@ -108,12 +111,12 @@ func TestModelCommonCommitRetainsCallableEquations(t *testing.T) {
 		name, canonical, marker, callable string
 		undo                              []string
 	}{
-		{"body", modelResolveShader, "const corners=", modelCommitBodyHelpers(), []string{
+		{"body", modelResolveShader, "fn modelResolveCorner(", modelCommitBodyHelpers(), []string{
 			"fn modelCommitBodyVertex(vid:u32,iid:u32)", "@vertex fn resolve_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)",
 			"fn modelCommitBodyFragment(input:Out)->vec4<f32>", "@fragment fn resolve_fragment(input:Out)->@location(0) vec4<f32>",
 			"mainU.", "u.",
 		}},
-		{"shadow", modelShadowCommitShader, "const modelShadowCorners=", modelCommitShadowHelpers(), []string{
+		{"shadow", modelShadowCommitShader, "fn modelShadowCorner(", modelCommitShadowHelpers(), []string{
 			"fn modelCommitShadowVertex(vid:u32,iid:u32)", "@vertex fn model_shadow_commit_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)",
 			"fn modelCommitShadowFragment(input:ModelShadowCommitOut)->vec4<f32>", "@fragment fn model_shadow_commit_fragment(input:ModelShadowCommitOut)->@location(0) vec4<f32>",
 			"shadowU.", "u.",
