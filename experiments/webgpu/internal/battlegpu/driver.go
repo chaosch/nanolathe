@@ -815,12 +815,16 @@ func writeRows(path string, rows []drawRow) error {
 }
 
 // releaseUploadedArt drops the CPU pixels of art the renderer has uploaded
-// and never reads again: the model texture atlas and the terrain tile and
-// detail atlases (~0.5 GB in a remastered 1440p field, half of the live heap
-// at the start of play, and the bulk of a browser tab's wasm memory).
+// and never reads again: the model texture atlas, the sprite atlases and the
+// terrain tile and detail atlases (~0.6 GB in a remastered 1440p field).
 // Dimensions stay. The debug frame dump serializes the model atlas, so it
 // keeps them.
 func releaseUploadedArt(scene *meshscene.Scene) {
+	// The sprite atlases are held by the live source's sprite builder too.
+	if live, ok := scene.Live.(interface{ ReleaseUploadedArt() }); ok {
+		live.ReleaseUploadedArt()
+	}
+	scene.SpriteAtlas.RGBA, scene.SpriteDetailAtlas.RGBA = nil, nil
 	scene.Atlas.RGBA = nil
 	if t := scene.TerrainTiles; t != nil {
 		t.Atlas.RGBA, t.Detail.RGBA = nil, nil

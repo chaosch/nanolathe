@@ -184,6 +184,22 @@ func abs32(v float32) float32 {
 	}
 	return v
 }
+
+// ReleaseUploadedArt drops the CPU pixels of the sprite atlases, in the sprite
+// builder and in the scene, for a renderer that has uploaded them once and
+// keeps its own GPU copy. A renderer that re-reads the scene must not call it.
+func (r *RetainedBattle) ReleaseUploadedArt() {
+	if r == nil || r.source == nil {
+		return
+	}
+	if b, ok := r.source.sprites.(*BattleSprites); ok {
+		b.ReleasePixels()
+	}
+	if s := r.source.scene; s != nil {
+		s.SpriteAtlas.RGBA, s.SpriteDetailAtlas.RGBA = nil, nil
+	}
+}
+
 func (r *RetainedBattle) Report() map[string]any {
 	report := map[string]any{"sprites": r.source.spriteReport(), "material_frames_missing": r.source.materialFramesMissing}
 	if r.previous != nil {

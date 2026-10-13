@@ -316,6 +316,10 @@ func (h *metalBattleHost) Next(seconds float64, in meshscene.Input) (meshscene.L
 	return h.compose(cur)
 }
 
+// ReleaseUploadedArt lets a renderer that has uploaded the world's art and
+// keeps its own GPU copy drop the CPU pixels (the WebGPU prototype does).
+func (h *metalBattleHost) ReleaseUploadedArt() { h.world.ReleaseUploadedArt() }
+
 // prepareForeground fills the frame's camera, foreground and frame sources
 // while the visuals' client-free half runs.
 func (h *metalBattleHost) prepareForeground(camera [3]float32, fraction int32, cur *frame.Frame) (*meshscene.LiveFrame, error) {

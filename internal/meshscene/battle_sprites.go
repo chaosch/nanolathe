@@ -21,6 +21,9 @@ import (
 type BattleSprites struct {
 	// Splits times the last Append: setup, features, effects+strips, projectiles, wreck lights, totals (ms, diagnostic).
 	Splits [6]float64
+	// releasedBytes keeps the packed atlas size for the census once
+	// ReleasePixels has dropped the pixels.
+	releasedBytes int
 	// hot holds per-feature counters as integers; Append merges nonzero ones
 	// into counts so reports keep the same keys and values.
 	hot                                                  [hotSpriteCounters]int
@@ -90,6 +93,14 @@ type spriteWalkOp struct {
 }
 
 func (b *BattleSprites) Texture() Texture { return b.texture }
+
+// ReleasePixels drops the packed atlases' CPU pixels for a renderer that has
+// uploaded them and keeps its own copy; sizes and regions stay, and nothing
+// here reads the pixels after packing.
+func (b *BattleSprites) ReleasePixels() {
+	b.releasedBytes = max(b.releasedBytes, len(b.texture.RGBA))
+	b.texture.RGBA, b.detailTexture.RGBA = nil, nil
+}
 
 // DetailTexture is the 2x feature variant atlas; empty when there is none.
 func (b *BattleSprites) DetailTexture() Texture { return b.detailTexture }
@@ -686,7 +697,7 @@ func (b *BattleSprites) Report() map[string]any {
 	for k, v := range b.totals {
 		totals[k] = v
 	}
-	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": len(b.texture.RGBA), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": 0, "alternate_children_composited": b.alternateChildrenPrepared, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "crop_raw_texel_area": b.rawSpritePixels, "crop_retained_texel_area": b.croppedSpritePixels, "crop_rgba_margin_bytes_removed": (b.rawSpritePixels - b.croppedSpritePixels) * 4, "crop_fully_transparent_frames": b.fullyTransparentFrames, "crop_area_basis": "sum of decoded frame areas before deduplication and gutters; atlas_bytes is actual packed storage", "approximations": []string{
+	return map[string]any{"atlas_width": b.texture.Width, "atlas_height": b.texture.Height, "atlas_bytes": max(len(b.texture.RGBA), b.releasedBytes), "atlas_cells": len(b.regions), "banks_loaded": b.banksLoaded, "frames_loaded": b.framesLoaded, "sequences_loaded": len(b.sequences), "missing_art": missing, "last_counts": counts, "record_visits": totals, "alternate_children_omitted": 0, "alternate_children_composited": b.alternateChildrenPrepared, "banks": append([]spriteBankCensus(nil), b.bankCensus...), "feature_scope_filtered": b.featureScopeFiltered, "prepared_feature_names": append([]string(nil), b.preparedFeatureNames...), "unresolved_feature_names": append([]string(nil), b.unresolvedFeatureNames...), "crop_raw_texel_area": b.rawSpritePixels, "crop_retained_texel_area": b.croppedSpritePixels, "crop_rgba_margin_bytes_removed": (b.rawSpritePixels - b.croppedSpritePixels) * 4, "crop_fully_transparent_frames": b.fullyTransparentFrames, "crop_area_basis": "sum of decoded frame areas before deduplication and gutters; atlas_bytes is actual packed storage", "approximations": []string{
 		"rest feature animations and event cursors sample authored holds from committed ticks",
 		"native straight RGBA alpha approximates destination-palette ALP; ordered alternate children use authored half-alpha over transparent RGBA",
 		"strip particles snap at committed ticks; original nano palette retained without optional team-color ramp",
