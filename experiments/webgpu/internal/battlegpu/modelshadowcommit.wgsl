@@ -89,9 +89,9 @@ fn modelShadowWeight(at:i32)->f32 {if at==2{return 6.0;}if at==1||at==3{return 4
    // Punching is all-samples only: a wholly covered block casts nothing.
    if dot(pick,covered)<samples{alpha=dot(pick,masked)/samples*0.5;}
   }else{
-   var cast=covered;
-   if s.params.y>=0.5{cast*=select(vec4<f32>(0.0),vec4<f32>(1.0),modelShadowKey4(t,reuse)>vec4<f32>(s.params.y));}
-   alpha=dot(pick,cast)/samples*0.5;
+   var shadowed=covered;
+   if s.params.y>=0.5{shadowed*=select(vec4<f32>(0.0),vec4<f32>(1.0),modelShadowKey4(t,reuse)>vec4<f32>(s.params.y));}
+   alpha=dot(pick,shadowed)/samples*0.5;
   }
  }
  return vec4<f32>(u.tint.rgb*alpha,alpha);
