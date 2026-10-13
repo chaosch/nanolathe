@@ -2,6 +2,7 @@
 package battlegpu
 
 import (
+	"bytes"
 	"cmp"
 	_ "embed"
 	"encoding/binary"
@@ -51,6 +52,9 @@ type ModelCounters struct {
 	UploadWrites, ChunkedUploadBytes int
 	// Soft shadow subjects pre-blurred this frame and their slots' texels.
 	AirSubjects, AirTexels int
+	// Bytes written this frame per record family: instances (with shadow
+	// clones), selected materials, lights, slots, shadow subjects.
+	FamilyBytes [5]int
 }
 type modelMesh struct {
 	first, count         uint32
@@ -168,6 +172,42 @@ type Models struct {
 	skipShadowCommits bool
 	// atlasShrink and shadowShrink count frames a smaller atlas would do.
 	atlasShrink, shadowShrink int
+	// selectedSpans maps each distinct material slice in this frame to its
+	// span in selectedBytes; selectedWritten is what the selected buffer
+	// already holds.
+	selectedSpans   map[modelSelectedKey][2]uint32
+	selectedWritten modelWritten
+}
+
+// modelSelectedKey identifies a material slice by its storage. The producer
+// shares one immutable slice among every instance whose selection walk is the
+// same (meshscene's material cache), so instances of a unit type, team and
+// state reuse one span instead of each copying it.
+type modelSelectedKey struct {
+	first *meshscene.NativeModelMaterial
+	count int
+}
+
+// modelWritten remembers the bytes last written to a buffer so an unchanged
+// family is not uploaded again: between simulation ticks the producer
+// republishes the same materials every frame.
+type modelWritten struct {
+	buffer *wgpu.Buffer
+	bytes  []byte
+}
+
+// write uploads data unless the buffer already holds exactly it.
+func (w *modelWritten) write(m *Models, b *wgpu.Buffer, data []byte) error {
+	if w.buffer == b && bytes.Equal(w.bytes, data) {
+		return nil
+	}
+	if err := m.writeMutableBuffer(b, data); err != nil {
+		w.buffer = nil
+		return err
+	}
+	w.buffer, w.bytes = b, append(w.bytes[:0], data...)
+	m.counters.UploadBytes += len(data)
+	return nil
 }
 
 // modelDirectPaint is one direct subject's place in the world pass walk.
@@ -333,6 +373,7 @@ func (m *Models) modelModule(source string) (*wgpu.ShaderModule, error) {
 	}
 	return s, e
 }
+
 func (m *Models) modelCreateTexture(label string, w, h int, format gputypes.TextureFormat, usage gputypes.TextureUsage) (*wgpu.Texture, *wgpu.TextureView, error) {
 	if w < 1 || h < 1 || w > 8192 || h > 8192 {
 		return nil, nil, modelError("textures within default core 8192 dimensions")
@@ -994,6 +1035,10 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	}
 	m.instanceBytes = modelBytes(m.instanceBytes, max(modelInstanceStride, len(f.Instances)*modelInstanceStride))
 	m.selectedBytes = m.selectedBytes[:0]
+	if m.selectedSpans == nil {
+		m.selectedSpans = make(map[modelSelectedKey][2]uint32)
+	}
+	clear(m.selectedSpans)
 	for i, in := range f.Instances {
 		if in.Mesh < 0 || in.Mesh >= len(m.meshes) || in.PoseOffset < 0 || in.PoseOffset+m.meshes[in.Mesh].pieces > len(f.Current) {
 			return modelError("live instance mesh and pose span within resident topology")
@@ -1001,20 +1046,28 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		at := i * modelInstanceStride
 		binary.LittleEndian.PutUint32(m.instanceBytes[at:], uint32(in.PoseOffset))
 		binary.LittleEndian.PutUint32(m.instanceBytes[at+4:], uint32(m.meshes[in.Mesh].centers))
-		binary.LittleEndian.PutUint32(m.instanceBytes[at+8:], uint32(len(m.selectedBytes)/48))
-		binary.LittleEndian.PutUint32(m.instanceBytes[at+12:], uint32(len(in.Materials)))
+		span := [2]uint32{uint32(len(m.selectedBytes) / 48), 0}
 		if len(in.Materials) > 0 {
 			if len(in.Materials) < m.meshes[in.Mesh].selectedCount {
 				return modelError("selected material spans aligned to the instance mesh")
 			}
-			for _, mat := range in.Materials {
-				at := len(m.selectedBytes)
-				m.selectedBytes = append(m.selectedBytes, make([]byte, 48)...)
-				modelVec(m.selectedBytes, at, mat.UV)
-				modelVec(m.selectedBytes, at+16, mat.Color)
-				modelVec(m.selectedBytes, at+32, mat.Params)
+			key := modelSelectedKey{&in.Materials[0], len(in.Materials)}
+			var shared bool
+			if span, shared = m.selectedSpans[key]; !shared {
+				span = [2]uint32{uint32(len(m.selectedBytes) / 48), uint32(len(in.Materials))}
+				m.selectedSpans[key] = span
+				m.selectedBytes = slices.Grow(m.selectedBytes, 48*len(in.Materials))
+				for _, mat := range in.Materials {
+					at := len(m.selectedBytes)
+					m.selectedBytes = m.selectedBytes[:at+48]
+					modelVec(m.selectedBytes, at, mat.UV)
+					modelVec(m.selectedBytes, at+16, mat.Color)
+					modelVec(m.selectedBytes, at+32, mat.Params)
+				}
 			}
 		}
+		binary.LittleEndian.PutUint32(m.instanceBytes[at+8:], span[0])
+		binary.LittleEndian.PutUint32(m.instanceBytes[at+12:], span[1])
 		visual := in.Visual
 		if visual.State == [4]float32{} {
 			visual.State[1] = 1
@@ -1186,12 +1239,16 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	for _, u := range []struct {
 		b    *wgpu.Buffer
 		data []byte
-	}{{m.instances.buffer, m.instanceBytes}, {m.selected.buffer, m.selectedBytes}, {m.lights.buffer, m.lightBytes}, {m.slots.buffer, m.slotBytes}, {m.shadowRecords.buffer, m.shadowBytes}, {m.groups.buffer, m.groupWork.groups}, {m.members.buffer, m.groupWork.members}, {m.uniform, ub[:]}} {
+	}{{m.instances.buffer, m.instanceBytes}, {m.lights.buffer, m.lightBytes}, {m.slots.buffer, m.slotBytes}, {m.shadowRecords.buffer, m.shadowBytes}, {m.groups.buffer, m.groupWork.groups}, {m.members.buffer, m.groupWork.members}, {m.uniform, ub[:]}} {
 		if e = m.writeMutableBuffer(u.b, u.data); e != nil {
 			return e
 		}
 		m.counters.UploadBytes += len(u.data)
 	}
+	if e = m.selectedWritten.write(m, m.selected.buffer, m.selectedBytes); e != nil {
+		return e
+	}
+	m.counters.FamilyBytes = [5]int{len(m.instanceBytes), len(m.selectedBytes), len(m.lightBytes), len(m.slotBytes), len(m.shadowBytes)}
 	split(4)
 	if m.poseGroup == nil {
 		m.poseGroup, e = m.modelGroup(m.poseLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.endpoints.buffer}, {Binding: 1, Buffer: m.poses.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}})
