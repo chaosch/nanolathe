@@ -365,23 +365,27 @@ func modelAtlasExtent(need, current int) int {
 	return size
 }
 
-// modelAtlasShrinkFrames is how long a smaller extent must suffice before an
-// atlas is reallocated down to it. Render passes clear and store whole
-// attachments, so an atlas left at a past peak (2048x8192 after a busy view)
-// costs every later frame its full bandwidth; a second of hysteresis keeps
-// reallocation rare when the need hovers at a boundary.
-const modelAtlasShrinkFrames = 120
+// modelAtlasShrinkFrames is how long a much smaller extent must suffice
+// before an atlas is reallocated down to it. Render passes clear and store
+// whole attachments, so an atlas left at a past peak costs later frames
+// bandwidth (about 0.16 ms per 512 rows of a 4096-wide body atlas). But the
+// frame after a reallocation spends 20-60 ms on the GPU on Apple silicon, and
+// a battle's need wanders: with a one-second, three-quarter rule the 1440p
+// field reallocated in grow/shrink pairs every few seconds, a third of its
+// late frames. An atlas now shrinks only to half its area or less, held for
+// five seconds at 120 Hz.
+const modelAtlasShrinkFrames = 600
 
 // modelAtlasFit returns the extent to allocate for need given the current
-// extent: growth doubles at once; a smaller power-of-two fit is adopted only
-// after it has held for modelAtlasShrinkFrames consecutive frames.
+// extent: growth is immediate; a fit of at most half the current area is
+// adopted only after it has held for modelAtlasShrinkFrames frames.
 func modelAtlasFit(needW, needH, curW, curH int, ready bool, shrink *int) (w, h int, change bool) {
 	if !ready || needW > curW || needH > curH {
 		*shrink = 0
 		return modelAtlasExtent(needW, curW), max(curH, modelAtlasRows(needH)), true
 	}
 	fitW, fitH := modelAtlasExtent(needW, 64), modelAtlasRows(needH)
-	if fitW >= curW && fitH >= curH*3/4 {
+	if fitW*fitH*2 > curW*curH {
 		*shrink = 0
 		return curW, curH, false
 	}
