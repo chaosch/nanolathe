@@ -64,11 +64,12 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 			}
 			pattern := fmt.Sprintf(`\b%s \[\[%s\(%d\)\]\]`, global.Name, kind, slot)
 			for _, entry := range []string{"model_commit_vertex", "model_commit_fragment"} {
-				// The vertex consumes both storage/uniform families; the fragment
-				// consumes every resource but the silhouette depth plane, which
-				// the union still declares. Texture and sampler indices include
-				// every declaration even though the vertex reads none of them.
-				if entry == "model_commit_vertex" && kind != "buffer" || global.Name == "keys" {
+				// The vertex consumes both storage/uniform families but the soft
+				// shadow records; the fragment consumes every resource but the
+				// silhouette depth plane, which the union still declares. Texture
+				// and sampler indices include every declaration even though the
+				// vertex reads none of them.
+				if entry == "model_commit_vertex" && (kind != "buffer" || global.Name == "air") || global.Name == "keys" {
 					continue
 				}
 				if !regexp.MustCompile(pattern).MatchString(modelBodyEntry(t, code, entry)) {
@@ -76,7 +77,7 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 				}
 			}
 		}
-		if buffer != 4 || texture != 6 || sampler != 1 {
+		if buffer != 5 || texture != 6 || sampler != 1 {
 			t.Fatalf("common native resources: buffers=%d textures=%d samplers=%d", buffer, texture, sampler)
 		}
 		for i, global := range module.GlobalVariables[:2] {

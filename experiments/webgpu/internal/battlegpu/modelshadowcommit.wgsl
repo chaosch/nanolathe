@@ -4,6 +4,7 @@ struct Uniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:v
 struct Slot {screen:vec4<f32>,atlas:vec4<f32>,params:vec4<f32>}
 struct ModelShadowUniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,tint:vec4<f32>,water:vec4<f32>}
 struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,order:vec4<u32>}
+struct AirSlot {place:vec4<f32>,source:vec4<f32>}
 @group(0) @binding(0) var<storage,read> slots:array<Slot,1>;
 @group(0) @binding(1) var<storage,read> subjects:array<ModelShadowSubject,__SUBJECTS__>;
 @group(0) @binding(2) var<uniform> mainU:Uniforms;
@@ -12,14 +13,18 @@ struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params
 @group(0) @binding(5) var body:texture_2d<f32>;
 @group(0) @binding(6) var keys:texture_depth_2d;
 @group(0) @binding(7) var mask:texture_2d<f32>;
-@group(0) @binding(8) var liquid:texture_2d<f32>;
-@group(0) @binding(9) var bodyKeys:texture_2d<f32>;
-@group(0) @binding(10) var shadowSampler:sampler;
+@group(0) @binding(8) var bodyKeys:texture_2d<f32>;
+@group(0) @binding(9) var shadowSampler:sampler;
+@group(0) @binding(10) var airBlur:texture_2d<f32>;
+@group(0) @binding(11) var<storage,read> air:array<AirSlot,__SUBJECTS__>;
 const modelShadowCorners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
-struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) screen:vec2<f32>,@location(1) @interpolate(flat) subject:u32}
+struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) screen:vec2<f32>,@location(1) @interpolate(flat) subject:u32,@location(2) wet:f32}
 @vertex fn model_shadow_commit_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->ModelShadowCommitOut {
  let s=subjects[iid];var corner=modelShadowCorners[vid];var out:ModelShadowCommitOut;
  out.screen=s.screen.xy+corner*s.screen.zw;out.subject=iid;
+ // A soft subject's record carries its corners' water grade in place of a
+ // mask rectangle; the rasterizer spreads it across the quad.
+ out.wet=0.0;if s.params.x>2.5{out.wet=mix(mix(s.mask.x,s.mask.y,corner.x),mix(s.mask.z,s.mask.w,corner.x),corner.y);}
  out.position=vec4<f32>(out.screen.x/u.extent.x*2.0-1.0,1.0-out.screen.y/u.extent.y*2.0,0.5,1.0);return out;
 }
 // A reused subject (zero body rectangle) reads its own composed body raster
@@ -43,22 +48,12 @@ fn modelShadowKey4(t:vec2<f32>,reuse:bool)->vec4<f32> {
  if reuse{let g=textureGather(0,bodyKeys,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(bodyKeys)));return round(g*255.0);}
  let g=textureGather(0,body,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(body)));return round(g*255.0);
 }
-// Hardware bilinear coverage at continuous texel position p (centres at +0.5).
-fn modelShadowCoverage(p:vec2<f32>,rect:vec4<f32>,reuse:bool)->f32 {
- if !modelShadowInside(p-vec2<f32>(0.5),vec2<f32>(1.0),rect){return 0.0;}
- if reuse{let c=textureSampleLevel(bodies,shadowSampler,p/vec2<f32>(textureDimensions(bodies)),0.0);return c.a;}
- let c=textureSampleLevel(body,shadowSampler,p/vec2<f32>(textureDimensions(body)),0.0);return c.a;
+// A soft subject's source, blurred once per frame at its dry radius
+// (modelair.wgsl), sampled at slot position p. Outside its slot it is zero.
+fn modelShadowAir(p:vec2<f32>,a:AirSlot)->f32 {
+ if !modelShadowInside(p-vec2<f32>(0.5),vec2<f32>(1.0),a.place){return 0.0;}
+ let c=textureSampleLevel(airBlur,shadowSampler,p/vec2<f32>(textureDimensions(airBlur)),0.0);return c.r;
 }
-fn modelShadowLiquidTap(at:vec2<i32>)->f32 {
- if ((at<vec2<i32>(0)).x||(at<vec2<i32>(0)).y)||((at>=vec2<i32>(textureDimensions(liquid))).x||(at>=vec2<i32>(textureDimensions(liquid))).y){return 0.0;}return textureLoad(liquid,at,0).r;
-}
-fn modelShadowLiquid(p:vec2<f32>)->f32 {
- let q=p-vec2<f32>(0.5);let f=fract(q);let a=vec2<i32>(floor(q));
- return mix(mix(modelShadowLiquidTap(a),modelShadowLiquidTap(a+vec2<i32>(1,0)),f.x),mix(modelShadowLiquidTap(a+vec2<i32>(0,1)),modelShadowLiquidTap(a+vec2<i32>(1,1)),f.x),f.y);
-}
-// Fixed five-tap weights avoid guarded array-load arithmetic in the pinned
-// Metal writer; their outer product sums to 256 (GPU design §34).
-fn modelShadowWeight(at:i32)->f32 {if at==2{return 6.0;}if at==1||at==3{return 4.0;}return 1.0;}
 @fragment fn model_shadow_commit_fragment(input:ModelShadowCommitOut)->@location(0) vec4<f32> {
  let s=subjects[input.subject];var alpha=0.0;
  // Source mapping: a silhouette source sits at the shadow raster; a reused
@@ -66,14 +61,20 @@ fn modelShadowWeight(at:i32)->f32 {if at==2{return 6.0;}if at==1||at==3{return 4
  let reuse=s.body.z<=0.0;var rect=s.body;var origin=s.placement.xy;var bodyRaster=max(u.tint.w,1.0);
  if reuse{let slot=slots[s.order.x-1u];rect=slot.atlas;origin=slot.screen.xy;bodyRaster=slot.atlas.z/max(slot.screen.z,1.0);}
  if s.params.x>2.5 {
-  let world=(input.screen-u.extent.xy*0.5)/u.camera.z+u.camera.xy;var wet=0.0;
-  if u.water.w>0.0{wet=smoothstep(0.8,1.0,modelShadowLiquid(world/u.water.w));}
-  let p=world-u.water.yz*6.0;let t=u.water.x;
-  let warp=vec2<f32>(sin(p.y*0.14+t*0.8)+0.35*sin(p.x*0.09-t*0.55),0.45*sin((p.x+p.y)*0.11+t*0.65));
-  let src=rect.xy+(input.screen-origin-s.placement.zw+warp*(wet*s.params.w))*bodyRaster;
-  let radius=(s.params.z+0.5*wet*s.params.w)*0.5*bodyRaster;var sum=0.0;
-  for(var y=0;y<5;y++){for(var x=0;x<5;x++){let weightX=modelShadowWeight(x);let weightY=modelShadowWeight(y);sum+=modelShadowCoverage(src+vec2<f32>(f32(x-2),f32(y-2))*radius,rect,reuse)*weightX*weightY;}}
-  alpha=sum/256.0*mix(0.5,0.20,wet);
+  let wet=clamp(input.wet,0.0,1.0);let a=air[input.subject];
+  var at=a.place.xy+(rect.xy+(input.screen-origin-s.placement.zw)*bodyRaster-a.source.xy)/a.source.z;var cover=0.0;
+  if wet>0.0{
+   // Over water the shadow ripples and its filter widens by half a world
+   // pixel: four taps at (+-h, +-h) add h^2 of variance to the pre-blurred
+   // radius, making it radius+dr. Dry pixels skip all of this.
+   let world=(input.screen-u.extent.xy*0.5)/u.camera.z+u.camera.xy;
+   let p=world-u.water.yz*6.0;let t=u.water.x;
+   let warp=vec2<f32>(sin(p.y*0.14+t*0.8)+0.35*sin(p.x*0.09-t*0.55),0.45*sin((p.x+p.y)*0.11+t*0.65));
+   at+=warp*(wet*s.params.w)*bodyRaster/a.source.z;
+   let dr=0.25*wet*s.params.w*bodyRaster;let h=sqrt(2.0*a.source.w*dr+dr*dr)/a.source.z;
+   cover=(modelShadowAir(at+vec2<f32>(h,h),a)+modelShadowAir(at+vec2<f32>(-h,h),a)+modelShadowAir(at+vec2<f32>(h,-h),a)+modelShadowAir(at+vec2<f32>(-h,-h),a))*0.25;
+  }else{cover=modelShadowAir(at,a);}
+  alpha=cover*mix(0.5,0.20,wet);
  }else{
   // An output pixel's samples sit one source texel apart: all four of a
   // doubled block, or its top-left alone at one sample per pixel.

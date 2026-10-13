@@ -49,6 +49,8 @@ type ModelCounters struct {
 	ChunkedUploads                                                               bool
 	// Attempted API calls/full payload bytes, including zero writes or failed prefixes.
 	UploadWrites, ChunkedUploadBytes int
+	// Soft shadow subjects pre-blurred this frame and their slots' texels.
+	AirSubjects, AirTexels int
 }
 type modelMesh struct {
 	first, count         uint32
@@ -159,6 +161,8 @@ type Models struct {
 	directSlots    []bool
 	directDraws    []modelDraw
 	directOrder    []modelDirectPaint
+	// air pre-blurs soft (aircraft) shadow sources for the world commit.
+	air modelAirWork
 	// skipShadowCommits is a diagnostic: shadow sources are prepared and
 	// rasterized but never committed, isolating the commit's GPU cost.
 	skipShadowCommits bool
@@ -213,11 +217,14 @@ func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
 		modelBufferEntry(4, vf, gputypes.BufferBindingTypeUniform, 96),
 		modelTextureEntry(5),
 		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
-		modelTextureEntry(7), modelTextureEntry(8),
+		modelTextureEntry(7),
 		// Reused shadow subjects read the body raster's key plane; shadow
 		// commits gather and filter through one linear sampler.
-		modelTextureEntry(9),
-		{Binding: 10, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+		modelTextureEntry(8),
+		{Binding: 9, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+		// Soft shadows sample their pre-blurred source through its record.
+		modelTextureEntry(10),
+		modelBufferEntry(11, vf, gputypes.BufferBindingTypeReadOnlyStorage, 0),
 	}
 }
 
@@ -230,7 +237,11 @@ func (m *Models) modelCommitTextureViews() [6]*wgpu.TextureView {
 	if keys == nil {
 		keys = m.shadowWork.dummy.bodyView
 	}
-	return [6]*wgpu.TextureView{m.modelBodyView(), a.bodyView, a.depthView, a.maskView, m.shadowWork.waterView, keys}
+	air := m.air.blurredView
+	if air == nil {
+		air = m.shadowWork.dummy.maskView
+	}
+	return [6]*wgpu.TextureView{m.modelBodyView(), a.bodyView, a.depthView, a.maskView, keys, air}
 }
 
 func (m *Models) modelCommitEntries(views [6]*wgpu.TextureView) []wgpu.BindGroupEntry {
@@ -238,8 +249,9 @@ func (m *Models) modelCommitEntries(views [6]*wgpu.TextureView) []wgpu.BindGroup
 		{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer},
 		{Binding: 2, Buffer: m.uniform, Size: 80}, {Binding: 3, TextureView: views[0]},
 		{Binding: 4, Buffer: m.shadowWork.uniform, Size: 96}, {Binding: 5, TextureView: views[1]},
-		{Binding: 6, TextureView: views[2]}, {Binding: 7, TextureView: views[3]}, {Binding: 8, TextureView: views[4]},
-		{Binding: 9, TextureView: views[5]}, {Binding: 10, Sampler: m.shadowSampler},
+		{Binding: 6, TextureView: views[2]}, {Binding: 7, TextureView: views[3]},
+		{Binding: 8, TextureView: views[4]}, {Binding: 9, Sampler: m.shadowSampler},
+		{Binding: 10, TextureView: views[5]}, {Binding: 11, Buffer: m.air.records.buffer},
 	}
 }
 
@@ -1080,6 +1092,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	if e = m.modelPrepareShadowSources(f); e != nil {
 		return e
 	}
+	if e = m.modelPrepareAir(f.Shadows); e != nil {
+		return e
+	}
 	m.modelDirectBands(f)
 	m.modelBatchSources(f)
 	split(0)
@@ -1193,6 +1208,9 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		}
 	}
 	if e = m.modelPrepareShadowGPU(f, changed); e != nil {
+		return e
+	}
+	if e = m.modelPrepareAirGPU(f, changed); e != nil {
 		return e
 	}
 	if e = m.modelPrepareCommitGroup(); e != nil {
@@ -1467,6 +1485,7 @@ func (m *Models) Close() {
 	m.bodyPipeline, m.outlinePipeline = nil, nil
 	m.shadowWork.bodyPipeline, m.shadowWork.outlinePipeline = nil, nil
 	m.shadowWork.modelClose()
+	m.air.modelClose()
 	m.atlas.modelClose()
 	m.commitWork.modelClose()
 	m.resolvePipeline = nil

@@ -90,7 +90,7 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 		used         []uint32
 	}{
 		{"project", modelShadowShaderSource(capacities), modelShadowProjectLayoutEntries(), []uint32{0, 1, 2, 3}},
-		{"commit", modelShadowCommitShaderSource(capacities), modelCommitLayoutEntries(), []uint32{0, 1, 3, 4, 5, 7, 8, 9, 10}},
+		{"commit", modelShadowCommitShaderSource(capacities), modelCommitLayoutEntries(), []uint32{0, 1, 3, 4, 5, 7, 8, 9, 10, 11}},
 	} {
 		ast, err := naga.Parse(pass.source)
 		if err != nil {

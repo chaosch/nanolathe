@@ -2,6 +2,7 @@ struct Uniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:v
 struct Slot {screen:vec4<f32>,atlas:vec4<f32>,params:vec4<f32>}
 struct ModelShadowUniforms {camera:vec4<f32>,extent:vec4<f32>,timing:vec4<f32>,projection:vec4<f32>,tint:vec4<f32>,water:vec4<f32>}
 struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params:vec4<f32>,placement:vec4<f32>,order:vec4<u32>}
+struct AirSlot {place:vec4<f32>,source:vec4<f32>}
 // Both world commit modules declare the complete union, including globals
 // unused here: pinned Metal assigns dense slots across all declarations.
 // Fixed arrays keep bounds guards independent of runtime size metadata,
@@ -14,9 +15,10 @@ struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params
 @group(0) @binding(5) var body:texture_2d<f32>;
 @group(0) @binding(6) var keys:texture_depth_2d;
 @group(0) @binding(7) var mask:texture_2d<f32>;
-@group(0) @binding(8) var liquid:texture_2d<f32>;
-@group(0) @binding(9) var bodyKeys:texture_2d<f32>;
-@group(0) @binding(10) var shadowSampler:sampler;
+@group(0) @binding(8) var bodyKeys:texture_2d<f32>;
+@group(0) @binding(9) var shadowSampler:sampler;
+@group(0) @binding(10) var airBlur:texture_2d<f32>;
+@group(0) @binding(11) var<storage,read> air:array<AirSlot,1>;
 // Store the guarded corner load before arithmetic: the pinned Metal writer
 // otherwise scales only the robust-access fallback in its conditional.
 const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));

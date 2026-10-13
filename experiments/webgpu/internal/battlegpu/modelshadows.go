@@ -4,6 +4,7 @@ import (
 	"cmp"
 	_ "embed"
 	"encoding/binary"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -67,7 +68,6 @@ type modelShadowWork struct {
 	dummy                         modelShadowAtlas
 	dummyInitialized              bool
 	uniform                       *wgpu.Buffer
-	waterView                     *wgpu.TextureView
 	hasWater                      bool
 	vertices, indices             *wgpu.Buffer
 	vertexCount                   int
@@ -79,6 +79,9 @@ type modelShadowWork struct {
 	projectPipeline               *wgpu.RenderPipeline
 	projectModule                 *wgpu.ShaderModule
 	capacities                    [4]int
+	// The liquid mask's coverage channel, kept to grade soft subjects' corners.
+	liquid       []byte
+	liquidExtent [2]int
 }
 
 func (p *modelShadowWork) modelClose() {
@@ -224,6 +227,11 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 			}
 		}
 		at := si * modelShadowStride
+		if subject.Params[0] > 2.5 {
+			// A soft subject has no mask rectangle; its record carries the
+			// water grade at the quad's corners instead.
+			subject.Mask = p.modelCornerWetness(subject.Screen, f.Camera, c.Water[3], m.width, m.height)
+		}
 		for j, value := range [][4]float32{subject.Screen, subject.Body, subject.Mask, subject.Params, subject.Placement} {
 			modelVec(m.shadowBytes, at+j*16, value)
 		}
@@ -285,6 +293,36 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 	return nil
 }
 
+// modelCornerWetness grades a soft subject's commit quad corners (top-left,
+// top-right, bottom-left, bottom-right) by the liquid beneath them, as the
+// commit once did per pixel: the bilinear mask coverage at the world point,
+// eased from 0.8 to 1. The rasterizer interpolates the corners across the
+// quad, which is exact on open water and on land and approximate only where
+// a shoreline crosses a shadow.
+func (p *modelShadowWork) modelCornerWetness(screen [4]float32, camera [3]float32, step float32, width, height int) (wet [4]float32) {
+	if step <= 0 || !p.hasWater {
+		return
+	}
+	tap := func(x, y int) float32 {
+		if x < 0 || y < 0 || x >= p.liquidExtent[0] || y >= p.liquidExtent[1] {
+			return 0
+		}
+		return float32(p.liquid[y*p.liquidExtent[0]+x]) / 255
+	}
+	for i := range wet {
+		sx, sy := screen[0]+float32(i&1)*screen[2], screen[1]+float32(i>>1)*screen[3]
+		qx := ((sx-float32(width)*0.5)/camera[2]+camera[0])/step - 0.5
+		qy := ((sy-float32(height)*0.5)/camera[2]+camera[1])/step - 0.5
+		ax, ay := float32(math.Floor(float64(qx))), float32(math.Floor(float64(qy)))
+		fx, fy, x, y := qx-ax, qy-ay, int(ax), int(ay)
+		top := tap(x, y) + (tap(x+1, y)-tap(x, y))*fx
+		bottom := tap(x, y+1) + (tap(x+1, y+1)-tap(x, y+1))*fx
+		v := min(max(((top+(bottom-top)*fy)-0.8)/0.2, 0), 1)
+		wet[i] = v * v * (3 - 2*v)
+	}
+	return
+}
+
 func (m *Models) modelInitShadows(scene *meshscene.Scene) (err error) {
 	p := &m.shadowWork
 	if p.uniform, err = m.modelBuffer("battle-shadow-uniforms", modelUniformSize, wgpu.BufferUsageUniform|wgpu.BufferUsageCopyDst, nil); err != nil {
@@ -295,8 +333,9 @@ func (m *Models) modelInitShadows(scene *meshscene.Scene) (err error) {
 	if !p.hasWater {
 		water = meshscene.Texture{Width: 1, Height: 1, RGBA: []byte{0, 0, 0, 0}}
 	}
-	if p.waterView, err = m.modelArt("battle-shadow-liquid-mask", water); err != nil {
-		return
+	p.liquid, p.liquidExtent = make([]byte, water.Width*water.Height), [2]int{water.Width, water.Height}
+	for i := range p.liquid {
+		p.liquid[i] = water.RGBA[i*4]
 	}
 	// The common world layout is valid even before any subject is admitted.
 	// Compute clears these one-pixel planes before their first no-shadow use.
@@ -481,9 +520,17 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 			return err
 		}
 	}
-	if len(p.projected) == 0 {
-		return nil
+	if len(p.projected) > 0 {
+		if err := m.modelDrawShadowMasks(enc); err != nil {
+			return err
+		}
 	}
+	return m.modelEncodeAir(enc)
+}
+
+// modelDrawShadowMasks rasterizes structures' quarter projections.
+func (m *Models) modelDrawShadowMasks(enc *wgpu.CommandEncoder) error {
+	p := &m.shadowWork
 	pass, err := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: p.atlas.maskView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
 	if err != nil {
 		return err

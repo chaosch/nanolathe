@@ -57,7 +57,7 @@ func TestModelCommitMetalUnionBindings(t *testing.T) {
 			t.Fatalf("unexpected union resource at %d", i)
 		}
 	}
-	if storage != 2 || uniforms != 2 || textures != 6 || samplers != 1 {
+	if storage != 3 || uniforms != 2 || textures != 6 || samplers != 1 {
 		t.Fatalf("core union resources: storage=%d uniforms=%d textures=%d samplers=%d", storage, uniforms, textures, samplers)
 	}
 }
@@ -65,12 +65,11 @@ func TestModelCommitMetalUnionBindings(t *testing.T) {
 func TestModelCommitViewsAndReplacement(t *testing.T) {
 	m := &Models{}
 	m.atlas.colorView, m.atlas.mergedView, m.atlas.metadataView = &wgpu.TextureView{}, &wgpu.TextureView{}, &wgpu.TextureView{}
-	m.shadowWork.waterView = &wgpu.TextureView{}
 	for _, atlas := range []*modelShadowAtlas{&m.shadowWork.dummy, &m.shadowWork.atlas} {
 		atlas.bodyView, atlas.depthView, atlas.maskView = &wgpu.TextureView{}, &wgpu.TextureView{}, &wgpu.TextureView{}
 	}
 	views := m.modelCommitTextureViews()
-	if views != [6]*wgpu.TextureView{m.atlas.colorView, m.shadowWork.dummy.bodyView, m.shadowWork.dummy.depthView, m.shadowWork.dummy.maskView, m.shadowWork.waterView, m.atlas.metadataView} {
+	if views != [6]*wgpu.TextureView{m.atlas.colorView, m.shadowWork.dummy.bodyView, m.shadowWork.dummy.depthView, m.shadowWork.dummy.maskView, m.atlas.metadataView, m.shadowWork.dummy.maskView} {
 		t.Fatal("absent shadows do not bind independent dummy planes")
 	}
 	group := &wgpu.BindGroup{}
@@ -92,7 +91,7 @@ func TestModelCommitViewsAndReplacement(t *testing.T) {
 		}
 	}
 	m.slots.buffer, m.shadowRecords.buffer, m.uniform, m.shadowWork.uniform = &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}
-	m.shadowSampler = &wgpu.Sampler{}
+	m.shadowSampler, m.air.records.buffer = &wgpu.Sampler{}, &wgpu.Buffer{}
 	entries, layout := m.modelCommitEntries(m.modelCommitTextureViews()), modelCommitLayoutEntries()
 	for i, entry := range entries {
 		if entry.Binding != layout[i].Binding || (entry.Buffer != nil) != (layout[i].Buffer != nil) || (entry.TextureView != nil) != (layout[i].Texture != nil) || (entry.Sampler != nil) != (layout[i].Sampler != nil) {
