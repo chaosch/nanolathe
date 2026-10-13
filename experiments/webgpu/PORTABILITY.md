@@ -213,10 +213,11 @@ proxy plays the battle on Vulkan with no errors or crashes:
   writes and reads back the same 360x240 R32Uint and RGBA8 textures on
   MoltenVK, alone or after a 41 MB RGBA8 write in the same batch, round-trips
   them intact; so plain queue writes are sound and the cause lies in the
-  renderer's first-frame work on a staged backend (a pass or copy reaching
-  the lookup's memory through a stale view is the leading suspect, since
-  Metal views keep their textures alive). **Unknown:** the writer; settle
-  with validation layers or a Linux/Windows run. Sprites, models, shadows,
+  renderer's first-frame work on a staged backend. The damage is
+  deterministic: the same 7,117 of 86,400 texels survive whether the lookup
+  is R32Uint or RGBA8 and whether it is allocated first or last, so it is
+  not an allocation-order overlap. **Unknown:** the writer; settle with
+  validation layers or a Linux/Windows run. Sprites, models, shadows,
   HUD and effects render.
 - wgpu's Vulkan `Queue.WriteBuffer` waits for the previous submission to
   finish before every CPU write (`waitForGPU`), the same stall Apple's
