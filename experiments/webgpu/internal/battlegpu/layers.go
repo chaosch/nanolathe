@@ -225,8 +225,7 @@ func (l *Layers) layerWriteTexture(dst *layerTexture, t meshscene.Texture, dirty
 	}
 	// Queue.WriteTexture permits tight rows; unlike encoder copies it requires
 	// no 256-byte row padding. Copy only the detached rectangle synchronously.
-	data := t.RGBA[(y*t.Width+x)*4:]
-	if err := l.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: dst.t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y)}}, data, &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(h)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(h), DepthOrArrayLayers: 1}); err != nil {
+	if err := writeTextureBands(l.q, dst.t, t.RGBA, t.Width, x, y, w, h); err != nil {
 		return err
 	}
 	l.counts.UploadBytes += w * h * 4

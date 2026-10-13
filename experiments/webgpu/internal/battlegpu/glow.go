@@ -312,7 +312,7 @@ func (g *Glow) glowUploadAtlas(stock *meshscene.StockFrame) (bool, error) {
 	// A texture created above has no submitted use and is written directly;
 	// a rewrite of one earlier frames sampled is staged on the frame encoder.
 	if changed || g.uploads == nil {
-		if err := g.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: g.atlas.t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y)}}, t.RGBA[(y*t.Width+x)*4:], &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(h)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(h), DepthOrArrayLayers: 1}); err != nil {
+		if err := writeTextureBands(g.q, g.atlas.t, t.RGBA, t.Width, x, y, w, h); err != nil {
 			return changed, err
 		}
 	} else if err := g.uploads.stage(g.atlas.t, t.RGBA, t.Width, x, y, w, h); err != nil {

@@ -230,3 +230,31 @@ func (u *textureUploads) close() {
 	clear(u.regions)
 	u.regions, u.arena, u.copies = nil, nil, nil
 }
+
+// uploadBandBytes bounds one queue texture write's staging. wgpu stages
+// texture writes on Vulkan, DX12 and discrete Metal through buffers capped
+// at 64 MiB; a single larger write copies past its staging buffer, and the
+// overflow chunks are copied into the next queue write's destination buffer
+// (Metal API validation on the MoltenVK proxy: "totalBytesUsed(236060672)
+// must be <= [sourceBuffer length](67108864)" for the sprite atlas, then
+// 64 MiB copies into a 4 KiB buffer). That corrupted the terrain lookup and
+// faulted MoltenVK. Apple-silicon Metal writes such textures directly.
+const uploadBandBytes = 32 << 20
+
+// writeTextureBands writes a w x h rectangle at (x, y) of 4-byte texels from
+// a tightly packed source image of srcWidth texels per row, in row bands
+// whose row-aligned staging stays within uploadBandBytes.
+func writeTextureBands(q rendererQueue, t *wgpu.Texture, src []byte, srcWidth, x, y, w, h int) error {
+	rows := max(1, uploadBandBytes/uploadAlign(w*4, uploadRowAlign))
+	for top := 0; top < h; top += rows {
+		n := min(rows, h-top)
+		// Pass exactly the band: when its rows need no padding, wgpu stages
+		// the whole slice it is given, not just the rows it copies.
+		start := ((y+top)*srcWidth + x) * 4
+		band := src[start : start+(n-1)*srcWidth*4+w*4]
+		if err := q.WriteTexture(&wgpu.ImageCopyTexture{Texture: t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y + top)}}, band, &wgpu.ImageDataLayout{BytesPerRow: uint32(srcWidth * 4), RowsPerImage: uint32(n)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(n), DepthOrArrayLayers: 1}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

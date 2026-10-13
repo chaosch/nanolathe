@@ -533,7 +533,7 @@ func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView,
 	if e != nil {
 		return nil, e
 	}
-	e = m.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: b}, t.RGBA, &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(t.Height)}, &wgpu.Extent3D{Width: uint32(t.Width), Height: uint32(t.Height), DepthOrArrayLayers: 1})
+	e = writeTextureBands(m.q, b, t.RGBA, t.Width, 0, 0, t.Width, t.Height)
 	return v, e
 }
 func (m *Models) modelCreatePipeline(module *wgpu.ShaderModule, layout *wgpu.PipelineLayout, vertex, fragment string, format gputypes.TextureFormat, depth int, blend bool, topology gputypes.PrimitiveTopology) (*wgpu.RenderPipeline, error) {
