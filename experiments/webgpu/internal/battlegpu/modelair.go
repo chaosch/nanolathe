@@ -32,6 +32,7 @@ type modelAirWork struct {
 	needW, needH                 int
 	count                        int
 	bytes                        []byte
+	items                        []modelAirItem // per-frame scratch, reused
 	records                      modelBuffer
 	uniform                      *wgpu.Buffer
 	layout                       *wgpu.BindGroupLayout
@@ -111,19 +112,22 @@ func modelAirScale(radius float64) float64 {
 	return d
 }
 
+// modelAirItem is one soft subject's air slot before shelf placement.
+type modelAirItem struct {
+	subject   int
+	w, h      int
+	x0, y0, d float64
+	radius    float64
+}
+
 // modelPrepareAir places every soft subject's blurred source in the air atlas
 // and records its mapping. Run after the subjects and model slots are final.
 func (m *Models) modelPrepareAir(c meshscene.ShadowComposition) error {
 	a := &m.air
 	a.count, a.needW, a.needH = 0, 0, 0
 	a.bytes = modelBytes(a.bytes, max(modelAirStride, len(c.Subjects)*modelAirStride))
-	type work struct {
-		subject   int
-		w, h      int
-		x0, y0, d float64
-		radius    float64
-	}
-	var items []work
+	items := a.items[:0]
+	defer func() { a.items = items[:0] }()
 	for si, s := range c.Subjects {
 		if s.Params[0] < 2.5 {
 			continue
@@ -144,7 +148,7 @@ func (m *Models) modelPrepareAir(c meshscene.ShadowComposition) error {
 		if w < 1 || h < 1 || w > 8190 || h > 8190 {
 			return modelError("soft shadow sources within the 8192-texel air atlas")
 		}
-		items = append(items, work{si, w, h, x0, y0, d, radius})
+		items = append(items, modelAirItem{si, w, h, x0, y0, d, radius})
 	}
 	if len(items) == 0 {
 		return nil

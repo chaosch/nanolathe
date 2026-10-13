@@ -1391,6 +1391,9 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 	pass.SetBindGroup(0, m.bodyGroup, nil)
 	pass.SetIndexBuffer(m.indices, gputypes.IndexFormatUint32, 0)
 	if m.batchWork.independent {
+		// Set a pipeline only when it changes: each set is a tracked reference
+		// in wgpu and a Metal call, and most mesh runs draw no outline.
+		bound := m.bodyPipeline
 		for first := 0; first < len(m.draws); {
 			end := modelDrawRun(m.draws, first, false, true)
 			mesh := m.meshes[m.draws[first].mesh]
@@ -1404,10 +1407,14 @@ func (m *Models) Compute(enc *wgpu.CommandEncoder) error {
 				}
 				if mesh.ringCount > 0 && outlines > first {
 					pass.SetPipeline(m.outlinePipeline)
+					bound = m.outlinePipeline
 					pass.Draw(modelOutlineDraw(mesh, uint32(outlines-first), m.draws[first].instance))
 					m.counters.Draws++
 				}
-				pass.SetPipeline(m.bodyPipeline)
+				if bound != m.bodyPipeline {
+					pass.SetPipeline(m.bodyPipeline)
+					bound = m.bodyPipeline
+				}
 				pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: m.draws[first].instance})
 				m.counters.Draws++
 			}
