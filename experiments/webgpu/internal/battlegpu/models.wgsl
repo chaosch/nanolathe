@@ -140,18 +140,21 @@ fn modelOutline(input:Out)->Fragment {
 @fragment fn model_fragment(input:Out)->Fragment {return modelShade(input);}
 @fragment fn outline_fragment(input:Out)->Fragment {return modelOutline(input);}
 struct ModelShadowFragment {@location(0) color:vec4<f32>,@builtin(frag_depth) depth:f32}
-// Shadow silhouettes need only coverage and the key depth: the commit never
-// reads their colour. This is modelShade's alpha, erasure and depth without
-// the palette, lighting, finish and glint work.
+// Shadow silhouettes need only coverage and the height key: red carries the
+// byte key the commit tests (128 for an unkeyed subject, whose depth is
+// fixed), alpha the coverage; depth still orders the faces. This is
+// modelShade's alpha, erasure and depth without the palette, lighting,
+// finish and glint work.
 @fragment fn model_shadow_fragment(input:Out)->ModelShadowFragment {
  let i=instances[input.instance];let key=wrappedKey(input.key);let ruled=i.counts.z>0u;
  if ((input.position.xy<i.atlas.xy).x||(input.position.xy<i.atlas.xy).y)||((input.position.xy>=i.atlas.xy+i.atlas.zw).x||(input.position.xy>=i.atlas.xy+i.atlas.zw).y){discard;}
  let a=textureSample(atlas,nearestSampler,input.uv).a;var erased=a<0.02||(ruled&&clipped(i,key));
  if ruled&&i.reveal.z>0.5{let rule=verdict(i,key);erased=erased||rule.w< -1.5;}
  if erased&&i.groupOperand.x==0&&i.counts.w==0u{discard;}
- var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,select(a,0.0,erased));out.depth=select(0.5,(256.0-key)/257.0,ruled&&i.reveal.w>0.5);return out;
+ let keyed=ruled&&i.reveal.w>0.5;
+ var out:ModelShadowFragment;out.color=vec4<f32>(select(128.0,key,keyed)/255.0,0.0,0.0,select(a,0.0,erased));out.depth=select(0.5,(256.0-key)/257.0,keyed);return out;
 }
-@fragment fn model_shadow_outline(input:Out)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>(0.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
+@fragment fn model_shadow_outline(input:Out)->ModelShadowFragment {let shaded=modelOutline(input);var out:ModelShadowFragment;out.color=vec4<f32>((256.0-round(shaded.depth*257.0))/255.0,0.0,0.0,shaded.color.a);out.depth=shaded.depth;return out;}
 
 // Direct subjects: an opaque single-member subject outside the effects phase
 // draws straight into the world in its paint position instead of through the

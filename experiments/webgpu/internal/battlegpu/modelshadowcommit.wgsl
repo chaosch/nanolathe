@@ -14,6 +14,7 @@ struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params
 @group(0) @binding(7) var mask:texture_2d<f32>;
 @group(0) @binding(8) var liquid:texture_2d<f32>;
 @group(0) @binding(9) var bodyKeys:texture_2d<f32>;
+@group(0) @binding(10) var shadowSampler:sampler;
 const modelShadowCorners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));
 struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) screen:vec2<f32>,@location(1) @interpolate(flat) subject:u32}
 @vertex fn model_shadow_commit_vertex(@builtin(vertex_index) vid:u32,@builtin(instance_index) iid:u32)->ModelShadowCommitOut {
@@ -23,21 +24,30 @@ struct ModelShadowCommitOut {@builtin(position) position:vec4<f32>,@location(0) 
 }
 // A reused subject (zero body rectangle) reads its own composed body raster
 // instead of a separate silhouette source: the same coverage, as retail's
-// shadow copies the cached body image [03 R-REN-03D §1].
-fn modelShadowTap(p:vec2<f32>,rect:vec4<f32>,reuse:bool)->f32 {
- let at=vec2<i32>(floor(p));if ((vec2<f32>(at)<rect.xy).x||(vec2<f32>(at)<rect.xy).y)||((vec2<f32>(at)>=rect.xy+rect.zw).x||(vec2<f32>(at)>=rect.xy+rect.zw).y){return 0.0;}
- if reuse{let c=textureLoad(bodies,at,0);return c.a;}
- let c=textureLoad(body,at,0);return c.a;
+// shadow copies the cached body image [03 R-REN-03D §1]. Both sources keep
+// the byte key in red (the body raster in its key plane, a silhouette in
+// its colour) and coverage in alpha.
+// Every source rectangle has a transparent margin of at least one doubled
+// pixel, so a fetch that straddles its edge reads no neighbour's coverage;
+// only a fetch wholly outside the rectangle is rejected.
+fn modelShadowInside(t:vec2<f32>,size:vec2<f32>,rect:vec4<f32>)->bool {
+ return ((t+size>rect.xy).x&&(t+size>rect.xy).y)&&((t<rect.xy+rect.zw).x&&(t<rect.xy+rect.zw).y);
 }
+// One gather returns the 2x2 block whose top-left texel is t, in gather
+// order x:(0,1) y:(1,1) z:(1,0) w:(0,0); it replaces four loads.
+fn modelShadowAlpha4(t:vec2<f32>,reuse:bool)->vec4<f32> {
+ if reuse{let g=textureGather(3,bodies,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(bodies)));return g;}
+ let g=textureGather(3,body,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(body)));return g;
+}
+fn modelShadowKey4(t:vec2<f32>,reuse:bool)->vec4<f32> {
+ if reuse{let g=textureGather(0,bodyKeys,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(bodyKeys)));return round(g*255.0);}
+ let g=textureGather(0,body,shadowSampler,(t+vec2<f32>(1.0))/vec2<f32>(textureDimensions(body)));return round(g*255.0);
+}
+// Hardware bilinear coverage at continuous texel position p (centres at +0.5).
 fn modelShadowCoverage(p:vec2<f32>,rect:vec4<f32>,reuse:bool)->f32 {
- let a=floor(p-vec2<f32>(0.5))+vec2<f32>(0.5);let f=fract(p-vec2<f32>(0.5));
- return mix(mix(modelShadowTap(a,rect,reuse),modelShadowTap(a+vec2<f32>(1,0),rect,reuse),f.x),mix(modelShadowTap(a+vec2<f32>(0,1),rect,reuse),modelShadowTap(a+vec2<f32>(1,1),rect,reuse),f.x),f.y);
-}
-// The body raster stores the exact byte key in its metadata red channel; a
-// silhouette source stores it as depth (256-key)/257.
-fn modelShadowKey(at:vec2<i32>,reuse:bool)->f32 {
- if reuse{let k=textureLoad(bodyKeys,at,0);return round(k.r*255.0);}
- let d=textureLoad(keys,at,0);return 256.0-round(d*257.0);
+ if !modelShadowInside(p-vec2<f32>(0.5),vec2<f32>(1.0),rect){return 0.0;}
+ if reuse{let c=textureSampleLevel(bodies,shadowSampler,p/vec2<f32>(textureDimensions(bodies)),0.0);return c.a;}
+ let c=textureSampleLevel(body,shadowSampler,p/vec2<f32>(textureDimensions(body)),0.0);return c.a;
 }
 fn modelShadowLiquidTap(at:vec2<i32>)->f32 {
  if ((at<vec2<i32>(0)).x||(at<vec2<i32>(0)).y)||((at>=vec2<i32>(textureDimensions(liquid))).x||(at>=vec2<i32>(textureDimensions(liquid))).y){return 0.0;}return textureLoad(liquid,at,0).r;
@@ -65,21 +75,24 @@ fn modelShadowWeight(at:i32)->f32 {if at==2{return 6.0;}if at==1||at==3{return 4
   for(var y=0;y<5;y++){for(var x=0;x<5;x++){let weightX=modelShadowWeight(x);let weightY=modelShadowWeight(y);sum+=modelShadowCoverage(src+vec2<f32>(f32(x-2),f32(y-2))*radius,rect,reuse)*weightX*weightY;}}
   alpha=sum/256.0*mix(0.5,0.20,wet);
  }else{
-  let block=floor(input.screen);let raster=max(u.tint.w,1.0);var count=1;if u.tint.w>1.5{count=2;}
-  var cover=0.0;var punch=0.0;
-  for(var y=0;y<count;y++){for(var x=0;x<count;x++){
-   let screen=block+(vec2<f32>(f32(x),f32(y))+vec2<f32>(0.5))/raster;
-   var bp=rect.xy+(screen-origin)*bodyRaster;if s.params.x>1.5{bp-=s.placement.zw*bodyRaster;}
-   let coverage=modelShadowTap(bp,rect,reuse);
-   if s.params.x<1.5{
-    let mp=s.mask.xy+(screen-s.placement.zw)*raster;
-    if ((mp>=s.mask.xy).x&&(mp>=s.mask.xy).y)&&((mp<s.mask.xy+s.mask.zw).x&&(mp<s.mask.xy+s.mask.zw).y){if textureLoad(mask,vec2<i32>(mp),0).r>0.5{cover+=1.0;}}
-    if coverage>0.5{punch+=1.0;}
-   }else if coverage>0.5{
-    let key=modelShadowKey(vec2<i32>(bp),reuse);if s.params.y<0.5||key>s.params.y{cover+=1.0;}
-   }
-  }}
-  let samples=f32(count*count);if s.params.x>1.5||punch<samples{alpha=cover/samples*0.5;}
+  // An output pixel's samples sit one source texel apart: all four of a
+  // doubled block, or its top-left alone at one sample per pixel.
+  let block=floor(input.screen);let raster=max(u.tint.w,1.0);
+  var pick=vec4<f32>(0.0,0.0,0.0,1.0);if u.tint.w>1.5{pick=vec4<f32>(1.0);}
+  let samples=dot(pick,vec4<f32>(1.0));let first=block+vec2<f32>(0.5)/raster;
+  var bp=rect.xy+(first-origin)*bodyRaster;if s.params.x>1.5{bp-=s.placement.zw*bodyRaster;}
+  let t=floor(bp);var covered=vec4<f32>(0.0);
+  if modelShadowInside(t,vec2<f32>(2.0),rect){covered=select(vec4<f32>(0.0),vec4<f32>(1.0),modelShadowAlpha4(t,reuse)>vec4<f32>(0.5));}
+  if s.params.x<1.5{
+   let mt=floor(s.mask.xy+(first-s.placement.zw)*raster);var masked=vec4<f32>(0.0);
+   if modelShadowInside(mt,vec2<f32>(2.0),s.mask){let m=textureGather(0,mask,shadowSampler,(mt+vec2<f32>(1.0))/vec2<f32>(textureDimensions(mask)));masked=select(vec4<f32>(0.0),vec4<f32>(1.0),m>vec4<f32>(0.5));}
+   // Punching is all-samples only: a wholly covered block casts nothing.
+   if dot(pick,covered)<samples{alpha=dot(pick,masked)/samples*0.5;}
+  }else{
+   var cast=covered;
+   if s.params.y>=0.5{cast*=select(vec4<f32>(0.0),vec4<f32>(1.0),modelShadowKey4(t,reuse)>vec4<f32>(s.params.y));}
+   alpha=dot(pick,cast)/samples*0.5;
+  }
  }
  return vec4<f32>(u.tint.rgb*alpha,alpha);
 }

@@ -46,24 +46,29 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 		if len(module.GlobalVariables) != len(layout) || len(module.EntryPoints) != 2 {
 			t.Fatal("common commit must declare only the complete union and its two entry points")
 		}
-		buffer, texture := 0, 0
+		buffer, texture, sampler := 0, 0, 0
 		for i, global := range module.GlobalVariables {
 			if global.Binding == nil || global.Binding.Group != 0 || global.Binding.Binding != uint32(i) || layout[i].Binding != uint32(i) {
 				t.Fatalf("common commit binding order differs at %d", i)
 			}
 			kind, slot := "buffer", buffer
-			if layout[i].Texture != nil {
+			switch {
+			case layout[i].Texture != nil:
 				kind, slot = "texture", texture
 				texture++
-			} else {
+			case layout[i].Sampler != nil:
+				kind, slot = "sampler", sampler
+				sampler++
+			default:
 				buffer++
 			}
 			pattern := fmt.Sprintf(`\b%s \[\[%s\(%d\)\]\]`, global.Name, kind, slot)
 			for _, entry := range []string{"model_commit_vertex", "model_commit_fragment"} {
 				// The vertex consumes both storage/uniform families; the fragment
-				// consumes all nine resources. Texture indices still include every
-				// declaration even though the vertex reads none of them.
-				if entry == "model_commit_vertex" && kind == "texture" {
+				// consumes every resource but the silhouette depth plane, which
+				// the union still declares. Texture and sampler indices include
+				// every declaration even though the vertex reads none of them.
+				if entry == "model_commit_vertex" && kind != "buffer" || global.Name == "keys" {
 					continue
 				}
 				if !regexp.MustCompile(pattern).MatchString(modelBodyEntry(t, code, entry)) {
@@ -71,8 +76,8 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 				}
 			}
 		}
-		if buffer != 4 || texture != 6 {
-			t.Fatalf("common native resources: buffers=%d textures=%d", buffer, texture)
+		if buffer != 4 || texture != 6 || sampler != 1 {
+			t.Fatalf("common native resources: buffers=%d textures=%d samplers=%d", buffer, texture, sampler)
 		}
 		for i, global := range module.GlobalVariables[:2] {
 			array, ok := module.Types[global.Type].Inner.(ir.ArrayType)

@@ -40,13 +40,15 @@ func TestModelCommitMetalUnionBindings(t *testing.T) {
 			t.Fatalf("resolve does not match common Metal layout: %s", pattern)
 		}
 	}
-	storage, uniforms, textures := 0, 0, 0
+	storage, uniforms, textures, samplers := 0, 0, 0, 0
 	for i, entry := range layout {
 		if entry.Binding != uint32(i) || module.GlobalVariables[i].Binding.Binding != entry.Binding {
 			t.Fatalf("union binding order differs at %d", i)
 		}
 		if entry.Texture != nil {
 			textures++
+		} else if entry.Sampler != nil {
+			samplers++
 		} else if entry.Buffer != nil && entry.Buffer.Type == gputypes.BufferBindingTypeUniform {
 			uniforms++
 		} else if entry.Buffer != nil && entry.Buffer.Type == gputypes.BufferBindingTypeReadOnlyStorage {
@@ -55,8 +57,8 @@ func TestModelCommitMetalUnionBindings(t *testing.T) {
 			t.Fatalf("unexpected union resource at %d", i)
 		}
 	}
-	if storage != 2 || uniforms != 2 || textures != 6 {
-		t.Fatalf("core union resources: storage=%d uniforms=%d textures=%d", storage, uniforms, textures)
+	if storage != 2 || uniforms != 2 || textures != 6 || samplers != 1 {
+		t.Fatalf("core union resources: storage=%d uniforms=%d textures=%d samplers=%d", storage, uniforms, textures, samplers)
 	}
 }
 
@@ -90,9 +92,10 @@ func TestModelCommitViewsAndReplacement(t *testing.T) {
 		}
 	}
 	m.slots.buffer, m.shadowRecords.buffer, m.uniform, m.shadowWork.uniform = &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}, &wgpu.Buffer{}
+	m.shadowSampler = &wgpu.Sampler{}
 	entries, layout := m.modelCommitEntries(m.modelCommitTextureViews()), modelCommitLayoutEntries()
 	for i, entry := range entries {
-		if entry.Binding != layout[i].Binding || (entry.Buffer != nil) != (layout[i].Buffer != nil) || (entry.TextureView != nil) != (layout[i].Texture != nil) {
+		if entry.Binding != layout[i].Binding || (entry.Buffer != nil) != (layout[i].Buffer != nil) || (entry.TextureView != nil) != (layout[i].Texture != nil) || (entry.Sampler != nil) != (layout[i].Sampler != nil) {
 			t.Fatalf("native group resource order differs from union layout at %d", i)
 		}
 	}

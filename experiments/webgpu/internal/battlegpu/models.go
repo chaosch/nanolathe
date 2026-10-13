@@ -121,7 +121,7 @@ type Models struct {
 	groups, members                                                             modelBuffer
 	uniform                                                                     *wgpu.Buffer
 	textureView, paletteView                                                    *wgpu.TextureView
-	sampler                                                                     *wgpu.Sampler
+	sampler, shadowSampler                                                      *wgpu.Sampler
 	poseLayout, bodyLayout, resolveLayout                                       *wgpu.BindGroupLayout
 	bodyPipelineLayout                                                          *wgpu.PipelineLayout
 	bodyWork                                                                    modelBodyPipelines
@@ -214,8 +214,10 @@ func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
 		modelTextureEntry(5),
 		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
 		modelTextureEntry(7), modelTextureEntry(8),
-		// Reused shadow subjects read the body raster's key plane.
+		// Reused shadow subjects read the body raster's key plane; shadow
+		// commits gather and filter through one linear sampler.
 		modelTextureEntry(9),
+		{Binding: 10, Visibility: wgpu.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
 	}
 }
 
@@ -237,7 +239,7 @@ func (m *Models) modelCommitEntries(views [6]*wgpu.TextureView) []wgpu.BindGroup
 		{Binding: 2, Buffer: m.uniform, Size: 80}, {Binding: 3, TextureView: views[0]},
 		{Binding: 4, Buffer: m.shadowWork.uniform, Size: 96}, {Binding: 5, TextureView: views[1]},
 		{Binding: 6, TextureView: views[2]}, {Binding: 7, TextureView: views[3]}, {Binding: 8, TextureView: views[4]},
-		{Binding: 9, TextureView: views[5]},
+		{Binding: 9, TextureView: views[5]}, {Binding: 10, Sampler: m.shadowSampler},
 	}
 }
 
@@ -611,6 +613,11 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return
 	}
 	m.modelRetain(m.sampler.Release)
+	// Shadow commits gather source blocks and filter blurred aircraft shadows.
+	if m.shadowSampler, err = d.CreateSampler(&wgpu.SamplerDescriptor{AddressModeU: gputypes.AddressModeClampToEdge, AddressModeV: gputypes.AddressModeClampToEdge, AddressModeW: gputypes.AddressModeClampToEdge, MinFilter: gputypes.FilterModeLinear, MagFilter: gputypes.FilterModeLinear, MipmapFilter: gputypes.FilterModeNearest}); err != nil {
+		return
+	}
+	m.modelRetain(m.shadowSampler.Release)
 	var layout *wgpu.PipelineLayout
 	if m.poseLayout, layout, err = m.modelLayout([]gputypes.BindGroupLayoutEntry{modelBufferEntry(0, wgpu.ShaderStageCompute, gputypes.BufferBindingTypeReadOnlyStorage, modelPoseStride), modelBufferEntry(1, wgpu.ShaderStageCompute, gputypes.BufferBindingTypeStorage, modelPoseStride), modelBufferEntry(2, wgpu.ShaderStageCompute, gputypes.BufferBindingTypeUniform, 80)}); err != nil {
 		return

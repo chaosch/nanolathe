@@ -90,7 +90,7 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 		used         []uint32
 	}{
 		{"project", modelShadowShaderSource(capacities), modelShadowProjectLayoutEntries(), []uint32{0, 1, 2, 3}},
-		{"commit", modelShadowCommitShaderSource(capacities), modelCommitLayoutEntries(), []uint32{0, 1, 3, 4, 5, 6, 7, 8, 9}},
+		{"commit", modelShadowCommitShaderSource(capacities), modelCommitLayoutEntries(), []uint32{0, 1, 3, 4, 5, 7, 8, 9, 10}},
 	} {
 		ast, err := naga.Parse(pass.source)
 		if err != nil {
@@ -130,7 +130,7 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 		if len(module.GlobalVariables) != len(pass.layout) {
 			t.Fatalf("%s declares resources absent from its pass layout", pass.name)
 		}
-		var bufferSlot, textureSlot int
+		var bufferSlot, textureSlot, samplerSlot int
 		for _, entry := range pass.layout {
 			name := ""
 			for _, global := range module.GlobalVariables {
@@ -142,10 +142,14 @@ func TestModelShadowShaderABIAndCoreBindings(t *testing.T) {
 				t.Fatalf("%s layout binding %d has no shader resource", pass.name, entry.Binding)
 			}
 			kind, slot := "buffer", bufferSlot
-			if entry.Texture != nil {
+			switch {
+			case entry.Texture != nil:
 				kind, slot = "texture", textureSlot
 				textureSlot++
-			} else {
+			case entry.Sampler != nil:
+				kind, slot = "sampler", samplerSlot
+				samplerSlot++
+			default:
 				bufferSlot++
 			}
 			pattern := fmt.Sprintf(`\b%s \[\[%s\(%d\)\]\]`, name, kind, slot)
