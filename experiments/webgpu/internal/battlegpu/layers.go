@@ -120,6 +120,7 @@ type Layers struct {
 	coalesceEffects                                                                             bool
 	featurePaintCount                                                                           int
 	annotationRanges                                                                            [][2]uint32 // one-based composition slot -> first/count
+	annotationScratch                                                                           layerAnnotationScratch
 	overlayRuns                                                                                 []layerDraw
 	effectLayers                                                                                [][]layerDraw
 	effectBytes                                                                                 [5][]byte
@@ -158,10 +159,26 @@ func layerPackQuad(dst []byte, q meshscene.OverlayQuad, scale float32) {
 // Only their storage order changes: stable slot grouping leaves each slot's
 // authored sequence intact (Metal composition annotation ranges, GPU C-G5).
 func layerPackAnnotations(in []meshscene.Annotation, slotCount int) ([]byte, [][2]uint32) {
-	order := slices.Clone(in)
+	var s layerAnnotationScratch
+	return s.pack(in, slotCount)
+}
+
+// layerAnnotationScratch keeps the annotation packing's buffers across
+// frames. The packed bytes are copied by the queue write that follows, and
+// the ranges are read only while this frame encodes.
+type layerAnnotationScratch struct {
+	order  []meshscene.Annotation
+	ranges [][2]uint32
+	data   []byte
+}
+
+func (s *layerAnnotationScratch) pack(in []meshscene.Annotation, slotCount int) ([]byte, [][2]uint32) {
+	order := append(s.order[:0], in...)
 	slices.SortStableFunc(order, func(a, b meshscene.Annotation) int { return cmp.Compare(a.Slot, b.Slot) })
-	ranges := make([][2]uint32, slotCount)
-	data := make([]byte, 0, len(in)*64)
+	ranges := slices.Grow(s.ranges[:0], slotCount)[:slotCount]
+	clear(ranges)
+	data := s.data[:0]
+	defer func() { s.order, s.ranges, s.data = order[:0], ranges, data }()
 	for _, a := range order {
 		if a.Slot == 0 || uint64(a.Slot) > uint64(slotCount) {
 			continue
@@ -824,7 +841,7 @@ func (l *Layers) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return err
 	}
 	split(0)
-	data, l.annotationRanges = layerPackAnnotations(f.Annotations, len(f.Composition.Slots))
+	data, l.annotationRanges = l.annotationScratch.pack(f.Annotations, len(f.Composition.Slots))
 	changed, err = l.layerUpload(&l.annotations, data, 64)
 	if err != nil {
 		return err
