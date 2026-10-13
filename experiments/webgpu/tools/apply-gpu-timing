@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the guarded present-handler diagnostic to an existing external copy."""
+"""Apply the measurement-only GPU timing diagnostic after the presented-handler one."""
 import hashlib,json,pathlib,platform,subprocess,sys
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
 if len(sys.argv)!=2:sys.exit('usage: tools/apply-gpu-timing REVIEWED_EXTERNAL_WGPU_COPY')

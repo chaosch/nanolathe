@@ -1,48 +1,34 @@
---- a/hal/metal/queue.go
-+++ b/hal/metal/queue.go
-@@ -24,6 +24,8 @@
- 
- // Queue implements hal.Queue for Metal.
- type Queue struct {
-+	gpuTimingInit     sync.Once
-+	gpuTiming         *gpuTiming
- 	presentInit       sync.Once
- 	presentDiagnostic *presentTelemetry
- 	device            *Device
-@@ -57,7 +59,9 @@
- func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
- 	pool := NewAutoreleasePool()
- 	defer pool.Drain()
--	return q.submitWithRuntime(commandBuffers, nativeSubmissionRuntime())
-+	rt := nativeSubmissionRuntime()
-+	rt.observe = q.observeGPUCommands
-+	return q.submitWithRuntime(commandBuffers, rt)
- }
- 
- // PollCompleted returns the highest submission index known to be completed by the GPU.
---- a/hal/metal/submission_owned.go
-+++ b/hal/metal/submission_owned.go
-@@ -13,6 +13,7 @@
- // Dependency-local seam permits failure tests without native calls or mutable
- // process-global hooks. Production supplies the initialized ObjC runtime.
- type metalSubmissionRuntime struct {
-+	observe    func([]hal.CommandBuffer, uint64)
- 	gpuBlock   func(*atomic.Uint64, uint64) uintptr
- 	frameBlock func(chan struct{}) uintptr
- 	discard    func(uintptr)
-@@ -68,6 +69,9 @@
- 	if q.frameSemaphore != nil {
- 		<-q.frameSemaphore
- 	}
-+	if rt.observe != nil {
-+		rt.observe(buffers, index)
+diff --git a/gpu_timing_native.go b/gpu_timing_native.go
+new file mode 100644
+index 0000000..20935c2
+--- /dev/null
++++ b/gpu_timing_native.go
+@@ -0,0 +1,20 @@
++//go:build !rust && !(js && wasm)
++
++package wgpu
++
++func (d *Device) NativeGPUTiming(close bool) any {
++	if d != nil && d.queue != nil {
++		if p, ok := d.queue.hal.(interface{ NativeGPUTiming(bool) any }); ok {
++			return p.NativeGPUTiming(close)
++		}
 +	}
- 	last := buffers[len(buffers)-1].(*CommandBuffer).raw
- 	rt.attach(last, gpu)
- 	if frame != 0 {
++	return nil
++}
++func (d *Device) NativeGPUClockSeconds() float64 {
++	if d != nil && d.queue != nil {
++		if p, ok := d.queue.hal.(interface{ NativeGPUClockSeconds() float64 }); ok {
++			return p.NativeGPUClockSeconds()
++		}
++	}
++	return 0
++}
+diff --git a/hal/metal/device.go b/hal/metal/device.go
+index 71188b2..95378c7 100644
 --- a/hal/metal/device.go
 +++ b/hal/metal/device.go
-@@ -1460,6 +1460,7 @@
+@@ -1456,6 +1456,7 @@ func (d *Device) WaitIdle() error {
  func (d *Device) Destroy() {
  	if d.queue != nil {
  		d.queue.NativePresentationTelemetry(true)
@@ -50,9 +36,12 @@
  	}
  	hal.Logger().Debug("metal: device destroyed")
  	d.releaseIndexedICBTranslators()
+diff --git a/hal/metal/gpu_timing.go b/hal/metal/gpu_timing.go
+new file mode 100644
+index 0000000..fdcc31e
 --- /dev/null
 +++ b/hal/metal/gpu_timing.go
-@@ -0,0 +1,315 @@
+@@ -0,0 +1,319 @@
 +//go:build darwin && !(js && wasm)
 +
 +package metal
@@ -343,7 +332,11 @@
 +	}
 +	block := permanentGPUBlock()
 +	for i, buffer := range buffers {
-+		raw := buffer.(*CommandBuffer).raw
++		cb, ok := buffer.(*CommandBuffer)
++		if !ok || cb == nil {
++			continue
++		}
++		raw := cb.raw
 +		available := block != 0 && msgSendBool(raw, Sel("respondsToSelector:"), argPointer(uintptr(Sel("GPUStartTime")))) && msgSendBool(raw, Sel("respondsToSelector:"), argPointer(uintptr(Sel("GPUEndTime"))))
 +		row := gpuTimingRow{Submission: index, BatchIndex: i, BatchSize: len(buffers), PreCommitHostSeconds: gpuHostSeconds()}
 +		if token := t.register(uintptr(raw), row, available); token != 0 {
@@ -368,19 +361,94 @@
 +	}
 +	return gpuHostSeconds()
 +}
+diff --git a/hal/metal/gpu_timing_root_native_test.go b/hal/metal/gpu_timing_root_native_test.go
+new file mode 100644
+index 0000000..0af8d28
+--- /dev/null
++++ b/hal/metal/gpu_timing_root_native_test.go
+@@ -0,0 +1,68 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++	"runtime"
++	"testing"
++	"unsafe"
++)
++
++func TestPermanentGPUBlockSurvivesGCAndNativeCopy(t *testing.T) {
++	if err := Init(); err != nil {
++		t.Fatal(err)
++	}
++	pointer := permanentGPUBlock()
++	if pointer == 0 {
++		t.Fatal("native permanent helper unavailable")
++	}
++	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
++	if err != nil {
++		t.Fatal(err)
++	}
++	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
++	if err != nil {
++		t.Fatal(err)
++	}
++	var copyCIF, releaseCIF types.CallInterface
++	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
++	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	for i := 0; i < 10; i++ {
++		runtime.GC()
++		var copied uintptr
++		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
++		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
++			t.Fatal(err)
++		}
++		if copied != pointer {
++			t.Fatal("global block copy moved the immutable literal")
++		}
++		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
++			t.Fatal(err)
++		}
++		if permanentGPU.pointer.Load() != pointer || permanentGPU.block == nil || permanentGPU.descriptor == nil {
++			t.Fatal("permanent roots changed")
++		}
++		// A valid block class also supports Objective-C dispatch. This distinguishes
++		// the inherited class-address bug from a GC lifetime failure.
++		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
++			t.Fatal("Objective-C global block copy changed its identity")
++		}
++		Release(ID(pointer))
++	}
++}
++
++func TestNativeGPUClockUsesPositiveHostTime(t *testing.T) {
++	a := gpuHostSeconds()
++	b := gpuHostSeconds()
++	if a <= 0 || b < a {
++		t.Fatalf("native host clock unavailable or regressed: %v %v", a, b)
++	}
++}
+diff --git a/hal/metal/gpu_timing_test.go b/hal/metal/gpu_timing_test.go
+new file mode 100644
+index 0000000..b8fd099
 --- /dev/null
 +++ b/hal/metal/gpu_timing_test.go
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,133 @@
 +//go:build darwin && !(js && wasm)
 +
 +package metal
 +
 +import (
 +	"encoding/json"
-+	"github.com/gogpu/wgpu/hal"
 +	"math"
 +	"sync"
-+	"sync/atomic"
 +	"testing"
 +)
 +
@@ -466,23 +534,6 @@
 +		}
 +	}
 +}
-+func TestGPUTimingObserverOnlyAfterOwnedPreflight(t *testing.T) {
-+	q := &Queue{}
-+	observed, commits := 0, 0
-+	rt := metalSubmissionRuntime{gpuBlock: func(*atomic.Uint64, uint64) uintptr { return 1 }, attach: func(ID, uintptr) {}, commit: func(ID) { commits++ }, observe: func(b []hal.CommandBuffer, index uint64) {
-+		observed++
-+		if commits != 0 || index != 1 || len(b) != 2 {
-+			t.Fatal("observer ran after commit or guessed identity")
-+		}
-+	}}
-+	if _, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{}}, rt); err == nil || observed != 0 {
-+		t.Fatal("invalid submission reached observer")
-+	}
-+	if _, err := q.submitWithRuntime([]hal.CommandBuffer{&CommandBuffer{raw: 1}, &CommandBuffer{raw: 2}}, rt); err != nil || observed != 1 || commits != 2 {
-+		t.Fatal("valid submit changed", err)
-+	}
-+}
-+
 +func TestGPUTimingMissingRecordsRemainJSONSerializable(t *testing.T) {
 +	r := &gpuTimingRouter{entries: make(map[uintptr]gpuTimingEntry)}
 +	a := newGPUTiming(r)
@@ -523,97 +574,27 @@
 +		t.Fatal("cancelled route accepted stale callback")
 +	}
 +}
---- /dev/null
-+++ b/hal/metal/gpu_timing_root_native_test.go
-@@ -0,0 +1,68 @@
-+//go:build darwin && !(js && wasm)
+diff --git a/hal/metal/queue.go b/hal/metal/queue.go
+index 3b036b9..2774503 100644
+--- a/hal/metal/queue.go
++++ b/hal/metal/queue.go
+@@ -24,6 +24,8 @@ const maxFramesInFlight = 2
+ 
+ // Queue implements hal.Queue for Metal.
+ type Queue struct {
++	gpuTimingInit     sync.Once
++	gpuTiming         *gpuTiming
+ 	presentInit       sync.Once
+ 	presentDiagnostic *presentTelemetry
+ 	device            *Device
+@@ -70,6 +72,10 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
+ 	pool := NewAutoreleasePool()
+ 	defer pool.Drain()
+ 
++	// Nanolathe measurement diagnostic: completed-handler GPU timings,
++	// attached before commit. Inert unless NANOLATHE_WEBGPU_GPU_TIMING=1.
++	q.observeGPUCommands(commandBuffers, subIdx)
 +
-+package metal
-+
-+import (
-+	"github.com/go-webgpu/goffi/ffi"
-+	"github.com/go-webgpu/goffi/types"
-+	"runtime"
-+	"testing"
-+	"unsafe"
-+)
-+
-+func TestPermanentGPUBlockSurvivesGCAndNativeCopy(t *testing.T) {
-+	if err := Init(); err != nil {
-+		t.Fatal(err)
-+	}
-+	pointer := permanentGPUBlock()
-+	if pointer == 0 {
-+		t.Fatal("native permanent helper unavailable")
-+	}
-+	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	var copyCIF, releaseCIF types.CallInterface
-+	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
-+	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
-+		t.Fatal(err)
-+	}
-+	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
-+		t.Fatal(err)
-+	}
-+	for i := 0; i < 10; i++ {
-+		runtime.GC()
-+		var copied uintptr
-+		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
-+		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
-+			t.Fatal(err)
-+		}
-+		if copied != pointer {
-+			t.Fatal("global block copy moved the immutable literal")
-+		}
-+		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
-+			t.Fatal(err)
-+		}
-+		if permanentGPU.pointer.Load() != pointer || permanentGPU.block == nil || permanentGPU.descriptor == nil {
-+			t.Fatal("permanent roots changed")
-+		}
-+		// A valid block class also supports Objective-C dispatch. This distinguishes
-+		// the inherited class-address bug from a GC lifetime failure.
-+		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
-+			t.Fatal("Objective-C global block copy changed its identity")
-+		}
-+		Release(ID(pointer))
-+	}
-+}
-+
-+func TestNativeGPUClockUsesPositiveHostTime(t *testing.T) {
-+	a := gpuHostSeconds()
-+	b := gpuHostSeconds()
-+	if a <= 0 || b < a {
-+		t.Fatalf("native host clock unavailable or regressed: %v %v", a, b)
-+	}
-+}
---- /dev/null
-+++ b/gpu_timing_native.go
-@@ -0,0 +1,20 @@
-+//go:build !rust && !(js && wasm)
-+
-+package wgpu
-+
-+func (d *Device) NativeGPUTiming(close bool) any {
-+	if d != nil && d.queue != nil {
-+		if p, ok := d.queue.hal.(interface{ NativeGPUTiming(bool) any }); ok {
-+			return p.NativeGPUTiming(close)
-+		}
-+	}
-+	return nil
-+}
-+func (d *Device) NativeGPUClockSeconds() float64 {
-+	if d != nil && d.queue != nil {
-+		if p, ok := d.queue.hal.(interface{ NativeGPUClockSeconds() float64 }); ok {
-+			return p.NativeGPUClockSeconds()
-+		}
-+	}
-+	return 0
-+}
+ 	lastIdx := len(commandBuffers) - 1
+ 	for i, buf := range commandBuffers {
+ 		cb, ok := buf.(*CommandBuffer)

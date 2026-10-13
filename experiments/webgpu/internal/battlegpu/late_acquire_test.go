@@ -34,18 +34,18 @@ func (f *lateFrameFixture) Format() gputypes.TextureFormat {
 	f.calls = append(f.calls, "format")
 	return f.format
 }
-func TestDeferredAcquisitionBeforeCommandEncoding(t *testing.T) {
+func TestLateAcquisitionOrderAndOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		name                      string
 		enc, view, resize, format bool
 		calls                     []string
-		recoverable               bool
+		unavailable, resized, ok  bool
 	}{
-		{"nil encoder", false, true, false, false, []string{"encoder"}, true},
-		{"nil view", true, false, false, false, []string{"encoder", "view"}, true},
-		{"changed extent", true, true, true, false, []string{"encoder", "view", "extent", "format"}, true},
-		{"changed format", true, true, false, true, []string{"encoder", "view", "extent", "format"}, false},
-		{"stable", true, true, false, false, []string{"encoder", "view", "extent", "format"}, false},
+		{"nil encoder", false, true, false, false, []string{"encoder"}, true, false, false},
+		{"nil view", true, false, false, false, []string{"encoder", "view"}, true, false, false},
+		{"changed format", true, true, false, true, []string{"encoder", "view", "format"}, false, false, false},
+		{"changed extent", true, true, true, false, []string{"encoder", "view", "format", "extent"}, false, true, true},
+		{"stable", true, true, false, false, []string{"encoder", "view", "format", "extent"}, false, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &lateFrameFixture{w: 1920, h: 1080, format: gputypes.TextureFormatBGRA8Unorm}
@@ -61,36 +61,25 @@ func TestDeferredAcquisitionBeforeCommandEncoding(t *testing.T) {
 			if tc.format {
 				f.format = gputypes.TextureFormatRGBA8Unorm
 			}
-			enc, view, err := acquireFixedFrame(f, 1920, 1080, gputypes.TextureFormatBGRA8Unorm)
+			enc, view, resized, err := acquireFrame(f, 1920, 1080, gputypes.TextureFormatBGRA8Unorm)
 			if !reflect.DeepEqual(f.calls, tc.calls) {
 				t.Fatalf("acquisition retried or getter order changed: %v", f.calls)
 			}
-			if tc.name == "stable" {
-				if err != nil || enc != f.enc || view != f.view {
-					t.Fatal("stable operands lost")
+			if tc.ok {
+				// A drawable cannot be handed back once acquired: a resized one
+				// still receives the prepared frame.
+				if err != nil || enc != f.enc || view != f.view || resized != tc.resized {
+					t.Fatal("acquired operands lost")
 				}
 				return
 			}
 			if err == nil || enc != nil || view != nil {
-				t.Fatal("changed frame published operands")
+				t.Fatal("failed acquisition published operands")
 			}
-			if errors.Is(err, errDeferredFrameChanged) != tc.recoverable {
+			if errors.Is(err, errFrameUnavailable) != tc.unavailable {
 				t.Fatalf("wrong recovery classification: %v", err)
 			}
 		})
-	}
-}
-func TestDeferredAcquisitionBoundaries(t *testing.T) {
-	for _, tc := range []struct {
-		draw int
-		want bool
-	}{{0, false}, {1, true}, {239, false}, {240, false}, {241, true}, {958, true}, {959, false}, {960, false}} {
-		if lateAcquireSteadyFrame(tc.draw, 240, 720) != tc.want {
-			t.Fatalf("boundary %d", tc.draw)
-		}
-	}
-	if !lateAcquireSteadyFrame(10000, 120, 0) {
-		t.Fatal("unbounded play rejected")
 	}
 }
 func TestDeferredFallbackDropsOneSourceWithoutReplay(t *testing.T) {

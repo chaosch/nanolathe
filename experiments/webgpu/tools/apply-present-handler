@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the guarded present-handler diagnostic to an existing external copy."""
+"""Apply the measurement-only presented-handler diagnostic to a private stock wgpu copy."""
 import hashlib,json,pathlib,platform,subprocess,sys
 exp=pathlib.Path(__file__).resolve().parents[1];repo=exp.parent.parent
 if len(sys.argv)!=2:sys.exit('usage: tools/apply-present-handler REVIEWED_EXTERNAL_WGPU_COPY')

@@ -32,6 +32,9 @@ type Renderer struct {
 	prepared bool
 	// queue defers every component's writes past the source handoff.
 	queue *deferredQueue
+	// uploads stages rewrites of textures earlier frames sampled; they are
+	// copied on the frame's encoder ahead of every pass.
+	uploads *textureUploads
 }
 type Counters struct {
 	// Targets, models, glow, ground fields, layers, distortions, reflections, lenses/paint, command encoding.
@@ -90,6 +93,8 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		r.queue = &deferredQueue{q: q, enabled: os.Getenv("NANOLATHE_WEBGPU_DEFER_WRITES") == "1"}
 		r.models.q, r.layers.q, r.glow.q, r.groundLight.q = r.queue, r.queue, r.queue, r.queue
 		r.distortions.q, r.lenses.q, r.reflections.q = r.queue, r.queue, r.queue
+		r.uploads = newTextureUploads(d, r.queue)
+		r.layers.uploads, r.glow.uploads = r.uploads, r.uploads
 	}
 	return
 }
@@ -98,8 +103,8 @@ func (r *Renderer) targets(width, height int) error {
 		return nil
 	}
 	// Windowed prototype resize owns a completion boundary; no borrowed view
-	// can survive target destruction. The host also completes previous work
-	// before Prepare mutates shared buffers; this wait owns resize only.
+	// can survive target destruction. Ordinary frames need none: buffer
+	// writes and staged texture copies are ordered with earlier GPU work.
 	if r.world != nil {
 		if err := r.d.WaitIdle(); err != nil {
 			return err
@@ -223,6 +228,9 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 	if e := r.queue.flush(); e != nil {
 		return Counters{PreparationMS: phases}, e
 	}
+	// Every component now holds this frame's prepared state, which Redraw may
+	// encode even if acquisition below yields no drawable.
+	r.prepared = true
 	var lateAcquireMS float64
 	if acquire != nil {
 		start := time.Now()
@@ -236,14 +244,18 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 			return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS}, fmt.Errorf("late acquisition returned incomplete frame operands")
 		}
 	}
-	r.prepared = true
 	// Command timing excludes both source handoff and drawable acquisition.
 	mark = time.Now()
+	if e := r.uploads.record(enc); e != nil {
+		return Counters{}, e
+	}
 	if e := r.encodeCommands(enc, output); e != nil {
 		return Counters{}, e
 	}
 	split(8)
-	return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS, CommandEncodeMS: phases[8], Models: r.models.Counters(), Layers: r.layers.Counters(), Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
+	layers := r.layers.Counters()
+	layers.StagedBytes, layers.StagedRegions = r.uploads.Bytes, r.uploads.Regions
+	return Counters{PreparationMS: phases, LateAcquireMS: lateAcquireMS, CommandEncodeMS: phases[8], Models: r.models.Counters(), Layers: layers, Glow: r.glow.Counters(), GroundLight: r.groundLight.Counters(), Distortions: r.distortions.Counters(), Lenses: r.lenses.Counters(), Reflections: r.reflections.Counters()}, nil
 }
 
 // Redraw encodes the last prepared frame again, reading only renderer-owned
@@ -253,6 +265,10 @@ func (r *Renderer) encodeSourceReadyAcquire(enc *wgpu.CommandEncoder, output *wg
 func (r *Renderer) Redraw(enc *wgpu.CommandEncoder, output *wgpu.TextureView) error {
 	if r == nil || !r.prepared || enc == nil || output == nil {
 		return nil
+	}
+	// A prepared frame that lost its drawable left its staged copies pending.
+	if e := r.uploads.record(enc); e != nil {
+		return e
 	}
 	return r.encodeCommands(enc, output)
 }
@@ -425,4 +441,6 @@ func (r *Renderer) Close() {
 		r.models.Close()
 		r.models = nil
 	}
+	r.uploads.close()
+	r.uploads = nil
 }

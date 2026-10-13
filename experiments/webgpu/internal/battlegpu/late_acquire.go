@@ -8,47 +8,39 @@ import (
 	"time"
 )
 
-// Deferred operations are render-owner-only and require the private owned host.
-type deferredFrameContext interface {
-	DeferredAcquireState() (int, int, gputypes.TextureFormat, bool)
-	DisableDeferredFrameReplay() bool
-	DiscardDeferredAcquire() bool
-}
+// errFrameUnavailable reports a drawable the host could not provide after the
+// frame was prepared (the surface was outdated, lost or not configured). The
+// prepared state stays valid for Renderer.Redraw; no borrowed source is reread.
+var errFrameUnavailable = errors.New("surface frame unavailable after preparation")
 
-var errDeferredFrameChanged = errors.New("deferred frame unavailable or changed before command encoding")
-
-func lateAcquireSteadyFrame(draw, warmup, frames int) bool {
-	return draw > 0 && draw != warmup-1 && draw != warmup && (frames <= 0 || draw < warmup+frames-1)
-}
-
-type fixedFrameAcquirer interface {
+type frameAcquirer interface {
 	CommandEncoder() *wgpu.CommandEncoder
 	SurfaceView() *wgpu.TextureView
 	FramebufferSize() (int, int)
 	Format() gputypes.TextureFormat
 }
 
-func acquireFixedFrame(ctx fixedFrameAcquirer, width, height int, format gputypes.TextureFormat) (*wgpu.CommandEncoder, *wgpu.TextureView, error) {
+// acquireFrame takes the frame's encoder and drawable view from the stock
+// host, which acquires the drawable lazily on the first of these calls. It
+// reports whether the drawable's extent differs from the prepared one: the
+// drawable cannot be returned once acquired, so the caller still encodes the
+// prepared frame into it (one stretched frame during a live resize) and the
+// next callback resizes. A changed surface format is a failure.
+func acquireFrame(ctx frameAcquirer, width, height int, format gputypes.TextureFormat) (enc *wgpu.CommandEncoder, view *wgpu.TextureView, resized bool, err error) {
 	if ctx == nil || width <= 0 || height <= 0 {
-		return nil, nil, fmt.Errorf("deferred acquisition requires positive prepared extent")
+		return nil, nil, false, fmt.Errorf("late acquisition requires a positive prepared extent")
 	}
-	enc := ctx.CommandEncoder()
-	if enc == nil {
-		return nil, nil, errDeferredFrameChanged
+	if enc = ctx.CommandEncoder(); enc == nil {
+		return nil, nil, false, errFrameUnavailable
 	}
-	view := ctx.SurfaceView()
-	if view == nil {
-		return nil, nil, errDeferredFrameChanged
+	if view = ctx.SurfaceView(); view == nil {
+		return nil, nil, false, errFrameUnavailable
+	}
+	if actual := ctx.Format(); actual != format {
+		return nil, nil, false, fmt.Errorf("surface format changed from %v to %v", format, actual)
 	}
 	w, h := ctx.FramebufferSize()
-	actualFormat := ctx.Format()
-	if actualFormat != format {
-		return nil, nil, fmt.Errorf("deferred surface format changed from %v to %v", format, actualFormat)
-	}
-	if w != width || h != height {
-		return nil, nil, errDeferredFrameChanged
-	}
-	return enc, view, nil
+	return enc, view, w != width || h != height, nil
 }
 
 // This consumes only the existing pending request. It never starts Next or

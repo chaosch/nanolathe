@@ -41,11 +41,13 @@ func (t *glowTexture) close() {
 }
 
 // Glow replays the production source packets and kernels (GPU design §19,
-// Metal glow source/shrink/across/down). The host owns completion and submission;
-// Prepare, replacement and Close require its completion boundary.
+// Metal glow source/shrink/across/down). The host owns submission. A rewrite
+// of its own source atlas is staged (textureUploads); replaced resources are
+// released through wgpu's deferred destruction. Close follows host completion.
 type Glow struct {
 	d                         *wgpu.Device
 	q                         rendererQueue
+	uploads                   *textureUploads // optional; owned by Renderer
 	owned                     []func()
 	closed, enabled           bool
 	width, height, vertices   int
@@ -294,6 +296,7 @@ func (g *Glow) glowUploadAtlas(stock *meshscene.StockFrame) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+		g.uploads.forget(g.atlas.t)
 		g.atlas.close()
 		g.atlas = n
 		changed = true
@@ -305,7 +308,13 @@ func (g *Glow) glowUploadAtlas(stock *meshscene.StockFrame) (bool, error) {
 	if uint64(dirty[0])+uint64(dirty[2]) > uint64(t.Width) || uint64(dirty[1])+uint64(dirty[3]) > uint64(t.Height) {
 		return changed, glowError("source atlas dirty rectangle within texture")
 	}
-	if err := g.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: g.atlas.t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y)}}, t.RGBA[(y*t.Width+x)*4:], &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(h)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(h), DepthOrArrayLayers: 1}); err != nil {
+	// A texture created above has no submitted use and is written directly;
+	// a rewrite of one earlier frames sampled is staged on the frame encoder.
+	if changed || g.uploads == nil {
+		if err := g.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: g.atlas.t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y)}}, t.RGBA[(y*t.Width+x)*4:], &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(h)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(h), DepthOrArrayLayers: 1}); err != nil {
+			return changed, err
+		}
+	} else if err := g.uploads.stage(g.atlas.t, t.RGBA, t.Width, x, y, w, h); err != nil {
 		return changed, err
 	}
 	g.counts.UploadBytes += w * h * 4
@@ -470,7 +479,7 @@ func (g *Glow) Close() {
 }
 
 // Layers uploads this exact StockFrame.Atlas/version/dirty rectangle. Borrow
-// its current view after Prepare; completion precedes replacement and Close.
+// its current view after Prepare; Layers stages its rewrites.
 // The standalone Glow path retains its own source atlas.
 func (g *Glow) glowShareAtlas(view *wgpu.TextureView) {
 	if g.sourceAtlas != view {
@@ -480,7 +489,7 @@ func (g *Glow) glowShareAtlas(view *wgpu.TextureView) {
 }
 
 // Render HAL does not bind runtime size metadata. Fixed capacities follow the
-// current uploaded tier; completion precedes Prepare and pipeline replacement.
+// current uploaded tier; a replaced pipeline lives until its last use completes.
 func glowSourceShader(capacity int, runtime ...bool) string {
 	if len(runtime) > 0 && runtime[0] {
 		return runtimeStorageArrays(glowShader)

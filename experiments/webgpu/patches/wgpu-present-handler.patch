@@ -1,160 +1,8 @@
---- a/hal/metal/queue.go
-+++ b/hal/metal/queue.go
-@@ -24,8 +24,10 @@
- 
- // Queue implements hal.Queue for Metal.
- type Queue struct {
--	device       *Device
--	commandQueue ID // id<MTLCommandQueue>
-+	presentInit       sync.Once
-+	presentDiagnostic *presentTelemetry
-+	device            *Device
-+	commandQueue      ID // id<MTLCommandQueue>
- 
- 	// submissionIndex is a monotonically increasing counter for tracking submissions.
- 	submissionIndex uint64
-@@ -347,11 +349,16 @@
- 
- 	cmdBuffer := MsgSend(q.commandQueue, Sel("commandBuffer"))
- 	if cmdBuffer == 0 {
--		Release(st.drawable)
--		st.drawable = 0
--		return nil
--	}
--
-+		if ms, ok := surface.(*Surface); ok {
-+			q.observePresent(ms, st, false)
-+		}
-+		st.releaseAcquired()
-+		return nil
-+	}
-+
-+	if ms, ok := surface.(*Surface); ok {
-+		q.observePresent(ms, st, true)
-+	}
- 	if !useTransaction {
- 		_ = MsgSend(cmdBuffer, Sel("presentDrawable:"), uintptr(st.drawable))
- 	}
---- a/hal/metal/surface.go
-+++ b/hal/metal/surface.go
-@@ -7,6 +7,7 @@
- 
- import (
- 	"fmt"
-+	"time"
- 
- 	"github.com/gogpu/gputypes"
- 	"github.com/gogpu/wgpu/hal"
-@@ -14,12 +15,13 @@
- 
- // Surface implements hal.Surface for Metal using CAMetalLayer.
- type Surface struct {
--	layer       ID // CAMetalLayer
--	device      *Device
--	format      gputypes.TextureFormat
--	width       uint32
--	height      uint32
--	presentMode gputypes.PresentMode
-+	diagnosticSurface, diagnosticGeneration, diagnosticAcquisition uint64
-+	layer                                                          ID // CAMetalLayer
-+	device                                                         *Device
-+	format                                                         gputypes.TextureFormat
-+	width                                                          uint32
-+	height                                                         uint32
-+	presentMode                                                    gputypes.PresentMode
- 	// presentsWithTransaction enables Core Animation transaction-based present.
- 	// Required for smooth live window resize on macOS (wgpu #3756, Flutter/Skia).
- 	presentsWithTransaction bool
-@@ -68,6 +70,15 @@
- 		}
- 	}
- 
-+	if s.device != nil && s.device.queue != nil {
-+		if t := s.device.queue.presentationDiagnostic(); t != nil {
-+			t.closeSurface(s.diagnosticSurface)
-+		}
-+	}
-+	if s.diagnosticSurface == 0 {
-+		s.diagnosticSurface = nextDiagnosticSurface.Add(1)
-+	}
-+	s.diagnosticGeneration++
- 	s.device = mtlDevice
- 
- 	pool := NewAutoreleasePool()
-@@ -162,6 +173,11 @@
- func (s *Surface) Unconfigure(_ hal.Device) {
- 	hal.Logger().Debug("metal: surface unconfigured")
- 	// Nothing to release for Metal layer
-+	if s.device != nil && s.device.queue != nil {
-+		if t := s.device.queue.presentationDiagnostic(); t != nil {
-+			t.closeSurface(s.diagnosticSurface)
-+		}
-+	}
- 	s.device = nil
- }
- 
-@@ -188,7 +204,21 @@
- 	pool := NewAutoreleasePool()
- 	defer pool.Drain()
- 
-+	var tracker *presentTelemetry
-+	var acquireStart time.Time
-+	if s.device != nil && s.device.queue != nil {
-+		tracker = s.device.queue.presentationDiagnostic()
-+	}
-+	if tracker != nil {
-+		tracker.beforeAcquire()
-+		acquireStart = time.Now()
-+	}
- 	drawable := MsgSend(s.layer, Sel("nextDrawable"))
-+	var acquireMS float64
-+	if tracker != nil {
-+		acquireMS = float64(time.Since(acquireStart)) / 1e6
-+		s.diagnosticAcquisition++
-+	}
- 	if drawable == 0 {
- 		hal.Logger().Error("metal: nextDrawable failed", "layer", s.layer)
- 		return nil, fmt.Errorf("metal: failed to get next drawable")
-@@ -226,8 +256,9 @@
- 
- 	return &hal.AcquiredSurfaceTexture{
- 		Texture: &SurfaceTexture{
--			texture:  mtlTexture,
--			drawable: drawable,
-+			texture:              mtlTexture,
-+			drawable:             drawable,
-+			diagnosticGeneration: s.diagnosticGeneration, diagnosticAcquisition: s.diagnosticAcquisition, diagnosticAcquireMS: acquireMS,
- 		},
- 		Suboptimal: false,
- 	}, nil
-@@ -250,6 +281,11 @@
- // Destroy releases the surface.
- func (s *Surface) Destroy() {
- 	hal.Logger().Debug("metal: surface destroyed")
-+	if s.device != nil && s.device.queue != nil {
-+		if t := s.device.queue.presentationDiagnostic(); t != nil {
-+			t.closeSurface(s.diagnosticSurface)
-+		}
-+	}
- 	if s.layer != 0 {
- 		Release(s.layer)
- 		s.layer = 0
-@@ -258,8 +294,10 @@
- 
- // SurfaceTexture wraps a Metal drawable texture.
- type SurfaceTexture struct {
--	texture  *Texture
--	drawable ID // id<CAMetalDrawable>
-+	diagnosticGeneration, diagnosticAcquisition uint64
-+	diagnosticAcquireMS                         float64
-+	texture                                     *Texture
-+	drawable                                    ID // id<CAMetalDrawable>
- }
- 
- // CurrentUsage returns 0 — Metal has no explicit resource state tracking.
+diff --git a/hal/metal/device.go b/hal/metal/device.go
+index f50c3ea..71188b2 100644
 --- a/hal/metal/device.go
 +++ b/hal/metal/device.go
-@@ -1458,6 +1458,9 @@
+@@ -1454,6 +1454,9 @@ func (d *Device) WaitIdle() error {
  
  // Destroy releases the device and associated resources.
  func (d *Device) Destroy() {
@@ -164,6 +12,75 @@
  	hal.Logger().Debug("metal: device destroyed")
  	d.releaseIndexedICBTranslators()
  	if d.eventListener != 0 {
+diff --git a/hal/metal/present_root_native_test.go b/hal/metal/present_root_native_test.go
+new file mode 100644
+index 0000000..be13212
+--- /dev/null
++++ b/hal/metal/present_root_native_test.go
+@@ -0,0 +1,60 @@
++//go:build darwin && !(js && wasm)
++
++package metal
++
++import (
++	"github.com/go-webgpu/goffi/ffi"
++	"github.com/go-webgpu/goffi/types"
++	"runtime"
++	"testing"
++	"unsafe"
++)
++
++func TestPermanentPresentedBlockSurvivesGCAndNativeCopy(t *testing.T) {
++	if err := Init(); err != nil {
++		t.Fatal(err)
++	}
++	pointer := permanentPresentedBlock()
++	if pointer == 0 {
++		t.Fatal("native permanent helper unavailable")
++	}
++	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
++	if err != nil {
++		t.Fatal(err)
++	}
++	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
++	if err != nil {
++		t.Fatal(err)
++	}
++	var copyCIF, releaseCIF types.CallInterface
++	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
++	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
++		t.Fatal(err)
++	}
++	for i := 0; i < 10; i++ {
++		runtime.GC()
++		var copied uintptr
++		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
++		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
++			t.Fatal(err)
++		}
++		if copied != pointer {
++			t.Fatal("global block copy moved the immutable literal")
++		}
++		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
++			t.Fatal(err)
++		}
++		if permanentPresented.pointer.Load() != pointer || permanentPresented.block == nil || permanentPresented.descriptor == nil {
++			t.Fatal("permanent roots changed")
++		}
++		// A valid block class also supports Objective-C dispatch. This distinguishes
++		// the inherited class-address bug from a GC lifetime failure.
++		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
++			t.Fatal("Objective-C global block copy changed its identity")
++		}
++		Release(ID(pointer))
++	}
++}
+diff --git a/hal/metal/present_telemetry.go b/hal/metal/present_telemetry.go
+new file mode 100644
+index 0000000..f52cd6c
 --- /dev/null
 +++ b/hal/metal/present_telemetry.go
 @@ -0,0 +1,331 @@
@@ -465,9 +382,9 @@
 +	if t == nil || s == nil || st == nil || st.drawable == 0 {
 +		return
 +	}
-+	q.submissionMu.Lock()
++	// Stock Submit and Present both run on the render thread, so the index is
++	// read without the owned-submission lock this diagnostic once borrowed.
 +	index := q.submissionIndex
-+	q.submissionMu.Unlock()
 +	row := presentationObservation{Submission: index, Surface: s.diagnosticSurface, Generation: st.diagnosticGeneration, Acquisition: st.diagnosticAcquisition, AcquireMS: st.diagnosticAcquireMS}
 +	if !accepted {
 +		t.register(handlerKey{}, row, false)
@@ -498,6 +415,9 @@
 +		t.cancel(token, fmt.Sprintf("handler-attach-error:%v", err))
 +	}
 +}
+diff --git a/hal/metal/present_telemetry_test.go b/hal/metal/present_telemetry_test.go
+new file mode 100644
+index 0000000..f5787bb
 --- /dev/null
 +++ b/hal/metal/present_telemetry_test.go
 @@ -0,0 +1,94 @@
@@ -595,69 +515,172 @@
 +		t.Fatal("close/ring did not bound resources")
 +	}
 +}
---- /dev/null
-+++ b/hal/metal/present_root_native_test.go
-@@ -0,0 +1,60 @@
-+//go:build darwin && !(js && wasm)
-+
-+package metal
-+
-+import (
-+	"github.com/go-webgpu/goffi/ffi"
-+	"github.com/go-webgpu/goffi/types"
-+	"runtime"
-+	"testing"
-+	"unsafe"
-+)
-+
-+func TestPermanentPresentedBlockSurvivesGCAndNativeCopy(t *testing.T) {
-+	if err := Init(); err != nil {
-+		t.Fatal(err)
-+	}
-+	pointer := permanentPresentedBlock()
-+	if pointer == 0 {
-+		t.Fatal("native permanent helper unavailable")
-+	}
-+	copySymbol, err := ffi.GetSymbol(objcLib, "_Block_copy")
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	releaseSymbol, err := ffi.GetSymbol(objcLib, "_Block_release")
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	var copyCIF, releaseCIF types.CallInterface
-+	arguments := []*types.TypeDescriptor{types.PointerTypeDescriptor}
-+	if err := ffi.PrepareCallInterface(&copyCIF, types.DefaultCall, types.PointerTypeDescriptor, arguments); err != nil {
-+		t.Fatal(err)
-+	}
-+	if err := ffi.PrepareCallInterface(&releaseCIF, types.DefaultCall, types.VoidTypeDescriptor, arguments); err != nil {
-+		t.Fatal(err)
-+	}
-+	for i := 0; i < 10; i++ {
-+		runtime.GC()
-+		var copied uintptr
-+		args := []unsafe.Pointer{unsafe.Pointer(&pointer)}
-+		if _, err := ffi.CallFunction(&copyCIF, copySymbol, unsafe.Pointer(&copied), args); err != nil {
-+			t.Fatal(err)
+diff --git a/hal/metal/queue.go b/hal/metal/queue.go
+index 3c1b9fb..3b036b9 100644
+--- a/hal/metal/queue.go
++++ b/hal/metal/queue.go
+@@ -8,6 +8,7 @@ package metal
+ import (
+ 	"fmt"
+ 	"image"
++	"sync"
+ 	"sync/atomic"
+ 	"unsafe"
+ 
+@@ -23,8 +24,10 @@ const maxFramesInFlight = 2
+ 
+ // Queue implements hal.Queue for Metal.
+ type Queue struct {
+-	device       *Device
+-	commandQueue ID // id<MTLCommandQueue>
++	presentInit       sync.Once
++	presentDiagnostic *presentTelemetry
++	device            *Device
++	commandQueue      ID // id<MTLCommandQueue>
+ 
+ 	// submissionIndex is a monotonically increasing counter for tracking submissions.
+ 	submissionIndex uint64
+@@ -431,11 +434,16 @@ func (q *Queue) Present(surface hal.Surface, texture hal.SurfaceTexture, _ []ima
+ 
+ 	cmdBuffer := MsgSend(q.commandQueue, Sel("commandBuffer"))
+ 	if cmdBuffer == 0 {
+-		Release(st.drawable)
+-		st.drawable = 0
++		if ms, ok := surface.(*Surface); ok {
++			q.observePresent(ms, st, false)
 +		}
-+		if copied != pointer {
-+			t.Fatal("global block copy moved the immutable literal")
-+		}
-+		if _, err := ffi.CallFunction(&releaseCIF, releaseSymbol, nil, []unsafe.Pointer{unsafe.Pointer(&copied)}); err != nil {
-+			t.Fatal(err)
-+		}
-+		if permanentPresented.pointer.Load() != pointer || permanentPresented.block == nil || permanentPresented.descriptor == nil {
-+			t.Fatal("permanent roots changed")
-+		}
-+		// A valid block class also supports Objective-C dispatch. This distinguishes
-+		// the inherited class-address bug from a GC lifetime failure.
-+		if objectCopy := MsgSend(ID(pointer), Sel("copy")); objectCopy != ID(pointer) {
-+			t.Fatal("Objective-C global block copy changed its identity")
-+		}
-+		Release(ID(pointer))
++		st.releaseAcquired()
+ 		return nil
+ 	}
+ 
++	if ms, ok := surface.(*Surface); ok {
++		q.observePresent(ms, st, true)
 +	}
-+}
+ 	if !useTransaction {
+ 		_ = MsgSend(cmdBuffer, Sel("presentDrawable:"), uintptr(st.drawable))
+ 	}
+diff --git a/hal/metal/surface.go b/hal/metal/surface.go
+index d83ded8..e8c54b7 100644
+--- a/hal/metal/surface.go
++++ b/hal/metal/surface.go
+@@ -7,6 +7,7 @@ package metal
+ 
+ import (
+ 	"fmt"
++	"time"
+ 
+ 	"github.com/gogpu/gputypes"
+ 	"github.com/gogpu/wgpu/hal"
+@@ -14,12 +15,13 @@ import (
+ 
+ // Surface implements hal.Surface for Metal using CAMetalLayer.
+ type Surface struct {
+-	layer       ID // CAMetalLayer
+-	device      *Device
+-	format      gputypes.TextureFormat
+-	width       uint32
+-	height      uint32
+-	presentMode gputypes.PresentMode
++	diagnosticSurface, diagnosticGeneration, diagnosticAcquisition uint64
++	layer                                                          ID // CAMetalLayer
++	device                                                         *Device
++	format                                                         gputypes.TextureFormat
++	width                                                          uint32
++	height                                                         uint32
++	presentMode                                                    gputypes.PresentMode
+ 	// presentsWithTransaction enables Core Animation transaction-based present.
+ 	// Required for smooth live window resize on macOS (wgpu #3756, Flutter/Skia).
+ 	presentsWithTransaction bool
+@@ -66,6 +68,15 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
+ 		_ = s.device.WaitIdle()
+ 	}
+ 
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
++	if s.diagnosticSurface == 0 {
++		s.diagnosticSurface = nextDiagnosticSurface.Add(1)
++	}
++	s.diagnosticGeneration++
+ 	s.device = mtlDevice
+ 
+ 	pool := NewAutoreleasePool()
+@@ -160,6 +171,11 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
+ func (s *Surface) Unconfigure(_ hal.Device) {
+ 	hal.Logger().Debug("metal: surface unconfigured")
+ 	// Nothing to release for Metal layer
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
+ 	s.device = nil
+ }
+ 
+@@ -186,7 +202,21 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
+ 	pool := NewAutoreleasePool()
+ 	defer pool.Drain()
+ 
++	var tracker *presentTelemetry
++	var acquireStart time.Time
++	if s.device != nil && s.device.queue != nil {
++		tracker = s.device.queue.presentationDiagnostic()
++	}
++	if tracker != nil {
++		tracker.beforeAcquire()
++		acquireStart = time.Now()
++	}
+ 	drawable := MsgSend(s.layer, Sel("nextDrawable"))
++	var acquireMS float64
++	if tracker != nil {
++		acquireMS = float64(time.Since(acquireStart)) / 1e6
++		s.diagnosticAcquisition++
++	}
+ 	if drawable == 0 {
+ 		hal.Logger().Error("metal: nextDrawable failed", "layer", s.layer)
+ 		return nil, fmt.Errorf("metal: failed to get next drawable")
+@@ -224,8 +254,9 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
+ 
+ 	return &hal.AcquiredSurfaceTexture{
+ 		Texture: &SurfaceTexture{
+-			texture:  mtlTexture,
+-			drawable: drawable,
++			texture:              mtlTexture,
++			drawable:             drawable,
++			diagnosticGeneration: s.diagnosticGeneration, diagnosticAcquisition: s.diagnosticAcquisition, diagnosticAcquireMS: acquireMS,
+ 		},
+ 		Suboptimal: false,
+ 	}, nil
+@@ -248,6 +279,11 @@ func (s *Surface) ActualExtent() (width, height uint32) {
+ // Destroy releases the surface.
+ func (s *Surface) Destroy() {
+ 	hal.Logger().Debug("metal: surface destroyed")
++	if s.device != nil && s.device.queue != nil {
++		if t := s.device.queue.presentationDiagnostic(); t != nil {
++			t.closeSurface(s.diagnosticSurface)
++		}
++	}
+ 	if s.layer != 0 {
+ 		Release(s.layer)
+ 		s.layer = 0
+@@ -256,8 +292,10 @@ func (s *Surface) Destroy() {
+ 
+ // SurfaceTexture wraps a Metal drawable texture.
+ type SurfaceTexture struct {
+-	texture  *Texture
+-	drawable ID // id<CAMetalDrawable>
++	diagnosticGeneration, diagnosticAcquisition uint64
++	diagnosticAcquireMS                         float64
++	texture                                     *Texture
++	drawable                                    ID // id<CAMetalDrawable>
+ }
+ 
+ // CurrentUsage returns 0 — Metal has no explicit resource state tracking.
+diff --git a/presentation_telemetry_native.go b/presentation_telemetry_native.go
+new file mode 100644
+index 0000000..bd48e6f
 --- /dev/null
 +++ b/presentation_telemetry_native.go
 @@ -0,0 +1,12 @@
