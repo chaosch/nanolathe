@@ -2,6 +2,7 @@ package battlegpu
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/gogpu/wgpu"
 )
@@ -46,10 +47,61 @@ type textureUploads struct {
 	copies   []wgpu.BufferTextureCopy
 	// Diagnostic: the last recorded upload's bytes and regions.
 	Bytes, Regions int
+	// submitted reads the queue's latest submission index; retired holds
+	// replaced resources until a submission after their replacement.
+	submitted func() uint64
+	retired   []uploadRetiree
+}
+
+type uploadRetiree struct {
+	after   uint64
+	release func()
 }
 
 func newTextureUploads(d *wgpu.Device, q modelBufferWriter) *textureUploads {
-	return &textureUploads{d: d, q: q}
+	u := &textureUploads{d: d, q: q}
+	// The browser queue reports no submission indices, and WebGPU there
+	// permits destroying a resource with a pending queue write.
+	if d != nil && runtime.GOOS != "js" {
+		queue := d.Queue()
+		u.submitted = queue.LastSubmissionIndex
+	}
+	return u
+}
+
+// retire releases a texture or buffer a component has just replaced once a
+// submission has been made after this point. Queue writes wait in wgpu's
+// pending-writes encoder until the next submit; a backend that stages them
+// (Vulkan, DX12, non-UMA Metal) fails that submit for a released texture
+// ("destination texture retired before submit") and copies into freed
+// memory for a released buffer (MoltenVK faulted in MVKCmdCopyBuffer). The
+// first frame replaces placeholders written at creation, and a dropped frame
+// prepares without submitting, so neither "this frame" nor "the next record"
+// is a safe point; a later submission index is.
+func (u *textureUploads) retire(release func()) {
+	if u == nil || u.submitted == nil {
+		release()
+		return
+	}
+	u.retired = append(u.retired, uploadRetiree{u.submitted(), release})
+}
+
+// collect releases retirees that a submission has passed.
+func (u *textureUploads) collect() {
+	if u == nil || len(u.retired) == 0 {
+		return
+	}
+	now := u.submitted()
+	kept := u.retired[:0]
+	for _, r := range u.retired {
+		if now > r.after {
+			r.release()
+		} else {
+			kept = append(kept, r)
+		}
+	}
+	clear(u.retired[len(kept):])
+	u.retired = kept
 }
 
 func uploadAlign(n, a int) int { return (n + a - 1) / a * a }
@@ -107,6 +159,7 @@ func (u *textureUploads) forget(t *wgpu.Texture) {
 // record uploads the arena and records every pending copy on enc. It must run
 // on the frame's encoder before the first pass that samples a staged texture.
 func (u *textureUploads) record(enc *wgpu.CommandEncoder) error {
+	u.collect()
 	if u == nil || len(u.regions) == 0 {
 		if u != nil {
 			u.arena = u.arena[:0]
@@ -166,6 +219,10 @@ func (u *textureUploads) close() {
 	if u == nil {
 		return
 	}
+	for _, r := range u.retired {
+		r.release()
+	}
+	u.retired = nil
 	if u.buffer != nil {
 		u.buffer.Release()
 		u.buffer = nil

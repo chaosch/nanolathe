@@ -189,7 +189,35 @@ build working around the earlier ones:
   layers (not installed; the loader route also needs V2's fix) or a Linux/Windows
   run with validation.
 
-No Vulkan capture exists, so no visual comparison with Metal was possible.
+**2026-10-13 update.** After the stock-dependency merge V4 had returned on
+the first submit, and V6 shares its cause: the renderer replaced resources
+that still had a queue write pending in wgpu's pending-writes encoder (layer
+textures replacing their init placeholders, layer storage, glow and
+reflection buffers growing, and the model atlas's 1x1 diagnostic plane when
+the atlas was reallocated twice before the first submit). Released before
+that submit, a texture fails it ("destination texture retired before
+submit") and a buffer leaves a staged copy aimed at freed memory, which is
+the MoltenVK fault. Replaced resources now go to the renderer's
+`textureUploads.retire`, which releases them only once the queue's
+submission index has passed their replacement (immediately in the browser,
+whose queue tracks no index and whose WebGPU permits it). With that, the
+proxy plays the battle on Vulkan with no errors or crashes:
+
+- **V7 (open, MoltenVK proxy).** The ground renders black. The terrain tile
+  atlas (RGBA8) reads back from the GPU byte-identical to Metal, but the
+  R32Uint tile lookup does not: in each 360-texel row ~310 texels read
+  0xFFFFFFFF (and 0xFFFF00FF when the lookup is stored as RGBA8 instead), so
+  the fill depends on the format and is not another resource's bytes.
+  Pre-padding rows to 256 bytes changes nothing. **Unknown:** whether wgpu's
+  Vulkan HAL or MoltenVK writes it; settle with validation layers or a
+  Linux/Windows run. Sprites, models, shadows, HUD and effects render.
+- wgpu's Vulkan `Queue.WriteBuffer` waits for the previous submission to
+  finish before every CPU write (`waitForGPU`), the same stall Apple's
+  shared textures caused on Metal; expect it to cost Linux/Windows frame
+  rate until upstream stages those writes.
+
+The debug capture (`NANOLATHE_WEBGPU_DEBUG_FRAME`) now includes the terrain
+tile atlas and lookup.
 
 ## 5. Browser (Chrome headless, WebGPU on Metal)
 

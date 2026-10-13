@@ -58,6 +58,7 @@ type reflectionInputs struct {
 type StockReflections struct {
 	d                    *wgpu.Device
 	q                    rendererQueue
+	uploads              *textureUploads // optional; owned by Renderer, retires replaced buffers
 	owned                []func()
 	closed, prepared     bool
 	encoded              bool
@@ -359,8 +360,8 @@ func (r *StockReflections) reflectionBuffers(count int) error {
 		return err
 	}
 	if r.vertices != nil {
-		r.vertices.Release()
-		r.indices.Release()
+		r.uploads.retire(r.vertices.Release)
+		r.uploads.retire(r.indices.Release)
 	}
 	r.vertices, r.indices, r.capacity = vertices, indices, capacity
 	r.counts.UploadBytes += len(indexBytes)

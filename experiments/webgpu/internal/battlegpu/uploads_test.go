@@ -69,3 +69,34 @@ func TestTextureUploadSupersedesAndForgets(t *testing.T) {
 		t.Fatal("rectangle outside its source accepted")
 	}
 }
+
+// A replaced resource outlives the submission that flushes its pending
+// queue write: it is released only once the queue's index has advanced past
+// its replacement, and immediately where no index is tracked (browser).
+func TestTextureUploadsRetireAfterSubmit(t *testing.T) {
+	var index uint64 = 7
+	u := newTextureUploads(nil, nil)
+	u.submitted = func() uint64 { return index }
+	released := 0
+	u.retire(func() { released++ })
+	u.collect()
+	if released != 0 {
+		t.Fatal("released before any later submission")
+	}
+	index++
+	u.retire(func() { released += 10 })
+	u.collect()
+	if released != 1 {
+		t.Fatalf("released %d, want only the retiree a submission has passed", released)
+	}
+	index++
+	u.close()
+	if released != 11 {
+		t.Fatal("close leaked a retiree")
+	}
+	untracked := newTextureUploads(nil, nil)
+	untracked.retire(func() { released = -1 })
+	if released != -1 {
+		t.Fatal("an untracked queue must release at once")
+	}
+}

@@ -67,6 +67,8 @@ func captureModelDebug(d *wgpu.Device, e *wgpu.CommandEncoder, renderer *Rendere
 		{renderer.reflections.soft.t, renderer.reflections.width, renderer.reflections.height, 4, wgpu.TextureFormatRGBA8Unorm, ".reflection-soft.png", true},
 		{renderer.reflections.flags.t, (renderer.reflections.width + 63) / 64, (renderer.reflections.height + 63) / 64, 4, gputypes.TextureFormatR32Uint, ".reflection-flags.r32u", false},
 		{renderer.groundLight.texture, renderer.groundLight.textureWidth, renderer.groundLight.textureHeight, 4, wgpu.TextureFormatRGBA8Unorm, ".ground.png", true},
+		{renderer.layers.tileAtlas.t, renderer.layers.tileAtlas.w, renderer.layers.tileAtlas.h, 4, wgpu.TextureFormatRGBA8Unorm, ".terrain-tiles.png", true},
+		{renderer.layers.lookup.t, renderer.layers.lookup.w, renderer.layers.lookup.h, 4, gputypes.TextureFormatR32Uint, ".terrain-lookup.r32u", false},
 		{renderer.glow.emission.t, renderer.glow.emission.w, renderer.glow.emission.h, 8, gputypes.TextureFormatRGBA16Float, ".glow.rgba16f", false},
 		{renderer.glow.octaves.t, renderer.glow.octaves.w, renderer.glow.octaves.h, 8, gputypes.TextureFormatRGBA16Float, ".glow-octaves.rgba16f", false},
 	} {

@@ -297,7 +297,8 @@ func (g *Glow) glowUploadAtlas(stock *meshscene.StockFrame) (bool, error) {
 			return false, err
 		}
 		g.uploads.forget(g.atlas.t)
-		g.atlas.close()
+		old := g.atlas
+		g.uploads.retire(old.close)
 		g.atlas = n
 		changed = true
 	}
@@ -359,8 +360,8 @@ func (g *Glow) Prepare(f meshscene.LiveFrame, width, height int) error {
 		if err != nil {
 			return err
 		}
-		if g.vertexBuffer != nil {
-			g.vertexBuffer.Release()
+		if old := g.vertexBuffer; old != nil {
+			g.uploads.retire(old.Release)
 		}
 		g.vertexBuffer, g.vertexCapacity = b, capacity
 		changed = true

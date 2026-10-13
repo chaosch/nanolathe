@@ -479,6 +479,9 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	next := modelAtlasResources{width: nw, height: nh}
 	defer func() {
 		if err != nil {
+			if next.shadow == m.atlas.shadow {
+				next.shadow, next.shadowView = nil, nil
+			}
 			next.modelClose()
 		}
 	}()
@@ -490,13 +493,21 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 		return err
 	}
 	// DebugResources retains its legacy transparent shadow diagnostic plane.
-	if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-dummy", 1, 1, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageCopyDst|wgpu.TextureUsageCopySrc); err != nil {
-		return err
+	// It is written once and carried to each new atlas: a written texture
+	// released before the queue's next submit fails that submit on backends
+	// whose writes are staged (Vulkan, DX12), and two atlas allocations can
+	// precede the first submit.
+	if m.atlas.shadow != nil {
+		next.shadow, next.shadowView = m.atlas.shadow, m.atlas.shadowView
+	} else {
+		if next.shadow, next.shadowView, err = m.modelCreateTexture("battle-model-shadow-dummy", 1, 1, wgpu.TextureFormatRGBA8Unorm, wgpu.TextureUsageTextureBinding|wgpu.TextureUsageCopyDst|wgpu.TextureUsageCopySrc); err != nil {
+			return err
+		}
+		if err = m.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: next.shadow}, []byte{0, 0, 0, 0}, &wgpu.ImageDataLayout{BytesPerRow: 4, RowsPerImage: 1}, &wgpu.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}); err != nil {
+			return err
+		}
+		m.counters.UploadBytes += 4
 	}
-	if err = m.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: next.shadow}, []byte{0, 0, 0, 0}, &wgpu.ImageDataLayout{BytesPerRow: 4, RowsPerImage: 1}, &wgpu.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}); err != nil {
-		return err
-	}
-	m.counters.UploadBytes += 4
 	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, modelKeyFormat, usage); err != nil {
 		return err
 	}
@@ -509,6 +520,7 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	// Prepare follows host completion. Release the old group before its views
 	// and textures; atlas resources never enter the static/growth-tier owner.
 	m.modelReleaseCommitGroup()
+	m.atlas.shadow, m.atlas.shadowView = nil, nil
 	m.atlas.modelClose()
 	m.atlas = next
 	return nil

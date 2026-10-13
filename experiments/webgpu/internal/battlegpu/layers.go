@@ -191,7 +191,7 @@ func (l *Layers) layerTexture(label string, t meshscene.Texture, format gputypes
 		return
 	}
 	out.w, out.h = t.Width, t.Height
-	out.t, err = l.d.CreateTexture(&wgpu.TextureDescriptor{Label: label, Size: wgpu.Extent3D{Width: uint32(t.Width), Height: uint32(t.Height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: format, Usage: wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopyDst})
+	out.t, err = l.d.CreateTexture(&wgpu.TextureDescriptor{Label: label, Size: wgpu.Extent3D{Width: uint32(t.Width), Height: uint32(t.Height), DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1, Dimension: wgpu.TextureDimension2D, Format: format, Usage: wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopyDst | wgpu.TextureUsageCopySrc})
 	if err != nil {
 		return
 	}
@@ -264,10 +264,11 @@ func (l *Layers) layerUpdateTexture(dst *layerTexture, t meshscene.Texture, vers
 		if err != nil {
 			return false, err
 		}
-		// Release is deferred until earlier submissions complete; no staged
-		// copy may target the released texture.
+		// No staged copy may target the replaced texture, and a queue write
+		// still pending since its creation keeps it until the next submit.
 		l.uploads.forget(dst.t)
-		dst.close()
+		replaced := *dst
+		l.uploads.retire(replaced.close)
 		*dst = n
 		*old = version
 		return true, nil
@@ -390,7 +391,8 @@ func (l *Layers) layerUpload(dst *layerBuffer, data []byte, minimum int) (bool, 
 		if e != nil {
 			return false, e
 		}
-		dst.close()
+		old := *dst
+		l.uploads.retire(old.close)
 		dst.b = b
 		dst.size = size
 		changed = true

@@ -94,7 +94,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 		r.models.q, r.layers.q, r.glow.q, r.groundLight.q = r.queue, r.queue, r.queue, r.queue
 		r.distortions.q, r.lenses.q, r.reflections.q = r.queue, r.queue, r.queue
 		r.uploads = newTextureUploads(d, r.queue)
-		r.layers.uploads, r.glow.uploads = r.uploads, r.uploads
+		r.layers.uploads, r.glow.uploads, r.reflections.uploads = r.uploads, r.uploads, r.uploads
 	}
 	return
 }
