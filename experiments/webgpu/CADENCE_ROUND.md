@@ -88,28 +88,49 @@ async simulation, `--fast` + late acquisition):
 
 ## Shadows
 
-Every model is rasterized twice: once into the 2x body atlas and once more
-as a silhouette into the shadow atlas, which the projected quarter masks and
-the per-subject commit (2x2, or 5x5 for aircraft) then sample. Whole-frame GPU
-span (first command buffer start to last end), not per-pass busy time, is what
-decides the frame; Apple GPUs overlap the shadow encoders with other work.
+A mobile's shadow is its body's own silhouette [03 R-REN-03D §1], so the
+renderer no longer draws a solo subject a second time: the shadow composer
+(`meshscene.ShadowComposer.Reuse`, chosen by the renderer package) gives a
+reused subject a zero body rectangle and no silhouette draws, and the commit
+reads coverage and the byte key from the body atlas through the subject's
+model slot. Keyed children, composed groups and viewport-clipped slots keep
+their own silhouette source (in this scene 67 of 901 subjects); the Metal
+renderer, whose depth-slab subjects have no atlas image, keeps all of them.
+Shadows now follow the body's production projection rather than the
+unsnapped silhouette projection: final frames differ only along shadow edges.
 
-| Scene | default | shadows 1x | no model shadows |
-| --- | --- | --- | --- |
-| play window, ~830 units, 1440p drawable | 5.38 ms | 5.59 ms | 5.34 ms |
-| GPU-bound: 2560x1440 non-Retina, zoom 1, 1,395 instances (2 reps) | 6.25 ms | 6.12 ms | 5.30 ms |
+Whole-frame GPU span (first command buffer start to last end) is what decides
+the frame; Apple GPUs overlap the shadow encoders with other work, so per-pass
+busy time overstates their cost. GPU-bound battle benchmark (2560x1440
+non-Retina, zoom 1, 1,395 instances, 901 shadow subjects; two alternating
+reps per row):
 
-So shadows are nearly free while the GPU has slack and ~0.95 ms (15%) when it
-is saturated; supersampling is ~0.13 ms of that. The silhouette fragment now
-writes only coverage and key depth, and both atlases grow in 512-row steps
-and shrink after a second (~150 MB at peak before). Larger redesigns (reuse
-the body atlas for shadows, a screen-space shadow mask, blob shadows when
-zoomed out) are proposals awaiting a decision.
+| Build | GPU span |
+| --- | --- |
+| before (silhouette redraw, four loads per sample) | 6.50 ms |
+| solo subjects read their body raster | 6.20-6.36 ms |
+| + one gather per 2x2 block, hardware bilinear aircraft taps | 5.97 ms |
+| same, soft aircraft shadows off (`softShadows: 0`) | 5.65 ms |
+| same, shadow commits skipped | 5.48 ms |
+| no model shadows | 5.43-5.54 ms |
+
+So shadows fell from ~0.95 ms to ~0.45 ms of a saturated frame, and the
+render thread's encode time from 4.34 to 3.86 ms (fewer silhouette clones and
+draws; the world pass also looked up each slot's shadows by scanning every
+subject). Nearly all of the rest is the Enhanced aircraft blur: 186 aircraft
+cover as many shadow pixels as 642 ground units, at 25 filtered taps each.
+With the GPU unsaturated (play window, ~830 units, 1440p drawable) shadows
+were already nearly free: 5.38 ms with them, 5.34 ms without.
+
+Both atlases grow in 512-row steps and shrink after a second; the shadow atlas
+now holds only structure projections and the few remaining silhouettes.
+`NANOLATHE_WEBGPU_SKIP_SHADOW_COMMITS=1` isolates the commit's GPU cost.
 
 ## Next
 
-- Model shadows are the largest model GPU cost when the GPU is saturated
-  (above); the body atlas is not.
+- Aircraft soft shadows are most of the remaining shadow cost (above): fewer
+  taps, or a mipmapped source sampled at the blur radius, would change their
+  look and await a decision.
 - ~5 MB/frame of model records upload between ticks (instances, slots,
   materials, shadow records rebuilt every frame); matters for discrete GPUs
   and the browser.
