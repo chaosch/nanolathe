@@ -197,6 +197,11 @@ cost.
   56 ms) -> 0-1 (18 ms) per 3,600 frames, 119.8 Hz, 0.13% late. Compact
   placement moves raster rectangles, so interpolated edges round
   differently: 0.16% of a final frame's pixels, scattered single pixels.
+- Art the renderer uploads once (model, sprite, terrain tile and detail
+  atlases) no longer keeps its CPU pixels: the live heap at the start of
+  1440p play fell from 1,788 to 1,153 MB, the browser's (750 units) from
+  1,251 to 973 MB. Decoded GAF frames (~430 MB) remain; the client draws
+  effects from them.
 - Private storage for render targets (a wgpu Metal HAL change: textures
   without CopyDst use MTLStorageModePrivate) saved only ~0.15 ms of GPU
   and did not shorten the stalls; it is not worth a patch.
@@ -245,8 +250,8 @@ Headless Chrome, 1080p: the 750-unit field runs at Chrome's 60 Hz cap
 (callback 17.2 ms, model uploads 238 -> 64 KB/frame). The 3,000-unit field
 now completes 1,800 frames instead of exhausting memory, at ~10 fps: the
 simulation takes 73 ms a frame (2.1 ticks of ~35 ms on one wasm thread), the
-renderer ~4 ms. The wasm heap reaches 2.2 GB, so long sessions may still run
-out.
+renderer ~4 ms. The wasm heap reached 2.2 GB there before the art release
+above.
 
 ## Next
 
