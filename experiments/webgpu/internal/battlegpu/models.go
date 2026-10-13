@@ -133,7 +133,7 @@ type Models struct {
 	commitWork                                                                  modelCommitPipeline
 	poseGroup, bodyGroup                                                        *wgpu.BindGroup
 	commitGroup                                                                 *wgpu.BindGroup
-	commitViews                                                                 [5]*wgpu.TextureView
+	commitViews                                                                 [6]*wgpu.TextureView
 	mergePipeline, copyPipeline                                                 *wgpu.RenderPipeline
 	mergeCapacities                                                             [3]int
 	groupWork                                                                   modelGroupWork
@@ -159,6 +159,9 @@ type Models struct {
 	directSlots    []bool
 	directDraws    []modelDraw
 	directOrder    []modelDirectPaint
+	// skipShadowCommits is a diagnostic: shadow sources are prepared and
+	// rasterized but never committed, isolating the commit's GPU cost.
+	skipShadowCommits bool
 	// atlasShrink and shadowShrink count frames a smaller atlas would do.
 	atlasShrink, shadowShrink int
 }
@@ -195,7 +198,7 @@ func (m *Models) modelReleaseCommitGroup() {
 		m.commitGroup.Release()
 		m.commitGroup = nil
 	}
-	m.commitViews = [5]*wgpu.TextureView{}
+	m.commitViews = [6]*wgpu.TextureView{}
 }
 
 func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
@@ -211,27 +214,34 @@ func modelCommitLayoutEntries() []gputypes.BindGroupLayoutEntry {
 		modelTextureEntry(5),
 		{Binding: 6, Visibility: wgpu.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}},
 		modelTextureEntry(7), modelTextureEntry(8),
+		// Reused shadow subjects read the body raster's key plane.
+		modelTextureEntry(9),
 	}
 }
 
-func (m *Models) modelCommitTextureViews() [5]*wgpu.TextureView {
+func (m *Models) modelCommitTextureViews() [6]*wgpu.TextureView {
 	a := &m.shadowWork.dummy
-	if m.shadowCount > 0 {
+	if m.shadowCount > 0 && m.shadowWork.atlas.bodyView != nil {
 		a = &m.shadowWork.atlas
 	}
-	return [5]*wgpu.TextureView{m.modelBodyView(), a.bodyView, a.depthView, a.maskView, m.shadowWork.waterView}
+	keys := m.atlas.metadataView
+	if keys == nil {
+		keys = m.shadowWork.dummy.bodyView
+	}
+	return [6]*wgpu.TextureView{m.modelBodyView(), a.bodyView, a.depthView, a.maskView, m.shadowWork.waterView, keys}
 }
 
-func (m *Models) modelCommitEntries(views [5]*wgpu.TextureView) []wgpu.BindGroupEntry {
+func (m *Models) modelCommitEntries(views [6]*wgpu.TextureView) []wgpu.BindGroupEntry {
 	return []wgpu.BindGroupEntry{
 		{Binding: 0, Buffer: m.slots.buffer}, {Binding: 1, Buffer: m.shadowRecords.buffer},
 		{Binding: 2, Buffer: m.uniform, Size: 80}, {Binding: 3, TextureView: views[0]},
 		{Binding: 4, Buffer: m.shadowWork.uniform, Size: 96}, {Binding: 5, TextureView: views[1]},
 		{Binding: 6, TextureView: views[2]}, {Binding: 7, TextureView: views[3]}, {Binding: 8, TextureView: views[4]},
+		{Binding: 9, TextureView: views[5]},
 	}
 }
 
-func (m *Models) modelSyncCommitViews(views [5]*wgpu.TextureView) {
+func (m *Models) modelSyncCommitViews(views [6]*wgpu.TextureView) {
 	if views != m.commitViews {
 		m.modelReleaseCommitGroup()
 	}
@@ -482,7 +492,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 		return nil, modelError("device, queue and retained scene")
 	}
 	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames),
-		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") == "1"}
+		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") == "1", skipShadowCommits: os.Getenv("NANOLATHE_WEBGPU_SKIP_SHADOW_COMMITS") == "1"}
 	defer func() {
 		if err != nil {
 			m.Close()
@@ -1394,9 +1404,14 @@ func (m *Models) DrawShadowSlot(pass *wgpu.RenderPassEncoder, slot uint32) {
 	if m == nil || m.closed || !m.prepared || pass == nil {
 		return
 	}
-	for _, p := range m.shadowPaint {
+	if m.skipShadowCommits {
+		return
+	}
+	// shadowPaint is sorted by slot, keeping subject order within a slot.
+	at, _ := slices.BinarySearchFunc(m.shadowPaint, slot, func(p modelShadowPaint, s uint32) int { return cmp.Compare(p.slot, s) })
+	for _, p := range m.shadowPaint[at:] {
 		if p.slot != slot {
-			continue
+			break
 		}
 		m.state.selectResources(pass, m.resolvePipeline, m.commitGroup)
 		pass.Draw(gputypes.DrawArgs{VertexCount: 6, InstanceCount: 1, FirstInstance: modelCommitShadowIndex(m.commitWork.capacities[0], p.subject)})

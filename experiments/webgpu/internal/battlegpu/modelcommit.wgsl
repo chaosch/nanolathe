@@ -13,6 +13,7 @@ struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params
 @group(0) @binding(6) var keys:texture_depth_2d;
 @group(0) @binding(7) var mask:texture_2d<f32>;
 @group(0) @binding(8) var liquid:texture_2d<f32>;
+@group(0) @binding(9) var bodyKeys:texture_2d<f32>;
 
 __BODY_HELPERS__
 __SHADOW_HELPERS__

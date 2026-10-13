@@ -391,7 +391,7 @@ func (h *metalBattleHost) compose(cur *frame.Frame) (meshscene.LiveFrame, error)
 	h.frame.Composition, h.frame.Composed = composition, true
 	h.frame.Annotations = h.selection.Prepare(h.cl, h.hud, h.composer.order, composition, 2)
 	if h.shadows == nil {
-		h.shadows = newMetalShadowComposer(h.world)
+		h.shadows = newMetalShadowComposer(h.world, metalrender.ShadowBodyReuse())
 	}
 	h.frame.Shadows, err = h.shadows.Prepare(h.cl, h.world, &h.frame, cur, h.width*2, h.height*2, h.composer.order)
 	if err != nil {

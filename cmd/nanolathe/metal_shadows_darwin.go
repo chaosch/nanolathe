@@ -24,8 +24,11 @@ type metalShadowComposer struct {
 	supersample bool
 }
 
-func newMetalShadowComposer(retained *meshscene.RetainedBattle) *metalShadowComposer {
-	return &metalShadowComposer{composer: meshscene.NewShadowComposer(retained), units: make(map[uint64]*frame.UnitView), supersample: os.Getenv("NANOLATHE_SHADOW_SUPERSAMPLE") != "0"}
+// reuse is the renderer's body-atlas contract (meshscene.ShadowBodyReuse).
+func newMetalShadowComposer(retained *meshscene.RetainedBattle, reuse meshscene.ShadowBodyReuse) *metalShadowComposer {
+	composer := meshscene.NewShadowComposer(retained)
+	composer.Reuse = reuse
+	return &metalShadowComposer{composer: composer, units: make(map[uint64]*frame.UnitView), supersample: os.Getenv("NANOLATHE_SHADOW_SUPERSAMPLE") != "0"}
 }
 func (m *metalShadowComposer) Prepare(cl *client.Client, retained *meshscene.RetainedBattle, live *meshscene.LiveFrame, current *frame.Frame, width, height int, order []meshscene.ModelOrder) (meshscene.ShadowComposition, error) {
 	if m.frame != current || current != nil && m.tick != current.Tick {

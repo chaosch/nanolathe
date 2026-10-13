@@ -55,20 +55,20 @@ func TestModelCommitMetalUnionBindings(t *testing.T) {
 			t.Fatalf("unexpected union resource at %d", i)
 		}
 	}
-	if storage != 2 || uniforms != 2 || textures != 5 {
+	if storage != 2 || uniforms != 2 || textures != 6 {
 		t.Fatalf("core union resources: storage=%d uniforms=%d textures=%d", storage, uniforms, textures)
 	}
 }
 
 func TestModelCommitViewsAndReplacement(t *testing.T) {
 	m := &Models{}
-	m.atlas.colorView, m.atlas.mergedView = &wgpu.TextureView{}, &wgpu.TextureView{}
+	m.atlas.colorView, m.atlas.mergedView, m.atlas.metadataView = &wgpu.TextureView{}, &wgpu.TextureView{}, &wgpu.TextureView{}
 	m.shadowWork.waterView = &wgpu.TextureView{}
 	for _, atlas := range []*modelShadowAtlas{&m.shadowWork.dummy, &m.shadowWork.atlas} {
 		atlas.bodyView, atlas.depthView, atlas.maskView = &wgpu.TextureView{}, &wgpu.TextureView{}, &wgpu.TextureView{}
 	}
 	views := m.modelCommitTextureViews()
-	if views != [5]*wgpu.TextureView{m.atlas.colorView, m.shadowWork.dummy.bodyView, m.shadowWork.dummy.depthView, m.shadowWork.dummy.maskView, m.shadowWork.waterView} {
+	if views != [6]*wgpu.TextureView{m.atlas.colorView, m.shadowWork.dummy.bodyView, m.shadowWork.dummy.depthView, m.shadowWork.dummy.maskView, m.shadowWork.waterView, m.atlas.metadataView} {
 		t.Fatal("absent shadows do not bind independent dummy planes")
 	}
 	group := &wgpu.BindGroup{}
@@ -85,7 +85,7 @@ func TestModelCommitViewsAndReplacement(t *testing.T) {
 		m.commitGroup, m.commitViews = &wgpu.BindGroup{}, m.modelCommitTextureViews()
 		change()
 		m.modelSyncCommitViews(m.modelCommitTextureViews())
-		if m.commitGroup != nil || m.commitViews != [5]*wgpu.TextureView{} {
+		if m.commitGroup != nil || m.commitViews != [6]*wgpu.TextureView{} {
 			t.Fatal("changed atlas family retained a borrowed union group")
 		}
 	}

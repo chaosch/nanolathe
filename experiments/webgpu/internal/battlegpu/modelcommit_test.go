@@ -71,7 +71,7 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 				}
 			}
 		}
-		if buffer != 4 || texture != 5 {
+		if buffer != 4 || texture != 6 {
 			t.Fatalf("common native resources: buffers=%d textures=%d", buffer, texture)
 		}
 		for i, global := range module.GlobalVariables[:2] {
@@ -86,9 +86,11 @@ func TestModelCommonCommitMetalUnionAndCapacities(t *testing.T) {
 				t.Fatalf("common uniform binding %d differs from its existing 80/96-byte span", index)
 			}
 		}
+		// Slots are read by the body vertex and fragment and by a reused
+		// shadow subject's fragment; subjects by the shadow vertex and fragment.
 		for i, name := range []string{"slots", "subjects"} {
 			guard := `uint\([^)]+\) < ` + strconv.Itoa(capacities[i]) + ` \? ` + name + `\.inner\[`
-			if len(regexp.MustCompile(guard).FindAllString(code, -1)) != 2 {
+			if len(regexp.MustCompile(guard).FindAllString(code, -1)) != []int{3, 2}[i] {
 				t.Fatalf("%s vertex/fragment guards do not use capacity %d", name, capacities[i])
 			}
 		}

@@ -15,6 +15,7 @@ struct ModelShadowSubject {screen:vec4<f32>,body:vec4<f32>,mask:vec4<f32>,params
 @group(0) @binding(6) var keys:texture_depth_2d;
 @group(0) @binding(7) var mask:texture_2d<f32>;
 @group(0) @binding(8) var liquid:texture_2d<f32>;
+@group(0) @binding(9) var bodyKeys:texture_2d<f32>;
 // Store the guarded corner load before arithmetic: the pinned Metal writer
 // otherwise scales only the robust-access fallback in its conditional.
 const corners=array<vec2<f32>,6>(vec2<f32>(0,0),vec2<f32>(1,0),vec2<f32>(0,1),vec2<f32>(0,1),vec2<f32>(1,0),vec2<f32>(1,1));

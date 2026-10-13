@@ -15,6 +15,11 @@ import (
 //go:embed shaders/shadows.metal
 var shadowShaderSource string
 
+// ShadowBodyReuse is this renderer's body-atlas contract: every shadow keeps
+// its own silhouette source. Most Metal subjects are depth slabs with no atlas
+// image to read, and the native commit has no reuse path.
+func ShadowBodyReuse() meshscene.ShadowBodyReuse { return meshscene.ShadowBodiesRaster }
+
 // nativeShadowUpload is 136 bytes on 64-bit hosts, matching NMShadowUpload.
 // Root embeds it in the live upload; acquired ring slots copy every operand.
 type nativeShadowUpload struct {

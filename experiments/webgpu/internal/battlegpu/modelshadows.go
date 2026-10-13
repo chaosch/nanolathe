@@ -1,8 +1,11 @@
 package battlegpu
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/binary"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +21,16 @@ var modelShadowsShader string
 var modelShadowCommitShader string
 
 const modelShadowVertexStride = 32
+
+// ShadowBodyReuse is this renderer's body-atlas contract for the shadow
+// composer: every composed slot is rasterized into the body atlas unless
+// direct subjects are enabled, which draw depth-slab slots into the world.
+func ShadowBodyReuse() meshscene.ShadowBodyReuse {
+	if os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") == "1" {
+		return meshscene.ShadowBodiesAtlasSlots
+	}
+	return meshscene.ShadowBodiesAllSlots
+}
 
 type modelShadowAtlas struct {
 	body, depth, mask             *wgpu.Texture
@@ -179,7 +192,8 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 		}
 		return nil
 	}
-	if c.AtlasWidth <= 0 || c.AtlasHeight <= 0 || c.AtlasWidth > 8192 || c.AtlasHeight > 8192 || len(c.PieceFlags) != len(f.Current) || len(c.BodyRuleSlots) != len(c.BodyDraws) || (c.Tint[3] != 1 && c.Tint[3] != 2) || c.Water[3] < 0 || c.Water[3] > 0 && !p.hasWater {
+	// Every subject may read its own body raster, leaving no atlas slots.
+	if c.AtlasWidth < 0 || c.AtlasHeight < 0 || len(c.Slots) > 0 && (c.AtlasWidth == 0 || c.AtlasHeight == 0) || c.AtlasWidth > 8192 || c.AtlasHeight > 8192 || len(c.PieceFlags) != len(f.Current) || len(c.BodyRuleSlots) != len(c.BodyDraws) || (c.Tint[3] != 1 && c.Tint[3] != 2) || c.Water[3] < 0 || c.Water[3] > 0 && !p.hasWater {
 		return modelError("bounded shadow atlas, aligned flags/rule slots, sample block and available water mask")
 	}
 	for _, vec := range [][4]float32{c.Tint, c.Water} {
@@ -195,7 +209,11 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 		}
 	}
 	for si, subject := range c.Subjects {
-		if !modelShadowRect(subject.Body, c.AtlasWidth, c.AtlasHeight) || !modelShadowRect(subject.Screen, m.width, m.height) || (subject.Params[0] != 1 && subject.Params[0] != 2 && subject.Params[0] != 3) || subject.Params[2] < 0 || subject.Params[3] <= 0 || subject.Order[0] == 0 || int(subject.Order[0]) > len(m.slotBytes)/modelSlotStride || int(subject.Order[3]) >= len(f.Instances) || subject.Params[0] < 1.5 && !modelShadowRect(subject.Mask, c.AtlasWidth, c.AtlasHeight) {
+		reuse := subject.Body == [4]float32{}
+		if reuse && (subject.Order[0] == 0 || int(subject.Order[0]) > len(m.directSlots) || m.directSlots[subject.Order[0]-1]) {
+			return modelError("reused shadow bodies in atlas-rasterized model slots")
+		}
+		if !reuse && !modelShadowRect(subject.Body, c.AtlasWidth, c.AtlasHeight) || !modelShadowRect(subject.Screen, m.width, m.height) || (subject.Params[0] != 1 && subject.Params[0] != 2 && subject.Params[0] != 3) || subject.Params[2] < 0 || subject.Params[3] <= 0 || subject.Order[0] == 0 || int(subject.Order[0]) > len(m.slotBytes)/modelSlotStride || int(subject.Order[3]) >= len(f.Instances) || subject.Params[0] < 1.5 && !modelShadowRect(subject.Mask, c.AtlasWidth, c.AtlasHeight) {
 			return modelError("valid shadow body/mask/commit rectangles, kind and painter attachment")
 		}
 		for _, vec := range [][4]float32{subject.Params, subject.Placement} {
@@ -257,6 +275,8 @@ func (m *Models) modelPrepareShadowSources(f meshscene.LiveFrame) error {
 		}
 		p.projected = append(p.projected, packed)
 	}
+	// The world pass looks subjects up by their model slot.
+	slices.SortStableFunc(m.shadowPaint, func(a, b modelShadowPaint) int { return cmp.Compare(a.slot, b.slot) })
 	// TODO(question): cached/live source chronology is absent from LiveFrame.
 	// This implements exported retained body sources, not exact retail images.
 	// TODO(question): an ordered shadow-only paint entry is needed for subjects
@@ -374,7 +394,13 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 	if len(f.Shadows.Topology) != len(p.meshes) {
 		return modelError("immutable scene-aligned shadow topology")
 	}
-	if err = m.modelResizeShadows(f.Shadows.AtlasWidth, f.Shadows.AtlasHeight); err != nil {
+	// With every subject reading its own body raster the atlas is unused; a
+	// minimal request lets an earlier large atlas shrink after its hold.
+	aw, ah := f.Shadows.AtlasWidth, f.Shadows.AtlasHeight
+	if aw == 0 || ah == 0 {
+		aw, ah = 64, 64
+	}
+	if err = m.modelResizeShadows(aw, ah); err != nil {
 		return
 	}
 	capacities := [4]int{p.vertexCount, int(m.poses.size / modelPoseStride), int(m.instances.size / modelInstanceStride), int(m.shadowRecords.size / modelShadowStride)}
@@ -448,6 +474,40 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 		}
 		return nil
 	}
+	// Each pass runs only for its readers: a subject with a silhouette source
+	// has at least one body draw, a projected structure one mask draw.
+	if len(m.shadowDraws) > 0 {
+		if err := m.modelDrawShadowBodies(enc); err != nil {
+			return err
+		}
+	}
+	if len(p.projected) == 0 {
+		return nil
+	}
+	pass, err := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: p.atlas.maskView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
+	if err != nil {
+		return err
+	}
+	pass.SetPipeline(p.projectPipeline)
+	pass.SetBindGroup(0, p.atlas.projectGroup, nil)
+	pass.SetIndexBuffer(p.indices, gputypes.IndexFormatUint32, 0)
+	for first := 0; first < len(p.projected); {
+		draw := p.projected[first]
+		end := modelDrawRun(p.projected, first, false, !m.disableModelBatching)
+		mesh := p.meshes[draw.mesh]
+		if mesh.count != 0 {
+			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
+			m.counters.Draws++
+		}
+		first = end
+	}
+	return pass.End()
+}
+
+// modelDrawShadowBodies rasterizes the silhouette sources that cannot read
+// their own body raster: keyed children, groups and viewport-clipped slots.
+func (m *Models) modelDrawShadowBodies(enc *wgpu.CommandEncoder) error {
+	p := &m.shadowWork
 	pass, err := enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: p.atlas.bodyView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}, DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{View: p.atlas.depthView, DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1, StencilReadOnly: true}})
 	if err != nil {
 		return err
@@ -481,26 +541,6 @@ func (m *Models) modelComputeShadows(enc *wgpu.CommandEncoder) error {
 		}
 		pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.edgeCount, InstanceCount: count, FirstIndex: mesh.edgeFirst, BaseVertex: mesh.base, FirstInstance: draw.instance})
 		m.counters.Draws++
-	}
-	if err = pass.End(); err != nil {
-		return err
-	}
-	pass, err = enc.BeginRenderPass(&wgpu.RenderPassDescriptor{ColorAttachments: []wgpu.RenderPassColorAttachment{{View: p.atlas.maskView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}})
-	if err != nil {
-		return err
-	}
-	pass.SetPipeline(p.projectPipeline)
-	pass.SetBindGroup(0, p.atlas.projectGroup, nil)
-	pass.SetIndexBuffer(p.indices, gputypes.IndexFormatUint32, 0)
-	for first := 0; first < len(p.projected); {
-		draw := p.projected[first]
-		end := modelDrawRun(p.projected, first, false, !m.disableModelBatching)
-		mesh := p.meshes[draw.mesh]
-		if mesh.count != 0 {
-			pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: mesh.count, InstanceCount: uint32(end - first), FirstIndex: mesh.first, BaseVertex: mesh.base, FirstInstance: draw.instance})
-			m.counters.Draws++
-		}
-		first = end
 	}
 	return pass.End()
 }

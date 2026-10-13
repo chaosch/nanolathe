@@ -11,7 +11,8 @@ import (
 )
 
 // ShadowSubject is 96 bytes: five float4 groups and one uint4. Screen is the
-// clipped commit rectangle. Body/Mask are atlas rectangles. Placement carries
+// clipped commit rectangle. Body/Mask are atlas rectangles; a zero Body reads
+// the subject's own model slot instead (ShadowComposer.Reuse). Placement carries
 // body screen origin and the mobile shadow's screen displacement (or the
 // projected mask screen origin for structures). Params is
 // kind (1 quarter projection, 2 silhouette, 3 aircraft), clip key, radius and
@@ -48,9 +49,30 @@ type ShadowComposition struct {
 	AtlasPixels               uint64 // body source plus projected-mask rectangle area
 }
 
+// ShadowBodyReuse selects which subjects' shadows read the renderer's own
+// body raster instead of a second silhouette raster in the shadow atlas.
+// A mobile's shadow is its body's own silhouette [03 R-REN-03D §1], and a
+// structure punches that body out of its projection, so a renderer that keeps
+// a subject's finished body in an atlas need not draw the model again.
+type ShadowBodyReuse uint8
+
+const (
+	// ShadowBodiesRaster rasterizes every subject's silhouette source.
+	ShadowBodiesRaster ShadowBodyReuse = iota
+	// ShadowBodiesAtlasSlots reuses subjects whose composed slot is not a
+	// depth-slab subject (ModelSlot.Params[2]); those never reach the atlas.
+	ShadowBodiesAtlasSlots
+	// ShadowBodiesAllSlots reuses every composed slot: the renderer draws
+	// depth-slab subjects into its atlas too.
+	ShadowBodiesAllSlots
+)
+
 // ShadowComposer keeps immutable topology and reusable bounded atlas scratch
 // on the presentation owner. No mesh vertices are transformed on the CPU.
 type ShadowComposer struct {
+	// Reuse is the renderer's body-atlas contract. A reused subject has a zero
+	// Body rectangle and no BodyDraws; its commit reads model slot Order[0].
+	Reuse      ShadowBodyReuse
 	bounds     *ModelComposer
 	bodyBounds *ModelComposer
 	packer     *ModelComposer
@@ -265,7 +287,17 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		if !bodyValid {
 			continue
 		}
-		bodySlot := c.addSlot(body)
+		// Only a solo subject's atlas image is the image its shadow reads:
+		// keyed children cast from unclipped solo sources, and composed group
+		// members are rasterized with merge rules before their carrier's final
+		// passes. A carrier alone in its slot forms no group.
+		child := e.GroupID != 0 && e.ID != e.GroupID
+		solo := len(c.members[commit]) == 1 && c.members[commit][0] == i && (i >= len(live.Composition.MemberGroup) || live.Composition.MemberGroup[i] == 0)
+		reuse := !child && solo && c.reusesBody(live, commit, width, height)
+		bodySlot := uint32(0)
+		if !reuse {
+			bodySlot = c.addSlot(body)
+		}
 		subject := uint32(len(out.Subjects))
 		kind := p.Rules.Shadow[0]
 		clip := float32(p.ClipKey)
@@ -321,6 +353,9 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		pixels := uint64(screen[2]-screen[0]) * uint64(screen[3]-screen[1])
 		out.SubjectPixels = append(out.SubjectPixels, pixels)
 		out.TotalPixels += pixels
+		if reuse {
+			continue
+		}
 		for _, member := range members {
 			in := live.Instances[member]
 			rules := p.Rules
@@ -328,7 +363,6 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 			if own {
 				rules = live.ModelRules[member]
 			}
-			child := e.GroupID != 0 && e.ID != e.GroupID
 			if child {
 				rules.Reveal[3] = 1
 				// Production child's shadow-only source precedes carrier
@@ -359,7 +393,9 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 	out.AtlasHeight = c.packer.composition.AtlasHeight
 	for i := range out.Subjects {
 		s := &out.Subjects[i]
-		s.Body = out.Slots[uint32(s.Body[0])-1].Atlas
+		if s.Body[0] > 0 {
+			s.Body = out.Slots[uint32(s.Body[0])-1].Atlas
+		}
 		if s.Mask[0] > 0 {
 			s.Mask = out.Slots[uint32(s.Mask[0])-1].Atlas
 		}
@@ -371,6 +407,20 @@ func (c *ShadowComposer) Prepare(r *RetainedBattle, live *LiveFrame, current *fr
 		}
 	}
 	return *out, nil
+}
+
+// reusesBody reports whether commit slot's atlas image holds the whole body.
+// A slot clipped by the viewport lacks the offscreen part a shadow displaced
+// onto the screen still needs, so it keeps its own silhouette source.
+func (c *ShadowComposer) reusesBody(live *LiveFrame, commit uint32, width, height int) bool {
+	if c.Reuse == ShadowBodiesRaster || commit == 0 || int(commit) > len(live.Composition.Slots) {
+		return false
+	}
+	s := live.Composition.Slots[commit-1]
+	if c.Reuse == ShadowBodiesAtlasSlots && s.Params[2] > 0.5 {
+		return false
+	}
+	return s.Screen[0] > -1 && s.Screen[1] > -1 && s.Screen[0]+s.Screen[2] < float32(width)+1 && s.Screen[1]+s.Screen[3] < float32(height)+1
 }
 func shadowRect(r [4]int) [4]float32 {
 	return [4]float32{float32(r[0]), float32(r[1]), float32(r[2] - r[0]), float32(r[3] - r[1])}

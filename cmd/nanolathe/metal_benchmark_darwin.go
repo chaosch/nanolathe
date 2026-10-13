@@ -247,7 +247,7 @@ func (h *metalBenchmarkSource) Next(_ float64, _ meshscene.Input) (meshscene.Liv
 	h.frame.Annotations = h.selection.Prepare(h.c, h.hud, h.composer.order, composition, 1)
 	split()
 	if h.shadows == nil {
-		h.shadows = newMetalShadowComposer(h.world)
+		h.shadows = newMetalShadowComposer(h.world, metalrender.ShadowBodyReuse())
 	}
 	h.frame.Shadows, err = h.shadows.Prepare(h.c, h.world, &h.frame, current, h.options.Width, h.options.Height, h.composer.order)
 	if err != nil {
