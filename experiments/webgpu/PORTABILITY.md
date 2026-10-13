@@ -1,4 +1,4 @@
-# WebGPU battle portability (2026-10-12)
+# WebGPU battle portability (2026-10-12, updated 2026-10-13)
 
 The real-battle WebGPU prototype (production `metalBattleHost` source plus
 `internal/battlegpu`) now builds for darwin/arm64, linux/amd64, windows/amd64
@@ -8,10 +8,10 @@ and js/wasm from one `tools/build-play`. Runtime evidence on this host:
 |---|---|---|---|
 | macOS arm64, Metal, stock GoGPU/wgpu | yes | bounded 600-frame field runs, capture renders units, terrain, features, HUD | works |
 | macOS arm64, Metal, stock + `--metal-cache`, `run-play --fast` | yes | 1440p 3,000-unit field, alternating against the former patched build (patches/README.md) | works; no dependency fork |
-| macOS arm64, Vulkan via MoltenVK (Linux/Windows proxy) | `--vulkan-proxy` | adapter, device, swapchain; shaders compile after a diagnostic rewrite | blocked: V3–V6 below |
-| linux/amd64 | yes (ELF, dynamically linked loader, CGO 0) | none (no hardware here) | compile only; V3–V6 expected on Vulkan |
-| windows/amd64 | yes (PE32+) | none | compile only; V4–V5 risks on DX12 and Vulkan |
-| js/wasm, Chrome WebGPU | yes (+ `wasm_exec.js`) | headless Chrome rendered the field battle after the B1–B4 shader/layout corrections (private overlay) | blocked on B1–B4 in tree; B6 open |
+| macOS arm64, Vulkan via MoltenVK (Linux/Windows proxy) | `--vulkan-proxy` | deterministic 2560x1440 benchmark: final frame identical to WebGPU-on-Metal (2 of 3.7 M pixels differ) | works; V1–V9 below |
+| linux/amd64 | yes (ELF, dynamically linked loader, CGO 0) | none (no hardware here) | compile only; the proxy's fixes apply to its Vulkan path |
+| windows/amd64 | yes (PE32+) | none | compile only; DX12 shares V4/V7's staged-write paths, now handled |
+| js/wasm, Chrome WebGPU | yes (+ `wasm_exec.js`) | headless Chrome plays the field battle with no WebGPU errors (750 units at the 60 Hz cap) | works; B1–B6 handled in tree |
 
 Nothing here is a hardware qualification beyond the runs listed. No module
 requirement changed; dependency edits exist only in external build outputs.
@@ -203,7 +203,7 @@ submission index has passed their replacement (immediately in the browser,
 whose queue tracks no index and whose WebGPU permits it). With that, the
 proxy plays the battle on Vulkan with no errors or crashes:
 
-- **V7 (open, MoltenVK proxy).** The ground renders black. The terrain tile
+- **V7 (MoltenVK proxy; closed below).** The ground renders black. The terrain tile
   atlas (RGBA8) reads back from the GPU byte-identical to Metal, but the
   R32Uint tile lookup does not: in each 360-texel row ~310 texels read
   0xFFFFFFFF (and 0xFFFF00FF when the lookup is stored as RGBA8 instead), so
@@ -219,6 +219,30 @@ proxy plays the battle on Vulkan with no errors or crashes:
   not an allocation-order overlap. **Unknown:** the writer; settle with
   validation layers or a Linux/Windows run. Sprites, models, shadows,
   HUD and effects render.
+- **V7 closed (2026-10-13).** Metal API validation under MoltenVK
+  (`MTL_DEBUG_LAYER=1`) named it: wgpu stages a texture write on Vulkan,
+  DX12 and discrete Metal through buffers capped at 64 MiB, and one larger
+  write (the 236 MB sprite atlas) copies past its staging buffer; the
+  overflow lands in the next queue write's destination, the terrain lookup.
+  Large textures are now written in row bands of at most 32 MiB
+  (`writeTextureBands`); Apple-silicon Metal writes such textures directly,
+  which hid it. Upstream: wgpu should split or refuse oversized writes.
+- **V8 (fixed; naga SPIR-V, affects Linux/Windows Vulkan).** Models drew
+  only bodies; every commit quad was empty. naga emits a module-scope
+  `const` array as `OpConstantNull`, so each corner table read zeros (the
+  Metal writer keeps the values). The five shaders that indexed such tables
+  now compute corners; a test rejects module-scope const arrays.
+- **V9 (fixed; wgpu Metal HAL, affects WebGPU-on-Metal only).** Nanoframe
+  outlines filled as white polygons on Metal while Vulkan drew lines: the
+  Metal HAL issues every `Draw`/`DrawIndexed` as triangles whatever the
+  pipeline's topology. Outlines no longer use a line list: one quad per
+  authored ring, whose fragments walk the ring's chains row by row as
+  retail's polygon outline does [03 R-RAST-01 §1] (CADENCE_ROUND.md). Upstream:
+  pass the pipeline's primitive type to the Metal draw calls.
+- With V7–V9 fixed, the deterministic benchmark's final 2560x1440 frame on
+  the proxy matches WebGPU-on-Metal exactly but for 2 pixels, and model
+  tests also compile every model shader through naga's SPIR-V writer, which
+  still lacks `any`/`all` (V3), so they fail there rather than at runtime.
 - wgpu's Vulkan `Queue.WriteBuffer` waits for the previous submission to
   finish before every CPU write (`waitForGPU`), the same stall Apple's
   shared textures caused on Metal; expect it to cost Linux/Windows frame
@@ -274,7 +298,10 @@ Remaining steps for a real browser target:
   unavailable. Go wasm is single-threaded: a Worker/SharedArrayBuffer split is a
   separate design.
 
-## Renderer and shader changes needed (not made here; files read-only for this unit)
+## Renderer and shader changes (all made in tree by 2026-10-13)
+
+The table records what each change was; R5's `any`/`all` remain unusable
+while naga's SPIR-V writer lacks them, and the model tests check it.
 
 | Id | File | Problem | Proposed change |
 |---|---|---|---|

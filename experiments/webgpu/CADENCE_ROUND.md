@@ -223,6 +223,30 @@ Metal, so ~2.5 ms of slack at 120 Hz. Remaster stress at 1440p, zoom 0.625
 5.70 -> 5.74 ms, model preparation unchanged at 0.71 ms. The remaining late frames are host CPU
 hitches (source work of 14-18 ms in a single frame), not GPU stalls.
 
+### Vulkan parity and nanoframe outlines
+
+The MoltenVK proxy (Linux/Windows stand-in) now renders the deterministic
+2560x1440 benchmark identically to WebGPU-on-Metal (2 differing pixels in
+3.7 M). Three causes, all in PORTABILITY.md §4: oversized staged texture
+writes overflowed wgpu's 64 MiB staging buffers into the terrain lookup
+(V7; large textures now go in 32 MiB row bands), naga's SPIR-V writer
+zeroes module-scope const arrays (V8; model commits drew nothing), and
+wgpu's Metal HAL draws every primitive as triangles (V9; nanoframe outlines
+filled white on Metal only).
+
+Outlines therefore no longer use a line list. Each authored ring of three
+or more corners draws one quad over its raster bounds; the vertex projects
+the ring's corners (retail models author at most 16) into flat values, and
+the fragment walks the ring's two chains for its raster row, marking the
+16.16-stepped pixel on each side and nothing where right is not right of
+left, as retail's polygon outline does [03 R-RAST-01 §1] and main's native
+Metal resolve implements. The nanoframe now reads as main's does — rows of
+vertical strokes, no flat edges — where the old line list drew every edge.
+Remaining differences against main: some of main's lines are greyer, and
+main hides a few outline pixels behind the body's height key. Play cost is
+nil (four alternating pairs at 1440p: 119.71 Hz / 0.24% late against
+119.65 Hz / 0.26%, GPU 5.79 against 5.82 ms).
+
 ### CPU headroom
 
 Tick frames are now the CPU risk: at zoom 0.625 their source work averages
@@ -259,11 +283,9 @@ above.
   fields change only per tick; splitting per-tick and per-frame fields would
   cut uploads further.
 - Effects capture and projectile/debris models on the CPU (CPU headroom).
-- Vulkan: the MoltenVK proxy now plays a battle without errors (V4/V6 were
-  resources released with queue writes pending; PORTABILITY.md). Its ground
-  is black (V7, the R32Uint terrain lookup arrives filled); settle with
-  validation layers or a Linux/Windows machine. wgpu's Vulkan WriteBuffer
-  waits for the GPU before every write, an upstream cost for Linux/Windows.
+- Vulkan: the MoltenVK proxy matches Metal (above); a real Linux or
+  Windows run is still owed. wgpu's Vulkan WriteBuffer waits for the GPU
+  before every write, an upstream cost for Linux/Windows.
 - Browser: the 3,000-unit field is simulation-bound and holds a 2.2 GB
   heap. (The missing Wind/Tidal and Game Time text was the harness's default
   settings: the "Wind/tide in game" readout, `weatherReport`, is off by

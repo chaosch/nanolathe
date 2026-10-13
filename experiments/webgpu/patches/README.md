@@ -91,6 +91,20 @@ in `modeluploads.go`, which still asks for the removed owned-submission marker.
 - Texture storage on Apple GPUs (above) also forgoes lossless compression for
   render targets: making textures without `CopyDst` private saved ~0.15 ms
   of GPU time in a 1440p frame. Small, but free for the backend.
+- wgpu stages a `WriteTexture` on Vulkan, DX12 and discrete Metal through
+  buffers capped at 64 MiB, and a larger write copies past its staging
+  buffer into the next queue write's destination (Metal API validation on
+  MoltenVK: "totalBytesUsed(236060672) must be <= [sourceBuffer
+  length](67108864)"). It should split or refuse the write. The renderer
+  writes large textures in 32 MiB row bands.
+- wgpu's Metal HAL issues every `Draw`/`DrawIndexed` as
+  `MTLPrimitiveTypeTriangle` whatever the pipeline's topology, so line-list
+  and point-list pipelines draw triangles. The renderer draws no lines.
+- naga's SPIR-V writer emits a module-scope `const` array as
+  `OpConstantNull` (every element reads zero) and has no case for
+  `any`/`all` (`ir.ExprRelational`); its Metal writer emits `select()` as an
+  unparenthesised ternary, so a select inside arithmetic miscompiles. The
+  shaders avoid all three and the model tests check them.
 - Metal: the frame after a large texture allocation spends 20-90 ms idle on
   the GPU while the memory is mapped, for shared and private storage alike.
   Not a wgpu bug; renderers should allocate up front (this one now does).
