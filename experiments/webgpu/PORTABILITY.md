@@ -208,9 +208,16 @@ proxy plays the battle on Vulkan with no errors or crashes:
   R32Uint tile lookup does not: in each 360-texel row ~310 texels read
   0xFFFFFFFF (and 0xFFFF00FF when the lookup is stored as RGBA8 instead), so
   the fill depends on the format and is not another resource's bytes.
-  Pre-padding rows to 256 bytes changes nothing. **Unknown:** whether wgpu's
-  Vulkan HAL or MoltenVK writes it; settle with validation layers or a
-  Linux/Windows run. Sprites, models, shadows, HUD and effects render.
+  Pre-padding rows to 256 bytes changes nothing, and the lookup is already
+  wrong when captured after the first frame. A standalone wgpu program that
+  writes and reads back the same 360x240 R32Uint and RGBA8 textures on
+  MoltenVK, alone or after a 41 MB RGBA8 write in the same batch, round-trips
+  them intact; so plain queue writes are sound and the cause lies in the
+  renderer's first-frame work on a staged backend (a pass or copy reaching
+  the lookup's memory through a stale view is the leading suspect, since
+  Metal views keep their textures alive). **Unknown:** the writer; settle
+  with validation layers or a Linux/Windows run. Sprites, models, shadows,
+  HUD and effects render.
 - wgpu's Vulkan `Queue.WriteBuffer` waits for the previous submission to
   finish before every CPU write (`waitForGPU`), the same stall Apple's
   shared textures caused on Metal; expect it to cost Linux/Windows frame
