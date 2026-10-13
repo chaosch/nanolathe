@@ -247,6 +247,38 @@ main hides a few outline pixels behind the body's height key. Play cost is
 nil (four alternating pairs at 1440p: 119.71 Hz / 0.24% late against
 119.65 Hz / 0.26%, GPU 5.79 against 5.82 ms).
 
+### Retina size and render-thread waste
+
+The prototype's default drawable, 2880x1800, is what this Mac plays at. At
+the default zoom it held 119.8 Hz / 0.06% late; zoomed out (0.625) it was
+the one setting that missed: 117.7-119.8 Hz / 0.17-1.34% late, with GPU at
+5.6 ms and tick-frame source work 8.2 ms (p95 8.9 ms). A play CPU profile
+then showed wgpu creating, mapping and destroying a one-off staging buffer
+for every buffer write over its 256 KiB belt chunk: model records were
+already split, but layer storage, glow, reflection, ground-light and lens
+writes were not (1.44 s of a 30 s profile, ~0.5 ms a frame on the render
+thread). The renderer's queue wrapper now splits every buffer write at the
+chunk size: render-thread encode 5.41 -> 3.73 s per 30 s, and zoomed-out
+2880x1800 play 119.80 Hz / 0.17% late in both runs. Smaller fixes from the
+same profile: the air-shadow item list and the annotation packing reuse
+their buffers, and the body pass binds its pipeline only when it changes.
+All final frames pixel-identical; Vulkan and the browser unchanged. At
+1440p default zoom, where few writes exceed a chunk, three alternating pairs
+were neutral (119.75 Hz / 0.21% before, 119.55 Hz / 0.33% after with one
+119.2 Hz outlier). A later full matrix ran while another agent and a Codex
+renderer were each using a third of a core (load 4-5.5) and spread from
+118.2 to 119.95 Hz, so compare only alternating pairs from one session.
+
+What remains on the render thread is wgpu's per-encoder reference list
+(~2,000 bind-group switches a frame regrow it from 64 entries; upstream) and
+model record uploads (~1.5 MB a frame zoomed out, mostly piece poses, which
+use all 16 floats). On the source side a Go execution trace shows tick
+frames waiting ~1 ms for the retained world rebuild and every frame ~0.55
+ms for the effects' adapter half; the rebuild could start when the
+simulation publishes a tick if the retained world were double-buffered
+(it is reculled on the frames between ticks), a shared-host change left
+for review. Garbage collection is not a factor: one cycle in 30 s of play.
+
 ### CPU headroom
 
 Tick frames are now the CPU risk: at zoom 0.625 their source work averages

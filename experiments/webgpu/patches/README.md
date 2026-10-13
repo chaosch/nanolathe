@@ -105,6 +105,16 @@ in `modeluploads.go`, which still asks for the removed owned-submission marker.
   `any`/`all` (`ir.ExprRelational`); its Metal writer emits `select()` as an
   unparenthesised ternary, so a select inside arithmetic miscompiles. The
   shaders avoid all three and the model tests check them.
+- Every pass `SetPipeline`/`SetBindGroup`/buffer bind appends a cloned
+  resource reference to the command encoder's list, which starts at 64 entries
+  for each new encoder. A battle frame makes ~2,000 bind-group switches (retail
+  paint order interleaves sprites, effects and model commits), so the list
+  regrows every frame: ~0.13 ms of `growslice` on the render thread at
+  2880x1800. Carrying the previous encoder's capacity forward would remove it.
+- Every `WriteBuffer` larger than the 256 KiB belt chunk creates, maps and
+  later destroys a dedicated staging buffer. The renderer splits its writes
+  at the chunk size (~0.5 ms a frame at 2880x1800 zoomed out); reusing
+  oversized buffers would help every other caller.
 - Metal: the frame after a large texture allocation spends 20-90 ms idle on
   the GPU while the memory is mapped, for shared and private storage alike.
   Not a wgpu bug; renderers should allocate up front (this one now does).
