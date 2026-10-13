@@ -201,9 +201,22 @@ cost.
   without CopyDst use MTLStorageModePrivate) saved only ~0.15 ms of GPU
   and did not shorten the stalls; it is not worth a patch.
 
-Play at 1440p, 3,000-unit field, now: 119.6 Hz / 0.13-0.3% late at the
-default zoom and 119.8 Hz / 0.13% at zoom 0.625 (the final capture frame
-excluded). The GPU has ~2.5 ms of slack there.
+Play, 3,000-unit field, async simulation, two alternating reps per row
+(final capture frame excluded; Metal is main's pure-Go renderer built from
+this worktree, same shared host):
+
+| Drawable, zoom | Start of night (WebGPU) | Now (WebGPU) | Metal |
+| --- | --- | --- | --- |
+| 2560x1440, default | 117.8 Hz / 1.11% late | 119.8 Hz / 0.19% | 119.2 Hz / 0.59% |
+| 2560x1440, 0.625 | 119.75 Hz / 0.17% | 119.8 Hz / 0.13% | 119.4 Hz / 0.46% |
+| 1920x1080, default | 119.5 Hz / 0.27% | 119.95 Hz / 0.04% | - |
+| 1920x1080, 0.625 | 119.75 Hz / 0.21% | 119.65 Hz / 0.21% | - |
+
+GPU per frame at 1440p is ~5.6-5.8 ms for WebGPU against ~5.9-6.5 ms for
+Metal, so ~2.5 ms of slack at 120 Hz. Remaster stress at 1440p, zoom 0.625
+(`--webgpu-quads=3`, 103K -> 308K model triangles): 119.82 -> 119.72 Hz, GPU
+5.70 -> 5.74 ms, model preparation unchanged at 0.71 ms. The remaining late frames are host CPU
+hitches (source work of 14-18 ms in a single frame), not GPU stalls.
 
 ### CPU headroom
 
