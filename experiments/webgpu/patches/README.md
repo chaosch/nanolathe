@@ -78,6 +78,22 @@ in `modeluploads.go`, which still asks for the removed owned-submission marker.
   block cannot be allocated, which would release deferred resources early.
 - The Objective-C call path prepares a call interface on every message send;
   the pointer-cache patch is the measured cost of that.
+- wgpu's Vulkan `Queue.WriteBuffer` (`hal/vulkan/queue.go`) waits for the
+  previous submission to finish before every CPU write (`waitForGPU`), the
+  same per-write stall Apple's shared textures caused on Metal. Expect it to
+  cost Linux/Windows frame rate; staging those writes would remove it.
+- A texture released while its `WriteTexture` is still pending fails the next
+  submit ("destination texture retired before submit"), and a buffer released
+  with a pending `WriteBuffer` leaves a staged copy aimed at freed memory
+  (MoltenVK faults). WebGPU allows destroying a resource after a queue write;
+  wgpu should keep the destination alive until the write is submitted. The
+  renderer now defers its own releases past a submission (2026-10-13).
+- Texture storage on Apple GPUs (above) also forgoes lossless compression for
+  render targets: making textures without `CopyDst` private saved ~0.15 ms
+  of GPU time in a 1440p frame. Small, but free for the backend.
+- Metal: the frame after a large texture allocation spends 20-90 ms idle on
+  the GPU while the memory is mapped, for shared and private storage alike.
+  Not a wgpu bug; renderers should allocate up front (this one now does).
 
 ## Measurements (2026-10-12)
 
