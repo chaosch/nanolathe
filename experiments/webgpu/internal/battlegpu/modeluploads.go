@@ -2,23 +2,20 @@ package battlegpu
 
 import (
 	"os"
-	"runtime"
 
 	"github.com/gogpu/wgpu"
 )
 
-// The pinned native staging belt reuses completed 256 KiB chunks. Larger
-// writes use one-off buffers. Splitting changes only copy command boundaries;
-// the existing queue owns copied data and destinations through completion.
-// Immutable mesh/UV uploads retain their original load-time path.
+// Stock wgpu stages every buffer write, reusing completed 256 KiB belt chunks
+// but allocating a one-off staging buffer for each larger write. Splitting the
+// mutable model records at the chunk size keeps them on reused chunks (99.9 to
+// 111.9 Hz on the zoomed-out 1440p field). It changes only copy boundaries, so
+// it is safe on every backend; NANOLATHE_WEBGPU_CHUNKED_UPLOADS=0 is the
+// control. Immutable mesh/UV uploads retain their original load-time path.
 const modelUploadChunkBytes = 256 << 10
 
-func chunkedModelUploadsEnabled(d *wgpu.Device) bool {
-	if os.Getenv("NANOLATHE_WEBGPU_CHUNKED_UPLOADS") != "1" || runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return false
-	}
-	contract, ok := any(d).(interface{ CompletionSafeUploads() bool })
-	return ok && contract.CompletionSafeUploads()
+func chunkedModelUploadsEnabled() bool {
+	return os.Getenv("NANOLATHE_WEBGPU_CHUNKED_UPLOADS") != "0"
 }
 
 type modelBufferWriter interface {

@@ -493,7 +493,7 @@ func NewModels(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, sce
 	if d == nil || q == nil || scene == nil {
 		return nil, modelError("device, queue and retained scene")
 	}
-	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(d), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames),
+	m = &Models{chunkedUploads: chunkedModelUploadsEnabled(), runtimeArrays: runtimeArraysEnabled(d), d: d, q: q, format: format, materials: slices.Clone(scene.Materials), frames: slices.Clone(scene.TextureFrames),
 		directEnabled: os.Getenv("NANOLATHE_WEBGPU_DIRECT_MODELS") == "1", skipShadowCommits: os.Getenv("NANOLATHE_WEBGPU_SKIP_SHADOW_COMMITS") == "1"}
 	defer func() {
 		if err != nil {
