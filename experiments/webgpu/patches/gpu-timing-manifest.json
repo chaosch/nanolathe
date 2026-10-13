@@ -1,27 +1,23 @@
 {
-  "scope": "Default-off MacARM64 GPU command-buffer completed-callback diagnostic after guardedpresent-handler build; excludes nativePresent/WaitIdle/privateHALfallback CBs",
+  "scope": "Measurement-only macOS arm64 GPU command-buffer completed-handler timing on stock wgpu v0.34.2, applied after the presented-handler diagnostic; excludes the native Present command buffer; never part of a shipping build",
+  "base": "stock wgpu v0.34.2 plus wgpu-present-handler.patch",
   "original_sha256": {
-    "hal/metal/queue.go": "327298b7030965a06342344ea538d46e06d487008e23d54514a758bf81108696",
-    "hal/metal/submission_owned.go": "eeee338c01d79e1d4abb960f1ee1dbb69e79ac46261409936a3f8c8ae2277c5f",
-    "hal/metal/device.go": "4e6e165dad58ea196c612d584a763fae7486aba4d2d9ed68b1f896d18781dcf3"
+    "hal/metal/device.go": "a9ef64fa1ff1d97f4cf057beabda8f83f4f16d4a35e8288b04ccfea28c757892",
+    "hal/metal/queue.go": "2578489adf7ec4141362844c56c3f3a7de5c88cb42fcb13837951afc631339b6"
   },
   "current_sha256": {
-    "hal/metal/queue.go": "2a69de0523b34298bb898d50dca3a555a391c6e3469d30de2a5a8e3a6b5bb818",
-    "hal/metal/submission_owned.go": "11231d0dfb1fae867bdc943898a668725b732f9ab3856c312bee080d440044a7",
-    "hal/metal/device.go": "1b660c837c4c8e21ac0eb3b94432a851610f6632ebce6c669a13910c7f35b748",
-    "hal/metal/gpu_timing.go": "481f1ddb7d93d6324d6ec926caea7e8ca062b5448d40f3877600c5f17ca0e2d7",
-    "hal/metal/gpu_timing_test.go": "de4f1ed4fb27ab0e698aeb4cb0416379600657d19f3a0bf9e869e3f922ecbd82",
+    "gpu_timing_native.go": "464021457197547f7b05a96abde979da643419420f57d5b28d0ff20da4a11c0b",
+    "hal/metal/device.go": "921ca6bd566f1320111d7c8405b685e1f7b3b8f5cb54cb1db1f5a1acf157da71",
+    "hal/metal/gpu_timing.go": "913184ea0b2c26ce81cf2f35fd2d85dde5cfd193322e72c62cb0afde2606922c",
     "hal/metal/gpu_timing_root_native_test.go": "2d22c23c5752658744d66fb34d8cfbd3e9014dc98ab3bb0854b3487bfa637c92",
-    "gpu_timing_native.go": "464021457197547f7b05a96abde979da643419420f57d5b28d0ff20da4a11c0b"
+    "hal/metal/gpu_timing_test.go": "b3f7610ba06eb26c952e16f28805a6d0d648797f9b085a5a40e103eda9fbfee7",
+    "hal/metal/queue.go": "8d10ebc92ab99daf9bacb14f5b185d83f64631ddd0e215b78305b075a020fc1f"
   },
   "added_files": [
+    "gpu_timing_native.go",
     "hal/metal/gpu_timing.go",
-    "hal/metal/gpu_timing_test.go",
     "hal/metal/gpu_timing_root_native_test.go",
-    "gpu_timing_native.go"
+    "hal/metal/gpu_timing_test.go"
   ],
-  "patch_sha256": "055eaef85d367fc9726e0040fdd6608037fec6770eb2e5589ef15a4ffa3a09a9",
-  "driver_original_sha256": "1232cd98937bf4f0557d8280305fa157cd050a5b470b3084d93021e319f627bc",
-  "driver_current_sha256": "b0f1c8d4d09b88ad7e0d965da3e014761409eeb0ee06699e3234658bedcdccb3",
-  "driver_patch_sha256": "f40b2a826d4158e3cf1c768e8753ac1f73a245138a4d362b948918c4a22e3571"
+  "patch_sha256": "10d851a88bf3a045be6541ee378704b41495fe9a53e498eed04baf51cb8ab350"
 }

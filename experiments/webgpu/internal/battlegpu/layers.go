@@ -37,7 +37,9 @@ const layerSmokeStride = 144
 
 type LayerCounters struct {
 	Draws, Sprites, SeabedSprites, Overlay, UploadBytes, PipelineBuilds int
-	PreparationMS                                                       [7]float64
+	// Renderer-wide staged texture rewrites recorded on this frame's encoder.
+	StagedBytes, StagedRegions int
+	PreparationMS              [7]float64
 }
 
 type layerTexture struct {
@@ -71,7 +73,9 @@ func (b *layerBuffer) close() {
 type layerDraw struct{ kind, first, count, mode uint32 }
 
 // Layers borrows the host device, queue, attachments and synchronous LiveFrame
-// input. Prepare and resource replacement require the host's completion boundary.
+// input. Rewrites of sampled textures are staged (textureUploads) and replaced
+// resources are released through wgpu's deferred destruction, so Prepare needs
+// no completion boundary while earlier frames are in flight.
 // Its stock operations replay the production packets (GPU design C-G3, C-G7);
 // it never makes emitters or simulation state of its own.
 type Layers struct {
@@ -79,6 +83,7 @@ type Layers struct {
 	runtimeArrays                                                                               bool
 	d                                                                                           *wgpu.Device
 	q                                                                                           rendererQueue
+	uploads                                                                                     *textureUploads // optional; owned by Renderer
 	format, outputFormat                                                                        gputypes.TextureFormat
 	owned                                                                                       []func()
 	closed                                                                                      bool
@@ -200,18 +205,47 @@ func (l *Layers) layerTexture(label string, t meshscene.Texture, format gputypes
 	return
 }
 
-func (l *Layers) layerWriteTexture(dst *layerTexture, t meshscene.Texture, dirty [4]uint32) error {
-	x, y, w, h := int(dirty[0]), int(dirty[1]), int(dirty[2]), int(dirty[3])
+func layerDirtyRect(t meshscene.Texture, dirty [4]uint32) (x, y, w, h int, err error) {
+	x, y, w, h = int(dirty[0]), int(dirty[1]), int(dirty[2]), int(dirty[3])
 	if w == 0 || h == 0 {
 		x, y, w, h = 0, 0, t.Width, t.Height
 	}
 	if x+w > t.Width || y+h > t.Height {
-		return layerError("atlas dirty rectangle outside texture")
+		return 0, 0, 0, 0, layerError("atlas dirty rectangle outside texture")
+	}
+	return
+}
+
+// layerWriteTexture fills a texture created this frame, which no submission
+// has used yet, so a direct queue write cannot race the GPU.
+func (l *Layers) layerWriteTexture(dst *layerTexture, t meshscene.Texture, dirty [4]uint32) error {
+	x, y, w, h, err := layerDirtyRect(t, dirty)
+	if err != nil {
+		return err
 	}
 	// Queue.WriteTexture permits tight rows; unlike encoder copies it requires
 	// no 256-byte row padding. Copy only the detached rectangle synchronously.
 	data := t.RGBA[(y*t.Width+x)*4:]
 	if err := l.q.WriteTexture(&wgpu.ImageCopyTexture{Texture: dst.t, Origin: wgpu.Origin3D{X: uint32(x), Y: uint32(y)}}, data, &wgpu.ImageDataLayout{BytesPerRow: uint32(t.Width * 4), RowsPerImage: uint32(h)}, &wgpu.Extent3D{Width: uint32(w), Height: uint32(h), DepthOrArrayLayers: 1}); err != nil {
+		return err
+	}
+	l.counts.UploadBytes += w * h * 4
+	return nil
+}
+
+// layerRewriteTexture updates a texture that earlier frames sampled and
+// whose submissions may still be in flight: the rectangle is staged and
+// copied on the frame's encoder (textureUploads). Without a stager the
+// standalone component relies on its host's completion boundary.
+func (l *Layers) layerRewriteTexture(dst *layerTexture, t meshscene.Texture, dirty [4]uint32) error {
+	if l.uploads == nil {
+		return l.layerWriteTexture(dst, t, dirty)
+	}
+	x, y, w, h, err := layerDirtyRect(t, dirty)
+	if err != nil {
+		return err
+	}
+	if err := l.uploads.stage(dst.t, t.RGBA, t.Width, x, y, w, h); err != nil {
 		return err
 	}
 	l.counts.UploadBytes += w * h * 4
@@ -230,6 +264,9 @@ func (l *Layers) layerUpdateTexture(dst *layerTexture, t meshscene.Texture, vers
 		if err != nil {
 			return false, err
 		}
+		// Release is deferred until earlier submissions complete; no staged
+		// copy may target the released texture.
+		l.uploads.forget(dst.t)
 		dst.close()
 		*dst = n
 		*old = version
@@ -238,7 +275,7 @@ func (l *Layers) layerUpdateTexture(dst *layerTexture, t meshscene.Texture, vers
 	if *old == 0 {
 		dirty = [4]uint32{}
 	}
-	if err := l.layerWriteTexture(dst, t, dirty); err != nil {
+	if err := l.layerRewriteTexture(dst, t, dirty); err != nil {
 		return false, err
 	}
 	*old = version
@@ -564,7 +601,7 @@ func (l *Layers) SetWorldTexture(view *wgpu.TextureView) error {
 	return l.layerGroup(&l.fogGroup, l.fogLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: l.uniform, Size: layerUniformSize}, {Binding: 1, TextureView: view}, {Binding: 2, TextureView: l.fogGrid.v}, {Binding: 3, TextureView: l.fogAtlas.v}, {Binding: 4, TextureView: l.layerGlowTexture()}})
 }
 
-// SetFields borrows component outputs after the host completion boundary.
+// SetFields borrows component outputs prepared for this frame.
 // Only view replacement rebinds; frame flags/active extents live in uniforms.
 func (l *Layers) SetFields(glow, ground *wgpu.TextureView, glowValues, rect, values [4]float32) error {
 	l.glowValues, l.groundLightRect, l.groundLightValues = glowValues, rect, values
