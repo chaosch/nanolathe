@@ -39,6 +39,19 @@ func TestModelUploadPreservesBytesAcrossChunkBoundaries(t *testing.T) {
 	}
 }
 
+// Renderer writes keep their destination offset across chunks.
+func TestBufferChunksKeepOffset(t *testing.T) {
+	data := make([]byte, 2*modelUploadChunkBytes+12)
+	for i := range data {
+		data[i] = byte(i*29 + 1)
+	}
+	q := &uploadRecorder{dst: bytes.Repeat([]byte{0xcd}, len(data)+64)}
+	writes, err := writeBufferChunks(q, nil, 32, data, true)
+	if err != nil || writes != 3 || !bytes.Equal(q.dst[32:32+len(data)], data) || !bytes.Equal(q.dst[:32], bytes.Repeat([]byte{0xcd}, 32)) || !bytes.Equal(q.dst[32+len(data):], bytes.Repeat([]byte{0xcd}, 32)) {
+		t.Fatalf("offset chunks: writes%d err%v", writes, err)
+	}
+}
+
 func TestModelUploadStopsAtFirstFailedChunk(t *testing.T) {
 	failure := errors.New("staging write refused")
 	data := bytes.Repeat([]byte{0xab}, 3*modelUploadChunkBytes)

@@ -33,8 +33,12 @@ type deferredWrite struct {
 // into one reused arena; the queue copies them again at replay, synchronously,
 // so the arena is free for the next frame as soon as flush returns.
 type deferredQueue struct {
-	q         *wgpu.Queue
-	enabled   bool
+	q       *wgpu.Queue
+	enabled bool
+	// chunked splits buffer writes at the staging belt's chunk size (see
+	// writeModelUpload): every renderer buffer write then reuses the belt's
+	// recycled chunks instead of a one-off staging buffer per large write.
+	chunked   bool
 	deferring bool
 	writes    []deferredWrite
 	arena     []byte
@@ -44,12 +48,19 @@ type deferredQueue struct {
 
 func (d *deferredQueue) WriteBuffer(b *wgpu.Buffer, offset uint64, data []byte) error {
 	if !d.deferring {
-		return d.q.WriteBuffer(b, offset, data)
+		return d.writeBuffer(b, offset, data)
 	}
 	at := len(d.arena)
 	d.arena = append(d.arena, data...)
 	d.writes = append(d.writes, deferredWrite{buffer: b, offset: offset, at: at, n: len(data)})
 	return nil
+}
+
+// writeBuffer issues one buffer write, split at the belt's chunk size when
+// chunking is on. Only the copy boundaries change.
+func (d *deferredQueue) writeBuffer(b *wgpu.Buffer, offset uint64, data []byte) error {
+	_, err := writeBufferChunks(d.q, b, offset, data, d.chunked)
+	return err
 }
 
 func (d *deferredQueue) WriteTexture(dst *wgpu.ImageCopyTexture, data []byte, layout *wgpu.ImageDataLayout, size *wgpu.Extent3D) error {
@@ -90,7 +101,7 @@ func (d *deferredQueue) flush() error {
 		data := d.arena[w.at : w.at+w.n]
 		var err error
 		if w.buffer != nil {
-			err = d.q.WriteBuffer(w.buffer, w.offset, data)
+			err = d.writeBuffer(w.buffer, w.offset, data)
 		} else {
 			var layout *wgpu.ImageDataLayout
 			if w.hasLay {

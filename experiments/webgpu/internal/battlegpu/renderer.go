@@ -90,7 +90,7 @@ func New(d *wgpu.Device, q *wgpu.Queue, format gputypes.TextureFormat, scene *me
 	if err == nil {
 		// Measured slower at 1440p (late frames 1.0% -> 4.4% zoomed out), so
 		// deferral stays an opt-in experiment; writes otherwise pass through.
-		r.queue = &deferredQueue{q: q, enabled: os.Getenv("NANOLATHE_WEBGPU_DEFER_WRITES") == "1"}
+		r.queue = &deferredQueue{q: q, enabled: os.Getenv("NANOLATHE_WEBGPU_DEFER_WRITES") == "1", chunked: chunkedModelUploadsEnabled()}
 		r.models.q, r.layers.q, r.glow.q, r.groundLight.q = r.queue, r.queue, r.queue, r.queue
 		r.distortions.q, r.lenses.q, r.reflections.q = r.queue, r.queue, r.queue
 		r.uploads = newTextureUploads(d, r.queue)
