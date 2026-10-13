@@ -86,6 +86,22 @@ async simulation, `--fast` + late acquisition):
   1.0% -> 4.4%. It stays opt-in; the render-thread profile that motivated it
   (half of preparation inside the queue's pending-write setup) still stands.
 
+## Dependencies
+
+The prototype now runs on the stock pinned gogpu and wgpu. Our own code
+stages rewrites of textures earlier frames sampled (stock `WriteTexture`
+writes Apple's shared textures at once, which forced a per-frame wait),
+chunks model uploads at the staging belt's chunk size, and acquires the
+drawable late through gogpu's lazy acquisition. The owned-submission,
+deferred-acquire, render-runtime and other unused patches are gone. What
+remains: the browser staging edit (required), the Metal pointer cache
+(`--metal-cache`, worth 2-3.5 Hz and half the late frames at 1440p), and the
+measurement-only presented-handler and GPU-timing patches. Play at 1440p,
+3,000-unit field: stock + pointer cache 116.3 Hz / 1.44% late against the
+fully patched 115.3 / 1.73 (default zoom), 115.6 / 2.25 against 115.5 / 2.14
+zoomed out. Details, upstream issues and the full table are in
+`patches/README.md`.
+
 ## Shadows
 
 A mobile's shadow is its body's own silhouette [03 R-REN-03D §1], so the
