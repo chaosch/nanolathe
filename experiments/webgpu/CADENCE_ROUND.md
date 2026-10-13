@@ -138,20 +138,111 @@ cover as many shadow pixels as 642 ground units, at 25 filtered taps each.
 With the GPU unsaturated (play window, ~830 units, 1440p drawable) shadows
 were already nearly free: 5.38 ms with them, 5.34 ms without.
 
-Both atlases grow in 512-row steps and shrink after a second; the shadow atlas
-now holds only structure projections and the few remaining silhouettes.
-`NANOLATHE_WEBGPU_SKIP_SHADOW_COMMITS=1` isolates the commit's GPU cost.
+Aircraft soft shadows are now blurred once per frame instead of per pixel:
+each soft subject's coverage is box-filtered to a slot texel of D source
+texels (a power of two, so the radius is one to two slot texels) and blurred
+with the same binomial kernel in two separable passes into a small R8 atlas;
+the commit samples it once (four times over water). The water grade under a
+soft shadow is computed on the CPU at the quad's corners, so the commit no
+longer reads the liquid mask. Same benchmark, two alternating reps: 25 taps
+6.07 ms, pre-blurred 5.99 ms; the passes cost ~0.14 ms, and soft shadows are
+now within ~0.2 ms of hard ones, the benchmark's noise floor. Final frames
+differ along aircraft shadow edges only (2.33% of pixels, two by more than
+15 levels).
+
+The body, shadow and blur atlases grow in 512-row steps. They used to shrink
+after a second below three quarters of their size; in play the field's need
+wanders across that bound, so they reallocated in grow/shrink pairs 120
+frames apart, and the frame after each reallocation spent 20-60 ms on the
+GPU. They now shrink only to half their area, after 600 frames: play at
+1440p went from 117.8 Hz / 1.11% late to 119.2 Hz / 0.29% (two alternating
+reps), and GPU frames over 10 ms from 13-15 to 4-5 per 3,600 frames. The
+rest are growth, which still costs one 15-90 ms GPU frame: Metal System
+Trace shows the GPU idle for that long before the first pass that uses the
+new textures, while their memory is mapped. Zeroing them from the CPU at
+creation only moves the cost to the CPU, and private storage does not
+avoid it.
+
+(Play rates in this section exclude the final capture frame, a 200-275 ms
+interval the earlier summaries counted; with it the same runs read 115.7
+and 117.7 Hz.)
+`NANOLATHE_WEBGPU_SKIP_SHADOW_COMMITS=1` and
+`NANOLATHE_WEBGPU_SKIP_AIR_PASSES=1` isolate the commit's and the blur's GPU
+cost.
+
+## Model records and atlases (overnight, 2026-10-13)
+
+- Instances whose material selection is the same share one span of the
+  selected-material buffer (the producer already shares the slice), and the
+  buffer is rewritten only when its bytes change. Materials were 2.1-2.4 MB
+  of the ~3 MB of model records written per frame. GPU-bound benchmark
+  (three alternating reps): GPU span 5.97 -> 5.29 ms, record build 1.24 ->
+  0.46 ms, uploads 4.96 -> 1.27 MB/frame, final frames pixel-identical. In
+  play the render thread's model preparation halved (0.98 -> 0.43 ms) and
+  uploads fell to 0.75 MB/frame.
+- Atlas depth is Depth16Unorm and the key plane RG8Unorm: both hold only
+  key ranks and flags. Pixel-identical; GPU time unchanged (bandwidth was not
+  the limit); growth stalls 15-30% shorter; play 119.20 -> 119.58 Hz.
+- Every allocation of a large texture mid-battle costs one frame a 20-60 ms
+  GPU stall (see Shadows). After the shrink fix the remaining ones were the
+  body atlas growing, the shadow atlas growing, and the merged plane, which
+  was allocated only when the first composed group appeared.
+  The body atlas is now reserved up front at one supersampled screen
+  (four texels per drawable pixel at the packing width; 2048x8192 at 1440p,
+  ~0.1 ms of clear and store), the shadow atlas at one texel per pixel, the
+  merged plane is allocated with the atlas, and height-ordered (compact)
+  slot packing is the default: it needs ~27% fewer rows, so the busy field
+  no longer outgrows 2048x8192 into a 256 MB 4096-wide atlas at tick 647.
+  Play at 1440p, two alternating reps: GPU stalls over 10 ms 2-3 (up to
+  56 ms) -> 0-1 (18 ms) per 3,600 frames, 119.8 Hz, 0.13% late. Compact
+  placement moves raster rectangles, so interpolated edges round
+  differently: 0.16% of a final frame's pixels, scattered single pixels.
+- Private storage for render targets (a wgpu Metal HAL change: textures
+  without CopyDst use MTLStorageModePrivate) saved only ~0.15 ms of GPU
+  and did not shorten the stalls; it is not worth a patch.
+
+Play at 1440p, 3,000-unit field, now: 119.6 Hz / 0.13-0.3% late at the
+default zoom and 119.8 Hz / 0.13% at zoom 0.625 (the final capture frame
+excluded). The GPU has ~2.5 ms of slack there.
+
+### CPU headroom
+
+Tick frames are now the CPU risk: at zoom 0.625 their source work averages
+7.5 ms with p95 8.2-8.3 ms, at the edge of the 8.33 ms budget (default zoom
+6.2 / 7.1 ms). Stage timers (`effects_*` in `phase_timing_scope`; the
+macOS CPU profiler misattributes waits and is not reliable here) show:
+
+- The client's effects capture is 2.2 ms (3.5 ms on tick frames). Its eight
+  batches total ~1.5 ms; the rest is the presentation blend of every unit,
+  which grows by ~1.2 ms on tick frames.
+- Projectile models cost 0.45 ms a frame although the GPU model lane draws
+  them: the client still projects every face on the CPU only to emit a paint
+  marker. Debris models (0.59 ms) are drawn from CPU-projected geometry.
+  Both scale with model detail, so remastered models would multiply them.
+  Giving projectile markers a geometry-free path and moving debris onto the
+  retained lane would remove ~1 ms; both touch shared client code with retail
+  paint-order rules and need their own review.
+- `NANOLATHE_WEBGPU_GO_TRACE_SECONDS=N` writes `go.trace` for the first N
+  measured seconds; use the module's toolchain (`go tool trace -pprof=sync`
+  from the worktree) to read it.
+
+### Browser
+
+Headless Chrome, 1080p: the 750-unit field runs at Chrome's 60 Hz cap
+(callback 17.2 ms, model uploads 238 -> 64 KB/frame). The 3,000-unit field
+now completes 1,800 frames instead of exhausting memory, at ~10 fps: the
+simulation takes 73 ms a frame (2.1 ticks of ~35 ms on one wasm thread), the
+renderer ~4 ms. The wasm heap reaches 2.2 GB, so long sessions may still run
+out.
 
 ## Next
 
-- Aircraft soft shadows are most of the remaining shadow cost (above): fewer
-  taps, or a mipmapped source sampled at the blur radius, would change their
-  look and await a decision.
-- ~5 MB/frame of model records upload between ticks (instances, slots,
-  materials, shadow records rebuilt every frame); matters for discrete GPUs
-  and the browser.
-- Effects recording (~3.5 ms/frame of client work) is the largest per-frame
-  source cost.
+- Instance records (~0.4-0.6 MB/frame) are rebuilt every frame though most
+  fields change only per tick; splitting per-tick and per-frame fields would
+  cut uploads further.
+- Effects capture and projectile/debris models on the CPU (CPU headroom).
 - Vulkan: V6 (MoltenVK buffer copy without memory) needs validation layers.
-- Browser: HUD Wind/Tidal and Game Time text is missing; the 3,000-unit
-  field exhausts wasm memory.
+- Browser: the 3,000-unit field is simulation-bound and holds a 2.2 GB
+  heap. (The missing Wind/Tidal and Game Time text was the harness's default
+  settings: the "Wind/tide in game" readout, `weatherReport`, is off by
+  default, and the native runs used settings with it on.)

@@ -439,7 +439,7 @@ func (m *Models) modelPrepareShadowGPU(f meshscene.LiveFrame, changed bool) (err
 	if aw == 0 || ah == 0 {
 		aw, ah = 64, 64
 	}
-	if err = m.modelResizeShadows(aw, ah); err != nil {
+	if err = m.modelResizeShadows(aw, max(ah, modelAtlasReserve(m.width, m.height, max(aw, p.atlas.width), 1))); err != nil {
 		return
 	}
 	capacities := [4]int{p.vertexCount, int(m.poses.size / modelPoseStride), int(m.instances.size / modelInstanceStride), int(m.shadowRecords.size / modelShadowStride)}

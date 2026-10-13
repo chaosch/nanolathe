@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -42,7 +43,7 @@ type BenchmarkFrame struct {
 }
 type drawRow struct {
 	NativeEncodeStartSeconds               float64
-	SourceStagesMS                         [12]float64
+	SourceStagesMS                         [20]float64
 	Index                                  int
 	Warmup                                 bool
 	Tick                                   uint32
@@ -174,7 +175,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	var live meshscene.LiveFrame
 	disableStateCache := os.Getenv("NANOLATHE_WEBGPU_DISABLE_STATE_CACHE") == "1"
 	disableModelBatching := os.Getenv("NANOLATHE_WEBGPU_DISABLE_MODEL_BATCHING") == "1"
-	compactSlotPacking := os.Getenv("NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING") == "1"
+	compactSlotPacking := os.Getenv("NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING") != "0"
 	disableCoalesce := os.Getenv("NANOLATHE_WEBGPU_DISABLE_EFFECT_COALESCE") == "1"
 	omitReflections := os.Getenv("NANOLATHE_WEBGPU_OMIT_STOCK_REFLECTIONS") == "1"
 	omitSeabed := os.Getenv("NANOLATHE_WEBGPU_OMIT_SEABED") == "1"
@@ -505,6 +506,16 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				if e == nil {
 					e = pprof.StartCPUProfile(cpu)
 				}
+				// Diagnostic: an execution trace of the first measured
+				// seconds shows what source and render goroutines wait on.
+				if seconds, _ := strconv.Atoi(os.Getenv("NANOLATHE_WEBGPU_GO_TRACE_SECONDS")); e == nil && seconds > 0 {
+					var file *os.File
+					if file, e = os.Create(filepath.Join(opts.OutputDir, "go.trace")); e == nil {
+						if e = trace.Start(file); e == nil {
+							time.AfterFunc(time.Duration(seconds)*time.Second, func() { trace.Stop(); file.Close() })
+						}
+					}
+				}
 				if e != nil {
 					failure = e
 					app.Quit()
@@ -763,7 +774,7 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 	report["runtime_arrays"] = map[string]any{"requested": os.Getenv("NANOLATHE_WEBGPU_RUNTIME_ARRAYS") == "1", "enabled": runtimeModeAtInit["models"], "renderer_components_at_init": runtimeModeAtInit, "scope": "runtime-sized WGSL arrays need a render-size capability no stock wgpu provides; fixed arrays are used"}
 	report["storage_reservation"] = map[string]any{"enabled": storageReserveEnabled(), "model_buffer_floor_bytes": modelStorageReserveBytes, "glow_buffer_floor_bytes": glowStorageReserveBytes, "scope": "opt-in buffer reservation and fixed-array pipeline precompilation; normal growth retained, textures unchanged"}
 	report["diagnostic_neutral_pointer"] = neutralPointer
-	report["phase_timing_scope"] = map[string]any{"source_stages": []string{"host_step", "pin_presentation", "world_build_or_recull", "visuals", "foreground_hud", "frame_policy_projection", "composition_selection", "shadows", "visual_record_adapter", "visual_lighting_sources", "visual_record", "visual_adapt"}, "renderer_stages": []string{"targets", "models", "glow", "ground_fields", "layers", "distortions", "reflections", "lenses_paint", "commands"}, "scope": "CPU wall durations; source stages copied before starting next Next; overlapping source/render stages are not additive"}
+	report["phase_timing_scope"] = map[string]any{"source_stages": []string{"host_step", "pin_presentation", "world_build_or_recull", "visuals", "foreground_hud", "frame_policy_projection", "composition_selection", "shadows", "visual_record_adapter", "visual_lighting_sources", "visual_record", "visual_adapt", "effects_before_features", "effects_before_ground", "effects_strip5_effects", "effects_projectiles", "effects_fixed_strip7", "effects_strip8", "effects_strip9_debris_trails", "effects_light_sources"}, "renderer_stages": []string{"targets", "models", "glow", "ground_fields", "layers", "distortions", "reflections", "lenses_paint", "commands"}, "scope": "CPU wall durations; source stages copied before starting next Next; overlapping source/render stages are not additive"}
 	report["source_age_scope"] = "requested source sample timestamp and preparation completion to encode start; negative sample age is predictive lead; publication tick is latest committed tick, not a wall-age timestamp"
 	report["submission_failure_contract"] = "stock dependencies log deferred Finish/Submit failures without returning them; qualification requires clean logs and expected pixel readbacks"
 	report["submission_indices_at_close"] = map[string]uint64{"submitted": submittedAtClose, "completed": completedAtClose}

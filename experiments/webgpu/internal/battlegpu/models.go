@@ -55,6 +55,8 @@ type ModelCounters struct {
 	// Bytes written this frame per record family: instances (with shadow
 	// clones), selected materials, lights, slots, shadow subjects.
 	FamilyBytes [5]int
+	// Allocated body and shadow atlas extents (width, height each).
+	AtlasExtents [4]int
 }
 type modelMesh struct {
 	first, count         uint32
@@ -454,6 +456,21 @@ func modelAtlasRows(need int) int {
 	return min(8192, max(64, (need*5/4+511)&^511, need))
 }
 
+// modelAtlasReserve is the atlas height reserved up front for a drawable:
+// texels per drawable pixel (four for the 2x body raster, one for shadow
+// sources) at the packing width. Growth reallocates the atlas, and the frame
+// after costs 20-60 ms of GPU time; a busy 1440p field reaches these sizes
+// within seconds.
+func modelAtlasReserve(width, height, atlasWidth, texels int) int {
+	if modelAtlasNoReserve || atlasWidth <= 0 {
+		return 0
+	}
+	return min(8192, (width*height*texels/atlasWidth+511)&^511)
+}
+
+// Diagnostic: NANOLATHE_WEBGPU_ATLAS_RESERVE=0 grows from the need alone.
+var modelAtlasNoReserve = os.Getenv("NANOLATHE_WEBGPU_ATLAS_RESERVE") == "0"
+
 func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	nw, nh, change := modelAtlasFit(width, height, m.atlas.width, m.atlas.height, m.atlas.colorView != nil, &m.atlasShrink)
 	if !change {
@@ -483,28 +500,17 @@ func (m *Models) modelResizeAtlas(width, height int) (err error) {
 	if next.metadata, next.metadataView, err = m.modelCreateTexture("battle-model-source-keys", next.width, next.height, modelKeyFormat, usage); err != nil {
 		return err
 	}
-	if m.groupWork.count > 0 || m.atlas.merged != nil {
-		if next.merged, next.mergedView, err = m.modelCreateTexture("battle-model-merged-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
-			return err
-		}
+	// The merged plane is allocated with the atlas, not when the first group
+	// appears: a mid-battle allocation costs the GPU the same 20-60 ms stall
+	// as a growth.
+	if next.merged, next.mergedView, err = m.modelCreateTexture("battle-model-merged-atlas", next.width, next.height, wgpu.TextureFormatRGBA8Unorm, usage); err != nil {
+		return err
 	}
 	// Prepare follows host completion. Release the old group before its views
 	// and textures; atlas resources never enter the static/growth-tier owner.
 	m.modelReleaseCommitGroup()
 	m.atlas.modelClose()
 	m.atlas = next
-	return nil
-}
-func (m *Models) modelPrepareMergedAtlas() error {
-	if m.groupWork.count == 0 || m.atlas.merged != nil {
-		return nil
-	}
-	usage := wgpu.TextureUsageTextureBinding | wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageCopySrc
-	t, v, e := m.modelCreateTexture("battle-model-merged-atlas", m.atlas.width, m.atlas.height, wgpu.TextureFormatRGBA8Unorm, usage)
-	if e != nil {
-		return e
-	}
-	m.atlas.merged, m.atlas.mergedView = t, v
 	return nil
 }
 func (m *Models) modelArt(label string, t meshscene.Texture) (*wgpu.TextureView, error) {
@@ -1171,10 +1177,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 	m.modelDirectBands(f)
 	m.modelBatchSources(f)
 	split(0)
-	if e = m.modelResizeAtlas(aw, ah); e != nil {
-		return e
-	}
-	if e = m.modelPrepareMergedAtlas(); e != nil {
+	if e = m.modelResizeAtlas(aw, max(ah, modelAtlasReserve(width, height, max(aw, m.atlas.width), 4))); e != nil {
 		return e
 	}
 	split(1)
@@ -1265,6 +1268,7 @@ func (m *Models) Prepare(f meshscene.LiveFrame, width, height int) error {
 		return e
 	}
 	m.counters.FamilyBytes = [5]int{len(m.instanceBytes), len(m.selectedBytes), len(m.lightBytes), len(m.slotBytes), len(m.shadowBytes)}
+	m.counters.AtlasExtents = [4]int{m.atlas.width, m.atlas.height, m.shadowWork.atlas.width, m.shadowWork.atlas.height}
 	split(4)
 	if m.poseGroup == nil {
 		m.poseGroup, e = m.modelGroup(m.poseLayout, []wgpu.BindGroupEntry{{Binding: 0, Buffer: m.endpoints.buffer}, {Binding: 1, Buffer: m.poses.buffer}, {Binding: 2, Buffer: m.uniform, Size: modelUniformSize}})

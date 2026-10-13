@@ -11,7 +11,7 @@ type sourceRequest struct {
 	input   meshscene.Input
 }
 type preparedSource struct {
-	stages            [12]float64
+	stages            [20]float64
 	frame             meshscene.LiveFrame
 	milliseconds      float64
 	err               error
@@ -85,11 +85,11 @@ func sourceAheadBoundary(next, warmup, frames int) bool {
 }
 
 // Optional diagnostic values are copied while this worker still owns Next.
-func sourcePreparationTimings(source meshscene.LiveSource) [12]float64 {
-	if diagnostic, ok := source.(interface{ PreparationTimings() [12]float64 }); ok {
+func sourcePreparationTimings(source meshscene.LiveSource) [20]float64 {
+	if diagnostic, ok := source.(interface{ PreparationTimings() [20]float64 }); ok {
 		return diagnostic.PreparationTimings()
 	}
-	return [12]float64{}
+	return [20]float64{}
 }
 
 // physicalExtentSource is optional: fixed-frame sources retain their fixed

@@ -15,8 +15,12 @@ type modelPackingWork struct {
 
 // SetSourcePacking selects compact body-slot placement before Prepare. Logical
 // slot IDs, world paint order, group membership and exported shadow slots are
-// unchanged. Compact placement remains opt-in: moving hardware raster rectangles can
-// change interpolated edge rounding. False retains input-order placement.
+// unchanged. Moving hardware raster rectangles changes interpolated edge
+// rounding (0.16% of a 1440p field frame, scattered single pixels), but
+// height-ordered shelves need ~27% fewer rows, which keeps a busy 1440p field
+// inside a 2048x8192 atlas instead of a 256 MB 4096-wide growth and its
+// GPU stall. It is the driver's default; NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING=0
+// retains input-order placement.
 func (m *Models) SetSourcePacking(compact bool) { m.packingWork.compact = compact }
 
 // modelPackSlots allocates independent body sources and final subjects at 2x,

@@ -435,8 +435,10 @@ FOLLOWUP_REPORT.md and METAL_GAP_MEASUREMENTS.json for matched full-game Metal
 comparisons, fresh-presentation accounting and all successful/failed variants.
 Source prepare-ahead is explicit (`NANOLATHE_WEBGPU_PREPARE_AHEAD=1`); it has
 mixed performance and still waits for GPU completion per frame. Compact slot
-placement (`NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING=1`) halves Coast body memory
-but changes raster edges, so remains a diagnostic. `tools/build-play OUT
+placement halves Coast body memory but changes raster edges; since
+2026-10-13 it is the default (`NANOLATHE_WEBGPU_COMPACT_SLOT_PACKING=0`
+restores input order), because it keeps a busy 1440p field from growing its
+atlas mid-battle (CADENCE_ROUND.md). `tools/build-play OUT
 --metal-cache` builds a private exact-v0.34.2 cache patch for macOS arm64 ABI
 investigation; ordinary builds use unchanged pins. These experiments do not
 establish steady120Hz or qualify the real game on Linux, Windows or browser.
