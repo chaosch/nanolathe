@@ -382,6 +382,9 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 				renderer.models.SetSourcePacking(compactSlotPacking)
 				renderer.layers.coalesceEffects = !disableCoalesce
 				runtimeModeAtInit = map[string]bool{"models": renderer.models.runtimeArrays, "layers": renderer.layers.runtimeArrays, "glow": renderer.glow != nil && renderer.glow.runtimeArrays}
+				if os.Getenv("NANOLATHE_WEBGPU_DEBUG_FRAME") == "" {
+					releaseUploadedArt(scene)
+				}
 			}
 			coldMS = float64(time.Since(coldStart).Nanoseconds()) / 1e6
 			if failure != nil {
@@ -809,4 +812,17 @@ func writeRows(path string, rows []drawRow) error {
 	}
 	w.Flush()
 	return w.Error()
+}
+
+// releaseUploadedArt drops the CPU pixels of art the renderer has uploaded
+// and never reads again: the model texture atlas and the terrain tile and
+// detail atlases (~0.5 GB in a remastered 1440p field, half of the live heap
+// at the start of play, and the bulk of a browser tab's wasm memory).
+// Dimensions stay. The debug frame dump serializes the model atlas, so it
+// keeps them.
+func releaseUploadedArt(scene *meshscene.Scene) {
+	scene.Atlas.RGBA = nil
+	if t := scene.TerrainTiles; t != nil {
+		t.Atlas.RGBA, t.Detail.RGBA = nil, nil
+	}
 }
