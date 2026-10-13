@@ -13,7 +13,61 @@ measurements, fidelity gaps and failed gates. It preserves the P0–P4 dependenc
 verdict below and does not start the production migration.
 
 The later opt-in interactive ordering seam and explicit engine-archive build are
-documented in [INTERACTIVE_LATE_ACQUISITION.md](INTERACTIVE_LATE_ACQUISITION.md).
+documented in [INTERACTIVE_LATE_ACQUISITION.md](INTERACTIVE_LATE_ACQUISITION.md);
+its deferred-host patch is superseded by stock late acquisition (below).
+
+## Stock dependencies — 2026-10-12
+
+The prototype now builds and plays on the stock pinned GoGPU and wgpu; no
+dependency fork is needed. These renderer changes replaced the owned-submission
+and deferred-acquire patches:
+
+- **Staged texture rewrites** (`internal/battlegpu/uploads.go`). Stock
+  `Queue.WriteTexture` writes a host-visible texture at once, and every
+  single-sampled texture on an Apple GPU is shared memory, so rewriting an atlas
+  could race a frame in flight. Rewrites of textures earlier frames sampled
+  (fog grid, HUD overlay and effect atlases, the standalone glow atlas) are
+  packed into one reused arena with 256-byte rows, uploaded with one chunked
+  `Queue.WriteBuffer` (always staged and ordered with GPU work) and copied by
+  `CopyBufferToTexture` on the frame's encoder before any pass. A texture
+  created the same frame is still written directly. Rectangles stay pending
+  until an encoder records them, so a frame that loses its drawable never
+  leaves a consumed atlas version unwritten.
+- **No per-frame completion wait.** wgpu v0.34.2 defers releasing textures,
+  views and shader modules to the last submission index and keeps buffers, bind
+  groups and pipelines alive by reference until their submissions complete, so
+  replaced atlases and buffers outlive the frames that used them. Resize,
+  capture and teardown keep their `WaitIdle`.
+- **Chunked model uploads.** Large mutable model writes are split at the
+  staging belt's 256 KiB chunk size; stock wgpu otherwise allocates a one-off
+  staging buffer for each larger write.
+- **Late acquisition on the stock host.** GoGPU acquires the drawable lazily on
+  the first `CommandEncoder()`/`SurfaceView()` call. With
+  `NANOLATHE_WEBGPU_LATE_ACQUIRE=1` the driver requests them only inside the
+  acquisition callback, after preparation and the source handoff. An
+  unavailable drawable leaves the prepared frame unshown (its source is never
+  reread; its staged copies stay pending). GoGPU replays a callback once when a
+  present finds the surface outdated; the driver detects that from GoGPU's frame
+  statistics and re-presents the last prepared frame with `Renderer.Redraw`,
+  consuming no source or input and keeping the pacing deadline.
+
+What remains patched, why, and the stock-versus-patched measurements are in
+[patches/README.md](patches/README.md). In short: the browser build's write
+staging is required; the Metal pointer cache (`--metal-cache`) is an optional
+macOS arm64 speed-up worth 2–3.5 Hz at 1440p, with which stock matches the
+former patched build; the presented-handler and GPU-timing patches are
+measurement-only.
+
+```sh
+# Shipping-shaped macOS build (stock pins plus the optional pointer cache):
+GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --metal-cache
+# Add --present-handler --gpu-timing only to measure presentation and GPU time.
+NEW_DIR/run-play --fast -- --root="$HOME/TotalAnnihilation" --map='Town & Country'
+```
+
+`run-play --fast` selects prepare-ahead, storage reservation, late acquisition
+and GOMAXPROCS between 4 and 8 on every native target; `--no-late-acquire`
+selects the early-acquisition control.
 
 ## Dependency qualification — 2026-10-10
 
@@ -388,11 +442,10 @@ investigation; ordinary builds use unchanged pins. These experiments do not
 establish steady120Hz or qualify the real game on Linux, Windows or browser.
 
 
-Owned-upload follow-up: `tools/build-play NEW_EXTERNAL_DIR --owned-submission
-[--metal-cache]` creates guarded private dependencies. `NANOLATHE_WEBGPU_ASYNC_UPLOADS=1`
-removes per-draw completion only with both reviewed contracts and reviewed Metal;
-resize/capture/shutdown still check completion. See FOLLOWUP_REPORT.md and
-OWNED_UPLOAD_MEASUREMENTS.json. Matched Coast improved100.92→115.99 callback Hz,
+Owned-upload follow-up (historical; the patches were removed on 2026-10-12, see
+"Stock dependencies" above): guarded private dependencies with
+`NANOLATHE_WEBGPU_ASYNC_UPLOADS=1` removed per-draw completion. See
+FOLLOWUP_REPORT.md and OWNED_UPLOAD_MEASUREMENTS.json. Matched Coast improved100.92→115.99 callback Hz,
 and source-ahead reached119.53Hz with identical final image/state/GPU fields.
 Dense fixed Field3000 reached87.06Hz; steady120FPS remains unproven. Public buffer
 writes were already staged: the repairs cover mutable texture staging, pending
@@ -403,48 +456,40 @@ intrinsically needed. Browser threading is deferred per user preference.
 
 ### Optional bounded storage reservation
 
-`NANOLATHE_WEBGPU_RESERVE_STORAGE=1` moves capacity-dependent model/effect shader compilation to setup by reserving less than 24 MiB of mutable buffer tiers. Texture planes and resident geometry/explicit UVs are unchanged; larger workloads retain ordinary growth. It is opt-in. Use the reviewed ownership build for asynchronous uploads. `FOLLOWUP_REPORT.md` and `STORAGE_RESERVATION_MEASUREMENTS.json` contain the fixed-state pixel, native growth, memory and timing qualification.
+`NANOLATHE_WEBGPU_RESERVE_STORAGE=1` moves capacity-dependent model/effect shader compilation to setup by reserving less than 24 MiB of mutable buffer tiers. Texture planes and resident geometry/explicit UVs are unchanged; larger workloads retain ordinary growth. It is opt-in and part of `run-play --fast`. `FOLLOWUP_REPORT.md` and `STORAGE_RESERVATION_MEASUREMENTS.json` contain the fixed-state pixel, native growth, memory and timing qualification.
 
 For repeatable native comparisons, point `NANOLATHE_SETTINGS` at a private settings snapshot with nominal `gameSpeed: 10`; do not edit saved preferences. The bounded interactive field diagnostic additionally uses `NANOLATHE_WEBGPU_BENCHMARK_NEUTRAL_POINTER=1`, `--live-scene=field:1000`, normal `--zoom=1`, and a fresh report directory. Callback Hz is not presentation Hz.
 
 The authored native oracle accepts `-pose-growth` to test 40,000-pose growth above the reservation and shrink-back, with exact pixel checks and GPU tail-pose readback. Standalone coverage uses CGO_ENABLED=0 without the combined game command's `nofakecgo` tag.
 
 
-Optional render runtime arrays can be built on qualified macOS arm64 using `tools/build-play NEW_EXTERNAL_OUTPUT --render-runtime`. This copies and verifies the exact pinned dependencies, applies owned-upload and pointer-cache diagnostics, then checks every base/result hash around the render-runtime patch. Run with `NANOLATHE_WEBGPU_RUNTIME_ARRAYS=1` to select standard runtime-sized WGSL storage arrays. The flag defaults off; pristine pins, other native backends, Intel Mac, Rust and browser builds retain the fixed-array fallback. No platform worker or browser execution changes are introduced.
+Optional render runtime arrays (historical): the `--render-runtime` patch that
+supplied Metal render-size metadata was removed on 2026-10-12. Without it every
+build uses the fixed-array path; `NANOLATHE_WEBGPU_RUNTIME_ARRAYS=1` has no effect.
 
 The runtime path passed native binding/offset tests, the19-case model/UV growth oracle with zero growth pipeline creation, and byte-equal Coast state/final pixels/18 GPU sidecars. It keeps meshes and explicit UVs resident. Current dense performance is near119 callbacks/s with encoding CPU above the reservation reference; neither callback FPS nor this optional path establishes actual presentation. Exact measurements and scopes are in `RUNTIME_ARRAY_MEASUREMENTS.json`.
 
 
 ### Current reproducible native prototype
 
-On the qualified macOS arm64 host, from this worktree:
+On macOS arm64, from this worktree:
 
 ```sh
-experiments/webgpu/tools/build-play /tmp/nanolathe-play --present-handler
-GOMAXPROCS=4 NANOLATHE_WEBGPU_ASYNC_UPLOADS=1 \
-NANOLATHE_WEBGPU_PREPARE_AHEAD=1 NANOLATHE_WEBGPU_RESERVE_STORAGE=1 \
-NANOLATHE_WEBGPU_RUNTIME_ARRAYS=0 \
-NANOLATHE_WEBGPU_PRESENT_TELEMETRY=1 \
-/tmp/nanolathe-play/nanolathe-webgpu --root="$HOME/TotalAnnihilation" \
-  --webgpu --map='Town & Country' --zoom=1 \
-  --webgpu-report=/tmp/nanolathe-play-report
+experiments/webgpu/tools/build-play /tmp/nanolathe-play --metal-cache
+/tmp/nanolathe-play/run-play --fast -- --root="$HOME/TotalAnnihilation" \
+  --map='Town & Country' --webgpu-report=/tmp/nanolathe-play-report
 ```
 
-The output build directory must be new. `--present-handler` verifies and applies
-all reviewed private dependency prerequisites: owned submission, Metal pointer
-cache, render-size metadata and the bounded presentation handler. It also
-verifies the external driver overlay. It installs no dependency or plugin and
-never patches the module cache or shipping renderer. The helper produces a
-binary, `.app` bundle and exact source/module/patch manifest. Go1.27.1 is required.
-
-This command uses the measured fixed-array reservation path; runtime WGSL arrays
-remain off. Add `NANOLATHE_WEBGPU_RUNTIME_ARRAYS=1` only for the qualified optional
-growth-stall alternative. Preparation, reservation, asynchronous uploads and
-telemetry all remain opt-in; public API safety markers reject unsupported async
-builds and retain the fixed-array fallback when runtime metadata is unavailable.
-The build option alone does not enable those runtime modes. Ordinary interactive
-play reads the user's current settings; the benchmark evidence used a private
-nominal-speed10 snapshot and must not be extrapolated to different game speeds.
+The output build directory must be new. Without flags the build uses the stock
+pinned dependencies unchanged; `--metal-cache` applies the pointer-cache patch
+to a private copy of wgpu, and `--present-handler`/`--gpu-timing` add the
+measurement-only diagnostics (`run-play --telemetry`/`--gpu-timing` turn them
+on). The helper produces a binary, `.app` bundle and exact
+source/module/patch manifest; it installs nothing and never patches the module
+cache or the shipping renderer. Go 1.27.1 is required. Ordinary interactive
+play reads the user's current settings; benchmark evidence uses a private
+nominal-speed-10 snapshot (`NANOLATHE_SETTINGS`) and must not be extrapolated to
+other game speeds.
 
 The generated production-source host supports serial programmatic resize:
 join old preparation, preserve its terminal/error result, update client/HUD and
@@ -459,24 +504,23 @@ measured improvement is allocations and CPU tails.
 
 ### Explicit launch profiles
 
-A fresh `tools/build-play ... --present-handler` output includes `run-play`.
-Use the packaged launcher to avoid an environment-variable list:
+Every `tools/build-play` output includes `run-play`:
 
 ```sh
-/tmp/nanolathe-fast-ready/run-play --fast --telemetry -- \
-  --root="$HOME/TotalAnnihilation" --map='Town & Country' --zoom=1
+BUILD/run-play --fast [--no-late-acquire] [--telemetry] [--gpu-timing] -- \
+  --root="$HOME/TotalAnnihilation" --map='Town & Country'
 ```
 
 Or invoke `experiments/webgpu/tools/run-play --build BUILD_DIRECTORY --fast ...`.
-Omit `--fast` for the baseline profile and `--telemetry` for no handler observations.
-The launcher verifies the binary digest and required build prerequisites, clears
-only inherited prototype diagnostic variables, and explicitly keeps runtime
-arrays off. Fast sets GOMAXPROCS=4, owned asynchronous uploads, preparation
-ahead and storage reservation. It preserves `NANOLATHE_SETTINGS` and never writes
-saved preferences. `execve` keeps signal cleanup attached to the launched process.
-The build records the packaged launcher's digest; runtime checks verify the binary.
-`--neutral-pointer` is restricted by the renderer to a bounded interactive field
-diagnostic; it is not ordinary-play or fixed-benchmark input.
+Omit `--fast` for the baseline profile. `--fast` sets prepare-ahead, storage
+reservation, late acquisition and GOMAXPROCS between 4 and 8; it needs no
+dependency patch, so it is the speed profile on every native target. The
+launcher verifies the binary digest, refuses telemetry flags for builds without
+the matching diagnostic, clears only inherited prototype diagnostic variables,
+preserves `NANOLATHE_SETTINGS` and never writes saved preferences. `execve`
+keeps signal cleanup attached to the launched process. `--neutral-pointer` is
+restricted by the renderer to a bounded interactive field diagnostic; it is not
+ordinary-play or fixed-benchmark input.
 
 One native width drag and a minimize/Raise visible-recovery sequence were
 observed through supported accessibility controls. The UI sessions closed with
@@ -491,13 +535,9 @@ selected post-close descriptors and handler routes drained. This is bounded
 short-run accounting, not an all-native-memory leak proof.
 
 
-The explicit `run-play --fast` profile also uses completion-owned reusable
-staging chunks for mutable model uploads. Six3600-frame same-binary controls at
-one camera and seed reduced median average CPU encoding1.571→1.340ms; they do
-not establish sustained120FPS. `--no-chunked-uploads` selects the diagnostic
-control while retaining the other fast modes. Ordinary baseline launches and
-unsupported-platform fallbacks retain original uploads. The bounded
-`--neutral-pointer` field control also suppresses shake via the existing NoShake
-switch, affecting diagnostic CRT chronology; compare both sides with the same
-control. See TAIL_PROFILE_MEASUREMENTS.json for exact source/build hashes,
-presentation duplicates, matched tick windows and partial memory accounting.
+Chunked mutable model uploads: large model writes are split at the staging
+belt's 256 KiB chunk size so they reuse completed chunks instead of one-off
+staging buffers. Introduced with the owned-upload profile, they are now on by
+default on the stock pins (`NANOLATHE_WEBGPU_CHUNKED_UPLOADS=0` is the control)
+and worth about 12 Hz on the zoomed-out 1440p field (patches/README.md).
+TAIL_PROFILE_MEASUREMENTS.json keeps the original evidence.

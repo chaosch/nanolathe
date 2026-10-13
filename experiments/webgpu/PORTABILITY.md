@@ -7,7 +7,7 @@ and js/wasm from one `tools/build-play`. Runtime evidence on this host:
 | Target | Build | Runtime evidence | State |
 |---|---|---|---|
 | macOS arm64, Metal, stock GoGPU/wgpu | yes | bounded 600-frame field runs, capture renders units, terrain, features, HUD | works |
-| macOS arm64, Metal, patched (`--fast`) | yes (`--gpu-timing` build) | not rerun here (unchanged path) | unchanged |
+| macOS arm64, Metal, stock + `--metal-cache`, `run-play --fast` | yes | 1440p 3,000-unit field, alternating against the former patched build (patches/README.md) | works; no dependency fork |
 | macOS arm64, Vulkan via MoltenVK (Linux/Windows proxy) | `--vulkan-proxy` | adapter, device, swapchain; shaders compile after a diagnostic rewrite | blocked: V3–V6 below |
 | linux/amd64 | yes (ELF, dynamically linked loader, CGO 0) | none (no hardware here) | compile only; V3–V6 expected on Vulkan |
 | windows/amd64 | yes (PE32+) | none | compile only; V4–V5 risks on DX12 and Vulkan |
@@ -15,13 +15,15 @@ and js/wasm from one `tools/build-play`. Runtime evidence on this host:
 
 Nothing here is a hardware qualification beyond the runs listed. No module
 requirement changed; dependency edits exist only in external build outputs.
+Since 2026-10-12 every target plays on the stock pins: the owned-submission and
+deferred-acquire patches are gone (see §1 and patches/README.md).
 
 ## Building and running
 
 ```sh
 # Native (default target = host toolchain), stock pinned dependencies:
 GOWORK=off experiments/webgpu/tools/build-play NEW_DIR
-# Other targets (patch flags are refused for non-darwin targets):
+# Other targets (the macOS diagnostic patch flags are refused here):
 GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --goos=linux --goarch=amd64
 GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --goos=windows --goarch=amd64
 GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --goos=js --goarch=wasm
@@ -29,7 +31,7 @@ GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --goos=js --goarch=wasm
 GOWORK=off experiments/webgpu/tools/build-play NEW_DIR --vulkan-proxy
 
 # Launch (refuses another platform's build and js/wasm):
-NEW_DIR/run-play [--stock-fast | --fast ...] -- --root=… '--map=Town & Country'
+NEW_DIR/run-play [--fast ...] -- --root=… '--map=Town & Country'
 # Browser: serve a js/wasm output and open http://127.0.0.1:PORT/
 experiments/webgpu/tools/serve-battle --build JS_DIR --root ~/TotalAnnihilation \
   --out NEW_RESULTS_DIR --port 8767 --args '{"argv":["--webgpu","--map=Town & Country",
@@ -50,27 +52,45 @@ NANOLATHE_SETTINGS=<private copy> GOMAXPROCS=4 tools/host-run BUILD/nanolathe-we
 exits with status 2 and prints nothing. In the WebGPU host the entry camera then
 moves off the coastal scene, so field + neutral pointer is the usable smoke.
 
-## 1. Stock dependencies on macOS
+## 1. Stock dependencies
 
-A build with no patch flags plays and captures normally (draws 720 = 120
-warm-up + 600, no run error, 47 model instances, 77 feature sprites, HUD,
-minimap and cursor present). `NANOLATHE_WEBGPU_PREPARE_AHEAD=1` and
-`NANOLATHE_WEBGPU_RESERVE_STORAGE=1` need no patch and work on stock
-(718/720 frames prepared ahead); `run-play --stock-fast` selects them and is the
-speed profile available on every target but the browser.
+Every target now builds and plays on the stock pinned GoGPU and wgpu.
+`run-play --fast` (prepare-ahead, storage reservation, late acquisition,
+GOMAXPROCS between 4 and 8) needs no dependency patch and is the speed profile
+on every native target. What used to need the owned-submission and
+deferred-acquire patches is now done by the renderer and driver:
 
-What stock lacks against `--fast`, all behind existing runtime checks:
+- **Texture rewrites are staged by the renderer** (`uploads.go`). Rewrites of
+  textures earlier frames sampled are packed into one arena with 256-byte rows
+  and 512-byte region offsets (the strictest buffer-to-texture placement any
+  backend asks for, DX12's), uploaded with `Queue.WriteBuffer` in 256 KiB
+  pieces and copied with `CommandEncoder.CopyBufferToTexture` on the frame's
+  encoder before any pass. Both calls exist with the same meaning on the
+  native HALs (Metal, Vulkan, DX12), wgpu-native and the browser; in js/wasm
+  the write goes through build-play's staging edit. Textures created in the
+  same frame keep `Queue.WriteTexture`.
+- **No per-frame completion wait.** Releasing a replaced texture, view, shader
+  module, buffer, bind group or pipeline is deferred by wgpu until the
+  submissions that used it complete (native); browsers defer `destroy()` the
+  same way. Resize, capture and teardown keep their `WaitIdle`.
+- **Late acquisition** uses GoGPU's lazy acquire: the driver requests the
+  encoder and drawable only after preparation. GoGPU's one replay after an
+  outdated present re-presents the last prepared frame (`Renderer.Redraw`).
+- **Model uploads** are split at the staging belt's 256 KiB chunk size, which
+  keeps large writes off one-off staging buffers on every staged backend.
 
-- owned asynchronous uploads (`ASYNC_UPLOADS`): stock waits for the whole device
-  before encoding every frame (`CompletionWaitMS`);
-- completion-safe chunked model uploads, late drawable acquisition, the Metal
-  pointer cache and runtime-sized WGSL arrays;
-- presented-time and GPU command-buffer telemetry;
-- submission failures returned from `Run` (stock GoGPU logs them), the deferred
-  frame replay prohibition and the same-size surface reconfigure fix.
+What stock still lacks: Metal pointer-call caching (optional `--metal-cache`,
+macOS arm64), presented and GPU timestamps (measurement-only
+`--present-handler`/`--gpu-timing`), runtime-sized WGSL arrays (fixed arrays
+are used), submission failures returned from `Run` (GoGPU logs them), and
+reconfiguring a surface restored at its old size after a zero-size event
+(GoGPU skips that same-size resize; macOS does not report a zero size on
+minimize, and a stock build played through a minimize/restore and four live
+resizes).
 
-Effects were not exercised: the field armies do not engage within 600 frames
-(tick ~200), and `--live-speed` does not shorten that in this host.
+Effects were not exercised in the original 600-frame stock smoke: the field
+armies do not engage within 600 frames (tick ~200). The 3,600-frame
+measurement runs do reach combat.
 
 ## 2. Driver portability
 
@@ -94,8 +114,8 @@ only the portable GoGPU/wgpu API. Small platform files hold what differs:
   Browser adapters also report an empty backend and are exempt.
 - Reports add `target`, `graphics_backend`, measured `layer_contents_scale`,
   `host_paces_frames` and `profiles_recorded`.
-- Patch-only features (owned uploads, late acquisition, telemetry, runtime
-  arrays, pointer cache) keep their interface assertions and stay off on stock.
+- Measurement-only diagnostics (presented and GPU timing) are reached through
+  interface checks and are absent on stock builds; nothing else is patch-only.
 
 ## 3. Portable host build
 
@@ -234,7 +254,7 @@ Remaining steps for a real browser target:
 
 - Stock Metal: `run-stock-metal-2/` (field camera), `run-stock-metal-3-prepare/`
   (prepare-ahead + reservation), `run-final-metal-stockfast2/` (final tree via
-  `run-play --stock-fast`); `run-stock-metal-1/` shows the entry camera without units.
+  `run-play --stock-fast`, the profile now named `--fast`); `run-stock-metal-1/` shows the entry camera without units.
 - Builds: `final-{darwin-arm64,linux-amd64,windows-amd64,js-wasm}/` with manifests;
   `build-darwin-fast/` (patched `--gpu-timing`, builds); `build-darwin-vulkan2/` (proxy).
 - Vulkan: `run-vulkan-loader-4.log` (V2), `run-vulkan-direct-1.log` (V3),

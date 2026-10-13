@@ -304,13 +304,15 @@ func Run(scene *meshscene.Scene, opts Options) (map[string]any, error) {
 			// A focus change or stall leaves a prepared sample whose instant has
 			// passed. Discard it after its serial Next joins; input and state that
 			// Next consumed are never replayed.
+			if preparer != nil && preparer.pending {
+				staleSources++
+			}
 			terminal, err := dropPreparedSource(preparer)
 			if err != nil || terminal {
 				failure = err
 				app.Quit()
 				return
 			}
-			staleSources++
 			next = entry
 		}
 		lastLifecycleEpoch = epoch
