@@ -704,11 +704,11 @@ func validateMetalOptions(opts Options) error {
 		return fmt.Errorf("nanolathe: --metal-report, --metal-model-capture and --metal-frames require --metal")
 	}
 	if opts.Metal {
-		if opts.Map == "" && opts.Mission == "" {
-			return fmt.Errorf("nanolathe: --metal plays one battle and requires --map or --mission")
+		if (opts.Map != "" || opts.Mission != "") == (opts.LoadSave != "") {
+			return fmt.Errorf("nanolathe: --metal plays one battle and requires one of --map, --mission or --load-save")
 		}
-		if opts.Shot != "" || opts.ShotModel != "" || opts.Headless || opts.LoadSave != "" {
-			return fmt.Errorf("nanolathe: --metal cannot be combined with --shot, --headless or --load-save")
+		if opts.Shot != "" || opts.ShotModel != "" || opts.Headless {
+			return fmt.Errorf("nanolathe: --metal cannot be combined with --shot or --headless")
 		}
 		if opts.MetalModelCapture != "" && opts.MetalReport == "" {
 			return fmt.Errorf("nanolathe: --metal-model-capture requires --metal-report")

@@ -20,6 +20,15 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/session"
 )
 
+// metalMapName names the terrain the scene retains: the --map battle's, or
+// the restored mission's own terrain key.
+func metalMapName(opts Options, sess *session.Session) string {
+	if opts.Map == "" && sess.Mission != nil {
+		return sess.Mission.TerrainKey
+	}
+	return opts.Map
+}
+
 // runMetal plays one battle in the native Metal renderer
 // (docs/DESIGN_METAL_RENDERER.md). It changes the window and draw executor
 // only: the ordinary shell owns battle composition, input service, HUD, audio
@@ -39,7 +48,11 @@ func runMetal(opts Options, cs *contentSet) error {
 	}
 	opts.Renderer, opts.RendererSet = "modern", true
 	opts.Arrival, opts.ArrivalSet = false, true
-	shell, cl, err := newDirectBattleView(opts, cs)
+	newView := newDirectBattleView
+	if opts.LoadSave != "" {
+		newView = newDirectSaveView
+	}
+	shell, cl, err := newView(opts, cs)
 	if err != nil {
 		return err
 	}
@@ -64,7 +77,10 @@ func runMetal(opts Options, cs *contentSet) error {
 	logicalW, logicalH := width/2, height/2
 	cl.Resize(logicalW, logicalH)
 	battle.setSurfaceSize(int32(logicalW), int32(logicalH))
-	battle.placeEntryCamera(logicalW, logicalH)
+	// A restored save keeps the camera it was saved with.
+	if opts.LoadSave == "" {
+		battle.placeEntryCamera(logicalW, logicalH)
+	}
 	cl.SetEnhanced(true)
 	cl.SetInterpolation(true)
 	cl.SetAsyncSimulation(true)
@@ -74,7 +90,7 @@ func runMetal(opts Options, cs *contentSet) error {
 	display := cl.DisplayPalette()
 	worldGamma := cl.GammaFactor()
 	terrainSources := cl.BattleTerrainSources()
-	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: cl.BattleFeatureDetail(), LoadOptions: meshscene.LoadOptions{Map: opts.Map, MaterialSource: metalMaterialSource(cl)}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
+	scene, retained, err := meshscene.RetainBattle(meshscene.BattleOptions{DisplayPalette: &display, DetailSprites: cl.BattleFeatureDetail(), LoadOptions: meshscene.LoadOptions{Map: metalMapName(opts, sess), MaterialSource: metalMaterialSource(cl)}, Width: width, Height: height, Zoom: 2}, cs.unmappedMount, battle.sess)
 	if err != nil {
 		return err
 	}
