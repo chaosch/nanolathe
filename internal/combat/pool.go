@@ -257,6 +257,12 @@ type Service struct {
 	// ProjectileWind is the session-owned wind used by ballistic admission.
 	// Its phase-8 deadline bounds future wind knowledge [01 §7.3].
 	ProjectileWind *world.Wind
+	// AirBoard is the Modern aircraft tactics' shared board (modern_air.go),
+	// the same one movement's pilots write. Only ModernRules reads or writes
+	// it; it is transient and never saved.
+	AirBoard        *AirBoard `json:"-"`
+	airClaimScratch []airClaimView
+	airReachScratch []Candidate
 
 	Slots   pool.Projectiles // sole count/dead authority (I5) [06 §5.1]
 	Records []Projectile     // named records parallel to Slots
@@ -276,6 +282,9 @@ type Service struct {
 	// firingPosition belongs only to the most recent unit weapon visit.
 	// It is transient Modern observation, never saved or indexed by unit.
 	firingPosition firingPositionObservation
+	// firingPreview is candidate-local storage, saved and restored across nested
+	// previews. It carries no observation or state outside the active call.
+	firingPreview firingPositionPreview
 
 	events      func(Event)               // optional ordered combat event sink; nil-safe
 	pendingAims map[pendingKey]pendingAim // Aim dispatch tracking ON-04 [06 §3.3]

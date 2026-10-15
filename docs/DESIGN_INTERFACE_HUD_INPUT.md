@@ -15,6 +15,50 @@ tick, and the citation routing that names this document as the home of
 `[P0-I14]` — picking, selection and HUD commands — and, jointly with
 DESIGN_PRESENTATION_CLIENT, of `[F-P1-008]`, defined in §3.5 below.
 
+## Modern economy breakdown
+
+The Enhanced presentation's metal and energy readout areas open an anchored
+dropdown. This is an explanation of the last settled resource report, not a
+claim that the ledger is wrong. Production and demand have separate percentage
+denominators. Demand means requests, not necessarily payments; immediate costs,
+unpaid carry, sharing and storage overflow can explain differences from the
+change in stock. An explicit note carries this distinction.
+
+Generation, reclaim, construction, weapons, upkeep, healing and cloaking are
+reported from observed ledger activity. Rows show amount, percentage and
+contributor count, with the largest contributors emphasized. Clicking a row's
+label selects and centers successive current owned contributors in descending
+amount order, with allocation identity as a stable tie-break. Reopening or
+switching resource begins with the largest. Dead, captured and reused slots
+cannot become navigation targets. The panel never navigates to another
+player's hidden units; an unattributed balance is explanatory text, not a
+fabricated unit.
+
+Each activity row begins with a separate media-style control: two pause bars
+while running, an amber play triangle while paused. Holds have no time limit,
+and paused rows are explicitly labelled. Pause bars beside both resource
+labels pulse between yellow and dim grey once per second while the viewing
+player has any paused activity. The pulse uses sampled host time, independently
+of game speed, and never hides the reminder entirely. Clicking either reminder
+opens its dropdown to identify the paused activities. Metal and energy share
+the same activity hold. This control is available only when the selected
+gameplay rule set permits it and the viewer controls that player; playback and
+observer views are read-only. Upkeep explains that only switchable structures
+are shut down and remaining mandatory costs still apply. Generation explains
+that operating costs continue. The underlying policy is
+[Modern economy explanation and temporary activity holds](DESIGN_ECONOMY_CONSTRUCTION.md#modern-economy-explanation-and-temporary-activity-holds).
+
+The panel paints above battle captions so messages cannot obscure its controls.
+It captures its entire pointer gesture, including release outside the
+panel, so it cannot issue an order behind itself. Escape, outside click or
+clicking the same resource again closes it; switching resources changes the
+open report. Closing the panel does not cancel holds. The Original renderer
+keeps its existing HUD input and appearance. Geometry uses the same chrome
+transform for painting and hit testing, with a smaller integer overlay scale
+when the rail's chosen magnification would clip the dropdown. Tests cover sorting, percentages,
+identity/ownership, capture, independent row controls, mode gates and visual
+inspection at compact and scaled HUD sizes.
+
 ## 1. Purpose and boundary
 
 These packages answer three questions, and nothing else:
@@ -2636,7 +2680,7 @@ count through the same installed-art resolver used by painting. No held-key
 fallback supplies a palette command `[07 §2]` `[07 §9]` `[07 R-WGT-01 §3]` `[07 R-HUD-03 §6]`.
 `\`, `Ctrl+F10` and
 F11 are developer mode, `Ctrl+F9` is a screenshot with no in-battle writer,
-`h` is the multiplayer share dialog and remains out of scope. Unclaimed Enter
+`h` opens the share dialog in an online battle only (§3.9). Unclaimed Enter
 opens the single-player TALK editor through partial I10 (§3.9)
 `[07 §5 "Chat"]` `[07 R-CAM-01 §9]`.
 
@@ -2683,7 +2727,7 @@ evidence only.
 | Orders | Previous / next build page `,` / `.`, plus this build's Page Down / Page Up; Self-destruct Ctrl+D | census rows above; the page keys' host extras in `handleBattleShortcuts` |
 | Selection | Select all Ctrl+A, commander Ctrl+C, on screen Ctrl+S, same type Ctrl+Z; `CTRL_B`, `CTRL_E`…`CTRL_R`, `CTRL_T`…`CTRL_Y` category selects on their Ctrl letters | census rows `[07 R-CAM-01 §2]` |
 | Camera | Follow next / previous `t` / `T`; next unvisited `n`; message source F3; store bookmarks 1–4 Ctrl+F5–F8 and recall F5–F8; zoom step F9 | census rows; F9 is the host extension of §3.8 |
-| Game | Options F2; options, resume or megamap Tab; Pause; speed `+` `=` / `-` `_`; label every unit `` ` `` `~` `!` `#` `*`; unit information F1; score panel F4; clear messages F12; chat Enter; switch renderer F10 | census rows; Enter opens TALK (§3.9); F10 is the host extension of DESIGN_GPU_RENDERER §14.6 |
+| Game | Options F2; options, resume or megamap Tab (online, the Tab strip with Options or F2 with Overview; Share `h`, §3.9); Pause; speed `+` `=` / `-` `_`; label every unit `` ` `` `~` `!` `#` `*`; unit information F1; score panel F4; clear messages F12; chat Enter; switch renderer F10 | census rows; Enter opens TALK (§3.9); F10 is the host extension of DESIGN_GPU_RENDERER §14.6 |
 | Fixed | Recall group or build page 1–9; assign group Ctrl+1–9; cancel or deselect Escape; scroll arrows; slide the rails Space (held) | shown for reference, never rebound |
 
 Fixed keys are held-key queries (arrows, Space), modifier-read multiplexers
@@ -2692,7 +2736,7 @@ the options window's and TALK's own cancel key, so rebinding it on the
 residual path alone would split its meaning. No action may take a Fixed key.
 Options (F2) and Unit information (F1) act only with Shift up, which the
 rewrite cannot change, so a shifted chord is never bound to them.
-The developer keys (`\`, Ctrl+F9, Ctrl+F10, F11) and the out-of-scope `h`
+The developer keys (`\`, Ctrl+F9, Ctrl+F10, F11) and the online-only `h`
 are not catalogued. They pass through unchanged, and binding an action to
 one of them takes the key.
 
@@ -2935,9 +2979,10 @@ by a simulation phase, and is not saved [I6].
   with no modal open and the pointer off the minimap, and only while the modern
   executor presents, Smooth multiplies the target by 1.25 per upward
   notch or divides it by 1.25 per downward notch, clamped to full map..2×.
-  Pinch and wheel share a configurable snap band: near targets and crossings
-  land immediately on the preferred stop, defaulting to exactly 1×. Controls →
-  Mouse owns Zoom lock (`presentation.zoomLockPercent`, default 100); 120
+  Wheel targets near or crossing the preferred stop snap immediately to it,
+  defaulting to exactly 1×. Smooth pinch stops only on reaching or crossing
+  that factor, with no snap band or resistance to leaving on a fresh gesture.
+  Controls → Mouse owns Zoom lock (`presentation.zoomLockPercent`, default 100); 120
   chooses approximately 1.2× and replaces the native stop in both Smooth and
   Steps. Camera zoom also offers No zoom: fixed native 1×, no pinch, wheel,
   F9 or whole-map Tab zoom, with panning intact and Tab opening Options.
@@ -2946,8 +2991,9 @@ by a simulation phase, and is not saved [I6].
   milliseconds of quiet before a new burst can leave the stop; pinch needs a
   fresh gesture. The world point under the pointer stays put within the camera bounds. Camera zoom
   centres an axis while the whole map fits on it, then limits panning to its
-  edges; those bounds take precedence over cursor anchoring and are applied
-  continuously during zooming (DESIGN_GPU_RENDERER §16.7). Fractional wheel travel banks
+  edges. Zooming in retains the point selected in that overview until the
+  bounds allow it under the cursor; the displayed view obeys the bounds at
+  every sample (DESIGN_GPU_RENDERER §16.7). Fractional wheel travel banks
   until it is worth a notch. The live wheel factor eases toward its target
   on the host Update grid; pinch follows the fingers directly. The
   classic executor takes no wheel zoom at all.
@@ -3051,7 +3097,7 @@ as local chat. The implemented handlers are:
 | `AntiAlias`, `Shading`, `Shadow` | toggle the independent live display bit and persist immediately |
 | `Gamma n` | apply the command factor to the shared output palette and persist the signed integer; startup and slider callbacks use their distinct factor conversion |
 | `Clock` | toggle and persist the stand-alone battle-clock bit; draw the committed unsigned tick in the late HUD layer |
-| `ShowRanges` | toggle detailed terrain-following range rings and labels inside the existing Shift-held queue overlay; Modern placement reuses its weapon-ring renderer (DESIGN_GPU_RENDERER §20); initially off unless the content profile opts in, retained by the shell across battles, without settings or simulation writes |
+| `ShowRanges` | toggle detailed terrain-following range rings and labels inside the existing Shift-held overlay; Modern saves the preference and adds stationary weapon rings independent of orders; Classic retains its process-only descriptor walk; initially off unless the content profile opts in; placement shares its weapon-ring renderer (DESIGN_GPU_RENDERER §20); no simulation writes |
 | `FPS` | toggle the process-local modern battle FPS counter (DESIGN_GPU_RENDERER §13.5); initially off, retained across battles, with no settings or simulation writes |
 | `Dither` | toggle the live current-fog pattern selector and persist `0` or `1` immediately |
 | `TShadow`, `FShadow` | toggle vehicle or feature shadows independently; persist on the next settings write |
@@ -3073,7 +3119,8 @@ as local chat. The implemented handlers are:
 `ShowRanges` reads authored radii from the catalog and live weapon-enabled
 bits from `UnitView`; no visibility-derived radius cache or live unit access is
 needed. The existing queue walker emits range chords and labels in descriptor
-order. Radii producing fewer than one chord are rejected before division, a
+order, with Modern's order-independent structure weapon pass defined in
+DESIGN_GPU_RENDERER §20. Radii producing fewer than one chord are rejected before division, a
 narrow malformed-input bounds departure under I11; no substitute radius is
 invented `[07 R-P0-11 §3]` `[I6]`. The separate bit-4 target-circle
 helper still needs its model-radius binding and replacement of the old flat
@@ -3131,8 +3178,68 @@ display bits, including the persisted low bit that selects dithered fog; a
 later direct-entry settings write includes deferred shadow preferences. The remaining ordinary local
 single-player command families stay in the parent I10 scope. The mask-4
 developer table and default unit-spawn handler remain unimplemented with developer
-mode; multiplayer `TALK2.GUI`, recipient controls and network chat remain
-excluded with multiplayer `[07 R-CAM-01 §6]` `[07 R-FE-02 §12]`.
+mode.
+
+**Online battle chat.** In an online battle the same TALK line is network
+chat over the hosted relay (DESIGN_MULTIPLAYER §12.2). A committed line is
+composed as `<name> text`, sent to the recipients its one-line prefix or
+the stored recipient mode selects, then posted locally with class 4 and no
+speaker; a received line is posted with class 8 and its sender's slot as
+speaker, drawing the sender's logo and playing `MessageArrived`
+`[07 §5 "Chat"]` `[07 R-FE-02 §12]` `[07 R-HUD-03 §14.3]`. The prefix is the
+first character of a line whose second is `,`, `:` or `;`: a digit names one
+slot, `a` or `e` the local player's allies or enemies by its own row A. The
+battle opens `TALK.GUI`, whose form cannot change the stored mode, so it
+stays "everyone"; `TALK2.GUI`'s recipient controls are a `TODO(question)`
+at `openTalk`, as is whether a prefix digit is the slot index or the slot
+plus one (the placeholder reads the index). A watcher, or a seat whose
+result is final, cannot open chat. A `+` line runs its command as in
+single-player and is then sent to everyone. Received names come from each
+receiver's own copy of the sender's row, so only the text travels. The
+loopback play test and replay playback post lines locally only. Chat
+changes no tick and is never recorded
+(`cmd/nanolathe/battle_online_chat.go`).
+
+**Online sharing and alliances.** Online, the Tab strip `TABMENU.GUI`
+fills the surface's last 33 rows: its authored `ypos −33` counts up from the
+bottom, and SHARE's `−429` ends on the strip's top edge `[07 R-WGT-01 §12]`
+`[07 R-HUD-05]`. It offers OPTIONS, SHARE, CONTROL, ALLIES and CANCEL, and
+`h` opens `SHARE.GUI` for a playing seat `[07 R-CAM-01 §2]`. Tab keeps the
+`presentation.overview` preference: with Options, Tab toggles the strip
+online as retail's Tab does in a multiplayer session; with Overview, Tab
+keeps the overview and F2 toggles the strip. Single-player keys are
+unchanged. Tab plays `SmallButton` both ways. Each strip button plays
+`BigButton` and opens its window — the options root, SHARE or ALLIES — on
+top of the strip, which stays open beneath and is the top window again when
+that window closes (`ui.BattleState.StripBeneath`); CANCEL closes the strip
+silently, and CONTROL is greyed (see the exclusions below)
+`[07 "Tab options menu and manual exit"]`. A Tab that closes the options
+root returns to the strip, and a second Tab closes it.
+
+The screens read the committed frame's `Sharing` view and player rows,
+which carry each replica's own admission for the local seat, and send the
+online seat commands of DESIGN_MULTIPLAYER §7.1; the `+ShareMetal` …
+`+SetShareEnergy` and `+Give` lines send the same commands and post retail's
+class-2 replies `[07 R-CAM-01 §6]`. SHARE lists the rows the local seat may
+give to, in slot order, starting on row 0, and with no player to offer it
+does not open; its sliders range over the committed stock and read back
+whole numbers, travel taken from the bar the build shrank between its arrows
+`[07 R-HUD-03 §9]`; its boxes and OK play `Options` and CANCEL `Previous`,
+while `h` and the opener play nothing `[05 R-SHARE-01 §5]`. OK sends one
+gift, and a gift of nothing is not sent. ALLIES shows one row per seated
+player still in play, the player's colour behind the name, and the ally
+button's stage is the local seat's two directions of declaration; a click
+sends the declaration and announces it as a chat line, VICTORY and OK play
+`Options`, and OK sends the Allied Victory box when it changed. Enter and
+Escape reach SHARE's and ALLIES's defaults only while the key-navigation
+switch the strip turned on is still on, so a SHARE opened by `h` alone takes
+both keys and ignores them. The windows are battle modals that take the
+world's input while up and never pause, because online battles have no
+pause; a final result closes them, the strip beneath included.
+`TODO(question)` at `battle_tabmenu.go`: whether retail's battle input still
+reaches the world under the strip alone. A replay playback, and a battle
+entered without the front-end shell, offer none of them
+(`cmd/nanolathe/battle_tabmenu.go`).
 
 * **The multiplayer lobby shell.** Retail's `SELGAME.GUI` lobby and its
   transport remain out of scope; the single-player skirmish setup screen is a
@@ -3180,9 +3287,11 @@ excluded with multiplayer `[07 R-CAM-01 §6]` `[07 R-FE-02 §12]`.
   audio calibration and focus-loss sound behavior remain a marked research
   gap `[03 §9]`. The pure Go decoder and bounded PCM conversion add no module
   dependencies and do not invoke an external decoder at runtime.
-* **`SHARE.GUI` and `CONTROL.GUI`.** The resource transfer dialog and the
-  host-only player control panel are multiplayer surfaces
-  `[07 R-HUD-03 §9]` `[07 R-FE-01 §7]`.
+* **`CONTROL.GUI`.** The host-only player control panel — watching allowed
+  and rejecting a player — has no online counterpart: watchers are not
+  offered and only a vote removes a seat (DESIGN_MULTIPLAYER §11.1, §11.4),
+  so the Tab strip shows CONTROL greyed on the host's machine
+  `[07 R-FE-01 §7]`. `SHARE.GUI` is built online (§3.9).
 * **Developer mode.** The repeated-command binding, contour overlay, in-battle
   screenshot and Unit State/Builder Probes are not implemented. They are now
   planned in [DESIGN_DEVELOPER_TOOLS](DESIGN_DEVELOPER_TOOLS.md), including the
@@ -4490,8 +4599,14 @@ small popup over `MAINMENU` on the base install's message-box frame
 move it. It holds one sentence ("Play online with friends: create a game and
 send them its code, or join with the code a friend sent you."), **Create
 Game** and **Join Game** in the stock 96×31 button size, a status line, and
-off the main path a small **Server** button with the current server beside it
-and **Cancel** (or Escape).
+off the main path a small **Name** button with "Name: none chosen" or the
+player's name beside it, a small **Server** button with the current server
+beside it, both cut short by character when long, and **Cancel** (or
+Escape). **Name** opens a popup, "Enter the name other players see", that
+saves the trimmed name as `nickname` (empty for none) and refuses, in plain
+words in the popup, a name over 16 characters or one with `<` or `>`
+(DESIGN_MULTIPLAYER §12.2). The name rides the hello of every room the
+player creates or joins.
 
 **Join Game** replaces the chooser with the base install's address window
 (`guis/tcp.gui`), captioned "Enter the room code your friend sent you", with
@@ -4530,7 +4645,9 @@ window does the same for a join.
 
 The lobby is the authored `SKIRMISH.GUI` window, opened as the setup screen
 with its ten runtime rows. Each present player has a row in seat order:
-"Player n", marked "(You)" or "(Host)", their side in the setup screen's side
+their name, or "Player n" when they have none or their client carries no
+names, marked "(You)" or "(Host)" — a long name is shortened with "..." so
+the mark stays, and the row's help names the player in full — their side in the setup screen's side
 art (any side the catalog defines), their colour in the setup screen's
 `logos.gaf` column, their team as the allegiance symbols (none, or teams 1–5,
 joined when shared and split when alone; hidden in Survival) and "Ready" in
@@ -4574,8 +4691,12 @@ build uses `navigator.clipboard.writeText` on secure pages; a host without a
 bridge, or a desktop without one of those programs, hides it).
 
 The host's settings stay open until Start: the game type (Skirmish or
-Survival, in Difficulty's place), **Select Map** through the ordinary map
-selector, which returns to the lobby, the four standard skirmish options
+Survival, in Difficulty's place), **Rules** after them in the same row, a
+push button cloned from Select Map's art that steps Strict 3.1, Community
+3.9 and Modern (a room starts on the host's own gameplay mode; a mod's
+minimum gameplay leaves out lower stages, and a Modern-only mod greys it;
+switching to Strict 3.1 with more computers than it allows is refused),
+**Select Map** through the ordinary map selector, which returns to the lobby, the four standard skirmish options
 (Commander, Location, Mapping, Line of Sight) and, for Survival, the Survival
 setup screen's Wave Pace, Air Waves and Naval Waves. Each change replaces the
 room's base configuration, which every seat adopts as it arrives; the mod,
@@ -4584,8 +4705,8 @@ greyed, and a map it lacks is named on the status line ("The host chose
 _map_, which you don't have.") with Ready greyed.
 
 **Ready** composes the final configuration from the latest base and the
-present seats in seat order, with their teams and sides, then the base's
-computers, prepares this seat's
+present seats in seat order, with their teams, sides, colours and names,
+then the base's computers, prepares this seat's
 battle at its slot and runs the pre-start rehearsal of DESIGN_MULTIPLAYER
 §16.7 on a job goroutine, then sends the configuration-identity and rehearsal
 digests; **Not ready** withdraws them. While the check runs the status line
@@ -4599,7 +4720,20 @@ or Survival has more than three players, computers included.
 **Start** is the host's, enabled when everyone present is ready and the
 digests agree; a mismatch is stated in plain words ("Your games simulate
 differently. Every player needs the same version."). Hovering a control shows
-its help in the status line instead. **Leave** (or Escape) leaves the room. A
+its help in the status line instead, which has two rows clear of the right
+column.
+
+**Chat.** Below the map field, left of Ready, four rows show the latest
+lines as `<name> text`, each receiver composing the name from its own room
+state. Enter, or a click on the line, opens a text line along the bottom
+("Press Enter to chat." while closed); Enter sends it to every other present
+seat whose client carries chat, and Escape or a right click drops it, the
+right press doing nothing else. A ready seat may chat. The line holds what
+fits its field, about 53 characters. A refusal — the rate limit, a
+character outside printable ASCII, no one able to read it — shows in the
+chat rows. Lines still unread at Start reach the battle's chat, which maps
+the room's seats to the battle's slots at Start (§3.9). Because Enter opens
+chat, it no longer starts the game. **Leave** (or Escape) leaves the room. A
 relay failure — the host leaving, the 30-minute wait, a dropped connection —
 returns to the chooser with its reason.
 
@@ -5610,6 +5744,44 @@ continue to ask their bound gameplay rules, so switching to Strict preserves
 the selected values without using them. Tests cover player isolation,
 boundary timing, preference reload, and the page's Undo/Cancel/OK behavior.
 
+
+### Constructor patrol button labels
+
+**Nanolathe Modern presentation policy (user-authorized, 2026-10-11).**
+While all selected units are mobile constructors actively on repair patrol,
+performing work borrowed from that patrol, or returning from that work, the
+movement-stance button displays their effective **Reclaim / Both / Assist**
+preference. Differing preferences display **Mixed**. The label follows the
+acting owner's preference for the actual stance; Modern's three defaults all
+read **Both**. It does not hard-code a preference for a stance.
+
+The stock `ARMMOVEORD` / `CORMOVEORD` art in `anims/commongui.gaf` supplies
+its dark blank frame 4 as the background, with columns 84–112 of the actual
+stance frame overlaid for its three indicators (user-authorized visual update,
+2026-10-11). The stock caption ends before that strip. Both stamps retain the
+native 113×21 authored movement rectangle; the caption uses the existing HUD
+font. This composition applies only to the six-frame stock layout with matching
+frame and gadget dimensions. Other layouts retain the fitted blank three-state
+`stagebuttn3` fallback.
+The original gadget identity, click, accelerator and stance cycle are retained.
+Hover text names both the work choice and movement stance, explains the cycle,
+and points to Options > Builders for editing the preference.
+
+Session publication supplies one committed presentation byte per unit, derived
+from the bound orders rule and the active queue's proven producer receipt.
+The painter never reads live preferences or queues. Explicit work with a future
+queued patrol is insufficient, and a save without a producer receipt is not
+silently assigned one. A mixed selection containing a non-patrolling unit, an
+empty selection, and a disabled movement control retain the stock button.
+Strict 3.1 and Community 3.9 retain their stock presentation. No command, rule,
+RNG, resource arithmetic or save format changes.
+
+Tests lock ground and air publication, preferences in each stance, player and
+frame isolation, queued-patrol exclusion, borrowed work/return, Strict/Community
+bypass, and selection/hover fallbacks. A stock-art pixel test locks the cleared
+caption area and every indicator pixel for both factions, including mixed
+stances, and the different-layout fallback. Visual captures use the installed
+art; original asset bytes are never checked in.
 
 ### Prepared-build accelerator status
 

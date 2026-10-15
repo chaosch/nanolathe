@@ -148,10 +148,14 @@ type UnitView struct {
 	PriorHealthSample uint8
 	BuildRemaining    float32
 	Flags             uint32
-	DefName           string
-	Model             string
-	FootX, FootZ      int8
-	Pieces            []PieceView
+	// PatrolWork is the bound Modern patrol preference while a constructor is
+	// patrolling or performing proven borrowed work/return: 0 is inactive,
+	// 1 Reclaim, 2 Both, 3 Assist. It is a committed presentation value [I6].
+	PatrolWork   uint8
+	DefName      string
+	Model        string
+	FootX, FootZ int8
+	Pieces       []PieceView
 	// CacheRevision is a copied VM presentation revision. It models image
 	// invalidation in Go and is not a persisted retail counter.
 	CacheRevision uint64
@@ -768,6 +772,7 @@ type EconomyView struct {
 	EnergyProduced float32
 	EnergyConsumed float32
 	DisplayTimer   uint32 // saved presentation deadline, seeded at battle entry [05 R-ECO-01 §1]
+	ActivityTick   uint32 // last settlement observed by the economy explanation
 	// MetalShareThreshold and EnergyShareThreshold are the player's automatic
 	// sharing thresholds [05 R-SHARE-01 §3]. The top strip marks each one on
 	// its bar [07 R-HUD-03 §4]; presentation reads the committed copy rather
@@ -1082,6 +1087,15 @@ const (
 	SurvivalDowntime
 )
 
+// SurvivalApproach is one announced entry point in whole map pixels and its
+// bearing from the survivor base (east at zero, south at a quarter turn).
+// It is detached presentation geometry, not a spawn site or an attacker contact
+// (docs/DESIGN_SURVIVAL.md §6.7 and §9).
+type SurvivalApproach struct {
+	X, Z  int32
+	Angle uint16
+}
+
 // SurvivalStatus is one tick's Survival director state: the wave the phase
 // refers to, the phase, whole seconds to the phase's end and the attacker's
 // live units.
@@ -1092,6 +1106,11 @@ type SurvivalStatus struct {
 	SecondsLeft int32
 	Attackers   int32
 	Score       int64 // the team's Survival score so far
+	// Approaches contains only the current warning's announced directions, in
+	// plan order; it is empty in every other phase. The fixed array owns its
+	// geometry across frame reuse and covers the director's three directions.
+	Approaches    [3]SurvivalApproach
+	ApproachCount uint8
 }
 
 // SurvivalResult is the survivors' Survival outcome; the score and its
@@ -1177,6 +1196,51 @@ type PlayerRow struct {
 	// prediction never reaches mutable session state [04 §3.4][05 R-SHARE-01
 	// §1][I6].
 	Allies [PlayerRowSlots]bool
+
+	// The fields below are the online sharing and alliance state the Tab
+	// strip's SHARE and ALLIES screens read (DESIGN_MULTIPLAYER §6.7, §7.1);
+	// every one is zero outside an online battle (Frame.Sharing.Online).
+	//
+	// AlliedBy is this slot's row B: each slot's declaration toward this one,
+	// the transpose of Allies across the rows rather than a copy (§6.7 Q22).
+	// The Allies indicator of [07 "Tab options menu and manual exit"] for the
+	// local seat L and row j is Players[L].AlliedBy[j]<<1 | Players[L].Allies[j].
+	AlliedBy [PlayerRowSlots]bool
+	// SharedVictory is the slot's shared-victory bit [05 R-SHARE-01 §1].
+	SharedVictory bool
+	// Team is the slot's lobby team symbol, 0..4 a team and 5 none. A row
+	// sharing the local seat's team (other than none) is greyed in the
+	// Allies window: a battleroom team cannot be broken in battle.
+	Team uint8
+	// ShareMetal, ShareEnergy, ShareMapping and ShareRadar are the slot's
+	// share options, option-word bits 1, 2, 5 and 6 [05 R-SHARE-01 §3]. The
+	// thresholds ride EconomyView.
+	ShareMetal, ShareEnergy, ShareMapping, ShareRadar bool
+	// GiftTarget says the local seat may name this slot as a SHARE target
+	// now, and AllianceTarget that its ally button is active now: each is the
+	// receiver's own admission evaluated for Sharing.Seat, so a screen offers
+	// exactly what every replica admits [05 R-SHARE-01 §5]
+	// [07 "Tab options menu and manual exit"].
+	GiftTarget     bool
+	AllianceTarget bool
+}
+
+// SharingView is the local seat's standing for the online sharing and
+// alliance screens (DESIGN_MULTIPLAYER §7.1); it is zero outside an online
+// battle. The per-slot halves are on PlayerRow.
+type SharingView struct {
+	// Online says the battle offers the Tab strip's SHARE and ALLIES screens,
+	// which retail offers only in a networked session [07 R-CAM-01 §2].
+	Online bool
+	// Seat is the seat the answers below and PlayerRow's targets are for.
+	Seat uint8
+	// MayShare says the seat may issue sharing and alliance commands now: a
+	// playing human seat, not a watcher.
+	MayShare bool
+	// SharedVictoryChangeable says the Allies window's VICTORY box is not
+	// greyed: the seat is not a watcher and its lobby team has fewer than two
+	// seated rows.
+	SharedVictoryChangeable bool
 }
 
 // FogView is the committed two-channel fog cache [03 §3.3].
@@ -1235,17 +1299,20 @@ type Frame struct {
 	// vector order [03 §1][03 R-STRIP-01 §2]. Strip objects are authoritative
 	// simulation state swept in phase 11, so presentation cannot read them
 	// directly; this is the committed copy it draws from [I6].
-	Strips      []StripView
-	OrderQueues []OrderQueueView
-	Economy     []EconomyView
-	Selection   SelectionView
-	CommandPage CommandPageView
-	Builds      []BuildProgressView
-	Visibility  VisibilityView
-	Radar       RadarView
-	Events      []EventView
-	Fog         FogView
-	Result      ResultView
+	Strips              []StripView
+	OrderQueues         []OrderQueueView
+	Economy             []EconomyView
+	EconomyFlows        []EconomyFlowView
+	EconomyHolds        []EconomyHoldView
+	EconomyHoldsAllowed bool
+	Selection           SelectionView
+	CommandPage         CommandPageView
+	Builds              []BuildProgressView
+	Visibility          VisibilityView
+	Radar               RadarView
+	Events              []EventView
+	Fog                 FogView
+	Result              ResultView
 	// Survival is the Survival director's committed state for the HUD
 	// (docs/DESIGN_SURVIVAL.md §9); zero outside Survival.
 	Survival SurvivalStatus
@@ -1267,6 +1334,9 @@ type Frame struct {
 	// [07 §6][07 R-HUD-04 §4]. They are scheduling and lobby scalars, not
 	// simulation state, and the strip is the only consumer.
 	Strip StripReadout
+	// Sharing is the local seat's standing for the online SHARE and ALLIES
+	// screens; zero outside an online battle.
+	Sharing SharingView
 	// retainedVisibility and retainedFog keep this double-buffer slot's last
 	// immutable presentation copies while Reset restores the public zero-value
 	// shape expected by ordinary frame writers. The retained observer is part
@@ -1397,6 +1467,9 @@ func (f *Frame) Reset() {
 	f.Strips = f.Strips[:0]
 	f.OrderQueues = f.OrderQueues[:0]
 	f.Economy = f.Economy[:0]
+	f.EconomyFlows = f.EconomyFlows[:0]
+	f.EconomyHolds = f.EconomyHolds[:0]
+	f.EconomyHoldsAllowed = false
 	f.Builds = f.Builds[:0]
 	f.Events = f.Events[:0]
 	f.Tick = 0
@@ -1412,6 +1485,7 @@ func (f *Frame) Reset() {
 	f.ShakeAmpX = 0
 	f.ShakeAmpY = 0
 	f.Survival = SurvivalStatus{}
+	f.Sharing = SharingView{}
 	f.Selection = SelectionView{Handles: f.Selection.Handles}
 	f.CommandPage = CommandPageView{
 		ProductKeys:       f.CommandPage.ProductKeys,

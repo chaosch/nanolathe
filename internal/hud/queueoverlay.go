@@ -7,6 +7,7 @@ package hud
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/pool"
@@ -156,6 +157,10 @@ type QueueOverlayOptions struct {
 	// ShowRanges selects the labelled range branch and the extra attack-icon
 	// rings. It does not bypass Shift or the descriptor's range/icon bits.
 	ShowRanges bool
+	// StationaryWeaponRanges lets Modern presentation show a privileged
+	// structure's weapons independently of its orders (GPU design §20).
+	// Shift and ShowRanges still gate it; the retail walker remains the default.
+	StationaryWeaponRanges bool
 	// Range resolves the immutable authored inputs for one committed unit. A
 	// false result suppresses range helpers for that unit rather than inventing
 	// definition data.
@@ -228,6 +233,32 @@ func QueueOverlay(f *frame.Frame, opt QueueOverlayOptions) []QueuePrimitive {
 	}
 
 	var out []QueuePrimitive
+	if opt.ShowRanges && opt.StationaryWeaponRanges && opt.Range != nil {
+		// Walk the committed slice for stable output, including idle towers
+		// with no published queue. Only the normal privileged sources qualify.
+		for _, u := range f.Units {
+			if _, ok := units[u.Slot]; !ok {
+				continue
+			}
+			eligible := selected[u.Slot]
+			for _, h := range privileged {
+				eligible = eligible || h != 0 && h == u.Slot
+			}
+			if !eligible {
+				continue
+			}
+			set, ok := opt.Range(u)
+			if !ok || set.HasMover {
+				continue
+			}
+			base := QueuePrimitive{Unit: u.Slot, Selected: selected[u.Slot], Center: opt.Project(u.X, u.Y, u.Z)}
+			for slot, weapon := range set.Weapons {
+				if weapon.Enabled && weapon.Range != 0 {
+					out = appendWeaponRange(out, base, QueueWorldPoint{X: u.X, Y: u.Y, Z: u.Z}, weapon.Range, slot, opt)
+				}
+			}
+		}
+	}
 	for _, q := range f.OrderQueues {
 		_, ok := units[q.Unit]
 		if !ok {
@@ -418,6 +449,10 @@ func appendUnitRanges(out []QueuePrimitive, base QueuePrimitive, center QueueWor
 	}
 
 	for slot := range set.Weapons {
+		if opt.StationaryWeaponRanges && !set.HasMover {
+			// The order-independent pass already emitted these weapons once.
+			continue
+		}
 		enabled := set.Weapons[slot].Enabled
 		if slot == 2 {
 			// Retail's third authored-range branch tests slot one's enabled bit,
@@ -477,7 +512,9 @@ func appendAttackRanges(out []QueuePrimitive, base QueuePrimitive, center QueueW
 }
 
 // appendRangeRing emits the shared range helper's adaptive, terrain-conforming
-// chord walk and then its optional FNT label [07 R-P0-11 §3].
+// chord walk and then its optional FNT label [07 R-P0-11 §3]. An endpoint whose
+// dword coordinate addition leaves the signed 32-bit domain is dropped rather
+// than drawn; see rangeRingPoint.
 func appendRangeRing(out []QueuePrimitive, base QueuePrimitive, center QueueWorldPoint, radius int32, color uint8, label string, labelOrdinal int, opt QueueOverlayOptions) []QueuePrimitive {
 	if radius == 0 || opt.Project == nil || opt.GroundHeight == nil {
 		return out
@@ -501,26 +538,32 @@ func appendRangeRing(out []QueuePrimitive, base QueuePrimitive, center QueueWorl
 	}
 	step := int32(65536 / chords)
 	angle := int32(0)
-	a := rangeRingPoint(center, numeric.Angle(uint16(angle)), radius, opt)
-	last := a
+	a, aOK := rangeRingPoint(center, numeric.Angle(uint16(angle)), radius, opt)
 	labelAt := QueuePoint{}
 	for chord := int32(0); chord <= chords; chord++ {
 		angle += step
-		b := rangeRingPoint(center, numeric.Angle(uint16(angle)), radius, opt)
-		line := base
-		line.Kind = QueuePrimitiveCircle
-		line.Color, line.ColorKnown = color, true
-		line.A, line.B = a, b
-		line.Radius = radius
-		out = append(out, line)
-		if chord == int32(labelOrdinal*3) {
+		b, bOK := rangeRingPoint(center, numeric.Angle(uint16(angle)), radius, opt)
+		if aOK && bOK {
+			line := base
+			line.Kind = QueuePrimitiveCircle
+			line.Color, line.ColorKnown = color, true
+			line.A, line.B = a, b
+			line.Radius = radius
+			out = append(out, line)
+		}
+		if chord == int32(labelOrdinal*3) && bOK {
 			labelAt = b
 		}
-		a, last = b, b
+		a, aOK = b, bOK
 	}
 	if label != "" {
 		if labelAt.X == 0 && labelAt.Y == 0 {
-			labelAt = last
+			// A rejected final endpoint has no screen position for the
+			// fallback label; the endpoint bound applies to text too.
+			if !aOK {
+				return out
+			}
+			labelAt = a
 		}
 		text := base
 		text.Kind = QueuePrimitiveLabel
@@ -546,14 +589,38 @@ func rangeChordCount(radius int32) int32 {
 	return int32(float64(radius) * 6.28318530717958 * 0.125)
 }
 
-func rangeRingPoint(center QueueWorldPoint, angle numeric.Angle, radius int32, opt QueueOverlayOptions) QueuePoint {
+// rangeRingPoint returns one ring endpoint and whether its 16.16 coordinates
+// fit the signed 32-bit domain the endpoint addition is carried in.
+//
+// The endpoint is formed as a dword addition, so a point outside that domain
+// wraps to the opposite side of the map; its chord then spans tens of
+// thousands of screen pixels and the clipped integer line drawer paints it
+// across the whole viewport (the anti-nuke's authored 32000 range reaches this
+// around any site more than ~768 map pixels from the origin — issue #119). The
+// unrepresentable endpoint is rejected at the host boundary instead of drawn,
+// so the wrapped chords disappear and every ring whose endpoints fit is
+// unchanged. Host bound (I11 bounds rejection), like the chord-count guards in
+// appendRangeRing.
+//
+// TODO(question): whether retail's own ring walk draws the wrapped chord or
+// clips it is unsettled — the pre-guard reading here asserted the wrap without
+// a traced citation, and the range-ring helpers have not been re-read since. A
+// retail session holding Shift with `+showranges` on a 32000-range weapon (an
+// anti-nuke or a silo) placed more than ~768 map pixels from the origin would
+// settle it; until then this rejection is the Nanolathe behavior.
+func rangeRingPoint(center QueueWorldPoint, angle numeric.Angle, radius int32, opt QueueOverlayOptions) (QueuePoint, bool) {
 	// The shared trig helpers consume an int32 16.16 magnitude; the shift and
-	// coordinate additions therefore retain the original dword wrap.
+	// coordinate additions retain the original dword width.
 	magnitude := radius << 16
 	dx := numeric.MulRound(numeric.Sin(angle), magnitude)
 	dz := numeric.MulRound(numeric.Cos(angle), magnitude)
-	x := numeric.Fixed(int32(int64(int32(center.X)) + int64(dx)))
-	z := numeric.Fixed(int32(int64(int32(center.Z)) + int64(dz)))
+	rawX := int64(int32(center.X)) + int64(dx)
+	rawZ := int64(int32(center.Z)) + int64(dz)
+	if rawX > math.MaxInt32 || rawX < math.MinInt32 || rawZ > math.MaxInt32 || rawZ < math.MinInt32 {
+		return QueuePoint{}, false
+	}
+	x := numeric.Fixed(int32(rawX))
+	z := numeric.Fixed(int32(rawZ))
 
 	centerWhole := int32(int16(uint16(uint64(center.Y) >> 16)))
 	groundWhole := int32(opt.GroundHeight(x, z) >> 16)
@@ -564,7 +631,7 @@ func rangeRingPoint(center QueueWorldPoint, angle numeric.Angle, radius int32, o
 	// The terrain result replaces the high word while the center's fractional
 	// low word survives. Projection consumes that signed high word.
 	y := numeric.Fixed(int32(uint32(uint16(whole))<<16 | uint32(uint16(center.Y))))
-	return opt.Project(x, y, z)
+	return opt.Project(x, y, z), true
 }
 
 // queueDescriptor is one order descriptor's two overlay bytes: the draw-mask

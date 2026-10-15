@@ -17,7 +17,10 @@ repository holds no app spec. `doctl apps spec get APP-ID` shows them.
 
 - **Pushing to `main` deploys.** Autodeploy is on, so every push to this
   repository's `main` branch builds and deploys it. Confirm afterwards that
-  `curl https://relay.nanolathe.gg/healthz` returns `ok`.
+  `curl https://relay.nanolathe.gg/healthz` returns `ok`, then run
+  `tools/check-relay` in the engine checkout. The second
+  check uses the current client to create, describe and join a lobby;
+  HTTP health alone does not prove game compatibility.
 - **One always-running instance** of 1 shared vCPU / 512 MiB
   (`apps-s-1vcpu-0.5gb`). The app sets no environment, so the image's defaults
   apply: `GOMEMLIMIT=384MiB` and `GOMAXPROCS=1`. This is not a measured
@@ -32,9 +35,14 @@ repository holds no app spec. `doctl apps spec get APP-ID` shows them.
   belong in this repository.
 
 **Keep instance count at 1.** Rooms live in this process's memory; a second
-instance could receive a join for a room on the first. A restart or deployment
-ends active matches, so push between play sessions. There is no persistent
-disk.
+instance could receive a join for a room on the first. There is no
+persistent disk.
+
+**Restarts drain.** On SIGTERM the relay refuses new rooms and lets running
+matches finish for at most `--drain-timeout` (100 s, under App Platform's
+default 120 s grace). For a longer drain raise the app's
+`grace_period_seconds` (at most 600) and the flag together. Longer matches
+still end, so push between play sessions when you can.
 
 ## Connect the local game
 

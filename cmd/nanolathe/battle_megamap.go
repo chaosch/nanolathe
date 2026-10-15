@@ -18,6 +18,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/session"
 	"github.com/nanolathe-gg/nanolathe/internal/settings"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
+	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/internal/units"
 )
 
@@ -242,7 +243,7 @@ func (b *battleSession) megamapCentreCamera(x, y int32) {
 // it is shown and the point lies in the battle viewport it covers, not under a
 // battle child window [draw-engine-interface "Input while shown"].
 func (b *battleSession) megamapOwnsPointer(x, y int32) bool {
-	if b == nil || !b.megamap.shown || b.battleState().HasOptionsLayer() || unitInfoCovers(x, y) {
+	if b == nil || !b.megamap.shown || b.battleState().Modal() != ui.BattleModalClosed || unitInfoCovers(x, y) {
 		return false
 	}
 	return b.megamapLens().ContainsView(x, y) && b.overWorld(x, y)
@@ -399,6 +400,11 @@ func (b *battleSession) megamapHoverUnit(f *frame.Frame, x, y int32) pool.Handle
 // while shown"].
 func (b *battleSession) serviceMegamapPointer(in *input.State, sample input.Sample, cl *client.Client) input.Sample {
 	if b == nil || !b.megamap.shown || in == nil {
+		return sample
+	}
+	// The dropdown also owns the outside click that closes it and the rest
+	// of that captured gesture. Pass those records to its later input stage.
+	if cl != nil && cl.Enhanced() && (b.economyPanel.open || b.economyPanel.captured) {
 		return sample
 	}
 	lens := b.megamapLens()

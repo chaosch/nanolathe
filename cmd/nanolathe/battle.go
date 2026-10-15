@@ -39,8 +39,9 @@ type battleSession struct {
 	// (replay_record.go); playback is the replay this battle plays instead
 	// of taking the clock's budget (replay_playback.go). Both are nil for an
 	// unrecorded battle.
-	replay   *replayRecording
-	playback *replayPlayback
+	replay       *replayRecording
+	playback     *replayPlayback
+	survivalBest *survivalBestRun
 	// preview owns a silent, isolated Settings scene (interface design §3.17).
 	preview                                bool
 	hostPresentation                       *settings.Presentation
@@ -207,6 +208,9 @@ type battleSession struct {
 	scrollSpeedPrimed bool
 
 	chat battleChatState
+	// sharing is the networked session's Tab strip, transfer dialog and
+	// allies window (battle_tabmenu.go).
+	sharing battleSharing
 
 	dragScroll        camera.DragScroll
 	dragScrollActive  bool
@@ -240,8 +244,8 @@ type battleSession struct {
 	// clock draw site for a direct battle. A shell-backed battle reads its live
 	// text-line setting because MAXLINES may change it while battle is running.
 	clockUsePrimaryFont bool
-	// showRanges is a process-lifetime presentation toggle, retained by the
-	// shell across battles and never written to settings [07 R-CAM-01 §6].
+	// showRanges retains the process toggle [07 R-CAM-01 §6]; Modern's explicit
+	// presentation preference takes precedence (GPU design §20).
 	showRanges bool
 	// Placement guides are presentation preferences only (GPU design §20).
 	// modBuildPageSize is the running content's build page lock: the mod's
@@ -256,6 +260,7 @@ type battleSession struct {
 	resourceQueueFeedback *resourceQueueFeedback // transient modern queue overlay; DESIGN_INTERFACE_HUD_INPUT §3.10
 	modernDrag            *battleCommandDrag     // modern command capture; DESIGN_INTERFACE_HUD_INPUT §3.11
 	resourceClick         *resourceClick         // modern resource gesture receipt; DESIGN_INTERFACE_HUD_INPUT §3.10
+	economyPanel          economyPanelState      // Enhanced resource explanation and pointer capture
 	// gammaSetting retains the direct battle's write-all value independently
 	// of the command's immediate display factor [07 R-CAM-01 §6].
 	gammaSetting int
@@ -455,6 +460,7 @@ func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Clie
 	var identity netproto.Identity
 	var playback *replayPlayback
 	var recording *replayRecording
+	var survivalBest *survivalBestRun
 	if opts.multiplayerPlaytest() {
 		authoritative, identity, err = composeLocalMultiplayer(opts, cs)
 	} else if opts.Replay != "" {
@@ -477,6 +483,7 @@ func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Clie
 		// is not recorded (docs/DESIGN_MULTIPLAYER.md §10).
 		if err == nil && opts.LiveTrace == "" && opts.LiveScene == "" {
 			recording = recordFreshBattle(replayTarget{dir: opts.ReplayDir}, request.value, cs, authoritative.Session)
+			survivalBest = newSurvivalBestRun(request.value, cs, authoritative.Session)
 		}
 	}
 	if err != nil {
@@ -577,6 +584,7 @@ func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Clie
 		return nil, nil, err
 	}
 	shell.battle.adoptReplayRecording(recording)
+	shell.battle.survivalBest = survivalBest
 	if opts.multiplayerPlaytest() {
 		if err := shell.battle.startLocalMultiplayer(opts, identity); err != nil {
 			return nil, nil, err
@@ -1182,6 +1190,7 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 	// End input gestures before any modal or accelerator consumes their key
 	// edges. Returning to battle must not reinterpret an earlier click.
 	if !cl.IsFocused() || b.isResultVisible() || b.battleState().Modal() != ui.BattleModalClosed || b.isTalkGUIActive() || unitInfoOpen() {
+		b.economyPanel = economyPanelState{}
 		b.modernDrag = nil
 		b.resourceClick = nil
 		b.resourceQueueFeedback = nil
@@ -1257,6 +1266,9 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 	// release-inside gesture; no battle hotkey or world command leaks through
 	// [07 §3][07 §11].
 	if b.isResultVisible() {
+		// A final result closes the networked session's windows, which act
+		// for a seat still playing (battle_tabmenu.go).
+		b.closeSharingModal()
 		if b.postBattle == nil && b.sess != nil && b.sess.Audio != nil {
 			b.sess.Audio.EndBattleMusic()
 		}
@@ -1313,7 +1325,14 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 		// routes the frame to it instead [07 R-WGT-01 §1][07 R-FE-01 §6].
 		// In the Megamap overview Tab belongs to the megamap and closes nothing
 		// (DESIGN_INTERFACE_HUD_INPUT §3.15).
-		if (keyDown(input.KeyTab) && !b.megamapMode() || keyDown(input.KeyF2) && !shortcutKeyboard.KeyHeld(input.KeyCtrl)) && state.Modal() == ui.BattleModalOptions &&
+		//
+		// Online, a second press of the strip's key closes the Tab strip
+		// (battle_tabmenu.go) [07 "Tab options menu and manual exit"].
+		_, sharing := b.sharingFrame()
+		if sharing && state.Modal() == ui.BattleModalTabMenu && b.stripKey(keyDown, shortcutKeyboard.KeyHeld(input.KeyCtrl), shortcutKeyboard.HasShift()) {
+			in.DiscardTokens(1)
+			b.closeTabMenu(cl, true)
+		} else if (keyDown(input.KeyTab) && !b.megamapMode() || keyDown(input.KeyF2) && !shortcutKeyboard.KeyHeld(input.KeyCtrl)) && state.Modal() == ui.BattleModalOptions &&
 			!b.battlePrefsActive() && !(b.shell != nil && (b.shell.saveLoadPanelActive() || b.shell.frontend.Panels.Modal() != nil)) {
 			in.DiscardTokens(1)
 			b.closeBattleMenu()
@@ -1383,11 +1402,27 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 		in = &residual
 		shortcutKeyboard = battleShortcutKeyboard(in)
 	}
-	if !talkOwned {
+	if !talkOwned && in.Mouse != nil && !b.economyPanelCovers(int32(in.Mouse.X), int32(in.Mouse.Y)) {
 		b.serviceMegamapWheel(in.Mouse, cl)
 	}
 	shiftHeld := shortcutKeyboard != nil && shortcutKeyboard.HasShift()
 	ctrlHeld := shortcutKeyboard != nil && shortcutKeyboard.KeyHeld(input.KeyCtrl)
+	// Online, the strip's key opens the Tab strip and `h` the transfer
+	// dialog, as retail's multiplayer session binds them; chat holds both
+	// while it is open [07 R-CAM-01 §2] (battle_tabmenu.go). A single-player
+	// battle never takes this branch.
+	if _, sharing := b.sharingFrame(); sharing && !talkOwned {
+		if b.stripKey(keyDown, ctrlHeld, shiftHeld) {
+			b.openTabMenu(cl)
+			cl.Cursors().SetIndex(render.CursorNormal)
+			return
+		}
+		if shareKeyToken(in) {
+			b.openShareScreen(cl)
+			cl.Cursors().SetIndex(render.CursorNormal)
+			return
+		}
+	}
 	if !talkOwned && (keyDown(input.KeyTab) || keyDown(input.KeyF2) && !ctrlHeld && !shiftHeld) {
 		// Host UI policy: a paused save opens without ARMOPT, so Tab resumes
 		// it directly instead of requiring an open/close cycle. F2 retains
@@ -1404,6 +1439,11 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 	// returns to idle, and an idle latch deselects everything. It does not open
 	// the options window — that is F2's and Tab's row [07 R-CAM-01 §2].
 	if !talkOwned && keyDown(input.KeyEscape) {
+		if cl.Enhanced() && b.economyPanel.open {
+			b.economyPanel = economyPanelState{}
+			cl.Cursors().SetIndex(render.CursorNormal)
+			return
+		}
 		if b.battleState().Input.Latch == input.LatchNormal && b.battleState().Input.BuildDef == "" {
 			_ = b.enqueueSelectionCommand(session.HumanCommand{Kind: session.HumanSelectionClear})
 		}
@@ -1568,6 +1608,9 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 // (DESIGN_GPU_RENDERER §16.6)[03 §4.1][07 R-HUD-05].
 func (b *battleSession) overBattleViewport(x, y int32) bool {
 	if b == nil || b.cam == nil {
+		return false
+	}
+	if b.economyPanelCovers(x, y) {
 		return false
 	}
 	left, top, bottom := b.cam.ChromeInset()

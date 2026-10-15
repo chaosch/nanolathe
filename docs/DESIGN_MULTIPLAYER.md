@@ -40,19 +40,24 @@ a missing number is a retired section.
 **Current scope.**
 
 1. Online skirmish for 2–10 seats with teams chosen in the lobby, and
-   online Survival for 2–3 survivors, under Modern gameplay, by
-   relayed lockstep through the hosted relay (§12, §16.5, §16.6), from the
-   native and browser builds. At least two seats are human; the room's
-   host may add Classic or Modern computer players, each with its own
-   difficulty (§6.6).
+   online Survival for 2–3 survivors, under the room's choice of Modern,
+   Strict 3.1 or Community 3.9 rules, by relayed lockstep through the
+   hosted relay (§12, §16.5, §16.6), from the native and browser builds.
+   At least two seats are human; the room's host may add Classic or Modern
+   computer players, each with its own difficulty, as many as the rules'
+   seat policy allows (§6.6).
 2. The host's map, mod, mutators and unit restrictions, frozen into the
    room's configuration when it is created and adopted by every joiner
    (§8.6, §16.6).
-3. Pre-start checks — matching configuration identities and rehearsal
+3. Player names and chat in the lobby and in battle (§12.2, §16.6.1).
+4. Retail's in-battle sharing and alliances: the share toggles and
+   thresholds, the SHARE screen's metal, energy, unit and map gifts, the
+   Allies window's declarations and shared victory (§6.3, §6.7, §7.1).
+5. Pre-start checks — matching configuration identities and rehearsal
    digests from every seat (§8.2, §16.7) — and a unit checksum every 30
    ticks during play (§16.4).
-4. A local two-window play test over a loopback relay (§16.4).
-5. Local replays of every skirmish and Survival battle, single-player and
+6. A local two-window play test over a loopback relay (§16.4).
+7. Local replays of every skirmish and Survival battle, single-player and
    online, played back in the game or verified headless (§10).
 
 **Designed for later.** The contracts here also cover what the design grows
@@ -64,13 +69,11 @@ spectators (§11.4); rejoining after a disconnect (§11.2); match-wide view
 restrictions (§8.4); and eventual competitive play with verified results
 (§12.6).
 
-**Not built yet.** Computer players added by a joiner; Strict 3.1 and
-Community online;
-alliance changes during a battle; watchers and spectators; replay rewind
-and sharing;
-reconnect, departures and removal votes; room lists, chat and display
-names; the embedded LAN relay; pause and speed changes; relay-drawn seeds;
-ranked play.
+**Not built yet.** Computer players added by a joiner; the watcher-entry
+visibility rebuild (Q24); watchers and spectators; replay rewind and
+sharing; reconnect, departures and removal votes; room lists; the
+embedded LAN relay; pause and speed changes; relay-drawn seeds; ranked
+play.
 
 **Out of scope.**
 
@@ -199,7 +202,7 @@ marked:
 | Computer players | One per human machine, hosted by its creator; difficulty is unsynchronized hosting-machine state `[08 R-SKIR-01 §13]` `[08 R-AI-01 §21]`. | Every replica runs each computer with its host's perspective; explicit per-computer difficulty (§6.6, Q23, Q26). |
 | Saving | Disabled in multiplayer `[08 R-SAVE-02 §4]`. | Not offered (§11.5). |
 | Replays | Retail has none `[08 "Replay"]` `[08 "Bounded absence"]`; the community recorder writes `[fmt tad]`. | A Nanolathe feature (§10). |
-| Chat | All, allies, enemies or chosen players; watchers cannot open battle chat `[07 §5]` `[07 R-CAM-01 §6]`. | Relay messages with sender-resolved recipients (§12.2), later. |
+| Chat | All, allies, enemies or chosen players; watchers cannot open battle chat `[07 §5]` `[07 R-CAM-01 §6]`. | Relay chat messages with sender-resolved recipients, in the lobby and in battle; a watcher or defeated seat cannot chat in battle, and lines stay out of replays (§10, §12.2). |
 | Unit identities | Transport-identity order. | Seat order, as in single player. |
 
 ## 4. The lockstep model
@@ -568,12 +571,12 @@ control byte's "local human") moves to a perspective or a seat:
 | Effect pool | Records live for their authored holds; at capacity the pool refuses shatter fragments and land-dust puffers before their draws `[03 §1]` `[06 R-WFX-01 §1]` `[04 R-COB-04 §3]` `[03 R-FX-01 §3]`. | Timed from `SimArt` on every host (M1). The events that feed it are admitted through an effect-only window independent of audio and status events (§16.4.1). |
 | Temporary sight | Recorded only for victims the viewing slot owns, at most 20 `[08 R-SESS-01 §3]`; expired in the executor tail `[01 R-PLAT-02 §5]`. | One list of 20 per perspective; expiry after every tick (§4.5). |
 | End condition | Each machine evaluates its own player in that player's deadline block; online, authored triggers are never polled `[08 R-TRIG-01 §6]` `[08 R-SKIR-01 §3]`. | Every human seat's block evaluates that seat (§6.5). |
-| End countdown | One countdown and ending latch per machine gate its human and hosted computers; won and lost share it; a false due never resets it `[05 R-ECO-01 §1]` `[08 R-SKIR-01 §3]`. | Per human perspective. Under Strict 3.1 it gates that human and its hosted computers; under Modern and Community it gates only the human (§6.6). The no-human site runs every tick, skips Deathmatch and ends every perspective on its sixth consecutive true tick from an unarmed countdown `[08 R-TRIG-01 §6]`. |
+| End countdown | One countdown and ending latch per machine gate its human and hosted computers; won and lost share it; a false due never resets it `[05 R-ECO-01 §1]` `[08 R-SKIR-01 §3]`. | Per human perspective. Under Strict 3.1 it gates that human and its hosted computers, and a host that still hosts a live computer takes retail's watch branch instead of the ending; under Modern and Community it gates only the human (§6.6). The no-human site runs every tick, skips Deathmatch and ends every perspective on its sixth consecutive true tick from an unarmed countdown `[08 R-TRIG-01 §6]`. |
 | Commander death | Only the owner's machine sweeps its units; a human respawns in its own block, and its visibility rebuild resets that machine's mapping history and sight grids `[08 R-SKIR-01 §3]` `[08 R-ENTRY-01 §7]`. | Sweep each owner once; respawn each eligible human in its own block; rebuild only that perspective's own and hosted-computer visibility, keeping unrelated players' history (Q24, §6.7). |
 | Watcher entry | Clears mapping and line-of-sight bits for the whole watching machine and rebuilds its grids `[08 R-SKIR-01 §3]` `[08 R-ENTRY-01 §7]`. | Changes the entering perspective and the hosted computers that borrow it (Q24). |
 | Automatic sharing | The local slot only, every 60 ticks `[05 R-SHARE-01 §3]`. | Every human seat, ascending. |
 | Explored-map sharing | Every 450 ticks an opted-in sharer asks surviving allied humans to copy its explored bits; the share screen's gift applies at once `[05 R-SHARE-01 §3]` `[05 R-SHARE-01 §6]`. | Q25: periodic shares apply on the request tick in canonical human order; gifts apply in stream order on their tick (§6.7). |
-| Unit transfer | A local and a remote branch with different copy rules `[05 R-WORK-01 §15]`. | Chosen by whether old and new owner share a machine. |
+| Unit transfer | A local and a remote branch with different copy rules, chosen by the giving machine from the new owner's control byte `[05 R-WORK-01 §15]` `[05 R-SHARE-01 §5]`. | A gift takes the local branch to a computer the giving seat hosts and the remote branch to every other seat; a capture runs on the captor's machine and takes the local branch. |
 | Player-record cheats | `+Give`, `+ATM` and their kin act for the local player; `Give` takes its source from the own/controlling slot `[07 R-CAM-01 §6]`. | The issuing seat (§7.1). |
 | Machine option bits | `DoubleShot` and `HalfShot` toggle bits 7 and 8 of one per-machine options word whose bit 10 is the `ShootAll` admission bit `[06 §9.2]` `[06 §3.2]`; a hit is resolved on the shooter's machine, a death explosion on the victim owner's, a shooterless record on every machine `[06 R-DMG-01 §9]`. | Per seat: each seat's bits govern its own and its hosted computers' shots, death explosions and target admission. Which seat's bits apply to shooterless damage is settled in M5 against `[06 R-DMG-01 §9]`, or left a `TODO(question)`. |
 | Builder options | The Community builder preference belongs to the host player (DESIGN_COMMUNITY_PATCH §4.3). | Each seat's own, as a seat command. |
@@ -584,8 +587,9 @@ control byte's "local human") moves to a perspective or a seat:
 For online skirmish on static lobby teams — 2–10 rows, the human seats plus
 the computers the room host added — and for Survival's 2–3 survivors, the
 session implements the sensor, predicate, COB-effect, effect-pool,
-temporary-sight, end-condition, end-countdown, known-site, builder-option
-and Survival-wave rows (§16.4.1–§16.4.2, §16.6). Only human seats have
+temporary-sight, end-condition, end-countdown, known-site, builder-option,
+automatic-sharing, explored-map-sharing, unit-transfer and Survival-wave
+rows, and `Give` (§16.4.1–§16.4.2, §16.6, §6.7). Only human seats have
 perspectives and result rows; a computer seat reads its host's perspective
 (§6.6), and Survival's attacker has no sensor pass, temporary sight,
 effect-union entry or result row. The other rows are M5 work.
@@ -697,8 +701,15 @@ The session-owned `SeatRules` seam of `session.RuleSet` answers
   countdown and ending latch gate the human and its hosted computers
   `[05 R-ECO-01 §1]` `[08 R-SKIR-01 §3]`: when the host's own due block
   writes its countdown or ending bit, the same values are copied onto its
-  computers' records, so they stop settling with it. A defeated host's
-  sensor pass is a defeated viewer's and marks every unit friendly
+  computers' records, so their settlement is refused from the due that
+  arms the countdown. A host whose machine still hosts a live computer
+  never takes the ending: on its sixth due it takes retail's watch branch,
+  which sets its watch-mode bit and leaves the countdown at −1 with the
+  ending bit clear, so its computers are refused on exactly five dues and
+  then settle again `[08 R-SKIR-01 §3]`. A watching host polls victory
+  instead of defeat, no longer counts as a human still playing, and does
+  not hold the battle open (§6.5). A defeated or watching host's sensor
+  pass is a defeated viewer's and marks every unit friendly
   `[03 R-VIS-01 §4]`.
 - **Modern and Community** (`ModernSeats`, false; Community composes
   Modern's answer) gate only the human. A hosted computer keeps settling,
@@ -753,15 +764,17 @@ the available seats; Community composes Modern's answer); the
 final-removal answer of §11.1 joins that seam in M6. Single-player
 admission and difficulty are unchanged.
 
-Online rooms run Modern rules today (§16.6), so the Strict answers of both
-policies are exercised by tests until other rule sets are offered online.
-Tests cover a second computer refused under Strict and admitted under
+Online rooms choose Modern, Strict 3.1 or Community 3.9 (§16.6); with only
+the room host adding computers, a Strict room holds one. Tests cover a second computer refused under Strict and admitted under
 Modern/Community, seat exhaustion, Deathmatch refusal, fixed host
 attribution, a configuration mismatch from one seat's difficulty, two
 differently configured computers on one host each reading its own value,
 two independent clients agreeing tick for tick with computers present, and
 human-only rooms — 2 and 3 skirmish seats, 2 and 3 Survival survivors —
-locked to the digests and checksums they had before computer seats existed.
+locked to the scripted-run checksums they had before computer seats existed
+and to their rehearsal digests (§16.7). Two clients agree under each rule
+set, and the Strict watch branch is locked on the reference install
+(`TestOnlineStrictComputerStopsWithItsHostRetail`).
 A computer using a sensor perspective of its own would be a separate
 gameplay decision.
 
@@ -771,7 +784,9 @@ gameplay decision.
 sessions in every gameplay mode, Strict 3.1 included. They define the
 common-world form of retail's separate machine copies; they do not rewrite
 the retail research or change single-player, and no room switch selects
-them. Not built online yet.
+them. Q22 and Q25 are built; Q24's respawn and watcher-entry rebuild is not
+built online yet, so a watching host keeps the battle's mapping and sight
+modes.
 
 **Alliance declarations (Q22).** One directed matrix of declarations in the
 common world; the incoming rows are its transpose, not a separate copy. An
@@ -797,8 +812,8 @@ current sight and radar: each member's perspective sees what any teammate's
 sensors cover, as Survival's survivors already do (DESIGN_SURVIVAL). Explored
 history stays one grid per player (Q24); what a teammate sees also explores
 each member's own grid, as it does for Survival's survivors, so a teammate's
-view never draws as unexplored. Resource, mapping and radar sharing commands
-stay refused online. This is Nanolathe's online policy;
+view never draws as unexplored. Retail's sharing commands and alliance
+declarations add to it (§7.1). This is Nanolathe's online policy;
 retail never merges allies' sight by default `[03 §3.2]`. Single-player
 battles are unchanged.
 
@@ -828,9 +843,9 @@ Every `HumanCommandKind` falls into one of four classes:
 | `Give` | `+Give p n metal`, open in every session kind with no alliance test: a transfer from the own/controlling slot to seat `p`, the typed integer converted to single precision; a negative amount reverses it `[07 R-CAM-01 §6]` `[05 R-SHARE-01 §2]`. | **Seat command** from the issuing seat. **Nanolathe online policy (Q8):** a positive whole amount within its producer's range is ordinary sharing; any other amount is rejected at validation unless the room's cheat permission is on, when the signed retail transfer applies to any amount that producer can generate (§7.4.1). Single-player keeps retail behaviour, negative amounts included. |
 | `SetResource` | `+NoMetal p n`, `+NoEnergy p n`: write any player's stock `[07 R-CAM-01 §6]`; in retail multiplayer the next economy copy overwrote it `[08 "Economy and integrity checks"]`. | **Seat command limited to the issuing seat's own stock, behind the online cheat permission**, in every mode (Q8). |
 | `SetLogo` | `+Logo n p` sets any seat's insignia `[07 R-CAM-01 §6]`. | **Local** presentation override; the record keeps its configured logo. |
-| *(new)* share toggles, thresholds and gifts | `+ShareMetal`, `+ShareEnergy`, `+ShareMapping`, `+ShareRadar`, `+ShareAll`, `+SetShareMetal`, `+SetShareEnergy` flip the issuer's own options `[07 R-CAM-01 §6]` `[05 R-SHARE-01 §3]`; the share screen is `[05 R-SHARE-01 §5]`; retail's receiver does not check the sender `[05 R-SHARE-01 §4]`. | **Seat commands** acting on the issuing seat. Share options are per-seat battle state in the checkpoint, not configuration. |
+| `ShareMetal` … `SetShareEnergy`, `ShareGift` (online only) | `+ShareMetal`, `+ShareEnergy`, `+ShareMapping`, `+ShareRadar`, `+ShareAll`, `+SetShareMetal`, `+SetShareEnergy` flip the issuer's own options `[07 R-CAM-01 §6]` `[05 R-SHARE-01 §3]`; the share screen gives metal, then energy, then the selected units, then map information to any seated, non-watching, non-eliminated player, enemies included `[05 R-SHARE-01 §5]`; retail's receiver does not check the sender `[05 R-SHARE-01 §4]`. All act only in a networked session. | **Seat commands** (kinds 35–42) acting on the issuing seat; a toggle carries the option's value after the flip. A gift's units are explicit references, visited in ascending identifier order; its amounts are zero or more unless the room's cheat permission is on (Q8); Survival's attacker is not a target (DESIGN_SURVIVAL). Share options are per-seat battle state in the checkpoint, not configuration. Single-player refuses them at the input boundary. |
 | `View`, `ATM`, `DoubleShot`, `HalfShot`, `Visibility`, `Meteor`, `MakeSelectable`, `Spawn` | Retail cheats, most behind the cheat gate `[08 R-OOS-01 §5]`, and the Modern testing spawn. `MakeSelectable` and the line-of-sight-type half of `Visibility` are ungated in retail `[07 R-CAM-01 §6]`. `DoubleShot`/`HalfShot` toggle the typing machine's damage gates `[06 §9.2]`. | **Seat commands only when the room enabled cheats** (Q8), the ungated two included, enforced by every receiver. `View` and `Visibility` change only the issuing seat's perspective; `DoubleShot`/`HalfShot` set the issuing seat's own bits `[06 R-DMG-01 §9]` (§6.3); `ATM` and `Spawn` act for the issuing seat; `Meteor` and `MakeSelectable` act on the whole battle. |
-| *(new)* `DeclareAlliance`, `SharedVictory` | Allies-window declarations and shared victory `[05 R-SHARE-01 §1]` `[07 R-FE-01 §7]`. | **Seat commands.** A declaration `{target, value}` needs a seated, non-eliminated, non-watching issuer and a distinct such human target outside its team; shared victory `{on}` refuses watchers and seats in teams of two or more. They update Q22's matrix (§6.7). |
+| `DeclareAlliance`, `SharedVictory` (online only) | Allies-window declarations and shared victory `[05 R-SHARE-01 §1]` `[07 R-FE-01 §7]`. | **Seat commands** (kinds 43, 44). A declaration `{target, value}` needs a seated, non-eliminated, non-watching issuer and a distinct such human target outside its team; shared victory `{on}` refuses watchers and seats in teams of two or more. They update Q22's matrix (§6.7). |
 | *(not yet a command)* `ShootAll` | Toggles bit 10 of the per-machine options word, ungated `[07 R-CAM-01 §6]` `[06 §3.2]`. | **Seat command** behind the cheat permission when added. |
 | `Gameplay` | Switches the rule set at the phase-1 boundary (DESIGN_GAMEPLAY_RULES §5). | **Lobby only**; refused in a lockstep battle. |
 
@@ -848,7 +863,9 @@ only in the sending interface `[08 "Packet framing and dispatch"]`.
   The developer phrase and developer commands cannot widen the stream
   classes or bypass the permission. An invalid command has the same
   rejection and no partial effect on every honest replica; diagnostics are
-  drained outside the tick.
+  drained outside the tick. A payload no replica decodes is skipped by
+  every replica and every playback, so it cannot end the battle; only a
+  broken relay stamp does.
 - **The session validates the actors.** Phase 1 admits only units the
   entry's seat owns, inside the tick on identical state, so a forged or
   stale command is refused identically everywhere.
@@ -929,11 +946,16 @@ replay schemas, including target-player fields online authorization
 forbids. Their context comes from the session or replay kind, never from a
 payload; online admission refuses them.
 
-#### 7.4.1 Version 1 primitives and limits
+#### 7.4.1 Primitives and limits
 
 **Nanolathe protocol contracts**, not retail findings. The command schema
-version is `1`, negotiated outside the payload. A payload starts with one
-kind byte; its context comes from the admitted session or replay header.
+version is `3`, negotiated outside the payload. Version 3 adds Modern economy
+activity holds (kind 47); earlier payloads keep their bytes and semantics.
+Version 2 adds the sharing
+and alliance kinds 35–44 and changes nothing version 1 encodes, so a
+version-1 payload decodes to the same command and a version-1 replay still
+plays (§10). A payload starts with one kind byte; its context comes from
+the admitted session or replay header.
 
 | Notation | Encoding and accepted domain |
 |---|---|
@@ -1023,21 +1045,57 @@ Fields are in wire order. Records are named `<Kind>Payload` under
 | 32 | BuilderOptions / S | Guard[0..2], then Patrol[0..2], six `u8` values each 0..2; replay adds Owner `u8` 0..9 first |
 | 33 | CommunityOrderDrag / D | Unit `ref`, Index `u16`, DescriptorID `s32`, CreationTick `u32`, Target `ref` (null in v1), Goal `point`, BuildProduct optional `key`, BuildFacing `u8` 0..3, Destination `point` |
 | 34 | CommunityKickout / S | Unit `ref`, Destination `point`; requires the Community feature |
-| 35..43 | ShareMetal, ShareEnergy, ShareMapping, ShareRadar, ShareAll, SetShareMetal, SetShareEnergy, ShareGift, DeclareAlliance / D | Reserved in that order; no v1 payload, rejected even where a receiver has local helpers |
-| 44 | SharedVictory / D | Reserved; no v1 payload |
-| 45 | ShootAll / D, cheat | Reserved; no v1 payload |
+| 35 | ShareMetal / S, online only, v2 | On `bool`, the option after the flip |
+| 36 | ShareEnergy / S, online only, v2 | On `bool` |
+| 37 | ShareMapping / S, online only, v2 | On `bool` |
+| 38 | ShareRadar / S, online only, v2 | On `bool` |
+| 39 | ShareAll / S, online only, v2 | Metal `bool`, Energy `bool`, Mapping `bool`, Radar `bool`, each option after its own flip |
+| 40 | SetShareMetal / S, online only, v2 | Amount `s32`, the typed integer |
+| 41 | SetShareEnergy / S, online only, v2 | Amount `s32` |
+| 42 | ShareGift / S, online only, v2; cheat for a negative amount | Target `u8` 0..9, Metal `s32`, Energy `s32`, Actors `actors` (ascending identifier order), MapInfo `bool` |
+| 43 | DeclareAlliance / S, online only, v2 | Target `u8` 0..9, Value `bool` |
+| 44 | SharedVictory / S, online only, v2 | On `bool` |
+| 45 | ShootAll / D, cheat | Reserved; no payload in any version |
 | 46 | DeveloperSpawn / R | Pattern `key` (wildcards allowed), Owner `u8` (the typed integer's low byte), Position `point`; replay only (DESIGN_DEVELOPER_TOOLS §8). Online codecs and receivers reject it. |
+| 47 | EconomyActivity / S, v3 | Activity `u8` 1 generation, 2 construction, 3 weapons, 4 upkeep, 5 healing, 6 cloaking, 7 reclaim; Pause `bool`. Acts only on the issuer, requires the bound economy hold rule, and needs no cheat permission. |
 | 255 | Gameplay / R; lobby-only online | Mode name `key`, resolved through the registered rule sets |
 
-Every unlisted number is invalid. Sharing and alliance kinds need M5's
-owning service contract and a new schema version; reserving numbers
-authorizes no threshold or gift arithmetic. `GroupAssign` has no Preserve
+Every unlisted number is invalid. Kinds 35–44 exist from version 2 and
+only online: retail runs them only in a networked session
+`[07 R-CAM-01 §6]` `[05 R-SHARE-01 §5]`, so the single-player replay
+context has neither their bytes nor their application. Their receiver
+admission is §7.1's. `GroupAssign` has no Preserve
 or filter Mask: those belong to recall. Replay `Give` takes its source from
 the own/controlling slot at drain time `[07 R-CAM-01 §6]` and keeps signed
 amounts and the negative-amount edge `[05 R-SHARE-01 §2]`; online uses the
 stamp and §7.4.1's bound. Replay `SetLogo`, `NoShake`, `View`,
 `BuilderOptions` and `Gameplay` keep their single-player effects; online
 context cannot request replay-only fields or bypass cheat checks.
+
+**Modern activity controls (user-authorized 2026-10-12).** Kind 47 sets a
+hold on both resources for the issuing player and activity until explicit Play.
+Repeated pause or resume intent is idempotent; no clock expires a hold.
+Strict and Community refuse
+the command. Single-player replay carries the same two fields. Upkeep switches
+off currently active, complete, switchable building-class units with positive
+authored energy use through their ordinary activation edge. Restoration retains
+allocation identity and owner; an explicit activation command, including off,
+supersedes it. An activation order already queued when the hold starts also
+keeps its intent: the hold switches the unit off but retains no restoration for
+it. New units and non-switchable/mobile costs remain ordinary. The owning
+policy is DESIGN_ECONOMY_CONSTRUCTION "Modern economy explanation and temporary
+activity holds".
+
+The canonical checkpoint carries active holds in economy's optional tag bit 3:
+ten fixed activity rows of active bits. Runtime's wind tag bit 2 announces the optional
+upkeep-restoration list: count, then each stored owner, handle and allocation
+serial. Existing no-hold bytes and summaries remain unchanged; observed resource
+attribution is excluded. Save/load starts fresh with no holds. Save projection
+resumes only retained same-owner upkeep intent on detached unit and COB copies:
+the saved unit is activated and its saved VM has the ordinary deferred Activate
+callback queued after existing work. No live script or random stream runs while
+saving, and manual off intent remains off. No hold metadata is persisted and
+sidecar schemas remain 1 and 2.
 
 Online counted production accepts −32767..−1 and 1..32767; the local
 adapter normalizes Count 0 to 1 before recording. Single-player replay
@@ -1120,6 +1178,11 @@ type CommandReceipt struct { Stamp CommandStamp; Outcome CommandOutcome; Diagnos
 type CommandOutcome uint8 // explicit constants: CommandApplied=1, CommandNoOp=2, CommandRejected=3
 func EncodeSeatCommand(context CommandContext, c SeatCommand) ([]byte, error)
 func DecodeSeatCommand(context CommandContext, payload []byte) (SeatCommand, error)
+// The Version forms encode or decode in a named command schema version
+// (netproto.CommandSchemaVersion is this build's); a replay decodes in its
+// recorded one.
+func EncodeSeatCommandVersion(version uint16, context CommandContext, c SeatCommand) ([]byte, error)
+func DecodeSeatCommandVersion(version uint16, context CommandContext, payload []byte) (SeatCommand, error)
 func (s *Session) EnqueueSeatCommand(stamp CommandStamp, c SeatCommand) error
 func (s *Session) DrainCommandReceipts() []CommandReceipt
 ```
@@ -1599,7 +1662,11 @@ owns the recording seams (`SetReplayRecorder`, `PrepareRecordedBattle`,
 - **Online.** The relay stream as granted: each tick's commands with their
   seats and stream positions. A recorder wraps the battle's
   `lockstep.Client`, so the relay, the driver and the network overlay are
-  unchanged.
+  unchanged. Empty command payloads have no effect under §7.2 and cannot be
+  encoded by replay version 1, so the recorder omits them. Every later
+  command retains its original stream position, and the tick's pump and
+  checksum are still recorded. Nonempty undecodable payloads remain in the
+  file and are skipped during playback as they were during the live battle.
 - **Checks.** `UnitStateChecksum` every 30 ticks, the cadence the online
   acknowledgement uses (§9.2), and the battle's initial checksum in the
   header.
@@ -1637,7 +1704,9 @@ oldest finished replays to the newest 100.
 **Playback.** Playback refuses a file whose content, map, mod, rules or
 configuration identity differs from what this install can compose, and
 names the difference; the build digest is advisory, since the checksums
-decide. It composes the battle exactly as battle entry did — single-player
+decide. A recording made under an older command schema plays, its commands
+decoded in the recorded version (§7.4.1); a newer schema is refused. It
+composes the battle exactly as battle entry did — single-player
 through the admitted path, which composes the battle ordinary single-player
 entry composes, online through the online composition for the recording
 seat — then runs the recorded pumps (`StepRecordedPump`) or granted ticks
@@ -1669,6 +1738,9 @@ as it can, mounting the replay's own mod unless `--mod` chooses one, prints
 one summary line and exits non-zero at the first mismatch or an
 incompatibility. `--replay FILE` opens it in the window. `--record-replay
 FILE` records a `--headless` or `--shot` battle to that file.
+
+Chat lines are not recorded: they travel beside the stream (§12.2) and
+change nothing a tick computes.
 
 **Later.** Pacing notes, chat and session events, rewind, sharing, and a
 canonical-checkpoint digest beside the unit checksums. Compatibility
@@ -1872,22 +1944,34 @@ acknowledgements and checksums.
 
 ### 12.2 Messages
 
-The hosted protocol is **version 7**; §16.5.1–§16.5.2 and §16.6.1 hold its
+The hosted protocol is **version 8**; §16.5.1–§16.5.2 and §16.6.1 hold its
 rules. Messages are bounded, length-prefixed binary frames in `netproto`
 primitives, carried over TLS or WebSocket (§12.3).
 
-**Versions.** The relay serves versions 5, 6 and 7 in the same rooms. It
-records each seat’s Hello version and answers its Welcome in that version;
-a Description is the same in all three. Versions 6 and 7 receive Progress,
-so version 5 receives its existing stream. Version 7 adds OpeningReady;
-versions 5 and 6 are implicitly opening-ready. Other versions are refused
-naming the served versions and the client’s. A client speaks version 7 and
-refuses a Welcome in another version. The relay must be upgraded before
-version-7 clients connect; a relay restart ends its live rooms (§12.5).
+**Versions.** The relay serves versions 7 and 8 in the same rooms, one
+version back. It records each seat’s Hello version and answers its Welcome
+in that version; a Description is the same in both. Version 8 adds display
+names and chat. A version-7 seat retains command schema 1 and receives no
+names or chat. A version-8 hello carries any nonzero `u16` command schema
+(§7.4.1): the relay forwards commands without interpreting them, so its
+own build's command version cannot limit the clients. Every join must name
+the creator's exact command schema before a seat is reserved or welcomed,
+in both ordinary lobbies and auto-start rooms. Different command schemas
+can use different rooms on the same relay; matching schemas still need
+matching content, configuration and rehearsal digests. Other hosted versions are
+refused naming the served versions and the client’s. A client speaks
+version 8 and refuses a Welcome in another version. The relay must be
+upgraded before version-8 clients connect; a relay restart ends its live
+rooms (§12.5).
+
+Command additions alone do not change the hosted transport version. A
+change to the framing, messages, bounds or transport semantics must revise
+the hosted compatibility contract and pass the live release gate (§16.5.6).
+The development loopback relay retains its exact-current-schema check.
 
 | Direction | Message | Content |
 |---|---|---|
-| client → relay | Hello | protocol version, room code (empty to create), the seat's `LocalHello` (a joiner asks for any seat), flags (auto-start), and from a creator the room size and the encoded base configuration |
+| client → relay | Hello | protocol version, room code (empty to create), the seat's `LocalHello` (a joiner asks for any seat), flags (auto-start), from a creator the room size and the encoded base configuration, and in version 8 the player's display name |
 | client → relay | Describe | a room code; answered with that room's base configuration and size |
 | client → relay | Team, Side, Colour | the sender's team, side or colour (0–9), while it is not ready; a colour another present seat holds changes nothing |
 | client → relay | Configuration | from the host before Start, a replacement base configuration |
@@ -1896,19 +1980,35 @@ version-7 clients connect; a relay restart ends its live rooms (§12.5).
 | client → relay | OpeningReady | version 7, after Started: no payload; the sender’s local opening is ready for gameplay (§16.6.1) |
 | client → relay | Submit | the client sequence and an opaque command payload (§4.2, §7.4) |
 | client → relay | Acknowledge | the tick executed, the unit checksum at every 30th tick, the battle-ended bit and the seat-final bit |
+| client → relay | Chat | version 8, in the lobby or the battle: the recipient seats as a mask, bit n naming seat n, and the line |
 | relay → client | Welcome | the room code and the assigned seat |
 | relay → client | Description | the room's base configuration bytes and size |
-| relay → client | Lobby state | the room size; per seat whether it is present and ready, its team, side and colour; and a mismatch bit when every present seat is ready but their digests differ |
+| relay → client | Lobby state | the room size; per seat whether it is present and ready, its team, side and colour, and in version 8 its display name and whether it can receive chat; and a mismatch bit when every present seat is ready but their digests differ |
 | relay → client | Configuration | the room's latest base configuration, to each joiner and after every host change |
 | relay → client | Started | the frozen match’s local opening may start, with the sender’s slot; grants wait for every opening-ready seat |
 | relay → client | Grant | a sealed tick and its commands `{seat, sequence, position, payload}` |
 | relay → client | Progress | versions 6 and 7, after Started: the last tick compared across playing seats, the newest sealed tick, and per slot whether it still plays, whether its result is final, its last acknowledged tick and the relay's ping round trip (§16.5.2) |
+| relay → client | Chat | version 8: the sender's seat and the line |
 | relay → client | Refused, Failed, Done | a refused hello, join, description or command, with its reason; a room failure with its reason; explicit normal completion |
+
+**Names and chat.** A display name is at most 16 bytes of printable ASCII
+other than `<` and `>`, with no leading or trailing space; the empty name
+means none, and the client shows "Player n". Names need not be unique. A
+chat line is 1–128 bytes of printable ASCII. The relay forwards a line only
+to the named seats that are present and speak version 8, never to its
+sender, and interprets nothing in it: the sending client resolves retail's
+recipient prefixes into the mask (DESIGN_INTERFACE_HUD_INPUT §3.9). Each
+seat may send a burst of five lines, then one a second; the relay drops the
+excess, and a client spaces its own lines at 1.25 seconds so jitter never
+reaches the relay's limit. A line the relay can do without is dropped
+rather than queued behind grants once its recipient's queue is long. A
+line never enters the stream, a replay or a checksum, and no tick depends
+on it.
 
 **Later messages:** a resume with seat credential and connection epoch
 (§11.2), digest reports with the agreed summary (§9.2), pacing
 requests (refused while Q5 stands), seat requests and removal calls and
-ballots (§11.1), chat, ping, desync and seat-status notices, and a
+ballots (§11.1), ping, desync and seat-status notices, and a
 two-stage start in which the relay freezes the configuration, draws the
 seeds and confirms Start only after every participant acknowledges that
 exact configuration and its initial checkpoint.
@@ -1940,9 +2040,10 @@ measurements justify it.
 
 A room today is a frozen battle configuration reached by its code: the host
 creates it, a joiner enters the code, both ready, and the host starts
-(§16.6). Later the lobby grows room lists, seat editing, computer seats,
-chat, display names and, last, accounts, ratings
-and matchmaking as web services beside the relay. The retail battleroom
+(§16.6). The host chooses the rules, the map, the teams and the computer
+seats, and everyone names themselves and chats. Later the lobby grows room
+lists and, last, accounts, ratings and matchmaking as web services beside
+the relay. The retail battleroom
 `[07 §12]` is the reference for what it offers (§3.3). Of retail's host
 options, *game closed* stays room state and *watching allowed* goes into the
 configuration `[08 R-SKIR-01 §12]`; a room has its own defaults
@@ -1950,16 +2051,28 @@ configuration `[08 R-SKIR-01 §12]`; a room has its own defaults
 
 ### 12.5 Operations
 
-One always-running relay instance; a restart or redeploy ends its live
-rooms without a result, and there is no cross-instance room lookup,
-database, autoscaling or reconnect. The room, connection, byte and time
+One always-running relay instance, with no cross-instance room lookup,
+database, autoscaling or reconnect. On SIGTERM the server drains
+(`HostedServer.Drain`): it refuses new rooms and closes lobbies, lets
+running matches play on, and exits when none remain, after
+`--drain-timeout` (100 seconds by default, below the platform's grace) or
+at a second signal; a match still running then ends without a result. The room, connection, byte and time
 bounds are §16.5.1, so one misbehaving room fails alone. A separate health
 listener reports readiness outside the connection limit (§16.5.6).
+
+Drain, room admission and the transition from lobby to match share the
+server's lifecycle mutex. A join or Start already in flight cannot start a
+match after draining begins. The status match and lobby counts read that
+same lifecycle state, independently of the progress snapshots: a match is
+counted before any Started message is sent and remains counted until its
+room finishes flushing and is released. Shutdown therefore cannot mistake
+a started match awaiting snapshot publication for an empty relay.
 
 **Public status.** `/status` (an HTML page that refreshes itself) and
 `/status.json` on the relay's port show: players, matches, lobbies and
 connections; totals since start of rooms, matches started, completed and
-ended early by reason, and the peak player count; each open room by
+ended early by reason, the peak player count, and chat lines relayed and
+dropped; each open room by
 sequence number with its phase, size, players, age or duration, ticks and
 tick rate, orders and orders per second, bytes in and out, bytes still
 queued and the last checksum-compared tick; each seat's readiness, team,
@@ -1967,12 +2080,19 @@ side, WebSocket round trip, acknowledgement lag in ticks and milliseconds,
 and whether it is defeated or has left; and the last 20 closed rooms with
 duration, players, ticks, orders and how each ended. Room pings every 5
 seconds carry their send time, so each pong measures the round trip. The
-page shows no room code (an invitation), address or process-level resource
-figure.
+page shows no room code (an invitation), address, name, chat text or
+process-level resource figure.
 
 **Operator log.** Once a minute the server writes one line with the same
-counts plus process heap, total memory and goroutines. Routine logs carry
-no room codes or credentials. Later: stream retention for rejoin, archives
+counts plus process heap, total memory and goroutines, and one line per
+ended room with its outcome and the seat whose message, departure, output
+queue or silence ended it (`FinishedRoom.Seat`). A required broadcast that
+fails a recipient's output queue names that recipient, regardless of which
+seat triggered the broadcast or whether a grant timer triggered it. Routine
+logs also identify the first seat still awaiting `OpeningReady` when a
+started match's opening expires; expiry without a started match names no
+seat. Routine logs carry no room codes, credentials, names or chat text.
+Later: stream retention for rejoin, archives
 under a declared release policy, and the trusted roles of §12.6.
 
 ### 12.6 Competitive authority and future state delivery
@@ -2107,6 +2227,9 @@ finding.
 | Q28 | Protocol values (Nanolathe's, revisable here): a rejoining seat counts as out of play; the grace is cumulative out-of-play time; only a completed rejoin cancels a vote; an uncompleted rejoin returns to the drop state after `RejoinGraceMilliseconds`; a 30-second vote window that closes early; a 60-second cooldown after a failed or tied vote; one open vote per subject; a fixed electorate; the call casts the caller's yes and ballots cannot change; a battle with no active playing human ends without a result after the grace; a lag bound moves a connected seat that makes no progress into the drop state (M6); the client-sequence rules of §4.2 and the Refused message; one `session.RuleSet` answer for unit retention and hosted computers; at most 10,000 area entries and an actor-times-entry product of at most 1,048,576 per online command; no battle-wide difficulty word. |
 | Q29 | A finally removed seat is absent from the end-condition sweeps in every mode, as retail's cleared record is `[08 R-LEAVE-01 §3]` `[08 R-LEAVE-01 §5]`; a seat only out of play blocks victory until voted out. Under Modern and Community the removed human's per-seat block keeps running, so the perspective its computers borrow stays live (§6.5, §11.1). |
 | Q30 | Under Modern and Community a hosted computer keeps playing, with normal sight, after its host human is defeated: the host's countdown gates only the human, and the defeated host's sensor pass stays an ordinary viewer's while one of its computers lives. Strict 3.1 keeps retail's one countdown per machine (§6.6). |
+| Q31 | An online room plays one of the reserved rule sets — Modern, Strict 3.1 or Community 3.9 — chosen by its host in the lobby and agreed in the configuration; a room starts on the reserved base of the host's current mode, and a mod's minimum gameplay applies (§16.6). |
+| Q32 | Players name themselves, optionally, and chat in the lobby and in battle through the relay. Battle chat keeps retail's recipient prefixes; a watcher or defeated seat cannot chat in battle; names need not be unique; chat is never recorded and changes no tick (§12.2). |
+| Q33 | Retail's sharing and alliance commands — share toggles and thresholds, SHARE-screen gifts of metal, energy, units and map information, Allies-window declarations and shared victory — are seat commands in every online mode, applied on their tick in stream order (Q22, Q25). A negative gift needs the cheat permission (Q8); Survival's attacker is not a gift target. Single-player refuses them, as retail runs them only in a networked session (§7.1). |
 
 ## 16. Delivery plan
 
@@ -2356,13 +2479,15 @@ adapter captures references at submission and keeps its legacy semantics
 otherwise. Online, the supported kinds apply; ATM, own-stock SetResource,
 MakeSelectable and Meteor need the cheat permission, Spawn the permission and
 the Modern set; `Give` follows Q8 and Q28; CommunityKickout needs its
-feature. MobileBuild, CommunityOrderDrag, View, Visibility, DoubleShot,
-HalfShot and the reserved kinds 35–45 are refused naming M5, except that the
-online session admits MobileBuild with its known-site check (§16.4.2).
+feature; the sharing and alliance kinds 35–44 follow §7.1. MobileBuild,
+CommunityOrderDrag, View, Visibility, DoubleShot and HalfShot are refused
+naming M5, except that the online session admits MobileBuild with its
+known-site check (§16.4.2); the reserved ShootAll is refused in every
+schema.
 Local kinds,
 replay-only NoShake and SetLogo, lobby-only Gameplay and unlisted numbers
 are never admitted online; the single-player replay context applies every
-S, D and R kind. Receiver rules: a stream position exceeds every position
+S, D and R kind it has a form for. Receiver rules: a stream position exceeds every position
 accepted so far (§4.2); an online stamp names a human row not finally
 removed whose record is neither Watcher nor observer; a replay stamp equals
 `LocalOwner`; online coordinates fit the signed 32-bit raw 16.16 range (a
@@ -2768,7 +2893,7 @@ function pointer alone does not establish the admitted binding.
 |---|---|---|
 | Terrain/plots | Row-major occupancy words, metal, feature index/sentinel, anchor/damage, gameplay flags; `metalSeeded`; feature names/definitions in record order, including nil rows and runtime appends. | Immutable geometry/heights, physics/map constants and LOS words bind admitted map inputs. The entry void sweep must be finished. Never-explored marker and placer nibble are presentation-only; any otherwise unclassified flag bits are retained. Static obstacle revision is diagnostic. |
 | `features.Service`, `Instance` | Global reproduction cursor, arena held, instances by sorted anchor index, exact active head-to-tail order; definition, cell/position/velocity/orientation, footprint, burning/animating/countdown/suppression, cursor frame/delay/sequence presence/key, active/arena/runtime-live flags, animation selector, damage accumulator. | `runtimeLive` affects replacement transforms. Lookup caches rebuild from sorted keys; active linkage reconstructs from the retained active order. Active-walk/pending-burn handoffs are rejected. Last reproduction index, reclaim/status/sinking/settled/shadow presentation and saved anchor staging are excluded. |
-| `visibility.Service` | Semantic mode bits, dimensions, row-major word mask; byte grids by player then row; local/team/viewer-defeated; footprints by observer ID with owner/cells/height/radius/quantized/live/stored cells/stored byte; effective Community inputs. | Fog caches, the mode cache-valid bit, publication versions/identities and rebuild flags are excluded. Spokes derive from immutable ray tables. The sensor index rebuilds every sensor tick; `sensorInputs` and `sensorStatusByID` have no production readers. Contact bits live in unit flags; cadence in session/ledger. |
+| `visibility.Service` | Semantic mode bits, dimensions, row-major word mask; byte grids and retained wide coverage counts by player then row; local/team/viewer-defeated; footprints by observer ID with owner/cells/height/radius/quantized/live/stored cells/stored byte; effective Community inputs. | Fog caches, the mode cache-valid bit, publication versions/identities and rebuild flags are excluded. Spokes derive from immutable ray tables. The sensor index rebuilds every sensor tick; `sensorInputs` and `sensorStatusByID` have no production readers. Contact bits live in unit flags; cadence in session/ledger. |
 | Movement base state | Per-handle routes, steers, collisions, flights, copied profiles/names, working sets, previous move tier/SFX band; layer registry, learned terrain, pending layers, active orders/next activation, arrival handles, move/record goals, provider, first requests, unreachable/jam/traffic/pocket state, work tick/smoothing budget, pilots, repair landings, air-base lists; effective fallback/Community/path-player/unit-limit inputs and current tick. | The tick must be ended, the overlap scan inactive and the provider eligibility cache invalid. Diagnostics, path failures, history/lab counters and per-call scratch walks are excluded. `passAlliance`/`trafficNow` are replaced at BeginTick for the recognized pure rules; unknown stateful rules cannot claim that exclusion. |
 | Route/profile/steer | Entire route `Points[20]`, count/active/dirty/repath/request/status/first-hold/pending; all eight profile footprint/water/slope fields; steer X/Z, heading/pending heading, dirty/speed/max velocity/turn rate/height/sea-level/definition flags/acceleration/brake. | Inactive route storage remains readable. `Route.StaticRevision` has only diagnostic readers. |
 | Collision/flight | All collision scalars, yard values, half-bias state, filing, saved/proposal/stamp/blocker/lean/turn fields; all flight scalars including mode mirror, targets, gravity/bank/pitch, and unit/command edges. Filing retains `Filed`, `OffMap`, `SX`, `SZ`, `Seq`, cargo included. The selected air sector is nil/record index/sentinel, never recomputed from position; tags are nil 0, record 1 then zero-based u32 index, sentinel 2. | Flight-command `Flags` is stream/publication bookkeeping; the command otherwise retains payload/owner/unit, position, velocity and heading. Immutable air-sector records bind terrain. Retained collision residuals are not reconstructed from current transforms. |
@@ -2824,10 +2949,14 @@ behaviour.
 
 #### 16.3.6 Canonical format and public API
 
-Schema 2 (2026-10-09) adds constructor patrol assignment/return references,
+Schema 3 (2026-10-14) adds visibility's retained wide coverage rows. Counts
+remain meaningful across rule switches and are not recoverable from saturated
+byte grids and observer records. The shared schema version also changes the
+AI application-history hash domains; their receipt payloads are unchanged.
+Schema 2 (2026-10-09) added constructor patrol assignment/return references,
 return outcome receipts and the route-wide recovery pause. Ordinary scalar
 command/AI order receipts keep their existing encoding; the canonical graph
-now preserves these simulation continuations.
+preserves these simulation continuations.
 
 **Leaf and files.** `internal/sim/checkpoint/{encoder,format,refs}.go` is a
 standard-library-only leaf: owners import it without pointing back to session
@@ -2838,7 +2967,7 @@ dependencies.
 
 ```go
 // internal/sim/checkpoint
-const SchemaVersion uint16 = 2
+const SchemaVersion uint16 = 3
 const OwnerCount = 13
 
 type Owner uint16
@@ -3434,9 +3563,11 @@ misses against admitted absence metadata.
 **Visibility:** Community values/binding tags, dimensions, rule binding,
 byte grids, sorted observer footprints, local player, semantic mode bits
 (all but fog-valid), ray-table and shape presence/keys, teams, terrain
-presence, viewer-defeated, word mask. Masks and ray tables resolve as
-admitted catalog objects. Readers are never invoked. Derived fog, spokes,
-sensor indexes and counters are excluded and not rebuilt. The key-collection
+presence, viewer-defeated, wide coverage rows, word mask. The ten wide rows
+carry their lengths and row-major `uint64` counts, including retained rows
+under Strict; absent and empty rows both have length zero. Masks and ray tables
+resolve as admitted catalog objects. Readers are never invoked. Derived fog,
+spokes, sensor indexes and counters are excluded and not rebuilt. The key-collection
 loop and its numeric sort are pinned by the I1 architecture audit.
 
 #### 16.3.12 U3 path-owner framing
@@ -4171,11 +4302,13 @@ CampaignSlot i64; Clock.GlobalTick u32; Community; DefeatDone bool;
 EnemyOwner u8; EntryCommunity; Gameplay string; Latch; LocalOwner u8;
 Meteor; Mutators; Progress; RNGCrtSeed u32; RNGSimSeed u32; Restrictions;
 Rules { Base string; Name string }; Skirmish; State u8; VictoryDone bool;
-ViewingOwner u8; Wind presence/payload; battleEntryTailDone bool;
-builderOptionsReady bool; campaignPlayerSide [10]i8;
-campaignPlayerSideKnown [10]bool; deathmatchActive bool;
-deathmatchAttempts u16; deathmatchExhausted bool;
-deathsWithNoRecordedCause i64; noShake bool; pendingCommanderDeaths [10]bool;
+ViewingOwner u8; Wind tag u8 (bit 0 wind present, bit 1 online)/payload;
+battleEntryTailDone bool; builderOptionsReady bool;
+campaignPlayerSide [10]i8; campaignPlayerSideKnown [10]bool;
+deathmatchActive bool; deathmatchAttempts u16; deathmatchExhausted bool;
+deathsWithNoRecordedCause i64; noShake bool;
+onlineResults.sharedVictory [10]bool (online only);
+pendingCommanderDeaths [10]bool;
 playerBuilderOptions [10]BuilderOptions; result; resultArmedTick u32;
 resultPending bool; resultPendingDraw bool; resultPendingLosers []i64;
 resultPendingReason string; resultPendingWinner i64;
@@ -4262,7 +4395,11 @@ lengths and row-major bytes, one unsigned word per scalar. The caller owns
 service presence; a missing service or accumulator errors with no partial
 append. It reads no footprint map, dimension, sensor cache, rule or reader,
 allocates nothing and does not refresh visibility. Nil and empty grids both
-contribute zero length.
+contribute zero length. Under Modern's approved [coverage
+saturation](DESIGN_WORLD_VISIBILITY.md#modern-coverage-saturation) the
+byte rows hold `min(count, 255)`, so the fragment compares any overlap at or
+above 255 as 255. Wide counts are a deliberate blind spot of this cheap
+fragment; the full checkpoint retains them (§16.3.11).
 
 #### 16.3.42 U6 closed stateless rule tags
 
@@ -5595,19 +5732,19 @@ nanolathe --root ~/TotalAnnihilation --mod none --map 'ashap plateau' --fullscre
 ### 16.5 Hosted relay
 
 The hosted relay serves the online battles of §16.6 — 2–10 human seats,
-with §16.4's Modern battle, unit checksum, command vocabulary and per-seat
-simulation — over the Internet, with no artificial order delay. A lost
+with §16.4's unit checksum, command vocabulary and per-seat simulation
+under the room's rules — over the Internet, with no artificial order delay. A lost
 connection of a seat still playing ends the room without a result or any
 gameplay removal; a seat whose result is final may leave (§16.6.1). Room
-lists, computer seats, reconnect and removal votes are later work.
+lists, reconnect and removal votes are later work.
 
 #### 16.5.1 Transport and admission contract
 
 `internal/relay` reuses the loopback relay's grant, command and
 acknowledgement payloads and identity comparison, and adds the hosted
-handshake and lobby (§16.6.1). The hosted protocol is version 7, and the
-relay also serves version-5 and version-6 seats (§12.2); a hello of another
-version is refused naming the served versions and the client's.
+handshake, lobby and chat (§16.6.1). The hosted protocol is version 8, and
+the relay also serves version-7 seats (§12.2); a hello of another version
+is refused naming the served versions and the client's.
 
 ```go
 type HostedConfig struct {
@@ -5619,6 +5756,7 @@ type HostedConfig struct {
 type HostedDialOptions struct {
     TLSConfig *tls.Config
     InsecureLoopback bool
+    Name string // the display name the hello carries; empty for none
 }
 func ListenHosted(address string, config HostedConfig) (*HostedServer, error)
 func (s *HostedServer) Addr() string
@@ -5722,8 +5860,8 @@ bit, then receive explicit normal completion. Surplus grants already sent
 are drained without running any tick after the shared terminal state. A
 discrepancy fails the room instead of awarding a result.
 
-**Progress report.** After Started the relay sends each playing version-6
-or version-7 seat a Progress message (§12.2) about once a second, and at once
+**Progress report.** After Started the relay sends each playing seat a
+Progress message (§12.2) about once a second, and at once
 when a seat leaves or its result becomes final. It carries the agreed tick — the
 last tick whose ended bits, and at every 30th tick unit checksums, the
 relay has compared across every playing seat — the newest tick it had
@@ -5854,7 +5992,8 @@ queries and other paths; `ws://` needs the numeric-loopback test switch.
 Certificate verification is always on.
 
 **Deployment.** `deploy/relay` is exported as a reproducible source snapshot
-into the private `nanolathe-relay` repository with the upstream revision and
+into the private `nanolathe-relay` repository (the sibling checkout
+`../nanolathe-relay`) with the upstream revision and
 source-file digests; the engine tree stays the source of truth for protocol
 code. It holds the MIT license, a Linux/amd64 multi-stage Dockerfile whose
 static non-root image contains only the relay, the wire package and the
@@ -5869,6 +6008,38 @@ or reconnect. The custom hostname `relay.nanolathe.gg` needs both its DNS
 CNAME and its registration on the app before App Platform issues the
 certificate.
 
+**Compatibility release gate.** `tools/check-relay` uses
+the candidate build's client and command schema against
+`wss://relay.nanolathe.gg/relay`. It creates a two-seat lobby, describes it,
+joins it, verifies that both clients see both seats, and closes its own
+connections without starting a battle. It loads no game assets. Connection
+failures, refusals and incomplete handshakes fail the bounded check; a
+healthy HTTP endpoint alone is insufficient. Run it before landing changes
+to the hosted protocol or command schema and after deploying the relay.
+The tool extracts only the probe and relay dependencies from the exact
+committed revision (`HEAD`, or `--revision COMMIT`) into a temporary
+directory, reuses the normal Go build cache, and runs
+`cmd/nanolathe-relay-check`. Dirty working files cannot make another
+revision pass. From the primary checkout, install `.githooks/pre-push` with
+`git config --local core.hooksPath "$(git rev-parse --show-toplevel)/.githooks"`:
+the absolute hook directory also covers older worktrees. Pushes to `main` check
+the exact outgoing commit locally and stop on failure, with no branch
+publication or GitHub wait. Other branch pushes do not run the probe.
+CI runs it on pushes and pull requests; browser publication depends on it
+and repeats it immediately before releasing. Native installers follow
+`main`, so the check must pass on the candidate before it lands too.
+
+**October 14, 2026 failure.** Command schema 3 reached desktop and browser
+clients while the deployed relay snapshot still required schema 2 under
+the same hosted protocol 8. Client-and-relay tests from one source revision
+passed; neither the release workflow nor `/healthz` tested the running
+relay's admission. Its refusal was also mislabeled as a host mismatch.
+Version-8 admission now compares clients within a room instead of using
+the relay build's command constant. Regression tests exercise older,
+future and maximum command versions, reject zero and mixed-schema joins
+without consuming a seat, and preserve version-7 and local-relay limits.
+Server schema refusals and host mismatches have distinct client messages.
+
 ### 16.6 First online lobby
 
 The main menu's MULTI entry offers two choices, Create Game and Join Game,
@@ -5880,9 +6051,15 @@ is ready the host starts the match. The lobby's rules:
 - **Rooms hold up to 10 players, computers included.** A skirmish can
   start with 2 up to the most start positions any of the map's network
   schemas offers; Survival with 2–3 survivors, ignoring start positions
-  (DESIGN_SURVIVAL). At least two players are human. Gameplay is Modern.
+  (DESIGN_SURVIVAL). At least two players are human.
+- **Rules.** The host chooses Modern, Strict 3.1 or Community 3.9 (Q31). A
+  room starts on the reserved base of the host's current gameplay mode, a
+  mod's minimum gameplay applies, and the choice is part of the agreed
+  configuration, so every seat binds the same `session.RuleSet`. Changing
+  it drops computers beyond the new rules' cap (§6.6).
 - **The host may add computer players** (§6.6), Classic or Modern, each
-  with its own difficulty, side, team and colour. They are rows of the base
+  with its own difficulty, side, team and colour, as many as the rules
+  allow: one under Strict 3.1, any free seat under Modern and Community. They are rows of the base
   configuration, hosted by seat 0, and every seat composes them after its
   present humans.
 - **The host's settings stay open until Start.** The host chooses the game
@@ -5898,9 +6075,10 @@ is ready the host starts the match. The lobby's rules:
 - **Teams and sides.** Each player picks their own team (none or 1–5) and
   side (any side the catalog defines) by clicking them while not ready.
   Teams are static: alliances are set from them at entry, teams of two or
-  more share victory `[08 R-SKIR-01 §3]` `[05 R-SHARE-01 §1]`, declaration
-  and sharing commands stay refused online, and teammates share sight
-  (§6.7). A skirmish with every player on one team cannot start
+  more share victory `[08 R-SKIR-01 §3]` `[05 R-SHARE-01 §1]`, and
+  teammates share sight (§6.7). In battle a lobby team cannot be broken,
+  but players may declare alliances outside it and share with anyone
+  (§7.1). A skirmish with every player on one team cannot start
   `[08 R-SKIR-01 §12]`. Survival has no team choice: the survivors are one
   side.
 - **Colours.** Each player has one of the ten player colours (0–9, the logo
@@ -5918,6 +6096,10 @@ is ready the host starts the match. The lobby's rules:
   in ascending seat order as slots, with their teams, sides and colours,
   then the base's computers —
   prepares it, runs the rehearsal (§16.7) and reports both digests.
+- **Names and chat.** Each player may set a display name, remembered in
+  the settings, shown in the lobby, the battle's chat and the result rows;
+  without one a player is "Player n". Everyone in the lobby can chat
+  (§12.2).
 - **The host draws the seed pair** with `crypto/rand` when it creates the
   room; the configuration digest covers it (§8.3).
 - **Room codes are six characters** from the 21-symbol alphabet of §16.5.1.
@@ -5971,10 +6153,10 @@ The relay treats configurations as opaque bytes and interprets no gameplay.
   digests; otherwise the relay repeats the lobby state. **Started** then
   goes to every seat with its slot, the rank of its seat among the present
   seats, before the local opening; grants stamp commands with slots.
-- **OpeningReady** (version-7 client to relay, after Started): a message
+- **OpeningReady** (client to relay, after Started): a message
   with no payload, sent once when the local opening allows gameplay. The
   relay seals no grant until every human slot is opening-ready; computer
-  players need no marker. Versions 5 and 6 are implicitly ready. Duplicates
+  players need no marker. Duplicates
   are harmless; a marker before Started, from a legacy seat, or with extra
   bytes fails the room. The 30-minute room-wait deadline is restarted for
   the opening, and regular Progress reports continue with sealed tick zero.
@@ -6001,8 +6183,11 @@ options) (HostedRoomDescription, error)` with the configuration and size;
 `OpenHostedLobby(ctx, address, room, hello, config, size, options)
 (*HostedLobby, error)`; and on `*HostedLobby`, `Code()`, `Seat()`,
 `State()` (the latest `HostedLobbyState` snapshot — size, per seat present,
-ready, team, side and colour, the mismatch bit, the configuration version
-and Started, with the local slot once started — never blocking),
+ready, team, side, colour, display name and whether it can receive chat, the
+mismatch bit, the configuration version and Started, with the local slot
+once started — never blocking), `SendChat(recipients, text)` and
+`DrainChat(dst)` (also on the battle's `*LocalClient`, which keeps the
+seats' numbers),
 `Configuration()` (the latest base configuration bytes), `SetTeam(team)`,
 `SetSide(side)`, `SetColor(color)` (below `HostedColors`, 10),
 `SetConfiguration(config)` (host only),
@@ -6028,11 +6213,14 @@ replay streams and authoritative checksums; post-landing effects continue
 while gameplay runs. `address` is
 `host:port` for TLS or a `wss://host/relay` URL, as for `--relay-address`.
 
-The session's lobby helpers: `session.OnlineMatchSetup{Survival, MapName,
-Seats []OnlineSeat{Team, Side, Color}, SimSeed, CRTSeed, SurvivalOptions,
-SideCount}` with `Rows()` (the seats, plus the attacker in Survival);
-`NewOnlineMatchRequest(setup, options, room)`, which names each seat
-"Player n" with participant slot+1, its own side and colour and the ally
+The session's lobby helpers: `session.OnlineMatchSetup{Rules, Survival,
+MapName, Seats []OnlineSeat{Team, Side, Color, Name}, Computers, SimSeed,
+CRTSeed, SurvivalOptions, SideCount}` with `Rows()` (the seats, plus the
+attacker in Survival); `OnlineComputersPerHost(rules)`, the rules' computer
+cap; `ValidateOnlineName(name)`; `NewOnlineMatchRequest(setup, options,
+room)`, which binds the named rule set and names each seat by its display
+name, or "Player n" with participant slot+1 when it has none, with its own
+side and colour and the ally
 group of its team (survivors share group 2, and the attacker takes the first
 colour no survivor holds, red when free), and refuses a colour above 9 or
 one two seats share;
@@ -6047,8 +6235,8 @@ sides' names in index order.
   browser build included; it greys only where Skirmish does, such as the
   browser's demo, which has no skirmish maps. The browser reaches the relay
   through its own WebSocket (§16.5.1). It opens a small chooser over the main menu: one
-  sentence saying how online play works, Create Game and Join Game, and
-  Cancel.
+  sentence saying how online play works, Create Game and Join Game, a Name
+  control that sets the remembered display name, and Cancel.
   Join Game asks for the room code in a popup (pasted or typed; case,
   spaces and dashes ignored), which stays open with the reason in plain
   words when the join is refused. A small Server control, off the main
@@ -6056,7 +6244,8 @@ sides' names in index order.
   `ws://` is the plaintext test opt-in, accepted only on a numeric loopback
   address).
 - **Create** opens a 10-seat room with the host's current skirmish map,
-  mod, mutators and restrictions. Only a mod installed from its archive can
+  mod, mutators and restrictions, under the reserved rule set of the host's
+  gameplay mode raised to the mod's minimum. Only a mod installed from its archive can
   be hosted, because field 8 needs the archive digest. Field 10 holds only
   the mounted content's own Community table, and every seat uses the default
   builder options.
@@ -6067,10 +6256,11 @@ sides' names in index order.
   later base configuration is adopted as it arrives; a map the player does
   not have is reported by name and keeps Ready disabled.
 - **Lobby**: the room code shown large, with Copy where the host clipboard
-  allows; a row per player with their team, side, colour and readiness, the
-  local player's own team, side and colour changed by clicking while not
-  ready; the host's settings (game type, Change map through the ordinary
-  map picker, Survival's options and the standard skirmish options);
+  allows; a row per player with their name, team, side, colour and
+  readiness, the local player's own team, side and colour changed by
+  clicking while not ready; the host's settings (game type, Rules, Change
+  map through the ordinary map picker, Survival's options and the standard
+  skirmish options); a chat area whose line Enter opens;
   Ready/Not ready; Start for the host, enabled when everyone present is
   ready, the digests agree and the player count fits the map or Survival's
   limit; Leave. Ready composes, prepares and rehearses off the game
@@ -6113,11 +6303,15 @@ effective configuration, separate from the match session, and returns a
 32-byte digest of its final state. A fixed, seat-symmetric script of
 ordinary seat commands drives every human seat: commander moves, builds and
 weapon fire, derived from the frozen catalog so that it exercises the
-room's own content. It runs 900 ticks; in Survival it runs until the first
+room's own content, and toward the next human seat the share toggles and
+thresholds, one gift of resources, units and map information, alliance
+declarations and shared victory, so the automatic shares and the alliance
+matrix are exercised too. It runs 900 ticks; in Survival it runs until the first
 wave has finished spawning, at most the first wave's delay plus its warning
 plus 300 ticks, so the wave director is exercised too. The script is defined by the code beside
-`RehearsalDigest`; this document does not duplicate it. The final state
-is digested under its own domain separation. The client sends the digest
+`RehearsalDigest`; this document does not duplicate it. The final state,
+with the sharing state its fingerprint omits, is digested under its own
+domain separation; a change to the script changes the domain's version. The client sends the digest
 with Ready (§16.6.1); the relay accepts Start only when every present seat
 is ready with equal digests, and reports a mismatch otherwise. The 30-tick
 checksum during play (§16.4) remains the final guard.
@@ -6157,21 +6351,26 @@ checksum, which stops the match.
   that frame, a battle menu open included.
 - **Relays and drivers.** Real loopback connections carrying both seats'
   commands, a cancellation before its stream position is assigned, race
-  tests, and a closed driver that cannot execute a buffered grant. Hosted
+  tests (CI runs the multiplayer packages under `-race`), and a closed
+  driver that cannot execute a buffered grant. Hosted
   socket contracts: TLS trust and refusal, identity mismatch, room
   isolation, full, expiry and close, bounded input and slow readers, a
   delayed checksum mismatch and final-grant handling; WebSocket framing and
-  handshake rejection, health, lifecycle and connection bounds; a headless
-  two-session match through WebSocket; a mixed version-5 and version-6
-  room in which only version-6 seats receive progress reports, through a
-  defeated seat's departure; exact traffic accounting; a js/wasm client
+  handshake rejection, health, lifecycle and connection bounds; draining
+  a join awaiting auto-start, and a started match counted before its
+  progress snapshot is published; a headless
+  two-session match through WebSocket; a mixed version-7 and version-8
+  room in which only version-8 seats exchange names and chat
+  (`TestHostedChatMixedVersionRoom`); chat codecs, rate limits, malformed
+  frames and a chat flood beside a slow reader that never holds grants
+  back; exact traffic accounting; a js/wasm client
   playing both seats of a hosted match under Node's WebSocket against a
   native relay, with its deadlines, refusals and measured round trips; and
   a deterministic lockstep test modelling the window host at 20–240 Hz.
 - **Opening.** No grant with only one ready seat, even beyond the execution
   progress bound; all ready releases tick one in command order. Duplicate,
-  premature and malformed readiness, disconnect and opening expiry; legacy
-  implicit readiness, direct-dial readiness and browser clients; host readiness
+  premature and malformed readiness, disconnect and opening expiry;
+  direct-dial readiness and browser clients; host readiness
   only at landing, disabled opening and failure cleanup; two retail sessions
   held at tick zero through unequal local openings, followed by matching ticks.
 - **Lobby.** Relay tests for the lobby states, refusals, leaving, Describe,
@@ -6201,7 +6400,19 @@ checksum, which stops the match.
   (`TestLateModernAIWorkerChangesNothingRetail`,
   `TestLateWorkerBatchLandsOnItsDeadline`); a two-client lobby match with a
   Modern and a Classic computer agrees through the relay; human-only rooms
-  keep their pre-computer digests (§6.6).
+  keep their pre-computer checksums and their locked rehearsal digests; the
+  Strict 3.1 watch branch and Community's retained computers are locked on
+  the reference install (§6.6).
+- **Rules, sharing and chat.** Two clients agree under Strict 3.1 and
+  Community 3.9 as under Modern. Sharing: three-seat declarations, where
+  victory needs the third seat (`TestOnlineDeclarationsAreOneWayAndVictoryNeedsTheThirdSeat`);
+  alliance and gift admission; every gift step, and its branch by host;
+  automatic and map shares on their due and request ticks; hostile sharing
+  commands changing nothing; replicas agreeing; single-player refusing the
+  kinds; the shared-victory checkpoint. Chat: recipient prefixes and
+  masks, refusals for watchers and final seats, command lines dispatched
+  then sent, and a retail chat round trip through a relay
+  (`TestOnlineChatRelayRetail`).
 - **Replays.** Single-player recordings from the window, with pumps of one
   to five ticks and commands at the paused-input boundary, and with Classic
   or asynchronous Modern computers, verify headless; both seats' recordings

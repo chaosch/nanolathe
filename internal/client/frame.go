@@ -311,7 +311,7 @@ func (c *Client) drawTerrainPrep() {
 		// scale it was projected at and the 2x tile set when one is installed, so
 		// an executor that cannot reach client state builds the same picture
 		// (DESIGN_GPU_RENDERER §14.2, §14.3).
-		c.emitTerrain(drawlist.Terrain{
+		t := drawlist.Terrain{
 			Water:   c.waterSurfaceMetadata(),
 			Terrain: c.terrain,
 			Cam:     c.cam,
@@ -321,7 +321,13 @@ func (c *Client) drawTerrainPrep() {
 			DstH:    int32(recH),
 			Scale:   c.viewScale(),
 			Detail:  c.detailTiles(),
-		})
+		}
+		// The strategic view offers the map at the density it is seen
+		// (DESIGN_GPU_RENDERER §16.15).
+		if c.strategicLayersApply() {
+			t.Level = strategicTerrainLevel(c.liveZoom())
+		}
+		c.emitTerrain(t)
 	}
 	// A frontend without terrain remains the cleared indexed surface. Retail
 	// does not define a synthetic gradient fallback [I9].
@@ -377,18 +383,22 @@ func (c *Client) drawInterface(cur *frame.Frame) {
 	if c == nil || len(c.indexed) != c.width*c.height {
 		return
 	}
+	resources := c.displayedResources
+	if c.recordNextResources {
+		resources = c.nextDisplayedResources()
+	}
+	presented := UIFrame{Committed: cur, Resources: resources}
 	if c.uiStage != nil {
-		resources := c.displayedResources
-		if c.recordNextResources {
-			resources = c.nextDisplayedResources()
-		}
-		c.uiStage.DrawUI(c, UIFrame{Committed: cur, Resources: resources})
+		c.uiStage.DrawUI(c, presented)
 	}
 	// The battle composer owns the column, including paused frames. Menus
 	// and briefings have no committed battle frame; ENDMSN owns a separate
 	// result surface after the battle ends [07 R-HUD-03 §14.3].
 	if cur != nil && !cur.Result.Ended {
 		c.drawMessageLines()
+	}
+	if overlay, ok := c.uiStage.(UIOverlayStage); ok {
+		overlay.DrawUIOverlay(c, presented)
 	}
 }
 

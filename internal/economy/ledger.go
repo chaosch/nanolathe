@@ -154,6 +154,13 @@ type Player struct {
 	AutoShareSensor      bool
 	MetalShareThreshold  float32 // separate sharing threshold [05 "Allied resource and sensor sharing"]
 	EnergyShareThreshold float32
+	// ShareRadar is option-word bit 6: an owner that sets it has its units
+	// marked friendly by the sensor pass of every viewer it has declared
+	// alliance toward [03 R-VIS-01 §7] [05 "Sensor sharing"]. Only an online
+	// seat command writes it (share.go); it enters the checkpoint behind the
+	// EconomySelector tag's bit 2, so a ledger in which no player sets it
+	// writes the bytes it always has.
+	ShareRadar bool
 	// Storage bonus per [05 "Storage capacity"] [OX P1]: an enable flag plus a
 	// per-resource bonus holding max(starting stock, 200). When set, the bonus
 	// is added to the player's storage capacity during the ledger's capacity
@@ -167,6 +174,11 @@ type Player struct {
 // Service is the economy service skeleton per plan public API.
 // Players are visited 0..9 ascending per [05 "Authoritative settlement order"] and I1.
 type Service struct {
+	// Rules and active holds are the owner/category controls of the
+	// Nanolathe Modern resource breakdown (DESIGN_ECONOMY_CONSTRUCTION).
+	Rules            Rules
+	HoldActive       [10][ActivityCount]bool
+	activityReport   *activityReport
 	Players          [10]Player
 	unitBuckets      []UnitEconomy
 	ReferencePlayer  int  // reference/local player for ShareTick dispatcher [05 "Allied resource and sensor sharing"] C12
@@ -343,6 +355,9 @@ func (s *Service) RestoreUnitEconomy(handle pool.Handle, buckets [2]Bucket, arch
 // same session creation barrier, before COB Create can observe or publish the
 // unit [05 "Unit instance economy state"].
 func (s *Service) InitializeUnitEconomy(handle pool.Handle) bool {
+	if s != nil && s.activityReport != nil && int(handle) < len(s.activityReport.units) {
+		s.activityReport.units[handle] = activityAccount{}
+	}
 	return s.RestoreUnitEconomy(handle, [2]Bucket{}, [2]ArchivedBucket{})
 }
 
@@ -539,12 +554,17 @@ func ApplyCloakDebits(s *Service, w *units.World, player int, getCost func(*unit
 	}
 	p := &s.Players[player]
 	ForEachUnitOrdered(w, player, func(u *units.Unit) {
+		if s.ActivityHeld(u.Owner, ActivityCloaking) {
+			u.SetCloakedInstance(false)
+			return
+		}
 		if s.CloakDueHook() == nil || !s.CloakDueHook()(u) {
 			u.SetCloakedInstance(false)
 			return
 		}
 		cost := getCost(u)
 		s.ensureUnitBuckets(u.Handle)
+		before := s.ActivitySnapshot(u.Handle)
 		if debitCloakToBucket(p, &s.unitBuckets[u.Handle].Buckets[Energy], cost) {
 			u.SetCloakedInstance(true)
 			if onSuccess != nil {
@@ -556,6 +576,7 @@ func ApplyCloakDebits(s *Service, w *units.World, player int, getCost func(*unit
 				onFailure(u)
 			}
 		}
+		s.ObserveActivity(u, ActivityCloaking, before)
 	})
 }
 

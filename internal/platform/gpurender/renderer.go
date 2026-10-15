@@ -57,6 +57,10 @@ type Renderer struct {
 	modelPrep         modelPrepScratch
 	tables            tables
 	displayPalette    [256][4]byte
+	// paletteGen counts display palette changes. The PAL row is rewritten in
+	// place, so the caches that bake colour (model sprites and feature
+	// layers) compare this rather than the table atlas's identity.
+	paletteGen uint64
 	// scene2D is the one opaque pass and sceneDest the one destination-compositing
 	// pass (§11.2 "One scene shader for the 2D families").
 	scene2D                   *ebiten.Shader
@@ -79,6 +83,11 @@ type Renderer struct {
 	// placeholder backs an image slot no op in a run requested, for the case
 	// where no palette (and so no table atlas) has been installed.
 	placeholder *ebiten.Image
+	// uploaded lists the images this frame wrote before its first draw, and
+	// uploadTarget is the one-pixel image the draw that queues their uploads
+	// writes (upload_flush.go).
+	uploaded     []*ebiten.Image
+	uploadTarget *ebiten.Image
 	// textureAtlas packs every resolved 3DO texture frame the model lane samples
 	// (model_atlas.go).
 	textureAtlas modelTextureAtlas
@@ -196,6 +205,11 @@ type Renderer struct {
 	// model path: faces triangulated from the packet's projected corners onto a
 	// per-frame atlas page, then commits resolved onto the composite (§22).
 	modelDirect modelDirectLane
+	// layers holds the strategic view's baked feature layers (feature_layer.go).
+	layers featureLayerStore
+	// terrainLevels holds the current tile set averaged down for the strategic
+	// view (terrain_level.go).
+	terrainLevels terrainLevelSet
 	// preview is allocated only by the isolated unit viewer. Battle model
 	// commands never select its fractional-depth surface.
 	preview *modelPreviewSurface
@@ -248,6 +262,7 @@ func (r *Renderer) SetDisplayPalette(p [256][4]byte) {
 	}
 	r.tables.setDisplayPalette(p)
 	r.displayPalette = p
+	r.paletteGen++
 	clear(r.lighting.colors)
 }
 
@@ -371,6 +386,7 @@ func (r *Renderer) Execute(list *drawlist.List, w, h int) *ebiten.Image {
 	r.arrival.packet = drawlist.Arrival{}
 	r.modelPrep.reset()
 	defer r.modelPrep.reset()
+	r.uploadSurfacesFirst(list)
 	// These prepare passes walk the whole list before Replay commits any of it,
 	// so each layer's device cost is a fixed handful of passes rather than one
 	// set per subject (§11.2). prepareModelDirect is the largest: every eligible

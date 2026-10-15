@@ -40,6 +40,9 @@ func TestPresentationPreferencesLoadAndRoundTrip(t *testing.T) {
 		want Presentation
 	}{
 		{"older file", `{"version":1}`, want("modern", 60)},
+		{"show ranges off", `{"version":1,"presentation":{"showRanges":0}}`, want("modern", 60, func(p *Presentation) { p.ShowRanges = 0 })},
+		{"show ranges on", `{"version":1,"presentation":{"showRanges":1}}`, want("modern", 60, func(p *Presentation) { p.ShowRanges = 1 })},
+		{"show ranges inherit", `{"version":1,"presentation":{"showRanges":-3}}`, want("modern", 60)},
 		{"opening and placement off", `{"version":1,"presentation":{"arrival":0,"placementWeaponRanges":0}}`, want("modern", 60, func(p *Presentation) { p.Arrival, p.PlacementWeaponRanges = 0, 0 })},
 		{"opening and placement repaired", `{"version":1,"presentation":{"arrival":-1,"placementWeaponRanges":-1}}`, want("modern", 60)},
 		{"missing fps", `{"version":1,"presentation":{"renderer":"classic"}}`, want("classic", 60)},
@@ -841,5 +844,45 @@ func TestTheRetiredModernAISelectionLoadsAsModernWithModernRows(t *testing.T) {
 	}
 	if strings.Contains(string(data), "modern-ai") || strings.Contains(string(data), `"ai"`) {
 		t.Fatalf("the saved file keeps the retired selection:\n%s", data)
+	}
+}
+
+// The display name is written by StoreNickname alone: a whole-block write
+// that names none keeps the stored one, a cleared name is cleared, and a name
+// the online lobby would refuse is neither stored nor loaded
+// (DESIGN_MULTIPLAYER §16.6.2).
+func TestNicknameStoredAndKept(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	t.Setenv(EnvPath, path)
+	if err := StoreNickname("Daniel"); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Load(); err != nil || s.Nickname != "Daniel" {
+		t.Fatalf("stored %q: %v", s.Nickname, err)
+	}
+	block := Defaults()
+	block.OnlineServer = "relay.example.test"
+	if err := block.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Load(); s.Nickname != "Daniel" || s.OnlineServer != "relay.example.test" {
+		t.Fatalf("after a whole-block write: nickname %q, server %q", s.Nickname, s.OnlineServer)
+	}
+	for _, bad := range []string{"Commander Keen991", "Big<Bad>", " Dan", "tab\there"} {
+		if err := StoreNickname(bad); err == nil {
+			t.Fatalf("stored %q", bad)
+		}
+	}
+	if err := StoreNickname(""); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Load(); s.Nickname != "" {
+		t.Fatalf("cleared nickname reads %q", s.Nickname)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":`+strconv.Itoa(FileVersion)+`,"nickname":"<Dan>"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Load(); err != nil || s.Nickname != "" {
+		t.Fatalf("a hand-edited bad name loads as %q: %v", s.Nickname, err)
 	}
 }

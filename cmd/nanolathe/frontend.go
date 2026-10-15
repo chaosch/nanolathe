@@ -245,7 +245,7 @@ type gameShell struct {
 	fpsVisible bool
 	// netVisible retains the online network overlay (+net) the same way.
 	netVisible bool
-	showRanges bool // process-only Shift overlay detail switch [07 R-CAM-01 §6]
+	showRanges bool // process fallback for the Shift overlay [07 R-CAM-01 §6]
 
 	campaigns       []mission.Campaign
 	campaignOptions []mission.Campaign
@@ -372,6 +372,13 @@ func (s battleHUDUIStage) PrepareUI(c *client.Client) {
 func (s battleHUDUIStage) DrawUI(c *client.Client, presented client.UIFrame) {
 	if s.hud != nil {
 		s.hud.draw(c, s.battle, presented)
+	}
+}
+
+func (s battleHUDUIStage) DrawUIOverlay(c *client.Client, presented client.UIFrame) {
+	if s.battle != nil && s.battle.battleState().Modal() == ui.BattleModalClosed &&
+		!s.battle.isTalkGUIActive() && !unitInfoOpen() && !s.battle.isResultVisible() {
+		s.hud.drawEconomyPanel(c, s.battle, presented.Committed)
 	}
 }
 

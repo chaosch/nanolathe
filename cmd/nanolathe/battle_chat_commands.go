@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -142,10 +144,17 @@ func (b *battleSession) toggleEffectChatSetting(command string) {
 	b.saveDirectChatSetting(func(*settings.Settings) {})
 }
 
+// retailCheatCommands are the mask-2 (cheat) entries this build dispatches
+// [07 R-CAM-01 §6]; MakePoster is not implemented.
+var retailCheatCommands = []string{"radar", "atm", "view", "los", "mapping", "doubleshot", "halfshot", "nowisee", "meteor"}
+
 // dispatchLocalCommand handles the bounded command set currently owned by
 // the engine. Unknown names remain plain local chat and do not create a
-// placeholder command framework [07 R-CAM-01 §6][07 R-FE-02 §12].
-func (b *battleSession) dispatchLocalCommand(text string) {
+// placeholder command framework [07 R-CAM-01 §6][07 R-FE-02 §12]. It reports
+// whether the line ran a cheat entry: the dispatcher's returned mask has bit
+// 2, which sends the line as chat to everyone [07 R-CAM-01 §6]. Every cheat
+// here dispatches only in skirmish; online none dispatches.
+func (b *battleSession) dispatchLocalCommand(text string) (cheat bool) {
 	trimmed := strings.TrimLeft(text, " ")
 	if len(trimmed) == 0 || trimmed[0] != '+' {
 		return
@@ -160,12 +169,19 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		return
 	}
 	if b.onlineBattle() {
-		// The play test has no cheat permission or chat transport. Keep the
-		// established local interface gestures; refuse every other +command
-		// before developer dispatch and exact-unit spawn fallbacks.
+		// Online play has no cheat permission. Keep the established local
+		// interface gestures and the share commands; refuse every other
+		// +command before developer dispatch and exact-unit spawn fallbacks.
+		// The line is still sent as chat (commitLocalChat).
 		switch strings.ToLower(words[0]) {
 		case "bigbrother", "noshake", "logo", "switchalt", "fps", "net":
 			// Local displays and interface gestures only.
+		case "sharemetal", "shareenergy", "sharemapping", "shareradar", "shareall", "setsharemetal", "setshareenergy", "give":
+			// Seat commands acting for this seat (battle_share_commands.go).
+			if !b.onlineShareCommand(words) {
+				b.onlineNotice("This +command is unavailable in multiplayer games")
+			}
+			return
 		default:
 			b.onlineNotice("This +command is unavailable in multiplayer games")
 			return
@@ -174,6 +190,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 	if b.developerCommand(words) {
 		return
 	}
+	cheat = b.sess != nil && battleSessionKind(b) == 2 && slices.Contains(retailCheatCommands, strings.ToLower(words[0]))
 	switch strings.ToLower(words[0]) {
 	case "light":
 		render.SetModelLight(int32(localCommandInt(words, 1)), int32(localCommandInt(words, 2)), int32(localCommandInt(words, 3)))
@@ -199,7 +216,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		b.spawnChatCommand(words)
 	case "atm":
 		if b.sess != nil && battleSessionKind(b) == 2 {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanATM})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanATM})
 		}
 	case "musicmode":
 		if b.sess != nil && b.sess.Audio != nil && b.sess.Audio.Music != nil {
@@ -254,6 +271,39 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		if b.shell != nil {
 			b.shell.showRanges = b.showRanges
 		}
+		// This is a renderer preference, never an authoritative rule or save
+		// field. Classic keeps the process-only command [07 R-P0-11 §3];
+		// Modern retains the player's choice (GPU design §20).
+		if b.modernRangePresentation() {
+			value := boolInt(b.showRanges)
+			if b.shell != nil {
+				b.shell.presentation.ShowRanges = value
+				b.shell.saveSettings()
+			} else {
+				p := b.hostPreferences()
+				p.ShowRanges = value
+				b.hostPresentation = &p
+				b.saveDirectChatSetting(func(s *settings.Settings) {
+					if b.cs == nil || b.cs.mod == nil {
+						s.Presentation.ShowRanges = value
+						return
+					}
+					// Direct entries load the same per-mod layers as the shell.
+					// Save only this choice into that layer so a previous mod
+					// override cannot restore the old toggle on the next entry.
+					key := modSettingsKey(b.cs.mod)
+					patch, err := settings.Merge(s.ModSettings[key], []byte(fmt.Sprintf(`{"presentation":{"showRanges":%d}}`, value)))
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "nanolathe: settings for %s: %v\n", key, err)
+						return
+					}
+					if s.ModSettings == nil {
+						s.ModSettings = make(map[string]json.RawMessage)
+					}
+					s.ModSettings[key] = patch
+				})
+			}
+		}
 	case "sound3d":
 		audio.ToggleOutput3D()
 		if b.shell != nil {
@@ -267,7 +317,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		}
 	case "view":
 		if b.sess != nil && battleSessionKind(b) == 2 {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanView, View: session.HumanViewCommand{Player: uint8(localCommandInt(words, 1))}})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanView, View: session.HumanViewCommand{Player: uint8(localCommandInt(words, 1))}})
 		}
 	case "give":
 		if b.sess == nil || len(words) < 4 {
@@ -282,7 +332,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		default:
 			return
 		}
-		_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanGive, Give: session.HumanGiveCommand{
+		_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanGive, Give: session.HumanGiveCommand{
 			Player: int(uint8(localCommandInt(words, 1))), Resource: resource, Amount: float32(localCommandInt(words, 2)),
 		}})
 	case "logo":
@@ -328,7 +378,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		if strings.EqualFold(words[0], "noenergy") {
 			resource = economy.Energy
 		}
-		_ = b.sess.EnqueueHumanCommand(session.HumanCommand{
+		_ = b.enqueueLocalBattleCommand(session.HumanCommand{
 			Kind: session.HumanSetResource,
 			SetResource: session.HumanSetResourceCommand{
 				Player: player, Resource: resource, Amount: float32(localCommandInt(words, 2)),
@@ -336,13 +386,13 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		})
 	case "selectable":
 		if b.sess != nil {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanMakeSelectable})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanMakeSelectable})
 		}
 	case "los":
 		if b.sess == nil || battleSessionKind(b) != 2 {
 			return
 		}
-		_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeCurrentEnabled}})
+		_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeCurrentEnabled}})
 		if b.shell != nil {
 			b.shell.saveSettings()
 		} else {
@@ -357,7 +407,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		if b.sess == nil || battleSessionKind(b) != 2 {
 			return
 		}
-		_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeHistoryEnabled}})
+		_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeHistoryEnabled}})
 		if b.shell != nil {
 			b.shell.saveSettings()
 		} else {
@@ -370,22 +420,25 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		}
 	case "lostype":
 		if b.sess != nil {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeTerrainRay}})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ToggleMask: visibility.ModeTerrainRay}})
 		}
 	case "nowisee":
 		if b.sess != nil && battleSessionKind(b) == 2 {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ClearMask: visibility.ModeHistoryEnabled | visibility.ModeCurrentEnabled}})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanVisibility, Visibility: session.HumanVisibilityCommand{ClearMask: visibility.ModeHistoryEnabled | visibility.ModeCurrentEnabled}})
 		}
 	case "doubleshot":
 		if b.sess != nil && battleSessionKind(b) == 2 {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanDoubleShot})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanDoubleShot})
 		}
 	case "halfshot":
 		if b.sess != nil && battleSessionKind(b) == 2 {
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{Kind: session.HumanHalfShot})
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{Kind: session.HumanHalfShot})
 		}
 	case "radar":
 		if b.sess != nil && battleSessionKind(b) == 2 {
+			if b.survivalBest != nil {
+				b.survivalBest.excluded = "cheats used"
+			}
 			b.radarOptions ^= radarAllContactsOption
 			// The strategic marker layer answers the same gate (§16.11).
 			if b.cl != nil {
@@ -395,7 +448,7 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 	case "meteor":
 		if b.sess != nil && battleSessionKind(b) == 2 {
 			argumentPresent := len(words) > 1
-			_ = b.sess.EnqueueHumanCommand(session.HumanCommand{
+			_ = b.enqueueLocalBattleCommand(session.HumanCommand{
 				Kind: session.HumanMeteor,
 				Meteor: session.HumanMeteorCommand{
 					ArgumentPresent: argumentPresent,
@@ -542,4 +595,5 @@ func (b *battleSession) dispatchLocalCommand(text string) {
 		// Modern exact-name shorthand keeps its own contract.
 		b.unitNameChatCommand(words)
 	}
+	return
 }

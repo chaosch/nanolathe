@@ -23,11 +23,11 @@ const (
 	// projectiles, effects, trails and unit labels stop being recorded. Above
 	// it the world is drawn in full. Features are NOT gated on it: they record at
 	// every factor (§16.10).
-	strategicModelCut = camera.ZoomUnit / 2 // 0.5x
+	strategicModelCut = camera.ZoomUnit * 13 / 32 // 0.40625x
 	// strategicMarkerOn is the factor at which the marker layer starts to fade
 	// in. Between it and strategicModelCut both layers are recorded, the markers
 	// growing from nothing to full.
-	strategicMarkerOn = camera.ZoomUnit*5/8 + 0 // 0.625x
+	strategicMarkerOn = camera.ZoomUnit * 17 / 32 // 0.53125x
 	// strategicMarkerSize is one marker's side in FRAMEBUFFER pixels. Markers do
 	// not scale with the world; that is the whole point of them. It is a little
 	// larger than the minimap's 4x4 `radlogo` blip so a sensor dot reads against
@@ -211,6 +211,51 @@ func (c *Client) strategicView() bool {
 
 func (c *Client) strategicViewAtZoom(z camera.Zoom) bool {
 	return z <= strategicModelCut || (c.enhanced && c.cam.TacticalAtFloor() && z <= c.cam.MinZoom())
+}
+
+// strategicSpriteLevelMax bounds the strategic sprites' level: at 2^-4 texels
+// per record pixel a sprite texel averages 32×32 texels of the lane's doubled
+// raster.
+const strategicSpriteLevelMax = 4
+
+// featureSprite offers a 3DO feature's packet to the model sprites (§16.13)
+// when its committed look holds while its cache key holds: the retained lane
+// with no reflection, no waterline, no Digger clip, no reveal, outline, live
+// faces or children, no cloak and no wreck heat. It returns the offer and its
+// level.
+//
+// In the strategic view, which drops the shadow (§16.10), the level is the one
+// whose texel density, 2^-level texels per record pixel, is the smallest power
+// of two at or above twice the live factor, so a screen pixel spans two to four
+// sprite texels and the bilinear draw reads the subject's own averaged detail
+// rather than blurring a texel across pixels. Everywhere else the level is
+// zero, the commit's own resolve, and the shadow comes with it when it is a
+// structure's retained projection, which holds while its own key holds; any
+// other shadow keeps the packet on the lane.
+func (c *Client) featureSprite(g *drawlist.ModelGeometry) (bool, uint8) {
+	if g == nil || !g.Cache.Reusable() || g.ReflectWater ||
+		g.Waterline != drawlist.ModelWaterlineNone || g.Digger || g.Cloaked || g.Reveal != nil ||
+		len(g.LiveFaces) != 0 || len(g.Outline) != 0 || len(g.Children) != 0 ||
+		g.WreckEmission != ([3]float32{}) || g.WreckHeatStrength != 0 {
+		return false, 0
+	}
+	if c.strategicView() {
+		return g.Shadow == nil, strategicSpriteLevel(c.liveZoom())
+	}
+	if sg := g.Shadow; sg != nil && (sg.Silhouette || !sg.Cache.Reusable() ||
+		len(sg.LiveFaces) != 0 || len(sg.Outline) != 0 || len(sg.Children) != 0) {
+		return false, 0
+	}
+	return true, 0
+}
+
+// strategicSpriteLevel is featureSprite's density rule for a live factor.
+func strategicSpriteLevel(z camera.Zoom) uint8 {
+	level := uint8(1)
+	for level < strategicSpriteLevelMax && z <= camera.ZoomUnit>>(level+2) {
+		level++
+	}
+	return level
 }
 
 // markerAlphaAtZoom is the strategic layer's fade: zero at and above

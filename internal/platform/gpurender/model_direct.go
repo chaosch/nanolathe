@@ -94,7 +94,10 @@ const (
 	// each, model_quads.go) and the per-subject verdict entries (one slot
 	// each). The image grows to what a frame uses; a frame past the bound
 	// draws its remaining faces linearly. modelDirectParamCap is in slots.
-	modelDirectParamMaxRows = 2048
+	// The parallel placer's pre-check (modelPlaceParamBound) counts two slots
+	// for every face a packet carries, culled or not, so the bound is sized
+	// for the roughly 95,000 faces a 3,000-unit battle's 1x frame carries.
+	modelDirectParamMaxRows = 4096
 	modelDirectParamCap     = modelDirectParamMaxRows * modelQuadParamWidth / modelQuadTexels
 	// modelDirectFatten is how far the water reflection pushes a face corner
 	// from its centroid, in atlas texels (water_reflections.go). The body
@@ -122,7 +125,8 @@ const (
 // and is key-tested once, against the pixel's nearest-sampled key, as
 // retail's 1× outline pass is [03 R-COMP-01 §3]. modelDirectLive is added to
 // a face drawn after the reveal — outline endpoints and the live lane — which
-// the reveal therefore never rewrites.
+// the reveal therefore never rewrites. Each vertex adds its run's seed phase
+// times modelDirectSeedStride on top (seedLane).
 const (
 	modelDirectFlat          = 0
 	modelDirectTextured      = 1
@@ -133,6 +137,7 @@ const (
 	modelDirectFlatQuadShade = 6
 	modelDirectOutline       = 7
 	modelDirectLive          = 8
+	modelDirectSeedStride    = 16
 )
 
 // modelDirectRegion is one subject's place on the atlas this frame: the page
@@ -217,19 +222,20 @@ type modelDirectLane struct {
 	// keyed bodies, claimOrder the order the pool claims jobs in when a test
 	// sets one, place the pre-check's tuning and placeMode how the last frame
 	// was placed (model_place_pool.go).
-	packets     []modelPlacePacket
-	jobs        []modelPlaceJob
-	slots       frameArena[modelTextureSlot]
-	placeKeys   map[modelBodyKey]struct{}
-	claimOrder  []int32
-	place       modelPlaceTuning
-	placeMode   modelPlaceMode
-	opts        ebiten.DrawTrianglesShaderOptions
-	seedUniform [1]float32
+	packets    []modelPlacePacket
+	jobs       []modelPlaceJob
+	slots      frameArena[modelTextureSlot]
+	placeKeys  map[modelBodyKey]struct{}
+	claimOrder []int32
+	place      modelPlaceTuning
+	placeMode  modelPlaceMode
+	opts       ebiten.DrawTrianglesShaderOptions
 
 	// retain holds the packed vertices of subjects whose cached lane the
 	// recorder proved unchanged (model_retain.go).
 	retain modelRetainStore
+	// sprites holds the strategic view's baked subjects (model_sprite.go).
+	sprites modelSpriteStore
 }
 
 // modelDirectFace is one face's place in the fallback's painter order.
@@ -253,6 +259,9 @@ func (r *Renderer) initModelDirect() error {
 	}
 	if d.shaderErr == nil {
 		d.groups.shader, d.shaderErr = compileShader(modelGroupMergeShaderSource)
+	}
+	if d.shaderErr == nil {
+		d.sprites.shader, d.shaderErr = compileShader(modelSpriteBakeShaderSource)
 	}
 	return d.shaderErr
 }
@@ -454,6 +463,8 @@ func modelFrameLanes(ox, oy float32) (fx, fy int, fits bool) {
 // device sees the order the sequential lane gave it.
 func (r *Renderer) prepareModelDirect(l *drawlist.List) {
 	if !r.placeModelDirectFrame(l) {
+		// Nothing of this frame has drawn yet (upload_flush.go).
+		r.flushUploads()
 		return
 	}
 	d := &r.modelDirect
@@ -465,6 +476,14 @@ func (r *Renderer) prepareModelDirect(l *drawlist.List) {
 			d.ensurePage(int32(p))
 		}
 	}
+	// The parameter image is written here, and its upload queued with the
+	// surfaces', before the page passes or Replay draw anything of this frame
+	// (upload_flush.go).
+	d.params.upload()
+	if d.params.img != nil {
+		r.uploaded = append(r.uploaded, d.params.img)
+	}
+	r.flushUploads()
 	a := &d.pageAcct
 	a.stats, a.draws, a.lastDest = ModelStats{}, 0, r.lastDest
 	d.pagesPending = true
@@ -509,6 +528,10 @@ func (d *modelDirectLane) bindsModelPage(imgs *[4]*ebiten.Image) bool {
 				return true
 			}
 		}
+		// A sprite page is written by the bakes the page goroutine runs.
+		if d.sprites.bindsSpritePage(img) {
+			return true
+		}
 	}
 	return false
 }
@@ -520,13 +543,9 @@ func (d *modelDirectLane) bindsModelPage(imgs *[4]*ebiten.Image) bool {
 func (r *Renderer) drawModelPages(fill *ebiten.Image) {
 	d := &r.modelDirect
 	a := &d.pageAcct
-	d.params.upload()
 	params := d.params.img
 	if params == nil {
 		params = fill
-	}
-	if d.opts.Uniforms == nil {
-		d.opts.Uniforms = map[string]any{"SeedPhase": d.seedUniform[:]}
 	}
 	for p := range d.pages {
 		pg := &d.pages[p]
@@ -557,7 +576,6 @@ func (r *Renderer) drawModelPages(fill *ebiten.Image) {
 				if run.iLen == 0 || int(run.page) != p || (run.seedPhase == modelSeedLive) != late {
 					continue
 				}
-				d.seedUniform[0] = float32(run.seedPhase)
 				a.submitted(int(run.vLen), int(run.iLen))
 				pg.key.DrawTrianglesShader32(a.spans.span(pg.key, d.verts, int(run.vOff), int(run.vLen)), d.idx[run.iOff:run.iOff+run.iLen], d.keyShader, &d.opts)
 			}
@@ -571,7 +589,6 @@ func (r *Renderer) drawModelPages(fill *ebiten.Image) {
 				if run.iLen == 0 || int(run.page) != p || (run.seedPhase == modelSeedLive) != late {
 					continue
 				}
-				d.seedUniform[0] = float32(run.seedPhase)
 				d.opts.Images = [4]*ebiten.Image{run.imgs[0], run.imgs[1], pg.key, params}
 				for j := range 2 {
 					if d.opts.Images[j] == nil {
@@ -585,6 +602,23 @@ func (r *Renderer) drawModelPages(fill *ebiten.Image) {
 		}
 	}
 	r.mergeModelGroupsInto(a)
+	r.bakeModelSprites(a)
+}
+
+// seedLane is what a run's vertices add to their mode lane: the run's seed
+// phase, modelDirectSeedStride apart (modelDirectSeedMode). The phase is a
+// vertex lane rather than a uniform because a uniform that changes between
+// runs keeps Ebitengine from merging them, and seeded bodies alternate with
+// unseeded shadows: nearly every run was its own device draw. In the vertices
+// the runs merge wherever their bindings agree, and their order — which
+// decides the colour pass's ties — is unchanged. A fallback face has no run
+// and no phase. The retained store keeps its vertices without it
+// (finishCapture) and a replay adds the replaying run's.
+func (run *modelDirectRun) seedLane() float32 {
+	if run == nil {
+		return 0
+	}
+	return float32(int(run.seedPhase) * modelDirectSeedStride)
 }
 
 // deviceAcct is the device accounting a stretch of device calls charges when
@@ -644,6 +678,7 @@ func (r *Renderer) placeModelDirectFrame(l *drawlist.List) bool {
 	// The retained lanes bake the finish switches into their colour lane, so
 	// a change drops every entry rather than drawing last frame's finish.
 	d.retain.setSwitches(r.metalGlint, r.materialsEnabled)
+	d.sprites.beginFrame(r.metalGlint, r.materialsEnabled, r.modelSingleSample, r.paletteGen)
 	if r.tables.atlas == nil {
 		return false
 	}
@@ -651,6 +686,16 @@ func (r *Renderer) placeModelDirectFrame(l *drawlist.List) bool {
 	// waste down; the commits keep record order regardless. A carried child's
 	// shadow-only command places the shadow alone; the body's region is set
 	// when the carrier is placed.
+	//
+	// The off-clip test clips against the rectangle the commits will clip
+	// against. r.worldW still holds the framebuffer here: the WorldBegin
+	// command that widens it to the frame's record extent below a rest factor
+	// is replayed after placement (renderer.Execute), so the same widening
+	// World applies is applied here.
+	clipW, clipH := r.clipW(), r.clipH()
+	if w, h := l.RecordedWorldExtent(); w > 0 && h > 0 {
+		clipW, clipH = max(clipW, int(w)), max(clipH, int(h))
+	}
 	d.pending = d.pending[:0]
 	l.VisitModels(func(m drawlist.Model) {
 		g := m.Geometry
@@ -659,13 +704,32 @@ func (r *Renderer) placeModelDirectFrame(l *drawlist.List) bool {
 		}
 		if m.ShadowOnly {
 			if g.Shadow != nil && !g.Shadow.Silhouette {
-				d.pending = append(d.pending, modelDirectPending{g: g.Shadow, shadow: true, height: modelWorldBounds(g.Shadow).Dy()})
+				sb := modelWorldBounds(g.Shadow)
+				if modelDirectBoxAway(sb, clipW, clipH) {
+					r.modelStats.DirectClipped++
+					return
+				}
+				d.pending = append(d.pending, modelDirectPending{g: g.Shadow, shadow: true, height: sb.Dy()})
 			}
+			return
+		}
+		// A sprite already baked is drawn from its page and takes no region,
+		// and neither does its shadow (model_sprite.go). It keeps its commit
+		// even when its box clips away: the draw is a quad whose 1-texel pad
+		// can touch the frame's edge from outside the box.
+		if g.Sprite && r.spriteDraw(g) {
 			return
 		}
 		bounds := modelWorldBounds(g)
 		if len(g.Children) != 0 {
 			bounds = modelGroupBounds(g)
+		}
+		// A subject whose every committed image would clip away takes no
+		// region: the same rectangle each commit clips against decides it, so
+		// dropping it here changes no pixel (modelDirectClipsAway).
+		if modelDirectClipsAway(g, bounds, clipW, clipH) {
+			r.modelStats.DirectClipped++
+			return
 		}
 		d.pending = append(d.pending, modelDirectPending{g: g, height: bounds.Dy()})
 	})
@@ -685,6 +749,7 @@ func (r *Renderer) placeModelDirectFrame(l *drawlist.List) bool {
 			}
 		}
 	}
+	r.planSpriteBakes()
 	rows, pages := 0, 0
 	for i := range d.pages {
 		if d.pages[i].usedRows > 0 {
@@ -697,6 +762,61 @@ func (r *Renderer) placeModelDirectFrame(l *drawlist.List) bool {
 		r.stageTimes.ModelPlace = time.Since(placeStarted)
 	}
 	return rows != 0
+}
+
+// modelDirectClipsAway reports whether every image a subject commits this frame
+// — its body box, or a group's composed box, and its shadow's — lies wholly
+// outside the frame's world clip. The commits test the same rectangle, so such
+// a subject draws nothing: placing it would spend a region of the frame's
+// atlas, both page passes' faces and a commit quad whose fragment is clipped
+// away. The recorder's unit view bound is conservative and features are
+// admitted by a cell window with margins (DESIGN_GPU_RENDERER §13.9), so a
+// frame still records subjects whose commits clip away entirely.
+//
+// A reflecting subject is never skipped: its reflection is committed from
+// geometry of its own and can land inside the clip while the body's box does
+// not. A subject with the blue waterline is never skipped either: its
+// underwater commit clips a rectangle the water's refraction displaces beyond
+// the body's box (commitUnderwater). An aircraft with clearance carries the
+// soft-shadow treatment, whose disc reaches a radius beyond its silhouette's
+// box (commitAircraftShadow), so it is never skipped while its height lane is
+// set. A silhouette's shadow reads its body's finished raster, so the shadow's
+// box is part of the test: the subject is placed when either box is in frame.
+// The same holds for a carrier's children: each child's shadow is committed
+// from the solo region the carrier's placement gives it, so a child whose
+// shadow reaches the frame keeps the whole group placed, and a child is held
+// to the same exceptions as its carrier.
+func modelDirectClipsAway(g *drawlist.ModelGeometry, bounds image.Rectangle, clipW, clipH int) bool {
+	if !modelDirectBoxAway(bounds, clipW, clipH) || !modelDirectReachAway(g, clipW, clipH) {
+		return false
+	}
+	for _, child := range g.Children {
+		if !modelDirectReachAway(child.Geometry, clipW, clipH) {
+			return false
+		}
+	}
+	return true
+}
+
+// modelDirectReachAway reports whether nothing a packet commits beyond its
+// body's box reaches the clip: it has no reflection, underwater commit or
+// soft shadow, and its shadow's box lies wholly outside.
+func modelDirectReachAway(g *drawlist.ModelGeometry, clipW, clipH int) bool {
+	if g == nil {
+		return true
+	}
+	if g.ReflectWater || g.Waterline == drawlist.ModelWaterlineBlue || g.AircraftShadowHeight > 0 {
+		return false
+	}
+	return g.Shadow == nil || modelDirectBoxAway(modelWorldBounds(g.Shadow), clipW, clipH)
+}
+
+// modelDirectBoxAway reports whether a box lies wholly outside [0,w)x[0,h):
+// the half-open rectangles a commit clips to, so a box touching an edge from
+// outside draws nothing and one touching it from inside draws at least a row
+// or column.
+func modelDirectBoxAway(b image.Rectangle, w, h int) bool {
+	return b.Max.X <= 0 || b.Max.Y <= 0 || b.Min.X >= w || b.Min.Y >= h
 }
 
 // assignGroupRegions places one subject's regions and nothing else, so the
@@ -1125,12 +1245,13 @@ func (r *Renderer) appendSoloFace(d *modelPlaceCtx, f *drawlist.ModelFace, slot 
 		colorB = float32((int32(slot.x)+u1)*4096 + int32(slot.y) + v1)
 	}
 	base := uint32(len(d.verts)) - uint32(run.vOff)
+	lane := float32(mode) + run.seedLane()
 	for _, v := range f.Vertices {
 		d.verts = append(d.verts, ebiten.Vertex{
 			DstX: ox + modelSamplePos(v.X, s), DstY: oy + modelSamplePos(v.Y, s),
 			SrcX: float32(slot.x + int(v.U)), SrcY: float32(slot.y + int(v.V)),
 			ColorR: 1, ColorG: float32(f.Color), ColorB: colorB, ColorA: colorA,
-			Custom0: float32(mode), Custom1: d.laneKey(v.Key), Custom2: float32(entry), Custom3: 0,
+			Custom0: lane, Custom1: d.laneKey(v.Key), Custom2: float32(entry), Custom3: 0,
 		})
 	}
 	for i := 1; i+1 < n; i++ {
@@ -1258,6 +1379,7 @@ func (r *Renderer) appendFaceCore(d *modelPlaceCtx, f *drawlist.ModelFace, tex m
 	d.verts = slices.Grow(d.verts, n)[:vi+n]
 	dst := d.verts[vi : vi+n]
 	shaded := f.Shaded && !shadow
+	lane := float32(mode) + run.seedLane()
 	for i := range f.Vertices {
 		v := &f.Vertices[i]
 		k := float32(1)
@@ -1279,7 +1401,7 @@ func (r *Renderer) appendFaceCore(d *modelPlaceCtx, f *drawlist.ModelFace, tex m
 			SrcX: float32(tex.x + v.U), SrcY: float32(tex.y + v.V),
 			ColorR: k, ColorG: colorG, ColorB: colorB,
 			ColorA:  colorA,
-			Custom0: float32(mode), Custom1: custom1, Custom2: custom2, Custom3: custom3,
+			Custom0: lane, Custom1: custom1, Custom2: custom2, Custom3: custom3,
 		}
 	}
 	ii := len(d.idx)
@@ -1309,11 +1431,12 @@ func (r *Renderer) appendDirectGPUFace(d *modelPlaceCtx, f modelGPUFace, ox, oy,
 	}
 	run := d.colourRun([2]*ebiten.Image{d.texturePage(r), r.tables.atlas}, 8)
 	base := uint32(len(d.verts)) - uint32(run.vOff)
+	lane := float32(modelDirectOutline|modelDirectLive) + run.seedLane()
 	for _, v := range f.Vertices {
 		d.verts = append(d.verts, ebiten.Vertex{
 			DstX: ox + v.X*s, DstY: oy + v.Y*s,
 			ColorR: 1, ColorG: float32(f.Color),
-			Custom0: modelDirectOutline | modelDirectLive, Custom1: d.laneKey(int32(v.Key)), Custom2: float32(entry), Custom3: 0,
+			Custom0: lane, Custom1: d.laneKey(int32(v.Key)), Custom2: float32(entry), Custom3: 0,
 		})
 	}
 	for i := 1; i+1 < n; i++ {
@@ -1350,6 +1473,10 @@ func fattenBy(v, c, s, fat float32) float32 {
 // fallback.
 func (r *Renderer) commitModelDirect(g *drawlist.ModelGeometry) {
 	d := &r.modelDirect
+	if sd, ok := d.sprites.draws[g]; ok {
+		r.commitModelSprite(g, sd.body)
+		return
+	}
 	region, ok := d.regions[g]
 	if !ok || !region.ok {
 		r.drawModelDirectFallback(g)
@@ -1398,11 +1525,19 @@ func (r *Renderer) commitModelDirect(g *drawlist.ModelGeometry) {
 // it no longer opens a phase (§11.2 "The scheduler").
 func (r *Renderer) commitModelDirectShadow(g *drawlist.ModelGeometry) {
 	d := &r.modelDirect
+	if sd, ok := d.sprites.draws[g]; ok {
+		if sd.shadow.ok {
+			r.commitModelSpriteShadow(g, sd)
+		} else {
+			r.modelStats.ShadowsOmitted++
+		}
+		return
+	}
 	sg := g.Shadow
 	shadow, ok := d.regions[sg]
 	body, bok := d.shadowSource(g)
 	if !ok || !shadow.ok || !bok || r.scene2D == nil {
-		r.modelStats.ShadowsOmitted++
+		r.omitShadow(g)
 		return
 	}
 	sb, bb := shadow.bounds, body.bounds
@@ -1430,6 +1565,18 @@ func (r *Renderer) commitModelDirectShadow(g *drawlist.ModelGeometry) {
 	r.modelStats.Shadows++
 }
 
+// omitShadow counts a shadow the lane has no image for. A shadow wholly
+// outside the clip is not counted: it would have drawn nothing, and it is
+// exactly what placement skips (modelDirectClipsAway), so ShadowsOmitted keeps
+// counting shadows the frame lost. An aircraft's soft-shadow disc reaches
+// beyond its box, so its shadow is counted wherever it is.
+func (r *Renderer) omitShadow(g *drawlist.ModelGeometry) {
+	if g.AircraftShadowHeight == 0 && modelDirectBoxAway(modelWorldBounds(g.Shadow), r.clipW(), r.clipH()) {
+		return
+	}
+	r.modelStats.ShadowsOmitted++
+}
+
 // commitModelSilhouetteShadow compiles a Digger or mobile subject's shadow:
 // an opaque-class command, like the projected shadow's, over the body's box at
 // the shadow's placement whose
@@ -1448,7 +1595,7 @@ func (r *Renderer) commitModelSilhouetteShadow(g *drawlist.ModelGeometry) {
 	sg := g.Shadow
 	body, bok := d.shadowSource(g)
 	if !bok || r.scene2D == nil {
-		r.modelStats.ShadowsOmitted++
+		r.omitShadow(g)
 		return
 	}
 	if r.commitAircraftShadow(g, body) {
@@ -1511,19 +1658,24 @@ func (r *Renderer) commitModelSilhouetteShadow(g *drawlist.ModelGeometry) {
 // the commit does for the group as a whole [03 R-COMP-01 §2]: the carrier's
 // blend covers its cargo, as a staged carrier's does.
 //
-// A frame reaches here only when both atlas pages are full, which neither
-// battle view does (§22.2).
+// A frame draws here only when both atlas pages are full, which neither
+// battle view does (§22.2). A subject placement skipped as off-clip arrives
+// here too, without a region, and leaves at the clip test.
 func (r *Renderer) drawModelDirectFallback(g *drawlist.ModelGeometry) {
-	// The fallback builds its faces in the lane's batch, which the page
-	// passes may still be reading.
-	r.joinModelPages()
-	d := &r.modelDirect
 	b := modelGroupBounds(g)
 	x0, y0 := max(b.Min.X, 0), max(b.Min.Y, 0)
 	x1, y1 := min(b.Max.X, r.clipW()), min(b.Max.Y, r.clipH())
 	if x0 >= x1 || y0 >= y1 {
 		return
 	}
+	// The fallback builds its faces in the lane's batch, which the page
+	// passes may still be reading. It joins them only once it has something
+	// to draw: every subject placement skipped as off-clip arrives here
+	// without a region, and joining for it would end the passes' overlap with
+	// Replay at the first such subject in record order (§22 "Page passes
+	// beside Replay").
+	r.joinModelPages()
+	d := &r.modelDirect
 	c := r.laneCtx()
 	c.fallbackOpacity = 1
 	if g.Cloaked {
@@ -1637,6 +1789,13 @@ func modelDirectFaceAt(g *drawlist.ModelGeometry, index int32) *drawlist.ModelFa
 // mode's key comes from the parameter image's two-chain mapping.
 func modelDirectMappedSource() string {
 	return `
+// modelDirectSeedMode splits the mode lane into the run's seed phase and the
+// face's mode (seedLane).
+func modelDirectSeedMode(lane float) (float, int) {
+	seed := floor((lane + 0.5) / ` + fmt.Sprint(modelDirectSeedStride) + `.0)
+	return seed, int(lane - seed*` + fmt.Sprint(modelDirectSeedStride) + `.0 + 0.5)
+}
+
 func modelDirectMapped(mode int) bool {
 	return mode == ` + fmt.Sprint(modelDirectQuad) + ` || mode == ` + fmt.Sprint(modelDirectQuadShade) + ` ||
 		mode == ` + fmt.Sprint(modelDirectFlatQuad) + ` || mode == ` + fmt.Sprint(modelDirectFlatQuadShade) + `
@@ -1655,10 +1814,8 @@ func modelDirectKeyShaderSource() string {
 
 package main
 ` + modelQuadMapperSource + modelOutlineSource + modelDirectMappedSource() + `
-var SeedPhase float
-
 func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
-	mode := int(custom.x + 0.5)
+	seedPhase, mode := modelDirectSeedMode(custom.x)
 	if mode >= ` + fmt.Sprint(modelDirectLive) + ` {
 		mode -= ` + fmt.Sprint(modelDirectLive) + `
 	}
@@ -1680,9 +1837,9 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
 	}
 	key = key - floor(key/256.0)*256.0
 	original := 0.0
- if SeedPhase == 1.0 || SeedPhase == 2.0 {
+ if seedPhase == 1.0 || seedPhase == 2.0 {
   original = key
-  if SeedPhase == 2.0 && key == 1.0 { key = 0.0 }
+  if seedPhase == 2.0 && key == 1.0 { key = 0.0 }
  }
  return vec4(key/255.0, original/255.0, 0.0, 1.0)
 }
@@ -1703,8 +1860,6 @@ func modelDirectColourShaderSource() string {
 	return `//kage:unit pixels
 
 package main
-
-var SeedPhase float
 
 const palRow = ` + fmt.Sprint(tableRowPAL) + `.0
 const blueRow = ` + fmt.Sprint(tableRowBlue) + `.0
@@ -1736,7 +1891,7 @@ func clipIndex(idx float, key float, wl float, wlKey float, digger float, digger
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
 	d := floor(dstPos.xy - imageDstOrigin())
-	mode := int(custom.x + 0.5)
+	seedPhase, mode := modelDirectSeedMode(custom.x)
 	live := mode >= ` + fmt.Sprint(modelDirectLive) + `
 	if live {
 		mode -= ` + fmt.Sprint(modelDirectLive) + `
@@ -1774,7 +1929,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
 		}
 		storedPixel := imageSrc2AtFromSrc0Pos(imageSrc0Origin()+at+vec2(0.5, 0.5))
   stored := floor(storedPixel.r*255.0 + 0.5)
-  if SeedPhase == 1.0 || SeedPhase == 2.0 {
+  if seedPhase == 1.0 || seedPhase == 2.0 {
    // Cached winner selection precedes the independently seeded key.
    stored = floor(storedPixel.g*255.0 + 0.5)
   }
@@ -1828,7 +1983,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
 		// lane carries the group delta, which is taken back off here.
 		delta := modelQuadU16(g.r, g.g) - 32768.0
   own := vkey - delta
-  if SeedPhase > 0.5 {
+  if seedPhase > 0.5 {
    own = vkey
    vkey = clamp(vkey + delta, 0.0, 255.0)
   }
@@ -1872,7 +2027,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4, custom vec4) vec4 {
 	if idx == 1.0 {
   // A winning live write replaces the seeded colour, including with the
   // composition transparent index. Cached transparent winners started clear.
-  if SeedPhase == 3.0 { return vec4(0.0) }
+  if seedPhase == 3.0 { return vec4(0.0) }
   discard()
 		return vec4(0.0)
 	}

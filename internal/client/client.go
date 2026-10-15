@@ -521,6 +521,10 @@ type Client struct {
 	featureShadows bool
 	shading        bool
 
+	// featureLayers holds the strategic view's static feature layers
+	// (feature_layers.go, DESIGN_GPU_RENDERER §16.14).
+	featureLayers featureLayerState
+
 	// Software cursor, drawn last over the composed surface [07 §8].
 	cursors *Cursors
 	// cursorPinned records that this frame's recording drew the build
@@ -1396,7 +1400,7 @@ func (c *Client) featureGAFFor(filename string) (*formats.GAF, error) {
 		return nil, err
 	}
 	path := "anims/" + key + ".gaf"
-	gaf, err := formats.LoadGAFFile(c.modelFS, path)
+	gaf, err := formats.LoadGAFDecodedFile(c.modelFS, path)
 	if err != nil {
 		c.featureGACErr[key] = err
 		return nil, err
@@ -1781,20 +1785,7 @@ func (c *Client) blitFogGAF(frame *formats.GAFFrame, dstX, dstY int, mode fogBli
 // center-sampled height. 3DO features retain their instance position
 // [03 R-RAST-01 §6].
 func (c *Client) featureScreenPos(f frame.FeatureView) (int32, int32) {
-	y := f.Y
-	if c.terrain != nil && f.FootX > 0 && f.FootZ > 0 && !(f.Model != "" && f.Filename == "") {
-		h0 := c.terrain.PlotAt(f.CX, f.CZ)
-		h1 := c.terrain.PlotAt(f.CX+1, f.CZ)
-		h2 := c.terrain.PlotAt(f.CX, f.CZ+1)
-		h3 := c.terrain.PlotAt(f.CX+1, f.CZ+1)
-		// Incomplete terrain retains the existing snapshot-only fallback.
-		if h0 != nil && h1 != nil && h2 != nil && h3 != nil {
-			sum := int64(h0.Height()) + int64(h1.Height()) + int64(h2.Height()) + int64(h3.Height())
-			// WorldToScreen halves this integer mean, yielding sum >> 3
-			// before applying the presentation view scale [03 §5.1.4].
-			y = numeric.Fixed((sum >> 2) << 16)
-		}
-	}
+	y := c.featureAnchorY(f)
 	if c.cam == nil {
 		// Fallback deterministic when no camera: use world high word directly [03 §2.5].
 		wx := int32(int64(f.X) >> 16)
@@ -1809,4 +1800,25 @@ func (c *Client) featureScreenPos(f frame.FeatureView) (int32, int32) {
 	sx -= camera.OriginX
 	sy -= camera.OriginY
 	return sx, sy
+}
+
+// featureAnchorY is the height a feature's anchor projects from: its own, or for
+// a sprite feature with a footprint the integer mean of its anchor cell's four
+// plot heights [03 §5.1.4].
+func (c *Client) featureAnchorY(f frame.FeatureView) numeric.Fixed {
+	y := f.Y
+	if c.terrain != nil && f.FootX > 0 && f.FootZ > 0 && !(f.Model != "" && f.Filename == "") {
+		h0 := c.terrain.PlotAt(f.CX, f.CZ)
+		h1 := c.terrain.PlotAt(f.CX+1, f.CZ)
+		h2 := c.terrain.PlotAt(f.CX, f.CZ+1)
+		h3 := c.terrain.PlotAt(f.CX+1, f.CZ+1)
+		// Incomplete terrain retains the existing snapshot-only fallback.
+		if h0 != nil && h1 != nil && h2 != nil && h3 != nil {
+			sum := int64(h0.Height()) + int64(h1.Height()) + int64(h2.Height()) + int64(h3.Height())
+			// WorldToScreen halves this integer mean, yielding sum >> 3
+			// before applying the presentation view scale [03 §5.1.4].
+			y = numeric.Fixed((sum >> 2) << 16)
+		}
+	}
+	return y
 }

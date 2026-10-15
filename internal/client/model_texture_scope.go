@@ -172,7 +172,7 @@ func (r *ModelTextureRegistry) loadModel(name string) (*unitModel, error) {
 	// preserves the registry's per-load primitive identity even for two unit
 	// definitions or features naming the same file [03 R-CRD-005 §1].
 	identity := *result.model.compiled
-	return &unitModel{compiled: &identity, pieceByName: result.model.pieceByName}, nil
+	return &unitModel{compiled: &identity, pieceByName: result.model.pieceByName, reach: result.model.reach}, nil
 }
 
 func (a *PreviewModelTextureAssets) featureBank(key string) previewFeatureBank {
@@ -180,7 +180,7 @@ func (a *PreviewModelTextureAssets) featureBank(key string) previewFeatureBank {
 	defer a.mu.Unlock()
 	bank, ok := a.features[key]
 	if !ok {
-		bank.gaf, bank.err = formats.LoadGAFFile(a.fs, "anims/"+key+".gaf")
+		bank.gaf, bank.err = formats.LoadGAFDecodedFile(a.fs, "anims/"+key+".gaf")
 		a.features[key] = bank
 	}
 	return bank

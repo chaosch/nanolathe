@@ -11,10 +11,10 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/netproto"
 )
 
-// A room of version-5 and version-6 seats plays as one; only the version-6
-// seats receive the relay's progress reports, which follow the agreed tick
-// and show a defeated seat that left as no longer playing (§12.2, §16.5.2).
-func TestHostedProgressReachesOnlyVersion6Seats(t *testing.T) {
+// A room of version-7 and version-8 seats plays as one; every seat receives
+// the relay's progress reports, which follow the agreed tick and show a
+// defeated seat that left as no longer playing (§12.2, §16.5.2).
+func TestHostedProgressReachesEveryServedVersion(t *testing.T) {
 	timeouts := hostedDefaultTimeouts
 	timeouts.ping, timeouts.report = 20*time.Millisecond, 50*time.Millisecond
 	s := listenWebSocketTest(t, HostedConfig{InsecureLoopback: true}, false, timeouts)
@@ -22,21 +22,26 @@ func TestHostedProgressReachesOnlyVersion6Seats(t *testing.T) {
 	options := HostedDialOptions{InsecureLoopback: true}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	host, err := openHostedLobby(ctx, 6, address, "", localTestHello(0), []byte{1}, 3, options)
+	// Transport versions differ; every seat still speaks command schema 1.
+	host, err := openHostedLobby(ctx, hostedVersion, address, "", versionTestHello(hostedMinVersion, 0), []byte{1}, 3, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = host.Close() })
-	// A version-5 seat is welcomed in version 5, and describes in it.
-	if d, err := describeVersion(ctx, address, host.Code(), 5); err != nil || d != hostedDescriptionMessage {
-		t.Fatalf("version-5 description: %d %v", d, err)
+	// A version-7 seat is welcomed in version 7, and describes in it; a
+	// retired version is refused.
+	if d, err := describeVersion(ctx, address, host.Code(), 7); err != nil || d != hostedDescriptionMessage {
+		t.Fatalf("version-7 description: %d %v", d, err)
 	}
-	old, err := openHostedLobby(ctx, hostedMinVersion, address, host.Code(), localTestHello(1), nil, 0, options)
+	if d, err := describeVersion(ctx, address, host.Code(), 6); err != nil || d != localRefusedMessage {
+		t.Fatalf("version-6 description: %d %v", d, err)
+	}
+	old, err := openHostedLobby(ctx, hostedMinVersion, address, host.Code(), versionTestHello(hostedMinVersion, 1), nil, 0, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = old.Close() })
-	leaver, err := openHostedLobby(ctx, 6, address, host.Code(), localTestHello(1), nil, 0, options)
+	leaver, err := openHostedLobby(ctx, hostedVersion, address, host.Code(), versionTestHello(hostedMinVersion, 1), nil, 0, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +108,11 @@ func TestHostedProgressReachesOnlyVersion6Seats(t *testing.T) {
 	if !ok || !p.Seats[0].Playing || !p.Seats[1].Playing || p.Seats[2].Playing || !p.Seats[2].Final || p.Seats[2].Acked < 5 || p.Seats[0].Final {
 		t.Fatalf("latest report after slot 2 left: %+v %v", p, ok)
 	}
-	if p, ok := battles[1].Progress(); ok {
-		t.Fatalf("the version-5 seat received a report: %+v", p)
+	if p, ok := battles[1].Progress(); !ok || len(p.Seats) != 3 {
+		t.Fatalf("the version-7 seat's report: %+v %v", p, ok)
 	}
 	if _, ok := battles[2].Progress(); !ok {
-		t.Fatal("the version-6 seat that left had received no report")
+		t.Fatal("the seat that left had received no report")
 	}
 	// The relay's messages and the seat's own, the lobby's included.
 	for i, c := range battles[:2] {
@@ -117,7 +122,7 @@ func TestHostedProgressReachesOnlyVersion6Seats(t *testing.T) {
 		}
 	}
 	awaitHostedCapacity(t, s, 0, 0)
-	if st := s.Status(); len(st.Recent) != 1 || st.Recent[0].Outcome != finishCompleted {
+	if st := s.Status(); len(st.Recent) != 1 || st.Recent[0].Outcome != finishCompleted || st.Recent[0].Seat != -1 {
 		t.Fatalf("recent rooms: %+v", st.Recent)
 	}
 }
@@ -148,7 +153,7 @@ func describeVersion(ctx context.Context, address, room string, version uint16) 
 func TestHostedTrafficCountsBothDirections(t *testing.T) {
 	s := listenHostedTest(t, HostedConfig{InsecureLoopback: true}, hostedDefaultTimeouts)
 	c, code := dialHostedTest(t, s, "", 0)
-	hello, err := encodeHostedHello("", hostedAutoStart, 2, localTestHello(0), nil)
+	hello, err := encodeHostedHello("", hostedAutoStart, 2, localTestHello(0), nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,12 +183,12 @@ func TestHostedClientRefusesAnotherWelcomeVersion(t *testing.T) {
 		}
 		_ = writeLocalFrame(server, encodeHostedWelcome("CFHJKM", 0, hostedMinVersion))
 	}()
-	hello, err := encodeHostedHello("", hostedAutoStart, 2, localTestHello(0), nil)
+	hello, err := encodeHostedHello("", hostedAutoStart, 2, localTestHello(0), nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var traffic trafficCounter
-	if _, _, err := exchangeHostedHello(client, &traffic, hostedVersion, hello, "", 0); err == nil || !strings.Contains(err.Error(), "version 7; this relay answered version 5") {
+	if _, _, err := exchangeHostedHello(client, &traffic, hostedVersion, hello, "", 0); err == nil || !strings.Contains(err.Error(), "version 8; this relay answered version 7") {
 		t.Fatalf("welcome in another version: %v", err)
 	}
 }
@@ -205,5 +210,74 @@ func TestHostedProgressReportEncoding(t *testing.T) {
 		if _, err := decodeHostedProgress(bad); err == nil {
 			t.Fatalf("accepted malformed report %v", bad)
 		}
+	}
+}
+
+// The operator's record of an ended match carries its duration and the
+// seat that ended it; a completed match names no seat.
+func TestFinishedRoomRecord(t *testing.T) {
+	var got []FinishedRoom
+	s := &HostedServer{config: HostedConfig{Finished: func(f FinishedRoom) { got = append(got, f) }}}
+	stats := &roomStats{startedAt: time.Now().Add(-2 * time.Second)}
+	s.recordFinished(&hostedRoom{id: 1, size: 2}, stats, true, 2, 60, finishDisconnected, 1)
+	s.recordFinished(&hostedRoom{id: 2, size: 2}, stats, true, 2, 90, finishCompleted, 1)
+	if len(got) != 2 || got[0].Seat != 1 || got[0].DurationSeconds < 2 || got[1].Seat != -1 {
+		t.Fatalf("records %+v", got)
+	}
+	for _, started := range []bool{false, true} {
+		s.recordFinished(&hostedRoom{id: 3, size: 2}, stats, started, 2, 0, finishExpired, 1)
+		f := got[len(got)-1]
+		if (started && f.Seat != 1) || (!started && f.Seat != -1) {
+			t.Fatalf("expiry with started=%v: %+v", started, f)
+		}
+	}
+}
+
+// Required broadcasts identify the recipient whose output queue failed,
+// rather than the triggering sender or the grant timer (§12.5).
+func TestHostedFailedRecipientAttribution(t *testing.T) {
+	for _, playing := range []bool{false, true} {
+		name := "lobby-event"
+		if playing {
+			name = "grant-timer"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, r, peers, _ := drainRoomTest(t, playing)
+			if !r.send(hostedEvent{peer: peers[1], join: true}) {
+				t.Fatal("join was not received")
+			}
+			deadline := time.Now().Add(time.Second)
+			for {
+				snap := r.status.get()
+				if len(snap.seats) == 2 && snap.started == playing && peers[0].queuedBytes() == 0 && peers[1].queuedBytes() == 0 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("both peers did not finish their initial output")
+				}
+				time.Sleep(time.Millisecond)
+			}
+			// Hold the recipient's outstanding byte budget at its limit,
+			// so its next required frame fails as a slow reader's would.
+			peers[1].mu.Lock()
+			peers[1].bytes = hostedMaxQueuedBytes
+			peers[1].mu.Unlock()
+			if playing {
+				for _, p := range peers {
+					if !r.send(hostedEvent{peer: p, body: []byte{hostedOpeningReadyMessage}}) {
+						t.Fatal("opening readiness was not received")
+					}
+				}
+			} else {
+				body := append([]byte{hostedReadyMessage, 1}, make([]byte, 64)...)
+				if !r.send(hostedEvent{peer: peers[0], body: body}) {
+					t.Fatal("readiness was not received")
+				}
+			}
+			awaitHostedCapacity(t, s, 0, 0)
+			if st := s.Status(); len(st.Recent) != 1 || st.Recent[0].Outcome != finishDisconnected || st.Recent[0].Seat != 1 {
+				t.Fatalf("recipient seat 1 failed its output budget: %+v", st.Recent)
+			}
+		})
 	}
 }

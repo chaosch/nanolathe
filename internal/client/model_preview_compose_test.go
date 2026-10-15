@@ -154,7 +154,7 @@ func TestModelPreviewProjectedRecordUnchangedWithoutAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := previewRecordDigest(t, record), "800994ca5cf60612f802a8b8326a925b1b32efc947eefe4a1136e0149b4040f6"; got != want {
+	if got, want := previewRecordDigest(t, record), "41664beca4dd8fcd754d78335a3b3ee0819ae548fd78a6559eabcadd3d7bd6ad"; got != want {
 		t.Fatalf("isolated projected record digest = %s, want %s", got, want)
 	}
 }

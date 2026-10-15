@@ -211,6 +211,24 @@ import (
 // diagnostic restoring only the preceding baseline implementations reproduces
 // every preceding short and long lock, including Modern. Initial and 6,000-tick
 // Ashap locks, the Modern long lock and battle end ticks remain unchanged.
+//
+// Modern aim re-issue (DESIGN_UNITS_ORDERS_COB "Modern aim re-issue") drops a
+// slot's Aim request with every order-side TargetCleared, so a slot an order
+// rebinds after its script cancelled the outstanding Aim asks again. The
+// combat benchmark's Modern warm/final locks move with the re-issued aims and
+// their shots. A diagnostic overlay answering false for only that rule
+// reproduces both preceding locks; letting explicit attacks reposition on Hold
+// Position moves no lock. Initial compositions, both Modern Ashap locks and
+// every Strict/Community lock remain unchanged.
+//
+// Modern aircraft tactics (DESIGN_MOVEMENT_PATH "Modern aircraft tactics")
+// fly the bombing, strafing and hovering attacks and the constructor-side
+// repair landing, and let aircraft and their attackers choose anti-air
+// targets beyond sight. The combat benchmark's Modern warm/final locks move
+// with the benchmark's aircraft. The build without these policies reproduces
+// both preceding locks; switching off the pilots alone does not, because the
+// anti-air target choices move them too. Initial compositions, both Modern
+// Ashap locks and every Strict/Community lock remain unchanged.
 // Modern's approved sight-circle, saved-return and recovery policies remain selected.
 const (
 	lockAshapMap                   = "ashap plateau"
@@ -235,10 +253,10 @@ const (
 	lockBenchModernInitial           = "partial-v1:55165c066f8b6eaa"
 	lockBenchStrictWarm              = "partial-v1:92288be0462952a2"
 	lockBenchCommunityWarm           = "partial-v1:9ca4bb1bae72a0e7"
-	lockBenchModernWarm              = "partial-v1:0e9e5bb74740f57c"
+	lockBenchModernWarm              = "partial-v1:a636ffbde1e6e2c0"
 	lockBenchStrictFinal             = "partial-v1:4a9bfa48817da57c"
 	lockBenchCommunityFinal          = "partial-v1:a97cef8ec7ca358d"
-	lockBenchModernFinal             = "partial-v1:a5ddab18c4d13cc7"
+	lockBenchModernFinal             = "partial-v1:45f7b3a50adfd6c6"
 )
 
 // The expanded retail audit corrects active-search budget continuation
@@ -354,6 +372,13 @@ func TestCommunityFingerprintIsLocked(t *testing.T) {
 	runFingerprintLock(t, gameplay.Community39, lockAshapCommunity6000, lockAshapCommunity54000, lockAshapCommunityEnd, lockBenchCommunityInitial, lockBenchCommunityWarm, lockBenchCommunityFinal)
 }
 
+// Issue 121's Modern combat patrol retention (DESIGN_UNITS_ORDERS_COB
+// "Modern danger response") moves the benchmark warm/final locks: aircraft
+// keep their patrol routes when no visible counterattack is available, rather
+// than braking into short withdrawal moves. An overlay restoring only the
+// old danger handler reproduces both old hashes. Modern's initial and both
+// Ashap locks, and every Strict and Community lock, remain unchanged.
+//
 // TestModernFingerprintIsLocked holds the approved Modern policy set the same
 // way, so an unintended change to a Modern rule is as loud as a change to the
 // retail path [I11].

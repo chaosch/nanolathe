@@ -48,6 +48,7 @@ Allowed floating point, exhaustively:
 | Resource stocks, ledger carry, debt/accept ratios | `float32` | `[05 "Player slot"]`, `[05 "Two-stage settlement algorithm"]` |
 | Repair-patrol resource thresholds and feature-fit comparisons | `float64` transient over stored `float32` inputs, with no intermediate store; Modern guard policy retains its own comparator | `[04 R-ORD-01 §4]`, `[04 R-ORD-01 §7]` |
 | Economy working-precision intermediates (production contributions and difficulty discounts, pool, stage remainders/ratios, carry terms, and promoted excess) | `float64` transient; narrowed at the named `float32` stores | `[05 R-ECO-01 §1]`, `[05 R-ECO-01 §3]`, `[05 R-ECO-01 §5]`, `[05 R-ECO-01 §6]` |
+| Online automatic sharing: the excess over the threshold, the recipient's capacity gap, the ratio product and their comparisons | `float64` transient at working precision; only the chosen amount is stored as `float32` | `[05 R-SHARE-01 §3]` |
 | Economy cumulative totals and waste counters — including the opt-in trace copy of the same totals in `internal/economy/p28_parity_trace.go` (P28-OBS-00C; mirrored by `internal/architecture`'s parity ratchet as this row) | `float64` | `[05 "Stocks, counters, and waste"]` |
 | Construction remaining fraction and its proportional cost/health intermediates | `float32` | `[05 "Construction target state"]`, `[05 "Construction arithmetic"]` |
 | Community repair energy calculation | `float64` transient, narrowed by the shared integer conversion | `community-patch-engine.md CP-DMG-4`; enabled only through `DESIGN_COMMUNITY_PATCH` |
@@ -426,7 +427,8 @@ DESIGN_SESSIONS_AI_SAVE "Modern save unit limits" and "Modern wave air
 targets", and DESIGN_UNITS_ORDERS_COB "Modern AI move retention", and
 DESIGN_UNITS_ORDERS_COB "Modern infection" with DESIGN_SURVIVAL "Modern
 infection hunters", DESIGN_WEAPONS_PROJECTILES "Modern infector target
-preference" and DESIGN_SESSIONS_AI_SAVE "Modern AI infector focus". Each
+preference" and DESIGN_SESSIONS_AI_SAVE "Modern AI infector focus", and
+DESIGN_WORLD_VISIBILITY "Modern coverage saturation". Each
 departure reaches its algorithm through the
 owning package's rule interface, bound once from the central session mode as
 one named rule set — not through independently configurable flags; new and

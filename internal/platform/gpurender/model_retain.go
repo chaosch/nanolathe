@@ -82,12 +82,16 @@ import (
 const (
 	// modelRetainCap bounds the store's entries, stubs included. A 1080p
 	// battle frame has about four hundred subjects, each on up to four
-	// half-pixel keys (§17.3).
-	modelRetainCap = 2048
+	// half-pixel keys (§17.3); a 1600x1200 view of a 3,000-unit battle at
+	// 1x, with its wrecks and debris, has about two thousand.
+	modelRetainCap = 4096
 	// modelRetainBodyCap bounds the body index: one entry per retained
 	// object's lane, whatever its revisions, so a frame's subjects and their
-	// projected shadows fit with room for what scrolled off.
-	modelRetainBodyCap = 1024
+	// projected shadows fit with room for what scrolled off. It is also the
+	// most keyed packets a frame may place in parallel (modelPlaceKeyCap):
+	// at 1,024 that mass-battle frame, about 1,400 keyed packets, fell back
+	// to placing every subject on the game goroutine, 8 ms a frame.
+	modelRetainBodyCap = 2048
 )
 
 // modelRetainStore is the lane's retained-lane store: the map for lookup,
@@ -588,6 +592,7 @@ func (d *modelPlaceCtx) finishCapture(g *drawlist.ModelGeometry, doubled bool, o
 			if rec.quad != 0 {
 				v.ColorB = float32(rec.quad)
 			}
+			v.Custom0 = float32(int(v.Custom0) % modelDirectSeedStride)
 			v.Custom2, v.Custom3 = 0, 0
 		}
 		vi += int(rec.n)
@@ -632,6 +637,7 @@ func (r *Renderer) replayRetained(d *modelPlaceCtx, e *modelRetained, g *drawlis
 	for si := range e.segs {
 		seg := &e.segs[si]
 		run := d.colourRun([2]*ebiten.Image{seg.img, r.tables.atlas}, int(seg.verts))
+		seed := run.seedLane()
 		for fi := seg.f0; fi < seg.f1; fi++ {
 			rec := &e.recs[fi]
 			n := int(rec.n)
@@ -656,6 +662,7 @@ func (r *Renderer) replayRetained(d *modelPlaceCtx, e *modelRetained, g *drawlis
 				if rec.quad != 0 {
 					v.ColorB = quad
 				}
+				v.Custom0 += seed
 				v.Custom2, v.Custom3 = custom2, lighting
 			}
 			for i := 1; i+1 < n; i++ {
