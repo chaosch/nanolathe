@@ -606,6 +606,12 @@ func (a *app) Draw(screen *ebiten.Image) {
 	if !a.consumePresentation() {
 		return
 	}
+	// Measurement branch only: trace classic presents as modern ones are.
+	if a.trace != nil {
+		a.trace.begin()
+		a.trace.markDraw(a.refreshPeriod, a.presentInterval, a.presentPlan.spacing, a.c.IsFocused())
+		a.trace.row.due = true
+	}
 	defer browserEndDrawSample(a, browserBeginSample())
 	if a.img == nil || a.img.Bounds().Dx() != width || a.img.Bounds().Dy() != height {
 		a.img = ebiten.NewImage(width, height)
