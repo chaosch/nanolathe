@@ -1553,6 +1553,9 @@ func (b *battleSession) viewerStep(delta float64, cl *client.Client) {
 		// used for picking or HUD clicks (DESIGN_INTERFACE_HUD_INPUT §3.1).
 		mx, my := int32(mouse.X), int32(mouse.Y)
 		effX, effY := cl.EdgeScrollPosition()
+		if os.Getenv("PROBE_NOEDGE") != "" {
+			effX, effY = 800, 500
+		}
 		talkActive := b.isTalkGUIActive()
 		overMinimap := b.isOverMinimap(mx, my)
 		modalActive := state.Modal() != ui.BattleModalClosed

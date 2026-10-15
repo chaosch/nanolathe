@@ -80,6 +80,8 @@ func runMetal(opts Options, cs *contentSet) error {
 	// A restored save keeps the camera it was saved with.
 	if opts.LoadSave == "" {
 		battle.placeEntryCamera(logicalW, logicalH)
+	} else {
+		measureProbe(battle)
 	}
 	cl.SetEnhanced(true)
 	cl.SetInterpolation(true)
