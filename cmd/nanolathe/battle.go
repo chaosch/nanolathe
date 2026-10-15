@@ -433,6 +433,93 @@ func runBattleView(launch, opts Options, cs *contentSet) error {
 	return ebitenapp.Run(cl, rendererMode(shell.opts), options)
 }
 
+// newDirectViewClient builds the client a direct view presents through. Its
+// update callback and interpolation producer follow whichever battle the
+// shell holds, so a restored save replaces the battle under it.
+func newDirectViewClient(shell *gameShell, cs *contentSet, buffer *frame.Buffer, title string) (*client.Client, error) {
+	var cl *client.Client
+	cl, err := client.New(client.Options{
+		Buffer: buffer,
+		Width:  shell.display.Width,
+		Height: shell.display.Height,
+		Title:  title,
+		Step:   func(delta float64) { shell.step(delta, cl) },
+		TickFraction: func() float32 {
+			if shell.battle == nil {
+				return 0
+			}
+			return shell.battle.tickFraction()
+		},
+		PresentationTick: func(ahead time.Duration) (uint32, float32, bool) {
+			if shell.battle == nil {
+				return 0, 0, false
+			}
+			return shell.battle.presentationAt(ahead)
+		},
+		PresentationTickAt: func(at time.Time) (uint32, float32, bool) {
+			if shell.battle == nil {
+				return 0, 0, false
+			}
+			return shell.battle.presentationAtInstant(at)
+		},
+		JoinSimulation: func() {
+			if shell.battle != nil {
+				shell.battle.stopSimulation(cl)
+			}
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("nanolathe: client: %w", err)
+	}
+	// The presentation model cache is typed on the concrete overlay, so it
+	// reads objects3d, textures and anims unmapped. That is correct only
+	// while no content profile renames those three, which a test in this
+	// package asserts (docs/DESIGN_CONTENT_VFS.md §5 "Content profiles").
+	cl.SetModelFS(cs.unmappedMount, cs.presentation.TeamLogos)
+	cursors, err := client.LoadCursors(cs.fs)
+	if err != nil {
+		return nil, err
+	}
+	cl.SetCursors(cursors)
+	clPtr = cl
+	return cl, nil
+}
+
+// newDirectSaveView restores one save for a direct view (--metal --load-save).
+// The client starts on an empty buffer, as the windowed shell's does, and the
+// production save seam installs the restored battle into it.
+func newDirectSaveView(opts Options, cs *contentSet) (*gameShell, *client.Client, error) {
+	saved := loadedSettings()
+	opts.Gameplay = startupGameplay(opts, saved.Gameplay)
+	shell, err := newGameShell(opts, cs)
+	if err != nil {
+		return nil, nil, err
+	}
+	entered := false
+	defer func() {
+		if !entered {
+			shell.teardownBattle(clPtr)
+			shell.releaseAudio()
+		}
+	}()
+	shell.applySettings(saved)
+	if err := validatePresentationZoom(shell.opts); err != nil {
+		return nil, nil, err
+	}
+	cl, err := newDirectViewClient(shell, cs, &frame.Buffer{}, "Nanolathe — "+opts.LoadSave)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := shell.loadRetailSavePath(opts.LoadSave); err != nil {
+		return nil, nil, err
+	}
+	if shell.battle == nil {
+		return nil, nil, fmt.Errorf("nanolathe: direct save view: logical path %s, providers searched [save], expected a battle, not a campaign continuation", opts.LoadSave)
+	}
+	entered = true
+	return shell, cl, nil
+}
+
 // newDirectBattleView skips menu navigation, but retains the same shell owner
 // for dialogs and battle replacement as menu entry. Both the update callback
 // and interpolation producer follow the current battle after loading a save.
@@ -526,51 +613,10 @@ func newDirectBattleView(opts Options, cs *contentSet) (*gameShell, *client.Clie
 	} else {
 		shell.setup = authoritative.Session.Skirmish
 	}
-	var cl *client.Client
-	cl, err = client.New(client.Options{
-		Buffer: authoritative.Session.Snapshot,
-		Width:  shell.display.Width,
-		Height: shell.display.Height,
-		Title:  "Nanolathe — " + opts.Map,
-		Step:   func(delta float64) { shell.step(delta, cl) },
-		TickFraction: func() float32 {
-			if shell.battle == nil {
-				return 0
-			}
-			return shell.battle.tickFraction()
-		},
-		PresentationTick: func(ahead time.Duration) (uint32, float32, bool) {
-			if shell.battle == nil {
-				return 0, 0, false
-			}
-			return shell.battle.presentationAt(ahead)
-		},
-		PresentationTickAt: func(at time.Time) (uint32, float32, bool) {
-			if shell.battle == nil {
-				return 0, 0, false
-			}
-			return shell.battle.presentationAtInstant(at)
-		},
-		JoinSimulation: func() {
-			if shell.battle != nil {
-				shell.battle.stopSimulation(cl)
-			}
-		},
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("nanolathe: client: %w", err)
-	}
-	// The presentation model cache is typed on the concrete overlay, so it
-	// reads objects3d, textures and anims unmapped. That is correct only
-	// while no content profile renames those three, which a test in this
-	// package asserts (docs/DESIGN_CONTENT_VFS.md §5 "Content profiles").
-	cl.SetModelFS(cs.unmappedMount, cs.presentation.TeamLogos)
-	cursors, err := client.LoadCursors(cs.fs)
+	cl, err := newDirectViewClient(shell, cs, authoritative.Session.Snapshot, "Nanolathe — "+opts.Map)
 	if err != nil {
 		return nil, nil, err
 	}
-	cl.SetCursors(cursors)
-	clPtr = cl
 	// There is no loading screen on direct entry. Prepare the same optional
 	// detail art before the shell adopts the completed battle.
 	sess := authoritative.Session
