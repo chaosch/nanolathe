@@ -518,6 +518,7 @@ func runGameShell(launch, opts Options, cs *contentSet) error {
 		if err := shell.loadRetailSavePath(opts.LoadSave); err != nil {
 			return err
 		}
+		measureProbe(shell.battle)
 	}
 	writeWindowStartupReport(os.Stderr, shell, time.Since(started))
 	shell.queueStartupMovie()

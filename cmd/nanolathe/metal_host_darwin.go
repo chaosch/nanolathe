@@ -81,6 +81,8 @@ func runMetal(opts Options, cs *contentSet) error {
 	// A restored save keeps the camera it was saved with.
 	if opts.LoadSave == "" {
 		battle.placeEntryCamera(logicalW, logicalH)
+	} else {
+		measureProbe(battle)
 	}
 	// A staged field scene can hold the camera on the armies for comparable
 	// measurements across native executors, with shake off through the
