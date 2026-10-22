@@ -47,6 +47,12 @@ type Rules interface {
 	// tactics". The answer is pure; pilot state belongs to the System.
 	AirTactics(*System) bool
 
+	// RepairPatrolOffMapArrival lets a construction patrol finish its waypoint
+	// horizontally while the stamped off-map sector disables altitude control.
+	// Nanolathe Modern policy: DESIGN_MOVEMENT_PATH "Modern construction patrol
+	// edge arrival". It changes no marker, route, RNG or resource state.
+	RepairPatrolOffMapArrival(*System) bool
+
 	// ClaimConflict reports whether claimant displaces incumbent from one
 	// contested occupancy cell. ArbitrateOverlap asks it for every ground,
 	// air and building/yard stamp, including a restamp after a host vacates.
@@ -220,6 +226,9 @@ func (*ModernRules) RepairPadQueue(*System) bool { return true }
 
 func (StrictRules) AirTactics(*System) bool  { return false }
 func (*ModernRules) AirTactics(*System) bool { return true }
+
+func (StrictRules) RepairPatrolOffMapArrival(*System) bool  { return false }
+func (*ModernRules) RepairPatrolOffMapArrival(*System) bool { return true }
 
 // ClaimConflict preserves retail's owner-state branch under Strict 3.1.
 func (StrictRules) ClaimConflict(s *System, incumbent, _ int) bool {

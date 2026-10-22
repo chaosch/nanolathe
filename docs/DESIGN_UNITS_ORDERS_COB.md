@@ -1156,6 +1156,13 @@ until work succeeds. Modern arrival-place assignment and exchange do not change
 a proven recovery return's saved destination; settling elsewhere cannot
 establish that the helper returned.
 
+At a map-edge waypoint, Modern construction patrols may reach their horizontal
+goal while the off-map footprint disables altitude control. Movement's narrow
+[construction patrol edge arrival](DESIGN_MOVEMENT_PATH.md#modern-construction-patrol-edge-arrival)
+policy permits that waypoint's ordinary arrival and rotation without an
+unreachable altitude wait (issue #152). It does not complete a saved recovery
+move or alter the patrol's work-success classification.
+
 Invalid targets, abandoned pursuit and ordinary executor failures retain the
 return move and pause borrowing across the whole retained patrol route. Failed
 return movement resumes that route under the same pause. Only genuine

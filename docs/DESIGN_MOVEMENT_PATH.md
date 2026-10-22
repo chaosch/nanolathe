@@ -1111,6 +1111,48 @@ Thunder releases a bomb and verifies another release at the new point in
 both modes. The ordinary distance and reload gates still decide how soon
 that release occurs [04 R-AIR-01 §8][06 §4.1].
 
+### Modern construction patrol edge arrival
+
+**Nanolathe Modern policy — issue #152 fix request, 2026-10-21.** A
+construction aircraft's patrol waypoint can lie at or beyond the map boundary.
+Retail's default point-marker arrival requires horizontal distance at most
+half a world unit, and an explicit altitude offset adds an altitude match
+[04 R-AIR-01 §4]. The stamped footprint can simultaneously link the aircraft
+into the off-map sector, which disables vertical control [04 R-AIR-01 §5].
+Strict 3.1, Community 3.9 and unbound systems retain both contracts, including
+the resulting wait when the waypoint's altitude cannot be reached.
+
+Modern accepts the existing horizontal arrival at a construction patrol's
+full-cruise-altitude waypoint while its committed footprint is filed off-map.
+This applies only to the currently bound `VTOL_RepairPatrol` phase-1 waypoint
+marker with its maintenance gate armed, matching the record's X/Z and full
+altitude offset. The takeoff wait, borrowed work, recovery moves, other air
+orders and on-map altitude arrival keep their existing tests. There is no
+wider arrival radius, timer, altered waypoint, synthetic recovery move or
+change to flight integration. Ordinary arrival releases the marker and lets
+the patrol rotate; work scanning and failed-job pause use their existing
+contracts in DESIGN_UNITS_ORDERS_COB "Modern patrol work".
+
+`movement.Rules.RepairPatrolOffMapArrival` owns the pure decision through the
+existing session rule set. The marker consults it only after horizontal
+arrival and a failed altitude match. No additional mutable or saved state is
+introduced: existing and restored markers use their live owning record and
+committed sector; switching modes affects the next arrival test. The decision
+draws no RNG, pays no resources and changes no order or marker state. Continuing
+the route can naturally reach later ordinary work and draw sites.
+
+**Verification.** `TestRepairPatrolEdgeArrival` covers all four boundaries,
+the inclusive half-unit threshold, an on-map waypoint, all reserved modes and
+an unbound system without query side effects. The companion exclusions cover
+takeoff, zero-cruise takeoff, setup, displaced destination, repair, construction
+assistance and recovery movement. The retail session regression
+`TestModernConstructorPatrolContinuesAtMapEdgeRetail` runs a stock Core
+constructor from an established patrol toward a fusion reactor at the left
+edge. It requires paid completion and actual travel toward the next retained
+waypoint. The unfixed implementation completes the reactor at tick 441, then
+remains at the edge through the 2,000-step observation window. Run the ordinary
+landing gates and the displayless simulation benchmark for this change.
+
 ### Modern repair-pad queue
 
 **Nanolathe Modern policy (user-authorized 2026-09-25).** Aircraft seeking

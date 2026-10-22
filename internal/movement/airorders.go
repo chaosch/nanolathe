@@ -254,9 +254,26 @@ func (m *airMarker) Arrived(u *units.Unit) bool {
 		}
 	}
 	if m.flags&airMarkerExplicitAlt != 0 && !AltitudesEqual(u.Y, m.goal.Y) {
-		return false
+		return m.repairPatrolOffMapArrival(u)
 	}
 	return true
+}
+
+// The patrol's full-altitude waypoint can be horizontally reached where the
+// stamped footprint disables vertical control [04 R-AIR-01 §5]. Modern lets
+// that leg arrive instead of waiting forever (DESIGN_MOVEMENT_PATH "Modern
+// construction patrol edge arrival"). Match the retained waypoint marker;
+// the same record's takeoff wait has no maintenance-deadline gate
+// [04 R-ORD-01 §7].
+func (m *airMarker) repairPatrolOffMapArrival(u *units.Unit) bool {
+	if m.sys == nil || u.Def == nil || m.flags&airMarkerFollow != 0 ||
+		m.altOffset != int16(u.Def.CruiseAlt) || !m.sys.airOffMap(u) {
+		return false
+	}
+	n := m.sys.airPayloadOwner(u.Handle)
+	return n != nil && n.ID == orders.Lookup("VTOL_RepairPatrol") && n.Phase == 1 && n.DynamicGate&1 != 0 &&
+		n.GoalX == m.goal.X && n.GoalZ == m.goal.Z &&
+		m.sys.rules().RepairPatrolOffMapArrival(m.sys)
 }
 
 // SupplyHeading is the marker's heading-supply method [04 R-AIR-01 §4], whose
