@@ -22,11 +22,11 @@ type TextStyle struct {
 // MeasureText reports the advance width of a run in pixels, including the
 // same pair kerning used by the rasterizer.
 func MeasureText(text string, style TextStyle) float64 {
-	face := textFace(style.Font)
+	face := TextFace(style.Font)
 	w := 0.0
 	previous := rune(0)
 	for _, r := range text {
-		g, normalized := face.glyph(r)
+		g, normalized := face.Glyph(r)
 		if previous != 0 {
 			w += face.Kerning[string([]rune{previous, normalized})]/face.Cap + style.Tracking
 		}
@@ -36,7 +36,7 @@ func MeasureText(text string, style TextStyle) float64 {
 	return w * style.Size
 }
 
-// mask is a coverage buffer for one drawn run: the glyph rasterizer fills it
+// mask is a coverage buffer for one drawn run: the Glyph rasterizer fills it
 // once and the compositor reads it for the shadow and the face, so overlapping
 // strokes composite as one shape instead of darkening at every join.
 type mask struct {
@@ -105,7 +105,7 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	if style.Size <= 0 {
 		return newMask(0, 0, 0, 0)
 	}
-	face := textFace(style.Font)
+	face := TextFace(style.Font)
 	scale := style.Size / face.Cap
 	type placedGlyph struct {
 		g *atlasGlyph
@@ -115,13 +115,13 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	pen, previous := x, rune(0)
 	minX, minY, maxX, maxY := x, baseline, x, baseline
 	for _, r := range text {
-		g, normalized := face.glyph(r)
+		g, normalized := face.Glyph(r)
 		if previous != 0 {
 			pen += face.Kerning[string([]rune{previous, normalized})]*scale + style.Tracking*style.Size
 		}
-		if len(g.levels) > 0 {
+		if len(g.Levels) > 0 {
 			placed = append(placed, placedGlyph{g, pen})
-			u := g.units()
+			u := g.Units()
 			minX = math.Min(minX, pen+(float64(g.Left)-3*u)*scale)
 			maxX = math.Max(maxX, pen+(float64(g.Left)+(float64(g.W)+3)*u)*scale)
 			minY = math.Min(minY, baseline+(float64(g.Top)-3*u)*scale)
@@ -135,15 +135,15 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	m := newMask(x0, y0, int(math.Ceil(maxX))-x0+2, int(math.Ceil(maxY))-y0+2)
 	for _, item := range placed {
 		g := item.g
-		// A texel covers units face units: one for the Latin faces, more for
+		// A texel covers Units face Units: one for the Latin faces, more for
 		// glyphs rasterized below the atlas resolution (the CJK additions).
-		u := g.units()
+		u := g.Units()
 		level, factor := 0, 1.0
-		for level+1 < len(g.levels) && scale*u*factor < 0.5 {
+		for level+1 < len(g.Levels) && scale*u*factor < 0.5 {
 			level++
 			factor *= 2
 		}
-		bitmap := g.levels[level]
+		bitmap := g.Levels[level]
 		pixelScale := scale * u * factor
 		left := item.x + (float64(g.Left)-2*u)*scale
 		top := baseline + (float64(g.Top)-2*u)*scale
@@ -236,7 +236,7 @@ func blend8(dst, src uint8, a float64) uint8 {
 func DrawText(dst *image.RGBA, text string, x, baseline float64, style TextStyle, alpha, revealX float64) float64 {
 	m := buildRun(text, x, baseline, style)
 	// A title crosses grass, smoke and unit art in the same line, so the face
-	// carries its own contrast: a dark outline tight against the glyph, then
+	// carries its own contrast: a dark outline tight against the Glyph, then
 	// the drop shadow, then the face itself.
 	if style.Halo > 0 {
 		r := max(1, int(math.Round(style.Halo*style.Size)))

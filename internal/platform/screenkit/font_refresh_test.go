@@ -11,7 +11,7 @@ func TestRetainedFontsAdoptChineseOnce(t *testing.T) {
 	film.EnableCJK()
 	base := film.FilmTypeface("body")
 	delete(base.Glyphs, '选')
-	old := newFont(base)
+	old := NewFont(base)
 	fonts := Fonts{Display: old, Body: old}
 	if _, r := fonts.Body.glyph('选'); r != ' ' {
 		t.Fatal("fixture already has Chinese")

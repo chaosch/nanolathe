@@ -220,4 +220,5 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 	if g != nil && g.font != nil {
 		c.UITextWidth(g.font, text, x, y, maxWidth, fntColor)
 	}
+
 }

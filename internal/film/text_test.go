@@ -62,14 +62,14 @@ func TestMeasuredWidthMatchesDrawnInk(t *testing.T) {
 // silently loses a letter and nobody notices until the render is watched.
 func TestEveryMappedGlyphDrawsInk(t *testing.T) {
 	style := TextStyle{Size: 40, Color: color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}}
-	for r := range textFace(style.Font).Glyphs {
+	for r := range TextFace(style.Font).Glyphs {
 		if r == " " {
 			continue
 		}
 		img := flat(120, 120, 0x00)
 		DrawText(img, r, 20, 80, style, 1, math.Inf(1))
 		if inkBounds(img, 0x00).Empty() {
-			t.Fatalf("glyph %q drew nothing", string(r))
+			t.Fatalf("Glyph %q drew nothing", string(r))
 		}
 	}
 }
@@ -81,11 +81,11 @@ func TestUnmappedRuneAdvancesLikeASpace(t *testing.T) {
 	if MeasureText("AéA", style) != MeasureText("A A", style) {
 		t.Fatal("an unmapped rune does not advance like a space")
 	}
-	if _, normalized := textFace("display").glyph('é'); normalized != ' ' {
-		t.Fatal("an unmapped rune reported a glyph")
+	if _, normalized := TextFace("display").Glyph('é'); normalized != ' ' {
+		t.Fatal("an unmapped rune reported a Glyph")
 	}
-	if _, normalized := textFace("display").glyph('a'); normalized != 'a' {
-		t.Fatal("lower case did not retain its glyph")
+	if _, normalized := TextFace("display").Glyph('a'); normalized != 'a' {
+		t.Fatal("lower case did not retain its Glyph")
 	}
 }
 

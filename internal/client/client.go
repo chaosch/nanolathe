@@ -1822,3 +1822,72 @@ func (c *Client) featureAnchorY(f frame.FeatureView) numeric.Fixed {
 	}
 	return y
 }
+
+// UIPutPixel 往UI索引帧缓冲写单个像素，自动遵守当前 c.uiClip UI裁剪区域
+func (c *Client) UIPutPixel(x, y int, idx byte) {
+	clip := c.uiClip
+	if !c.hasUIClip {
+		// 没有UI裁剪时，只做全局画面边界判断
+		if x < 0 || y < 0 || x >= c.width || y >= c.height {
+			return
+		}
+	} else {
+		// 有UI裁剪，判断是否在uiClip矩形内
+		if int32(x) < clip.X || int32(y) < clip.Y ||
+			int32(x) >= clip.X+clip.W || int32(y) >= clip.Y+clip.H {
+			return
+		}
+	}
+
+	off := y*c.width + x
+	if off < 0 || off >= len(c.indexed) {
+		return
+	}
+	c.indexed[off] = idx
+}
+
+// UIMaskBlit 用灰度mask做蒙版，使用给定调色板索引颜色绘制，服从当前UI裁剪栈
+// mask灰度: Y==0 透明跳过；Y>0 绘制palIdx，硬填充（原版文字风格）
+func (c *Client) UIMaskBlit(mask *image.Gray, dstX, dstY int, palIdx byte) {
+	bounds := mask.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+
+	for yy := 0; yy < h; yy++ {
+		for xx := 0; xx < w; xx++ {
+			a := mask.GrayAt(xx, yy).Y
+			if a == 0 {
+				continue
+			}
+			c.UIPutPixel(dstX+xx, dstY+yy, palIdx)
+		}
+	}
+}
+
+// UIDrawIndexed 将一个 indexed 像素缓冲直接录制进渲染队列。
+// 这对绘制汉字、自定义 UI 图像非常有效。
+func (c *Client) UIDrawIndexed(pixels []byte, w, h, dstX, dstY int, palIdx byte) {
+	if c == nil || w <= 0 || h <= 0 {
+		return
+	}
+	// 使用 14 或 255 作为前景色，0 作为透明色。
+	// 你可以根据 palIdx 来填充 pixels，但这里为了最简，假设 pixels 里的值已经是正确的调色板索引。
+	// 如果 mask 传进来的都是 0 或 255，我们可以直接使用。
+
+	// 如果字节全是 255，需要转换为你想要的 palIdx。假设我们在外面做转换。
+	src := &drawlist.Surface{
+		Pixels: pixels,
+		SrcW:   int32(w),
+		SrcH:   int32(h),
+		Dst:    drawlist.Rect{X: int32(dstX), Y: int32(dstY), W: int32(w), H: int32(h)},
+	}
+	if c.hasUIClip {
+		src.HasClip = true
+		src.Clip = c.uiClip
+	}
+	c.list.RecordSurface(*src)
+}
+
+// List 暴露渲染指令队列
+func (c *Client) List() *drawlist.List {
+	return &c.list
+}

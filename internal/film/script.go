@@ -56,7 +56,7 @@ func (s *Script) CropOrigin() (x, y int) {
 }
 
 // Scene names the battle the shots look at. It is a capture fixture, not a
-// retail opening: the units are placed directly (docs/FILM_CAPTURE.md
+// retail opening: the Units are placed directly (docs/FILM_CAPTURE.md
 // "Scenes").
 type Scene struct {
 	Kind      string  `json:"kind"`             // "battle" or "skirmish"
@@ -65,7 +65,7 @@ type Scene struct {
 	Map       string  `json:"map"`
 	Seed      uint32  `json:"seed"`
 	PreTicks  int     `json:"pre_ticks"`
-	PerSide   int     `json:"per_side"`  // armed mobile units per side, "battle" only
+	PerSide   int     `json:"per_side"`  // armed mobile Units per side, "battle" only
 	Buildings int     `json:"buildings"` // rear buildings per side, "battle" only
 	Factories bool    `json:"factories"` // queue factory production, "battle" only
 	Fog       bool    `json:"fog"`       // keep the viewing player's fog; a film reveals by default
@@ -75,15 +75,15 @@ type Scene struct {
 	// Air is extra aircraft per side, created in flight and kept patrolling
 	// across the front so no plane sits parked in frame.
 	Air int `json:"air"`
-	// Builders is construction units per side, each given a short list of
+	// Builders is construction Units per side, each given a short list of
 	// structures to raise behind its own line.
 	Builders int `json:"builders"`
-	// Columns, Pitch and Gap reshape the two formations: units per row, pixel
+	// Columns, Pitch and Gap reshape the two formations: Units per row, pixel
 	// spacing, and half the distance between the armies.
 	Columns int `json:"columns"`
 	Pitch   int `json:"pitch"`
 	Gap     int `json:"gap"`
-	// Patrol sends ground units back and forth across the front rather than
+	// Patrol sends ground Units back and forth across the front rather than
 	// to one goal, so a late shot still has traffic in it.
 	Patrol bool `json:"patrol"`
 }

@@ -7,7 +7,7 @@
 // cmd/nanolathe owns the Ebitengine loop, the client and the device, and hands
 // this package the readback buffer after the frame is composed.
 //
-// Overlay typography uses licensed display and body glyph atlases, independent
+// Overlay typography uses licensed display and body Glyph atlases, independent
 // of retail GAF fonts (docs/FILM_CAPTURE.md "Titles"). Promotional wording and
 // its typography are capture presentation, never game content or behavior.
 package film

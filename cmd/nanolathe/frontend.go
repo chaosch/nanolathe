@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"io"
 	"os"
 	"sort"
@@ -1542,4 +1544,125 @@ func (g *gameShell) draw(c *client.Client, _ client.UIFrame) {
 	}
 	g.drawRetailPanel(c)
 	g.drawRetailModal(c)
+}
+
+func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, palColor byte, attribs uint32) {
+	if c == nil || !film.CJKReady() {
+		return
+	}
+	face := film.TextFace("display")
+	if face == nil || face.Cap <= 0 || g.assets == nil || g.assets.pal == nil {
+		return
+	}
+
+	// 【修改 1】使用 248（微暖米黄）作为主色，匹配原版英文字体的质感
+	// 如果 248 还是偏灰，试试 254 或 255
+	textIdx := byte(248)
+	// 【修改 2】阴影改用深灰色 (1 或 2)，比纯黑(0)更柔和
+	edgeIdx := byte(1)
+
+	const cjkSize = 13
+	const paddedSize = cjkSize + 2
+
+	runes := []rune(text)
+	totalW := len(runes) * paddedSize
+
+	cursorX := float64(x)
+	switch {
+	case attribs&4 != 0:
+		cursorX = float64(x+maxWidth) - float64(totalW) - 3
+	case attribs&2 != 0:
+		cursorX = float64(x) + (float64(maxWidth)-float64(totalW))/2.0
+	default:
+		cursorX += 3
+	}
+
+	controlHeight := 22
+	startY := baselineY + (controlHeight-paddedSize)/2 - 1
+
+	for _, rn := range runes {
+		glyph, _ := face.Glyph(rn)
+		if glyph == nil || len(glyph.Levels) == 0 {
+			cursorX += float64(paddedSize)
+			continue
+		}
+
+		srcMask := glyph.Levels[0]
+		b := srcMask.Bounds()
+		if b.Empty() {
+			cursorX += float64(paddedSize)
+			continue
+		}
+
+		// 【修改 3】降低阈值到 50，保留边缘抗锯齿的灰度，让字形更圆润
+		shape := make([][]bool, cjkSize)
+		for ty := 0; ty < cjkSize; ty++ {
+			shape[ty] = make([]bool, cjkSize)
+			for tx := 0; tx < cjkSize; tx++ {
+				sx := b.Min.X + tx*b.Dx()/cjkSize
+				sy := b.Min.Y + ty*b.Dy()/cjkSize
+				if srcMask.GrayAt(sx, sy).Y > 50 {
+					shape[ty][tx] = true
+				}
+			}
+		}
+
+		pixels := make([]byte, paddedSize*paddedSize)
+		transparent := make([]bool, paddedSize*paddedSize)
+		for i := range transparent {
+			transparent[i] = true
+		}
+
+		for ty := 0; ty < paddedSize; ty++ {
+			for tx := 0; tx < paddedSize; tx++ {
+				ox, oy := tx-1, ty-1
+
+				isText := false
+				if ox >= 0 && ox < cjkSize && oy >= 0 && oy < cjkSize {
+					isText = shape[oy][ox]
+				}
+
+				if isText {
+					pixels[ty*paddedSize+tx] = textIdx
+					transparent[ty*paddedSize+tx] = false
+				} else {
+					isOutline := false
+					for dy := -1; dy <= 1; dy++ {
+						for dx := -1; dx <= 1; dx++ {
+							nx, ny := ox+dx, oy+dy
+							if nx >= 0 && nx < cjkSize && ny >= 0 && ny < cjkSize {
+								if shape[ny][nx] {
+									isOutline = true
+								}
+							}
+						}
+					}
+					if isOutline {
+						pixels[ty*paddedSize+tx] = edgeIdx
+						transparent[ty*paddedSize+tx] = false
+					}
+				}
+			}
+		}
+
+		frame := &formats.GAFFrame{
+			Width:       paddedSize,
+			Height:      paddedSize,
+			Pixels:      pixels,
+			Transparent: transparent,
+		}
+
+		sprite := drawlist.Sprite{
+			Frame:   frame,
+			X:       int32(cursorX),
+			Y:       int32(startY),
+			Kind:    drawlist.BlitKeyed,
+			Key:     0,
+			HasClip: true,
+			Clip:    drawlist.Rect{X: int32(x), Y: int32(baselineY - 5), W: int32(maxWidth), H: 30},
+		}
+
+		c.List().RecordSprite(sprite)
+		cursorX += float64(paddedSize) + 1
+	}
 }

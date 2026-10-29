@@ -46,7 +46,7 @@ type Fonts struct {
 // graphics device exists.
 func LoadFonts() Fonts {
 	ready := film.CJKReady()
-	return Fonts{Display: newFont(film.FilmTypeface("display")), Body: newFont(film.FilmTypeface("body")), cjk: ready}
+	return Fonts{Display: NewFont(film.FilmTypeface("display")), Body: NewFont(film.FilmTypeface("body")), cjk: ready}
 }
 
 // Refresh adopts optional glyphs when they arrive. Screens retain their faces
@@ -59,7 +59,7 @@ func (f Fonts) Refresh() Fonts {
 	return f
 }
 
-func newFont(face *film.Typeface) *Font {
+func NewFont(face *film.Typeface) *Font {
 	f := &Font{face: face, glyphs: make(map[rune]*fontGlyph, len(face.Glyphs))}
 	for r, g := range face.Glyphs {
 		units := g.Scale

@@ -14,15 +14,15 @@ type atlasGlyph struct {
 	X, Y, W, H int
 	Left, Top  int
 	Advance    float64
-	// Scale is how many face units one atlas pixel covers; zero means one.
+	// Scale is how many face Units one atlas pixel covers; zero means one.
 	// tools/film-font-cjk writes it for glyphs it rasterizes below the atlas
 	// resolution the Latin faces use.
 	Scale  float64
-	levels []*image.Gray
+	Levels []*image.Gray
 }
 
-// units is how many face units one atlas texel of the glyph covers.
-func (g *atlasGlyph) units() float64 {
+// Units is how many face Units one atlas texel of the Glyph covers.
+func (g *atlasGlyph) Units() float64 {
 	if g.Scale == 0 {
 		return 1
 	}
@@ -64,7 +64,7 @@ func loadAtlasFace(name string) *atlasFace {
 		// into the filtered edge. Mips preserve coverage in small captions.
 		base := image.NewGray(image.Rect(0, 0, g.W+4, g.H+4))
 		draw.Draw(base, image.Rect(2, 2, g.W+2, g.H+2), atlas, image.Pt(g.X, g.Y), draw.Src)
-		g.levels = append(g.levels, base)
+		g.Levels = append(g.Levels, base)
 		for base.Bounds().Dx() > 8 && base.Bounds().Dy() > 8 {
 			next := image.NewGray(image.Rect(0, 0, (base.Bounds().Dx()+1)/2, (base.Bounds().Dy()+1)/2))
 			for y := 0; y < next.Bounds().Dy(); y++ {
@@ -78,7 +78,7 @@ func loadAtlasFace(name string) *atlasFace {
 					next.Pix[y*next.Stride+x] = uint8((sum + 2) / 4)
 				}
 			}
-			g.levels = append(g.levels, next)
+			g.Levels = append(g.Levels, next)
 			base = next
 		}
 	}
@@ -134,7 +134,7 @@ func CJKError() error {
 }
 
 // cjkFaces is the base pair with the Chinese additions merged in, built once
-// on first use. The CJK atlas carries every glyph it draws, so a key already
+// on first use. The CJK atlas carries every Glyph it draws, so a key already
 // present in the base face keeps the base entry.
 var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 	faces := make(map[string]*atlasFace, 2)
@@ -159,7 +159,7 @@ var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 	return faces
 })
 
-func textFace(name string) *atlasFace {
+func TextFace(name string) *atlasFace {
 	key := "display"
 	if name == "body" {
 		key = "body"
@@ -172,7 +172,7 @@ func textFace(name string) *atlasFace {
 
 // Unsupported characters retain a space's advance, preserving the existing
 // script contract instead of collapsing the rest of the line.
-func (f *atlasFace) glyph(r rune) (*atlasGlyph, rune) {
+func (f *atlasFace) Glyph(r rune) (*atlasGlyph, rune) {
 	if g, ok := f.Glyphs[string(r)]; ok {
 		return g, r
 	}
