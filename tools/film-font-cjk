@@ -56,7 +56,7 @@ def load_face(source, weight, size):
     font = ImageFont.truetype(source, size)
     # The weights are axis values of the variable font the README names. A
     # static font raises here rather than silently setting its own weight.
-    # font.set_variation_by_axes([weight])
+    font.set_variation_by_axes([weight])
     return font
 
 

@@ -250,6 +250,7 @@ func (g *gameShell) drawRetailButton(c *client.Client, p *ui.Panel, index int, g
 }
 
 func (g *gameShell) drawRetailText(c *client.Client, p *ui.Panel, index int, gad gui.Gadget, r gui.Rect) {
+	fmt.Printf("drawRetailText：%s\n", retailGadgetText(p, index, gad))
 	g.drawRetailTextState(c, p, index, gad, r)
 }
 
@@ -275,9 +276,6 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	text := retailGadgetText(p, index, gad)
-	if text == "2-click" || text == "2-click:" {
-		fmt.Print("Paused.")
-	}
 	if i18n.Language() == "chinese" {
 		tr := i18n.T(text)
 		if tr != text {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -134,6 +135,7 @@ func drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text str
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
+	fmt.Println("drawRetailGAFTextClipped" + ":" + text)
 	for i := 0; i < len(text); i++ {
 		code := text[i]
 		if code == 0 {

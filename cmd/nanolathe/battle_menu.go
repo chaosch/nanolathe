@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/input"
@@ -54,6 +55,7 @@ func (b *battleSession) applyBattleSchedule(intent ui.BattleScheduleIntent) {
 }
 
 func (b *battleSession) openBattleMenu() {
+	fmt.Println("openBattleMenu")
 	if b == nil || b.sess == nil {
 		return
 	}

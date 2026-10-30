@@ -3,6 +3,7 @@ package main
 // The in-battle options window's painter [07 R-FE-01 §6][07 R-FE-01 §7].
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
@@ -46,6 +47,7 @@ func (h *retailBattleHUD) drawBattleOptionsWindow(c *client.Client, b *battleSes
 			continue
 		}
 		r := p.Window.PlacedRect(i)
+		fmt.Printf("[OPTS-DRAW] i=%d Kind=%d Name=%q Text=%q\n", i, gad.Kind, gad.Name, gad.Text)
 		switch gad.Kind {
 		case gui.KindPanel, gui.KindPanelAlias, gui.KindFont, gui.KindRawFile:
 			// The synthesised `PANEL` and the two file kinds paint nothing

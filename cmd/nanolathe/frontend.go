@@ -351,6 +351,7 @@ type gameShell struct {
 	pendingQuick   quickAction
 	autosaveBattle *battleSession
 	autosaveDue    uint32
+	cjkCache       map[glyphCacheKey]*cachedGlyph
 }
 
 func (g *gameShell) widgetTimerAdvanced(p *ui.Panel) bool {
@@ -412,6 +413,7 @@ func (s battleHUDUIStage) ScreenOnly(cur *frame.Frame) bool {
 // resource set, and the opening panel used by the windowed entry.
 func newGameShell(opts Options, cs *contentSet) (*gameShell, error) {
 	shell := &gameShell{opts: opts, cs: cs, frontend: ui.NewFrontend(modeMenuMain), showRanges: cs.presentation.ShowRanges}
+	shell.cjkCache = make(map[glyphCacheKey]*cachedGlyph)
 	// The map census and the TNT reader are typed on the concrete overlay,
 	// so they read `maps` unmapped; no content profile renames it, and a test
 	// in this package asserts that (DESIGN_CONTENT_VFS §5 "Content profiles").
@@ -1715,12 +1717,12 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 	}
 
 	textIdx := byte(192) // 暗金色
-	edgeIdx := byte(248) // 浅灰色边缘
+	edgeIdx := byte(0)   // 浅灰色边缘
 
 	// === 1. 解析控制符 ===
 	type token struct {
 		rn      rune
-		size    int // 0 表示跟随默认
+		size    int
 		forceNL bool
 	}
 
@@ -1759,26 +1761,17 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 	}
 
 	// === 2. 计算全局默认字号 ===
-	// 假设行距为字号的 1.25 倍，可用高度 = controlHeight - 上下留白(8)
 	const paddingY = 1
 	availHeight := controlHeight - paddingY*2
-	if availHeight < 12 {
-		availHeight = 12 // 极小保护
-	}
 
-	// 计算全局默认字号
 	defaultSize := int(float64(availHeight) / 1.25)
 	if defaultSize < 10 {
 		defaultSize = 10
 	}
-	//if defaultSize > 24 {
-	//	defaultSize = 24
-	//}
 
-	// === 3. 仅按 \n 换行排版 ===
+	// === 3. 换行排版 ===
 	var lines [][]token
 	var currentLine []token
-
 	for _, tk := range tokens {
 		if tk.forceNL {
 			lines = append(lines, currentLine)
@@ -1797,7 +1790,6 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 		lineStep = defaultSize + 2
 	}
 
-	// 垂直居中
 	totalH := len(lines) * lineStep
 	startLineY := baselineY + paddingY
 	if totalH < availHeight {
@@ -1820,7 +1812,6 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 			}
 		}
 
-		// 水平对齐
 		cursorX := float64(x)
 		switch {
 		case attribs&4 != 0:
@@ -1841,37 +1832,6 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 			rn := tk.rn
 			size := curSize
 
-			// 标点直接画 2x2 像素点
-			isPunc := rn == '。' || rn == '，' || rn == '、'
-			if isPunc {
-				paddedW, paddedH := 4, 4
-				pixels := make([]byte, paddedW*paddedH)
-				transparent := make([]bool, paddedW*paddedH)
-				for j := range transparent {
-					transparent[j] = true
-				}
-				for ty := 1; ty < 3; ty++ {
-					for tx := 1; tx < 3; tx++ {
-						pixels[ty*paddedW+tx] = textIdx
-						transparent[ty*paddedW+tx] = false
-					}
-				}
-				frame := &formats.GAFFrame{
-					Width: uint16(paddedW), Height: uint16(paddedH),
-					Pixels: pixels, Transparent: transparent,
-				}
-				startY := currentLineY + size - 3
-				sprite := drawlist.Sprite{
-					Frame: frame, X: int32(cursorX), Y: int32(startY),
-					Kind: drawlist.BlitKeyed, Key: 0, HasClip: true,
-					Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(maxWidth), H: int32(controlHeight + 40)},
-				}
-				c.List().RecordSprite(sprite)
-				cursorX += float64(size/2 + 1)
-				continue
-			}
-
-			// 正常字符渲染
 			glyph, _ := face.Glyph(rn)
 			if glyph == nil || len(glyph.Levels) == 0 {
 				if rn < 128 {
@@ -1894,90 +1854,117 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 			}
 
 			isASCII := rn < 128
+			cacheKey := glyphCacheKey{rn: rn, size: size}
+			cached, exists := g.cjkCache[cacheKey]
 
-			// 绝不拉伸：严格按原图比例
-			origW := float64(b.Dx())
-			origH := float64(b.Dy())
-			scale := float64(size) / origH
-			w := int(origW * scale)
-			h := size
+			if !exists {
+				origW := float64(b.Dx())
+				origH := float64(b.Dy())
 
-			if isASCII {
-				w = size / 2
-			}
-			if w < 1 {
-				w = 1
-			}
+				scale := float64(size) / 110.0
+				w := int(origW * scale)
+				h := int(origH * scale)
 
-			paddedW := w + 2
-			paddedH := h + 2
-			startY := currentLineY + (size-h)/2
-
-			// 采样
-			shape := make([][]byte, h)
-			for ty := 0; ty < h; ty++ {
-				shape[ty] = make([]byte, w)
-				for tx := 0; tx < w; tx++ {
-					x0 := b.Min.X + int(float64(tx)*origW/float64(w))
-					x1 := b.Min.X + int(float64(tx+1)*origW/float64(w))
-					y0 := b.Min.Y + int(float64(ty)*origH/float64(h))
-					y1 := b.Min.Y + int(float64(ty+1)*origH/float64(h))
-
-					var sum, count int
-					for sy := y0; sy < y1; sy++ {
-						for sx := x0; sx < x1; sx++ {
-							sum += int(srcMask.GrayAt(sx, sy).Y)
-							count++
-						}
-					}
-					if count > 0 {
-						shape[ty][tx] = byte(sum / count)
+				if isASCII {
+					w = size / 2
+					if h > size {
+						h = size
 					}
 				}
-			}
+				if w < 1 {
+					w = 1
+				}
+				if h < 1 {
+					h = 1
+				}
 
-			pixels := make([]byte, paddedW*paddedH)
-			transparent := make([]bool, paddedW*paddedH)
-			for j := range transparent {
-				transparent[j] = true
-			}
+				// ★★★ 修复：必须加上 +2，否则描边会被切掉 ★★★
+				paddedW := w + 2
+				paddedH := h + 2
 
-			for ty := 0; ty < paddedH; ty++ {
-				for tx := 0; tx < paddedW; tx++ {
-					ox, oy := tx-1, ty-1
-					var grayVal byte
-					if ox >= 0 && ox < w && oy >= 0 && oy < h {
-						grayVal = shape[oy][ox]
+				pixels := make([]byte, paddedW*paddedH)
+				transparent := make([]bool, paddedW*paddedH)
+				for j := range transparent {
+					transparent[j] = true
+				}
+
+				// 先把灰度数据扣出来放入 shape（偏移 1 像素）
+				shape := make([]byte, paddedW*paddedH)
+				for ty := 0; ty < h; ty++ {
+					for tx := 0; tx < w; tx++ {
+						x0 := b.Min.X + int(float64(tx)*origW/float64(w))
+						y0 := b.Min.Y + int(float64(ty)*origH/float64(h))
+						if x0 >= b.Max.X {
+							x0 = b.Max.X - 1
+						}
+						if y0 >= b.Max.Y {
+							y0 = b.Max.Y - 1
+						}
+
+						shape[(ty+1)*paddedW+(tx+1)] = srcMask.GrayAt(x0, y0).Y
 					}
-					if grayVal > 40 {
-						pixels[ty*paddedW+tx] = textIdx
-						transparent[ty*paddedW+tx] = false
-					} else {
-						isOutline := false
-						for dy := -1; dy <= 1; dy++ {
-							for dx := -1; dx <= 1; dx++ {
-								nx, ny := ox+dx, oy+dy
-								if nx >= 0 && nx < w && ny >= 0 && ny < h {
-									if shape[ny][nx] > 40 {
-										isOutline = true
+				}
+
+				// ★★★ 核心修复：重新实现精准 3x3 描边检测 ★★★
+				for ty := 0; ty < paddedH; ty++ {
+					for tx := 0; tx < paddedW; tx++ {
+						grayVal := shape[ty*paddedW+tx]
+
+						// 降低字芯阈值，保留更多抗锯齿细节
+						if grayVal > 100 {
+							pixels[ty*paddedW+tx] = textIdx
+							transparent[ty*paddedW+tx] = false
+						} else {
+							// 只要周围有字芯，就画描边
+							isOutline := false
+							for dy := -1; dy <= 1; dy++ {
+								for dx := -1; dx <= 1; dx++ {
+									nx, ny := tx+dx, ty+dy
+									if nx >= 0 && nx < paddedW && ny >= 0 && ny < paddedH {
+										if shape[ny*paddedW+nx] > 100 {
+											isOutline = true
+										}
 									}
 								}
 							}
-						}
-						if isOutline {
-							pixels[ty*paddedW+tx] = edgeIdx
-							transparent[ty*paddedW+tx] = false
+							if isOutline {
+								pixels[ty*paddedW+tx] = edgeIdx
+								transparent[ty*paddedW+tx] = false
+							}
 						}
 					}
 				}
+
+				cached = &cachedGlyph{
+					frame: &formats.GAFFrame{
+						Width: uint16(paddedW), Height: uint16(paddedH),
+						Pixels: pixels, Transparent: transparent,
+					},
+				}
+				g.cjkCache[cacheKey] = cached
 			}
 
-			frame := &formats.GAFFrame{
-				Width: uint16(paddedW), Height: uint16(paddedH),
-				Pixels: pixels, Transparent: transparent,
+			if cached == nil || cached.frame == nil {
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
+				} else {
+					cursorX += float64(size + 1)
+				}
+				continue
 			}
+
+			startY := currentLineY + (size-int(cached.frame.Height))/2
+
+			if !isASCII {
+				startY += 1 // 汉字保留 1 像素的视觉下沉，避免看起来浮空
+			} else {
+				{
+					startY += 2 // 汉字保留 1 像素的视觉下沉，避免看起来浮空
+				}
+			}
+
 			sprite := drawlist.Sprite{
-				Frame: frame, X: int32(cursorX), Y: int32(startY),
+				Frame: cached.frame, X: int32(cursorX), Y: int32(startY),
 				Kind: drawlist.BlitKeyed, Key: 0, HasClip: true,
 				Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(maxWidth), H: int32(controlHeight + 40)},
 			}

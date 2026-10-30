@@ -19,6 +19,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/input"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/vfs"
@@ -312,6 +313,26 @@ func (h *retailBattleHUD) drawBattleInfoLabel(c *client.Client, window *gui.Wind
 	if h == nil || c == nil || window == nil || text == "" {
 		return
 	}
+	// 【新增：中文截胡】
+	if i18n.Language() == "chinese" {
+		if tr := i18n.T(text); tr != text {
+			// 因为这里拿不到 h.shell，我们把 drawRetailFilmCJK 需要的参数直接传过去
+			// 注意：如果 drawRetailFilmCJK 是属于 *gameShell 的方法，你需要想办法拿到 shell
+			// 如果拿不到，只能把中文绘制逻辑直接写在这里。
+			// 假设你在 retailBattleHUD 里增加了一个 shell *gameShell 的字段（或者通过别的方式拿到）
+			if h.shell != nil {
+				h.shell.drawRetailFilmCJK(
+					c,
+					tr,
+					int(r.X), int(r.Y), int(r.W), int(r.H),
+					h.guiColor(byte(gad.ColorF)),
+					gad.Attribs,
+				)
+				return
+			}
+		}
+	}
+
 	if window.FontRecord(gad.FontNumber) != gui.NoFontRecord {
 		font := selected
 		if font == nil {
