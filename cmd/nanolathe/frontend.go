@@ -1546,7 +1546,166 @@ func (g *gameShell) draw(c *client.Client, _ client.UIFrame) {
 	g.drawRetailModal(c)
 }
 
-func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, palColor byte, attribs uint32) {
+//	func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) {
+//		if c == nil || !film.CJKReady() {
+//			return
+//		}
+//		face := film.TextFace("display")
+//		if face == nil || face.Cap <= 0 || g.assets == nil || g.assets.pal == nil {
+//			return
+//		}
+//
+//		textIdx := byte(192) // 暗金色
+//		edgeIdx := byte(248) // 浅灰色边缘
+//
+//		// === 核心基准尺寸（整体缩小 2 像素） ===
+//		cjkSize := 12
+//		if controlHeight > 30 {
+//			cjkSize = 22
+//		} else if controlHeight < 20 {
+//			cjkSize = 9
+//		}
+//
+//		// 英文半宽，同高
+//		asciiW := cjkSize / 2
+//		asciiH := cjkSize
+//
+//		runes := []rune(text)
+//		var totalW float64
+//		var widths []float64
+//		for _, rn := range runes {
+//			if rn < 128 {
+//				// 英文占位宽度：去掉了之前的 +1，减小间距
+//				widths = append(widths, float64(asciiW))
+//				totalW += float64(asciiW)
+//			} else {
+//				// 汉字占位宽度：从 +2 减小到 +1，缩小字间距
+//				widths = append(widths, float64(cjkSize+1))
+//				totalW += float64(cjkSize + 1)
+//			}
+//		}
+//
+//		// 对齐计算
+//		cursorX := float64(x)
+//		switch {
+//		case attribs&4 != 0:
+//			cursorX = float64(x+maxWidth) - totalW - 3
+//		case attribs&2 != 0:
+//			cursorX = float64(x) + (float64(maxWidth)-totalW)/2.0
+//		default:
+//			cursorX += 3
+//		}
+//
+//		for i, rn := range runes {
+//			glyph, _ := face.Glyph(rn)
+//			if glyph == nil || len(glyph.Levels) == 0 {
+//				cursorX += widths[i]
+//				continue
+//			}
+//
+//			srcMask := glyph.Levels[0]
+//			b := srcMask.Bounds()
+//			if b.Empty() {
+//				cursorX += widths[i]
+//				continue
+//			}
+//
+//			isASCII := rn < 128
+//
+//			w, h := cjkSize, cjkSize
+//			if isASCII {
+//				w, h = asciiW, asciiH
+//			}
+//
+//			paddedW := w + 2
+//			paddedH := h + 2
+//
+//			// 垂直居中
+//			startY := baselineY + (controlHeight-paddedH)/2 - 1
+//
+//			// 非等比平均池化采样
+//			shape := make([][]byte, h)
+//			for ty := 0; ty < h; ty++ {
+//				shape[ty] = make([]byte, w)
+//				for tx := 0; tx < w; tx++ {
+//					x0 := b.Min.X + tx*b.Dx()/w
+//					x1 := b.Min.X + (tx+1)*b.Dx()/w
+//					y0 := b.Min.Y + ty*b.Dy()/h
+//					y1 := b.Min.Y + (ty+1)*b.Dy()/h
+//
+//					var sum, count int
+//					for sy := y0; sy < y1; sy++ {
+//						for sx := x0; sx < x1; sx++ {
+//							sum += int(srcMask.GrayAt(sx, sy).Y)
+//							count++
+//						}
+//					}
+//					if count > 0 {
+//						shape[ty][tx] = byte(sum / count)
+//					}
+//				}
+//			}
+//
+//			pixels := make([]byte, paddedW*paddedH)
+//			transparent := make([]bool, paddedW*paddedH)
+//			for j := range transparent {
+//				transparent[j] = true
+//			}
+//
+//			// 生成像素与描边
+//			for ty := 0; ty < paddedH; ty++ {
+//				for tx := 0; tx < paddedW; tx++ {
+//					ox, oy := tx-1, ty-1
+//					var grayVal byte
+//					if ox >= 0 && ox < w && oy >= 0 && oy < h {
+//						grayVal = shape[oy][ox]
+//					}
+//
+//					if grayVal > 40 {
+//						pixels[ty*paddedW+tx] = textIdx
+//						transparent[ty*paddedW+tx] = false
+//					} else {
+//						isOutline := false
+//						for dy := -1; dy <= 1; dy++ {
+//							for dx := -1; dx <= 1; dx++ {
+//								nx, ny := ox+dx, oy+dy
+//								if nx >= 0 && nx < w && ny >= 0 && ny < h {
+//									if shape[ny][nx] > 40 {
+//										isOutline = true
+//									}
+//								}
+//							}
+//						}
+//						if isOutline {
+//							pixels[ty*paddedW+tx] = edgeIdx
+//							transparent[ty*paddedW+tx] = false
+//						}
+//					}
+//				}
+//			}
+//
+//			frame := &formats.GAFFrame{
+//				Width:       uint16(paddedW),
+//				Height:      uint16(paddedH),
+//				Pixels:      pixels,
+//				Transparent: transparent,
+//			}
+//
+//			sprite := drawlist.Sprite{
+//				Frame:   frame,
+//				X:       int32(cursorX),
+//				Y:       int32(startY),
+//				Kind:    drawlist.BlitKeyed,
+//				Key:     0,
+//				HasClip: true,
+//				Clip:    drawlist.Rect{X: int32(x), Y: int32(baselineY - 5), W: int32(maxWidth), H: 30},
+//			}
+//
+//			c.List().RecordSprite(sprite)
+//			cursorX += widths[i]
+//		}
+//	}
+func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) {
 	if c == nil || !film.CJKReady() {
 		return
 	}
@@ -1555,114 +1714,280 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 		return
 	}
 
-	// 【修改 1】使用 248（微暖米黄）作为主色，匹配原版英文字体的质感
-	// 如果 248 还是偏灰，试试 254 或 255
-	textIdx := byte(248)
-	// 【修改 2】阴影改用深灰色 (1 或 2)，比纯黑(0)更柔和
-	edgeIdx := byte(1)
+	textIdx := byte(192) // 暗金色
+	edgeIdx := byte(248) // 浅灰色边缘
 
-	const cjkSize = 13
-	const paddedSize = cjkSize + 2
-
-	runes := []rune(text)
-	totalW := len(runes) * paddedSize
-
-	cursorX := float64(x)
-	switch {
-	case attribs&4 != 0:
-		cursorX = float64(x+maxWidth) - float64(totalW) - 3
-	case attribs&2 != 0:
-		cursorX = float64(x) + (float64(maxWidth)-float64(totalW))/2.0
-	default:
-		cursorX += 3
+	// === 1. 解析控制符 ===
+	type token struct {
+		rn      rune
+		size    int // 0 表示跟随默认
+		forceNL bool
 	}
 
-	controlHeight := 22
-	startY := baselineY + (controlHeight-paddedSize)/2 - 1
-
-	for _, rn := range runes {
-		glyph, _ := face.Glyph(rn)
-		if glyph == nil || len(glyph.Levels) == 0 {
-			cursorX += float64(paddedSize)
-			continue
-		}
-
-		srcMask := glyph.Levels[0]
-		b := srcMask.Bounds()
-		if b.Empty() {
-			cursorX += float64(paddedSize)
-			continue
-		}
-
-		// 【修改 3】降低阈值到 50，保留边缘抗锯齿的灰度，让字形更圆润
-		shape := make([][]bool, cjkSize)
-		for ty := 0; ty < cjkSize; ty++ {
-			shape[ty] = make([]bool, cjkSize)
-			for tx := 0; tx < cjkSize; tx++ {
-				sx := b.Min.X + tx*b.Dx()/cjkSize
-				sy := b.Min.Y + ty*b.Dy()/cjkSize
-				if srcMask.GrayAt(sx, sy).Y > 50 {
-					shape[ty][tx] = true
+	var tokens []token
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		rn := runes[i]
+		if rn == '\\' && i+1 < len(runes) {
+			next := runes[i+1]
+			if next == 'n' || next == 'N' {
+				tokens = append(tokens, token{forceNL: true})
+				i++
+				continue
+			}
+			if next == 's' || next == 'S' {
+				i++
+				start := i + 1
+				end := start
+				for end < len(runes) && runes[end] >= '0' && runes[end] <= '9' {
+					end++
 				}
+				if end > start {
+					size := 0
+					for k := start; k < end; k++ {
+						size = size*10 + int(runes[k]-'0')
+					}
+					if size >= 6 && size <= 32 {
+						tokens = append(tokens, token{size: size})
+					}
+					i = end - 1
+				}
+				continue
+			}
+		}
+		tokens = append(tokens, token{rn: rn})
+	}
+
+	// === 2. 计算全局默认字号 ===
+	// 假设行距为字号的 1.25 倍，可用高度 = controlHeight - 上下留白(8)
+	const paddingY = 1
+	availHeight := controlHeight - paddingY*2
+	if availHeight < 12 {
+		availHeight = 12 // 极小保护
+	}
+
+	// 计算全局默认字号
+	defaultSize := int(float64(availHeight) / 1.25)
+	if defaultSize < 10 {
+		defaultSize = 10
+	}
+	//if defaultSize > 24 {
+	//	defaultSize = 24
+	//}
+
+	// === 3. 仅按 \n 换行排版 ===
+	var lines [][]token
+	var currentLine []token
+
+	for _, tk := range tokens {
+		if tk.forceNL {
+			lines = append(lines, currentLine)
+			currentLine = nil
+			continue
+		}
+		currentLine = append(currentLine, tk)
+	}
+	if len(currentLine) > 0 {
+		lines = append(lines, currentLine)
+	}
+
+	// === 4. 渲染 ===
+	lineStep := int(float64(defaultSize) * 1.25)
+	if lineStep < defaultSize+2 {
+		lineStep = defaultSize + 2
+	}
+
+	// 垂直居中
+	totalH := len(lines) * lineStep
+	startLineY := baselineY + paddingY
+	if totalH < availHeight {
+		startLineY = baselineY + paddingY + (availHeight-totalH)/2
+	}
+
+	curSize := defaultSize
+
+	for lineIdx, line := range lines {
+		var lineW float64
+		for _, tk := range line {
+			sz := curSize
+			if tk.size > 0 {
+				sz = tk.size
+			}
+			if tk.rn < 128 {
+				lineW += float64(sz/2 + 1)
+			} else {
+				lineW += float64(sz + 1)
 			}
 		}
 
-		pixels := make([]byte, paddedSize*paddedSize)
-		transparent := make([]bool, paddedSize*paddedSize)
-		for i := range transparent {
-			transparent[i] = true
+		// 水平对齐
+		cursorX := float64(x)
+		switch {
+		case attribs&4 != 0:
+			cursorX = float64(x+maxWidth) - lineW - 3
+		case attribs&2 != 0:
+			cursorX = float64(x) + (float64(maxWidth)-lineW)/2.0
+		default:
+			cursorX += 3
 		}
 
-		for ty := 0; ty < paddedSize; ty++ {
-			for tx := 0; tx < paddedSize; tx++ {
-				ox, oy := tx-1, ty-1
+		currentLineY := startLineY + lineIdx*lineStep
 
-				isText := false
-				if ox >= 0 && ox < cjkSize && oy >= 0 && oy < cjkSize {
-					isText = shape[oy][ox]
+		for _, tk := range line {
+			if tk.size > 0 {
+				curSize = tk.size
+				continue
+			}
+			rn := tk.rn
+			size := curSize
+
+			// 标点直接画 2x2 像素点
+			isPunc := rn == '。' || rn == '，' || rn == '、'
+			if isPunc {
+				paddedW, paddedH := 4, 4
+				pixels := make([]byte, paddedW*paddedH)
+				transparent := make([]bool, paddedW*paddedH)
+				for j := range transparent {
+					transparent[j] = true
 				}
+				for ty := 1; ty < 3; ty++ {
+					for tx := 1; tx < 3; tx++ {
+						pixels[ty*paddedW+tx] = textIdx
+						transparent[ty*paddedW+tx] = false
+					}
+				}
+				frame := &formats.GAFFrame{
+					Width: uint16(paddedW), Height: uint16(paddedH),
+					Pixels: pixels, Transparent: transparent,
+				}
+				startY := currentLineY + size - 3
+				sprite := drawlist.Sprite{
+					Frame: frame, X: int32(cursorX), Y: int32(startY),
+					Kind: drawlist.BlitKeyed, Key: 0, HasClip: true,
+					Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(maxWidth), H: int32(controlHeight + 40)},
+				}
+				c.List().RecordSprite(sprite)
+				cursorX += float64(size/2 + 1)
+				continue
+			}
 
-				if isText {
-					pixels[ty*paddedSize+tx] = textIdx
-					transparent[ty*paddedSize+tx] = false
+			// 正常字符渲染
+			glyph, _ := face.Glyph(rn)
+			if glyph == nil || len(glyph.Levels) == 0 {
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
 				} else {
-					isOutline := false
-					for dy := -1; dy <= 1; dy++ {
-						for dx := -1; dx <= 1; dx++ {
-							nx, ny := ox+dx, oy+dy
-							if nx >= 0 && nx < cjkSize && ny >= 0 && ny < cjkSize {
-								if shape[ny][nx] {
-									isOutline = true
+					cursorX += float64(size + 1)
+				}
+				continue
+			}
+
+			srcMask := glyph.Levels[0]
+			b := srcMask.Bounds()
+			if b.Empty() {
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
+				} else {
+					cursorX += float64(size + 1)
+				}
+				continue
+			}
+
+			isASCII := rn < 128
+
+			// 绝不拉伸：严格按原图比例
+			origW := float64(b.Dx())
+			origH := float64(b.Dy())
+			scale := float64(size) / origH
+			w := int(origW * scale)
+			h := size
+
+			if isASCII {
+				w = size / 2
+			}
+			if w < 1 {
+				w = 1
+			}
+
+			paddedW := w + 2
+			paddedH := h + 2
+			startY := currentLineY + (size-h)/2
+
+			// 采样
+			shape := make([][]byte, h)
+			for ty := 0; ty < h; ty++ {
+				shape[ty] = make([]byte, w)
+				for tx := 0; tx < w; tx++ {
+					x0 := b.Min.X + int(float64(tx)*origW/float64(w))
+					x1 := b.Min.X + int(float64(tx+1)*origW/float64(w))
+					y0 := b.Min.Y + int(float64(ty)*origH/float64(h))
+					y1 := b.Min.Y + int(float64(ty+1)*origH/float64(h))
+
+					var sum, count int
+					for sy := y0; sy < y1; sy++ {
+						for sx := x0; sx < x1; sx++ {
+							sum += int(srcMask.GrayAt(sx, sy).Y)
+							count++
+						}
+					}
+					if count > 0 {
+						shape[ty][tx] = byte(sum / count)
+					}
+				}
+			}
+
+			pixels := make([]byte, paddedW*paddedH)
+			transparent := make([]bool, paddedW*paddedH)
+			for j := range transparent {
+				transparent[j] = true
+			}
+
+			for ty := 0; ty < paddedH; ty++ {
+				for tx := 0; tx < paddedW; tx++ {
+					ox, oy := tx-1, ty-1
+					var grayVal byte
+					if ox >= 0 && ox < w && oy >= 0 && oy < h {
+						grayVal = shape[oy][ox]
+					}
+					if grayVal > 40 {
+						pixels[ty*paddedW+tx] = textIdx
+						transparent[ty*paddedW+tx] = false
+					} else {
+						isOutline := false
+						for dy := -1; dy <= 1; dy++ {
+							for dx := -1; dx <= 1; dx++ {
+								nx, ny := ox+dx, oy+dy
+								if nx >= 0 && nx < w && ny >= 0 && ny < h {
+									if shape[ny][nx] > 40 {
+										isOutline = true
+									}
 								}
 							}
 						}
-					}
-					if isOutline {
-						pixels[ty*paddedSize+tx] = edgeIdx
-						transparent[ty*paddedSize+tx] = false
+						if isOutline {
+							pixels[ty*paddedW+tx] = edgeIdx
+							transparent[ty*paddedW+tx] = false
+						}
 					}
 				}
 			}
-		}
 
-		frame := &formats.GAFFrame{
-			Width:       paddedSize,
-			Height:      paddedSize,
-			Pixels:      pixels,
-			Transparent: transparent,
-		}
+			frame := &formats.GAFFrame{
+				Width: uint16(paddedW), Height: uint16(paddedH),
+				Pixels: pixels, Transparent: transparent,
+			}
+			sprite := drawlist.Sprite{
+				Frame: frame, X: int32(cursorX), Y: int32(startY),
+				Kind: drawlist.BlitKeyed, Key: 0, HasClip: true,
+				Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(maxWidth), H: int32(controlHeight + 40)},
+			}
+			c.List().RecordSprite(sprite)
 
-		sprite := drawlist.Sprite{
-			Frame:   frame,
-			X:       int32(cursorX),
-			Y:       int32(startY),
-			Kind:    drawlist.BlitKeyed,
-			Key:     0,
-			HasClip: true,
-			Clip:    drawlist.Rect{X: int32(x), Y: int32(baselineY - 5), W: int32(maxWidth), H: 30},
+			if rn < 128 {
+				cursorX += float64(size/2 + 1)
+			} else {
+				cursorX += float64(size + 1)
+			}
 		}
-
-		c.List().RecordSprite(sprite)
-		cursorX += float64(paddedSize) + 1
 	}
 }

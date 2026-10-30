@@ -32,7 +32,7 @@ func TestWrapKeepsLatinSeparatorsAtSpaces(t *testing.T) {
 func TestWrapBindsChinesePunctuation(t *testing.T) {
 	f := LoadFonts().Body
 	s := Style{Size: 12, Verbatim: true}
-	text := "选择你的队伍、阵营与颜色，然后点“准备”。原版游戏的“界面类型”：左键单击时取消。"
+	text := "选择你的队伍、阵营与颜色，然后点“准备”。原版游戏的“界面类型”:左键单击时取消。"
 	for width := 10.0; width <= 400; width += 3 {
 		lines := f.Wrap(text, s, width)
 		if got := strings.Join(lines, ""); got != text {

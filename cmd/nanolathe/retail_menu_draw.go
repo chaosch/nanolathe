@@ -4,6 +4,7 @@ package main
 // drawer per control kind — art, button, text and surface [07 §5].
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
@@ -274,21 +275,22 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	text := retailGadgetText(p, index, gad)
-
+	if text == "2-click" || text == "2-click:" {
+		fmt.Print("Paused.")
+	}
 	if i18n.Language() == "chinese" {
 		tr := i18n.T(text)
 		if tr != text {
 			disp := tr
 			palColor, _ := g.retailTextPen(p, index, gad)
-			lineStep := 16
-			penY := retailTextPenY(gad, r, lineStep)
-
+			penY := int(r.Y)
 			g.drawRetailFilmCJK(
 				c,
 				disp,
 				int(r.X),
 				penY,
 				int(r.W),
+				int(r.H), // <--- 新增：传入控件高度
 				palColor,
 				gad.Attribs,
 			)

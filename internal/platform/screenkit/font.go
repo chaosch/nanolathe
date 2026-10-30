@@ -264,7 +264,7 @@ func wide(r rune) bool {
 // noBreakBefore reports the closing punctuation a line may not start with: a
 // Chinese line breaks between characters, but never before these.
 func noBreakBefore(r rune) bool {
-	return strings.ContainsRune("。，、；：？！）〕〉》」』】’”·…％", r)
+	return strings.ContainsRune("。，、；:？！）〕〉》」』】’”·…％", r)
 }
 
 // noBreakAfter reports the opening punctuation a line may not end with.
