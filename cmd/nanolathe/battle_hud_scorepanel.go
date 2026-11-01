@@ -245,8 +245,9 @@ const sideLogoEntry = "32xlogos"
 // limit, and the light-table row as the brightness argument
 // [07 R-HUD-04 §1][03 R-FONT-01 §6].
 func (h *retailBattleHUD) drawScoreText(c *client.Client, text string, x, y, shade int) {
+	printDebug(text)
 	if text == "" || h.modalFont == nil {
 		return
 	}
-	drawRetailGAFTextLit(c, h.modalFont, text, x, y, hud.ScorePanelTextLimit, h.pal, shade)
+	h.shell.drawRetailGAFTextLit(c, h.modalFont, text, x, y, hud.ScorePanelTextLimit, h.pal, shade)
 }

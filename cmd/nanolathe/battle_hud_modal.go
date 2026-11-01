@@ -9,6 +9,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/mission"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 )
@@ -267,8 +268,11 @@ func (h *retailBattleHUD) drawGUIWindowState(c *client.Client, window *gui.Windo
 				func(x, y, w, height int, fill byte) { clipFill(c, x, y, w, height, fill, clip) },
 				func(text string, x, y, width int) {
 					if h.modalFont != nil {
-						drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+						h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					} else {
+						if h.shell.drawRetailFilmCJKCylindrical(c, text, x, y, width, int(clip.H), 0, 2) {
+							return
+						}
 						c.UITextWidthClipped(fallback, text, x, y, width, color, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					}
 				})
@@ -324,6 +328,7 @@ func (h *retailBattleHUD) initializeModalLabels(window *gui.Window) {
 // FNT colour is raw palette index 0: the label's colour word is the pen mode
 // and the foreground, the builder zeroes it, and no battle modal writes it.
 func (h *retailBattleHUD) drawModalLabelGAF(c *client.Client, window *gui.Window, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, common *formats.FNT) {
+	printDebug(text)
 	measure, metric, ok := retailLabelFaceMetrics(h.modalFontSmall, common)
 	if c == nil || !ok || text == "" {
 		return
@@ -334,7 +339,7 @@ func (h *retailBattleHUD) drawModalLabelGAF(c *client.Client, window *gui.Window
 			c.UITextWidth(common, line, x, y, -1, 0)
 			return
 		}
-		drawRetailGAFTextClipped(c, small, line, x, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+		h.shell.drawRetailGAFTextClipped(c, small, line, x, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 	})
 }
 
@@ -356,6 +361,7 @@ func retailBattleButtonText(gad gui.Gadget, panel *ui.Panel, index, stage int) s
 // Each window keeps its private-surface clip for every GAF glyph; the FNT path
 // retains the pen's no-width-limit fallback [03 R-FONT-01 §6].
 func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, textWidth, metric int, flash uint16) {
+	printDebug(text)
 	if c == nil || text == "" {
 		return
 	}
@@ -379,35 +385,42 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 		if h.modalFont != nil {
 			// GAF mode-0 glyphs carry their own colours. The foreground is still
 			// calculated so the null-slot FNT path takes the same branch.
-			drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+			h.shell.drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 			return
 		}
 		c.UITextWidthClipped(selected, s, px, y, -1, foreground, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 	}
 	key := captionQuickKeyIndex(text, gad.QuickKey)
-	if key < 0 || (!build && (!centred || gad.GrayedOut&1 != 0)) {
-		draw(text, x, color)
-		return
-	}
-	prefix, letter, suffix := text[:key], text[key:key+1], text[key+1:]
-	draw(prefix, x, color)
-	// TODO(question): settle admission of a keyed later build caption;
-	// retail measures the first stored caption in that branch. Retain selected
-	// prefix spacing until its exceptional writer paths are known [07 R-WGT-01 §3].
-	x += measure(prefix)
-	keyColor := color
-	if build {
-		keyColor = h.guiColor(10)
-	}
-	draw(letter, x, keyColor)
-	if centred {
-		underline := byte(2)
-		if gad.Stages != 0 {
-			underline = 0
+	if i18n.Language() != "chinese" {
+		if key < 0 || (!build && (!centred || gad.GrayedOut&1 != 0)) {
+			draw(text, x, color)
+			return
 		}
-		clipFill(c, x, y+metric-1, measure(letter), 1, h.guiColor(underline), clip)
+		prefix, letter, suffix := text[:key], text[key:key+1], text[key+1:]
+		draw(prefix, x, color)
+		// TODO(question): settle admission of a keyed later build caption;
+		// retail measures the first stored caption in that branch. Retain selected
+		// prefix spacing until its exceptional writer paths are known [07 R-WGT-01 §3].
+		x += measure(prefix)
+		keyColor := color
+		if build {
+			keyColor = h.guiColor(10)
+		}
+		draw(letter, x, keyColor)
+		if centred {
+			underline := byte(2)
+			if gad.Stages != 0 {
+				underline = 0
+			}
+			clipFill(c, x, y+metric-1, measure(letter), 1, h.guiColor(underline), clip)
+		}
+		draw(suffix, x+measure(letter), color)
+	} else {
+		//text = text + "(" + text[key:key+1] + ")"
+		h.shell.drawRetailFilmCJKCylindrical(c, text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), 0, uint32(AlignCenter))
+		//h.shell.drawRetailFilmCJKCylindrical(c, "("+text[key:key+1]+")", int(clip.W), y, int(clip.W), retailGAFBaselineHeight(h.modalFont), 0, 0)
+
 	}
-	draw(suffix, x+measure(letter), color)
 }
 
 // drawBattleRestartWindow supplies RESTART.GUI's session-owned labels and
@@ -468,6 +481,7 @@ func (h *retailBattleHUD) modalGadgetArtFrames(gad gui.Gadget, page *formats.GAF
 // window surface bounds it, and no stock modal window authors a font record,
 // so nothing reaches this path with a caption wider than its window.
 func (h *retailBattleHUD) drawModalLabelFNT(c *client.Client, window *gui.Window, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT) {
+	printDebug(text)
 	if c == nil || window == nil || font == nil || text == "" {
 		return
 	}

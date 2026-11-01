@@ -123,6 +123,7 @@ func (c *Client) drawCommunityUnitHUD(u *frame.UnitView, centerX, healthY int32)
 }
 
 func (c *Client) drawCommunityCounter(text string, centerX, healthY, textOffsetY int32) {
+	fmt.Printf("DrawCommunityCounter:%s\r\n", text)
 	if text == "" || c.fnt == nil {
 		return
 	}

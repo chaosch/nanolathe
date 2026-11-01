@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -351,7 +354,6 @@ type gameShell struct {
 	pendingQuick   quickAction
 	autosaveBattle *battleSession
 	autosaveDue    uint32
-	cjkCache       map[glyphCacheKey]*cachedGlyph
 }
 
 func (g *gameShell) widgetTimerAdvanced(p *ui.Panel) bool {
@@ -413,7 +415,6 @@ func (s battleHUDUIStage) ScreenOnly(cur *frame.Frame) bool {
 // resource set, and the opening panel used by the windowed entry.
 func newGameShell(opts Options, cs *contentSet) (*gameShell, error) {
 	shell := &gameShell{opts: opts, cs: cs, frontend: ui.NewFrontend(modeMenuMain), showRanges: cs.presentation.ShowRanges}
-	shell.cjkCache = make(map[glyphCacheKey]*cachedGlyph)
 	// The map census and the TNT reader are typed on the concrete overlay,
 	// so they read `maps` unmapped; no content profile renames it, and a test
 	// in this package asserts that (DESIGN_CONTENT_VFS §5 "Content profiles").
@@ -1548,176 +1549,76 @@ func (g *gameShell) draw(c *client.Client, _ client.UIFrame) {
 	g.drawRetailModal(c)
 }
 
-//	func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) {
-//		if c == nil || !film.CJKReady() {
-//			return
-//		}
-//		face := film.TextFace("display")
-//		if face == nil || face.Cap <= 0 || g.assets == nil || g.assets.pal == nil {
-//			return
-//		}
-//
-//		textIdx := byte(192) // 暗金色
-//		edgeIdx := byte(248) // 浅灰色边缘
-//
-//		// === 核心基准尺寸（整体缩小 2 像素） ===
-//		cjkSize := 12
-//		if controlHeight > 30 {
-//			cjkSize = 22
-//		} else if controlHeight < 20 {
-//			cjkSize = 9
-//		}
-//
-//		// 英文半宽，同高
-//		asciiW := cjkSize / 2
-//		asciiH := cjkSize
-//
-//		runes := []rune(text)
-//		var totalW float64
-//		var widths []float64
-//		for _, rn := range runes {
-//			if rn < 128 {
-//				// 英文占位宽度：去掉了之前的 +1，减小间距
-//				widths = append(widths, float64(asciiW))
-//				totalW += float64(asciiW)
-//			} else {
-//				// 汉字占位宽度：从 +2 减小到 +1，缩小字间距
-//				widths = append(widths, float64(cjkSize+1))
-//				totalW += float64(cjkSize + 1)
-//			}
-//		}
-//
-//		// 对齐计算
-//		cursorX := float64(x)
-//		switch {
-//		case attribs&4 != 0:
-//			cursorX = float64(x+maxWidth) - totalW - 3
-//		case attribs&2 != 0:
-//			cursorX = float64(x) + (float64(maxWidth)-totalW)/2.0
-//		default:
-//			cursorX += 3
-//		}
-//
-//		for i, rn := range runes {
-//			glyph, _ := face.Glyph(rn)
-//			if glyph == nil || len(glyph.Levels) == 0 {
-//				cursorX += widths[i]
-//				continue
-//			}
-//
-//			srcMask := glyph.Levels[0]
-//			b := srcMask.Bounds()
-//			if b.Empty() {
-//				cursorX += widths[i]
-//				continue
-//			}
-//
-//			isASCII := rn < 128
-//
-//			w, h := cjkSize, cjkSize
-//			if isASCII {
-//				w, h = asciiW, asciiH
-//			}
-//
-//			paddedW := w + 2
-//			paddedH := h + 2
-//
-//			// 垂直居中
-//			startY := baselineY + (controlHeight-paddedH)/2 - 1
-//
-//			// 非等比平均池化采样
-//			shape := make([][]byte, h)
-//			for ty := 0; ty < h; ty++ {
-//				shape[ty] = make([]byte, w)
-//				for tx := 0; tx < w; tx++ {
-//					x0 := b.Min.X + tx*b.Dx()/w
-//					x1 := b.Min.X + (tx+1)*b.Dx()/w
-//					y0 := b.Min.Y + ty*b.Dy()/h
-//					y1 := b.Min.Y + (ty+1)*b.Dy()/h
-//
-//					var sum, count int
-//					for sy := y0; sy < y1; sy++ {
-//						for sx := x0; sx < x1; sx++ {
-//							sum += int(srcMask.GrayAt(sx, sy).Y)
-//							count++
-//						}
-//					}
-//					if count > 0 {
-//						shape[ty][tx] = byte(sum / count)
-//					}
-//				}
-//			}
-//
-//			pixels := make([]byte, paddedW*paddedH)
-//			transparent := make([]bool, paddedW*paddedH)
-//			for j := range transparent {
-//				transparent[j] = true
-//			}
-//
-//			// 生成像素与描边
-//			for ty := 0; ty < paddedH; ty++ {
-//				for tx := 0; tx < paddedW; tx++ {
-//					ox, oy := tx-1, ty-1
-//					var grayVal byte
-//					if ox >= 0 && ox < w && oy >= 0 && oy < h {
-//						grayVal = shape[oy][ox]
-//					}
-//
-//					if grayVal > 40 {
-//						pixels[ty*paddedW+tx] = textIdx
-//						transparent[ty*paddedW+tx] = false
-//					} else {
-//						isOutline := false
-//						for dy := -1; dy <= 1; dy++ {
-//							for dx := -1; dx <= 1; dx++ {
-//								nx, ny := ox+dx, oy+dy
-//								if nx >= 0 && nx < w && ny >= 0 && ny < h {
-//									if shape[ny][nx] > 40 {
-//										isOutline = true
-//									}
-//								}
-//							}
-//						}
-//						if isOutline {
-//							pixels[ty*paddedW+tx] = edgeIdx
-//							transparent[ty*paddedW+tx] = false
-//						}
-//					}
-//				}
-//			}
-//
-//			frame := &formats.GAFFrame{
-//				Width:       uint16(paddedW),
-//				Height:      uint16(paddedH),
-//				Pixels:      pixels,
-//				Transparent: transparent,
-//			}
-//
-//			sprite := drawlist.Sprite{
-//				Frame:   frame,
-//				X:       int32(cursorX),
-//				Y:       int32(startY),
-//				Kind:    drawlist.BlitKeyed,
-//				Key:     0,
-//				HasClip: true,
-//				Clip:    drawlist.Rect{X: int32(x), Y: int32(baselineY - 5), W: int32(maxWidth), H: 30},
-//			}
-//
-//			c.List().RecordSprite(sprite)
-//			cursorX += widths[i]
-//		}
-//	}
-func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) {
-	if c == nil || !film.CJKReady() {
-		return
+// 描边颜色统一变量，方便修改
+const COLOR_EDGE = 79 // 描边黑/暗色（调色板索引）
+type HAlign uint32
+
+const (
+	AlignLeft   HAlign = 0 // 000
+	AlignCenter HAlign = 2 // 010  <-- 必须强制等于 2
+	AlignRight  HAlign = 4 // 100  <-- 必须强制等于 4
+)
+
+type glyphCacheKey struct {
+	rn   rune
+	size int // 这里存入的是包含留白和描边的最终像素宽度 finalW
+	face string
+}
+
+func (g *gameShell) drawRetailFilmCJKCylindrical(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) bool {
+	if cjkCache == nil {
+		cjkCache = make(map[glyphCacheKey]*cachedGlyph)
 	}
-	face := film.TextFace("display")
+	if printed == nil {
+		printed = make(map[string]int)
+	}
+	if len(text) == 0 {
+		printDebug("text is empty")
+		return false
+	}
+	if i18n.Language() != "chinese" {
+		printDebug("not chinese interface!")
+		return false
+	}
+	tr := ""
+	if tr = i18n.T(text); tr == text {
+		if _, exists := printed[text]; !exists {
+			printDebugInternal("translate text not found!", text)
+		}
+		return false
+	}
+	if c == nil || !film.CJKReady() {
+		fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
+		return false
+	}
+	// === 0. 解析字体前缀 ===
+	faceName := "display"
+	if len(tr) >= 2 && tr[0] == '\\' {
+		if tr[1] == 'd' || tr[1] == 'D' {
+			faceName = "display"
+			tr = tr[2:]
+		} else if tr[1] == 'b' || tr[1] == 'B' {
+			faceName = "body"
+			tr = tr[2:]
+		}
+	}
+	safeMaxWidth := maxWidth
+	if safeMaxWidth < 0 {
+		safeMaxWidth = 9999
+	}
+	face := film.TextFace(faceName)
 	if face == nil || face.Cap <= 0 || g.assets == nil || g.assets.pal == nil {
-		return
+		printDebug("input error!")
+		return false
 	}
 
-	textIdx := byte(192) // 暗金色
-	edgeIdx := byte(0)   // 浅灰色边缘
+	// 调色板范围设定 (64是亮黄，72是暗黄，79是描边)
+	const (
+		COLOR_BASE_BRIGHT = 64
+		COLOR_BASE_DARK   = 72
+		COLOR_EDGE        = 79
+		LINE_STEP_PERCENT = 1.25 // ★ 新增：行距常量 (字高的 125%)
+	)
 
 	// === 1. 解析控制符 ===
 	type token struct {
@@ -1727,7 +1628,7 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 	}
 
 	var tokens []token
-	runes := []rune(text)
+	runes := []rune(tr)
 	for i := 0; i < len(runes); i++ {
 		rn := runes[i]
 		if rn == '\\' && i+1 < len(runes) {
@@ -1763,8 +1664,7 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 	// === 2. 计算全局默认字号 ===
 	const paddingY = 1
 	availHeight := controlHeight - paddingY*2
-
-	defaultSize := int(float64(availHeight) / 1.25)
+	defaultSize := int(float64(availHeight) / LINE_STEP_PERCENT)
 	if defaultSize < 10 {
 		defaultSize = 10
 	}
@@ -1785,26 +1685,19 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 	}
 
 	// === 4. 渲染 ===
-	lineStep := int(float64(defaultSize) * 1.25)
-	if lineStep < defaultSize+2 {
-		lineStep = defaultSize + 2
-	}
-
-	totalH := len(lines) * lineStep
-	startLineY := baselineY + paddingY
-	if totalH < availHeight {
-		startLineY = baselineY + paddingY + (availHeight-totalH)/2
-	}
-
+	// 起始 Y 坐标
+	currentLineY := baselineY + paddingY
 	curSize := defaultSize
 
-	for lineIdx, line := range lines {
+	for _, line := range lines {
 		var lineW float64
+		// 为了正确计算居中，先遍历一次获取本行最终的 curSize（如果行内有 \s 控制符）
+		lineSize := curSize
 		for _, tk := range line {
-			sz := curSize
 			if tk.size > 0 {
-				sz = tk.size
+				lineSize = tk.size
 			}
+			sz := lineSize
 			if tk.rn < 128 {
 				lineW += float64(sz/2 + 1)
 			} else {
@@ -1815,22 +1708,26 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 		cursorX := float64(x)
 		switch {
 		case attribs&4 != 0:
-			cursorX = float64(x+maxWidth) - lineW - 3
+			cursorX = float64(x+safeMaxWidth) - lineW - 3
 		case attribs&2 != 0:
-			cursorX = float64(x) + (float64(maxWidth)-lineW)/2.0
+			cursorX = float64(x) + (float64(safeMaxWidth)-lineW)/2.0
 		default:
 			cursorX += 3
 		}
 
-		currentLineY := startLineY + lineIdx*lineStep
+		// 记录本行最后使用的字号，用于决定下一行的行距
+		lineEndSize := lineSize
+		renderSize := curSize
 
 		for _, tk := range line {
 			if tk.size > 0 {
-				curSize = tk.size
+				renderSize = tk.size
+				curSize = tk.size // 更新全局当前字号，供后续行初始化使用
+				lineEndSize = tk.size
 				continue
 			}
 			rn := tk.rn
-			size := curSize
+			size := renderSize
 
 			glyph, _ := face.Glyph(rn)
 			if glyph == nil || len(glyph.Levels) == 0 {
@@ -1854,8 +1751,8 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 			}
 
 			isASCII := rn < 128
-			cacheKey := glyphCacheKey{rn: rn, size: size}
-			cached, exists := g.cjkCache[cacheKey]
+			cacheKey := glyphCacheKey{rn: rn, size: size, face: faceName}
+			cached, exists := cjkCache[cacheKey]
 
 			if !exists {
 				origW := float64(b.Dx())
@@ -1878,7 +1775,6 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 					h = 1
 				}
 
-				// ★★★ 修复：必须加上 +2，否则描边会被切掉 ★★★
 				paddedW := w + 2
 				paddedH := h + 2
 
@@ -1888,7 +1784,6 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 					transparent[j] = true
 				}
 
-				// 先把灰度数据扣出来放入 shape（偏移 1 像素）
 				shape := make([]byte, paddedW*paddedH)
 				for ty := 0; ty < h; ty++ {
 					for tx := 0; tx < w; tx++ {
@@ -1900,36 +1795,36 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 						if y0 >= b.Max.Y {
 							y0 = b.Max.Y - 1
 						}
-
 						shape[(ty+1)*paddedW+(tx+1)] = srcMask.GrayAt(x0, y0).Y
 					}
 				}
 
-				// ★★★ 核心修复：重新实现精准 3x3 描边检测 ★★★
 				for ty := 0; ty < paddedH; ty++ {
 					for tx := 0; tx < paddedW; tx++ {
-						grayVal := shape[ty*paddedW+tx]
+						idx := ty*paddedW + tx
+						grayVal := shape[idx]
 
-						// 降低字芯阈值，保留更多抗锯齿细节
-						if grayVal > 100 {
-							pixels[ty*paddedW+tx] = textIdx
-							transparent[ty*paddedW+tx] = false
+						if grayVal > 0 {
+							transparent[idx] = false
+							ratio := float64(grayVal) / 255.0
+							colorRange := float64(COLOR_BASE_DARK - COLOR_BASE_BRIGHT)
+							palIdx := float64(COLOR_BASE_BRIGHT) + (1.0-ratio)*colorRange
+							pixels[idx] = byte(palIdx)
 						} else {
-							// 只要周围有字芯，就画描边
 							isOutline := false
-							for dy := -1; dy <= 1; dy++ {
-								for dx := -1; dx <= 1; dx++ {
-									nx, ny := tx+dx, ty+dy
+							for oy := -1; oy <= 1; oy++ {
+								for ox := -1; ox <= 1; ox++ {
+									nx, ny := tx+ox, ty+oy
 									if nx >= 0 && nx < paddedW && ny >= 0 && ny < paddedH {
-										if shape[ny*paddedW+nx] > 100 {
+										if shape[ny*paddedW+nx] > 0 {
 											isOutline = true
 										}
 									}
 								}
 							}
 							if isOutline {
-								pixels[ty*paddedW+tx] = edgeIdx
-								transparent[ty*paddedW+tx] = false
+								pixels[idx] = COLOR_EDGE
+								transparent[idx] = false
 							}
 						}
 					}
@@ -1941,7 +1836,7 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 						Pixels: pixels, Transparent: transparent,
 					},
 				}
-				g.cjkCache[cacheKey] = cached
+				cjkCache[cacheKey] = cached
 			}
 
 			if cached == nil || cached.frame == nil {
@@ -1954,19 +1849,16 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 			}
 
 			startY := currentLineY + (size-int(cached.frame.Height))/2
-
 			if !isASCII {
-				startY += 1 // 汉字保留 1 像素的视觉下沉，避免看起来浮空
+				startY += 1
 			} else {
-				{
-					startY += 2 // 汉字保留 1 像素的视觉下沉，避免看起来浮空
-				}
+				startY += 2
 			}
 
 			sprite := drawlist.Sprite{
-				Frame: cached.frame, X: int32(cursorX), Y: int32(startY),
+				Frame: cached.frame, X: int32(cursorX - 1), Y: int32(startY - 1),
 				Kind: drawlist.BlitKeyed, Key: 0, HasClip: true,
-				Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(maxWidth), H: int32(controlHeight + 40)},
+				Clip: drawlist.Rect{X: int32(x), Y: int32(baselineY - 20), W: int32(safeMaxWidth), H: int32(controlHeight + 40)},
 			}
 			c.List().RecordSprite(sprite)
 
@@ -1976,5 +1868,98 @@ func (g *gameShell) drawRetailFilmCJK(c *client.Client, text string, x, baseline
 				cursorX += float64(size + 1)
 			}
 		}
+
+		// ★ 核心：渲染完这一行后，直接按本行最后生效的字号计算行距，推挤下一行
+		lineStep := int(float64(lineEndSize) * LINE_STEP_PERCENT)
+		if lineStep < lineEndSize+2 {
+			lineStep = lineEndSize + 2
+		}
+		currentLineY += lineStep
+	}
+	return true
+}
+
+var printed map[string]int
+var cjkCache map[glyphCacheKey]*cachedGlyph
+
+func printDebug(args ...interface{}) {
+	defer printlock.Unlock()
+	printlock.Lock()
+	if printed == nil {
+		printed = make(map[string]int)
+	}
+	var pcindex int
+	pcindex = 1
+	pc, _, _, ok := runtime.Caller(pcindex)
+	if ok {
+		fn := runtime.FuncForPC(pc)
+		prompt := fmt.Sprintf("debug message: %s:%v\n", fn.Name(), args)
+		if fn != nil {
+			if _, exists := printed[prompt]; !exists {
+				fmt.Printf(prompt)
+				printed[prompt]++
+			}
+		}
 	}
 }
+func printDebugInternal(args ...interface{}) {
+	defer printlock.Unlock()
+	printlock.Lock()
+	if printed == nil {
+		printed = make(map[string]int)
+	}
+	var pcindex int
+	pcindex = 2
+	pc, _, _, ok := runtime.Caller(pcindex)
+	if ok {
+		fn := runtime.FuncForPC(pc)
+		prompt := fmt.Sprintf("debug message: %s:%v\n", fn.Name(), args)
+		if fn != nil {
+			if _, exists := printed[prompt]; !exists {
+				fmt.Printf(prompt)
+				printed[prompt]++
+			}
+		}
+	}
+}
+
+var printlock sync.RWMutex // ★ 新增全局读写锁
+
+func printStackTrace() {
+	// 获取调用栈，1 是跳过 printStackTrace 自己，2 是跳过直接调用者，取更上层
+	defer printlock.Unlock()
+	printlock.Lock()
+	if printed == nil {
+		printed = make(map[string]int)
+	}
+	pcs := make([]uintptr, 10)
+	n := runtime.Callers(2, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+
+	for {
+		frame, more := frames.Next()
+		fmt.Printf("%s\n  -> %s:%d\n", frame.Function, frame.File, frame.Line)
+		if !more {
+			break
+		}
+	}
+}
+
+// pc, file, line, ok := runtime.Caller(1)
+// if ok {
+// fn := runtime.FuncForPC(pc)
+// fmt.Printf("=== 抓到了！ ===\n")
+// fmt.Printf("调用者文件: %s\n", file)
+// fmt.Printf("调用者行号: %d\n", line)
+// if fn != nil {
+// fmt.Printf("调用者函数: %s\n", fn.Name())
+// }
+// }
+
+type cachedGlyph struct {
+	frame *formats.GAFFrame
+}
+
+// ==========================================
+// 2. 在 gameShell 结构体中添加字段
+// ==========================================

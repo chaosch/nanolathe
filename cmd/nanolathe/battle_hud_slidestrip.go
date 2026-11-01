@@ -93,7 +93,7 @@ func (h *retailBattleHUD) drawSlideStrip(c *client.Client, b *battleSession, cur
 	y := yBottom + off + slideStripTextY
 	write := func(dx int, text string) {
 		if font != nil {
-			drawRetailGAFText(c, font, text, x+dx, y, -1)
+			h.shell.drawRetailGAFText(c, font, text, x+dx, y, -1)
 		} else if h.console != nil {
 			// Null slot: the pen falls back to the active FNT with the width
 			// limit dropped [03 R-FONT-01 §6].

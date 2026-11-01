@@ -4,8 +4,6 @@ package main
 // drawer per control kind — art, button, text and surface [07 §5].
 
 import (
-	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -250,7 +248,6 @@ func (g *gameShell) drawRetailButton(c *client.Client, p *ui.Panel, index int, g
 }
 
 func (g *gameShell) drawRetailText(c *client.Client, p *ui.Panel, index int, gad gui.Gadget, r gui.Rect) {
-	fmt.Printf("drawRetailText：%s\n", retailGadgetText(p, index, gad))
 	g.drawRetailTextState(c, p, index, gad, r)
 }
 
@@ -276,25 +273,11 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	text := retailGadgetText(p, index, gad)
-	if i18n.Language() == "chinese" {
-		tr := i18n.T(text)
-		if tr != text {
-			disp := tr
-			palColor, _ := g.retailTextPen(p, index, gad)
-			penY := int(r.Y)
-			g.drawRetailFilmCJK(
-				c,
-				disp,
-				int(r.X),
-				penY,
-				int(r.W),
-				int(r.H), // <--- 新增：传入控件高度
-				palColor,
-				gad.Attribs,
-			)
-			return
-		}
+	if len(text) == 0 {
+		return
 	}
+
+	palColor, _ := g.retailTextPen(p, index, gad)
 
 	if gad.Kind == gui.KindLabel && p.Window != nil && index > 0 && index < len(p.Window.Gadgets) {
 		oldX := gad.Rect.X
@@ -315,11 +298,35 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	selected := g.windowGadgetFont(p, gad)
 	if gad.Kind == gui.KindLabel && selected != nil {
 		color, _ := g.retailTextPen(p, index, gad)
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			retailGadgetText(p, index, gad),
+			int(r.X),
+			int(r.Y),
+			int(r.W),
+			int(r.H), // <--- 新增：传入控件高度
+			palColor,
+			gad.Attribs,
+		) {
+			return
+		}
 		g.drawRetailLabelFNT(c, p, gad, r, text, selected, color)
 		return
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			retailGadgetText(p, index, gad),
+			int(r.X),
+			int(r.Y),
+			int(r.W),
+			int(r.H), // <--- 新增：传入控件高度
+			palColor,
+			gad.Attribs,
+		) {
+			return
+		}
 		g.drawRetailLabelGAF(c, p, gad, r, text, color, shade)
 		return
 	}
@@ -328,10 +335,34 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	measure, lineStep := g.retailTextMetrics(selected)
 	if gad.Kind == gui.KindButton {
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			retailGadgetText(p, index, gad),
+			int(r.X),
+			int(r.Y),
+			int(r.W),
+			int(r.H), // <--- 新增：传入控件高度
+			palColor,
+			gad.Attribs,
+		) {
+			return
+		}
 		g.drawRetailButtonCaption(c, p, index, gad, r, text, selected, measure, lineStep)
 		return
 	}
 	if gad.Kind == gui.KindTextBox {
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			retailGadgetText(p, index, gad),
+			int(r.X),
+			int(r.Y),
+			int(r.W),
+			int(r.H), // <--- 新增：传入控件高度
+			palColor,
+			gad.Attribs,
+		) {
+			return
+		}
 		color, shade := g.retailTextPen(p, index, gad)
 		drawTextEditorState(c, p, index, gad, r, text, measure, lineStep, 0, g.guiColor(9),
 			func(x, y, w, h int, fill byte) { c.UIFillRect(x, y, w, h, fill) },
@@ -385,6 +416,18 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		for i, line := range lines {
 			g.drawRetailStringSelected(c, line, x, top+i*lineStep, maxWidth, color, shade, selected)
 		}
+		return
+	}
+	if g.drawRetailFilmCJKCylindrical(
+		c,
+		retailGadgetText(p, index, gad),
+		int(r.X),
+		int(r.Y),
+		int(r.W),
+		int(r.H), // <--- 新增：传入控件高度
+		palColor,
+		gad.Attribs,
+	) {
 		return
 	}
 	g.drawRetailStringSelected(c, text, x, y, maxWidth, color, shade, selected)
@@ -490,6 +533,7 @@ func (g *gameShell) retailTextMetrics(selected *formats.FNT) (measure func(strin
 // with the width limit dropped (`maxW = -1`) and the selected record's FNT —
 // or the common font when the gadget selected none [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y, maxWidth int, color byte, shade int, selected *formats.FNT) {
+	printDebug(text)
 	if selected == nil || g.retailGAFTextFont() != nil {
 		g.drawRetailStringLit(c, text, x, y, maxWidth, color, shade)
 		return
@@ -512,6 +556,7 @@ func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y
 // The GAF pen's wrap-or-single-line choice belongs to the other branch and
 // never runs here.
 func (g *gameShell) drawRetailLabelFNT(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT, color byte) {
+	printDebug(text)
 	if c == nil || font == nil || text == "" {
 		return
 	}
@@ -550,6 +595,7 @@ func retailLabelPenX(_ *gui.Window, gad gui.Gadget, r gui.Rect, textWidth int) i
 // `shade` (the label's live colour word); the FNT fallback draws in that word
 // raw [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, color byte, shade int) {
+	printDebug(text)
 	measure, metric, ok := g.retailLabelTextMetrics()
 	if c == nil || !ok || text == "" {
 		return
@@ -568,7 +614,7 @@ func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Ga
 			c.UITextWidth(g.font, line, x, y, -1, color)
 			return
 		}
-		drawRetailGAFTextLit(c, font, line, x, y, int(r.W), pal, shade)
+		g.drawRetailGAFTextLit(c, font, line, x, y, int(r.W), pal, shade)
 	})
 }
 
@@ -588,6 +634,7 @@ func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Ga
 // label width `w`, so a zero-width label draws nothing; on the FNT fallback
 // the limit is dropped.
 func drawRetailLabelLines(window *gui.Window, gad gui.Gadget, r gui.Rect, text string, measure func(string) int, metric int, draw func(line string, x, y int)) {
+	printDebug(text)
 	x, y := retailLabelPenX(window, gad, r, measure(text)), int(r.Y)
 	if 2*metric < int(r.H)-1 {
 		for _, line := range retailLabelWrapLines(text, measure, int(r.W), int(r.H), metric+2) {

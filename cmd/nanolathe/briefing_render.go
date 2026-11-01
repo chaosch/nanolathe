@@ -661,6 +661,7 @@ func (g *gameShell) drawBriefingText(c *client.Client, b *campaignBriefingContro
 // labels no width, so nothing here truncates: the wrapper is what keeps a line
 // inside the region [07 R-HUD-03 §10].
 func (g *gameShell) drawBriefingLine(c *client.Client, text string, x, y int, color byte) {
+	printDebug(text)
 	if text == "" {
 		return
 	}

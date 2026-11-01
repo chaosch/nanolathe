@@ -398,14 +398,14 @@ func (h *retailBattleHUD) drawUnitInfoRows(c *client.Client, screen *unitInfoScr
 	clip := screen.window.Rect
 	originX, originY := int(screen.window.Rect.X), int(screen.window.Rect.Y)
 	for i, label := range unitInfoLabels {
-		drawRetailGAFTextClipped(c, h.modalFont, label.Text,
+		h.shell.drawRetailGAFTextClipped(c, h.modalFont, label.Text,
 			originX+label.X, originY+label.Y, -1,
 			int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 		value := screen.values[i]
 		if value == unitInfoHeaderValue || value == "" {
 			continue
 		}
-		drawRetailGAFTextClipped(c, h.modalFont, value,
+		h.shell.drawRetailGAFTextClipped(c, h.modalFont, value,
 			originX+unitInfoValueColumn, originY+label.Y, -1,
 			int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 	}

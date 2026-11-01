@@ -62,6 +62,7 @@ func constructorPatrolDarkPlate(entry *formats.GAFEntry, r gui.Rect) *formats.GA
 }
 
 func (h *retailBattleHUD) drawConstructorPatrolCaption(c *client.Client, r gui.Rect, text string) {
+	printDebug(text)
 	// Leave the authored plate's three indicators clear at the right. The
 	// caption is our own pen; the gadget geometry and cycle input stay retail's.
 	x, width := int(r.X)+6, int(r.W)-32
@@ -70,7 +71,7 @@ func (h *retailBattleHUD) drawConstructorPatrolCaption(c *client.Client, r gui.R
 	}
 	if h.modalFont != nil {
 		y := int(r.Y) + (int(r.H)-retailGAFTextHeight(h.modalFont))/2
-		drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(r.X), int(r.Y), int(r.W), int(r.H))
+		h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(r.X), int(r.Y), int(r.W), int(r.H))
 	} else if h.guiFont != nil {
 		y := int(r.Y) + (int(r.H)-int(h.guiFont.Height))/2
 		c.UITextWidthClipped(h.guiFont, text, x, y, width, h.guiColor(0), int(r.X), int(r.Y), int(r.W), int(r.H))

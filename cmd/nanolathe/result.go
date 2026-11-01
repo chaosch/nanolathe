@@ -612,7 +612,7 @@ func (h *retailBattleHUD) drawResultBar(c *client.Client, row, column, current, 
 	if h.modalFontSmall != nil {
 		textWidth := retailGAFTextWidth(h.modalFontSmall, text)
 		fontMetric := retailGAFTextHeight(h.modalFontSmall)
-		drawRetailGAFText(c, h.modalFontSmall, text, x+33-textWidth/2, y+9-fontMetric/2, -1)
+		h.shell.drawRetailGAFText(c, h.modalFontSmall, text, x+33-textWidth/2, y+9-fontMetric/2, -1)
 	} else if h.console != nil {
 		textWidth := client.MeasureText(h.console, text)
 		fontMetric := int(h.console.Height)
@@ -700,7 +700,7 @@ func (h *retailBattleHUD) drawResultName(c *client.Client, surface gui.Rect, nam
 	if font := h.modalFontSmall; font != nil {
 		textWidth := retailGAFTextWidth(font, name)
 		penY := y + (20-retailGAFTextHeight(font))/2
-		drawRetailGAFTextLit(c, font, name, x+resultNameWidth/2-textWidth/2, penY, resultNameWidth, h.pal, resultNameColor)
+		h.shell.drawRetailGAFTextLit(c, font, name, x+resultNameWidth/2-textWidth/2, penY, resultNameWidth, h.pal, resultNameColor)
 		return
 	}
 	if font := h.primaryFont; font != nil {

@@ -192,6 +192,7 @@ func (c *nlUICache) fit(f *screenkit.Font, text string, st screenkit.Style, widt
 // drawWrapped is Font.DrawWrapped over the kept lines: the same baselines,
 // leading and height.
 func (s *nlScreen) drawWrapped(screen *ebiten.Image, f *screenkit.Font, text string, x, top, width, leading float64, st screenkit.Style) float64 {
+	printDebug(text)
 	lines := s.ui.wrap(f, text, st, width)
 	st.Verbatim = true
 	y := top + st.Size

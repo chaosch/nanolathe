@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -122,20 +121,30 @@ func (g *gameShell) retailTextHeight() int {
 // colors, directly as PALETTE.PAL indices.
 // No GUI semantic-color remap or FNT tint is applied. maxWidth < 0 means no
 // width limit; otherwise the next glyph must fit in the remaining width.
-func drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
-	drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
+func (g *gameShell) drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
+	printDebug(text)
+	g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
 }
 
 // drawRetailGAFTextClipped draws the same opaque glyphs into the modal
 // window's private surface, clipping glyph bearings and text beyond the
 // authored window [07 §4].
-func drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth, clipX, clipY, clipW, clipH int) {
+func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth, clipX, clipY, clipW, clipH int) {
+	printDebug(text)
 	if c == nil || font == nil {
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
-	fmt.Println("drawRetailGAFTextClipped" + ":" + text)
+	if g.drawRetailFilmCJKCylindrical(
+		c,
+		text,
+		x, y, maxWidth, baselineHeight,
+		0,
+		0,
+	) {
+		return
+	}
 	for i := 0; i < len(text); i++ {
 		code := text[i]
 		if code == 0 {
@@ -166,12 +175,24 @@ func drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text str
 // drawRetailGAFTextLit draws each glyph normally at shade level zero; a
 // non-zero level remaps it through PALETTE.LHT. Only loading-screen stage
 // labels pass a non-zero level [07 §4][03 §4.3.1].
-func drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
+func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
+	printDebug(text)
 	if c == nil || font == nil {
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
+
+	if g.drawRetailFilmCJKCylindrical(
+		c,
+		text,
+		x, y, maxWidth, baselineHeight,
+		0,
+		2,
+	) {
+		return
+	}
+
 	for i := 0; i < len(text); i++ {
 		code := text[i]
 		if code == 0 {
@@ -207,19 +228,39 @@ func drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string,
 }
 
 func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWidth int, fntColor byte) {
+	printDebug(text)
 	g.drawRetailStringLit(c, text, x, y, maxWidth, fntColor, 0)
 }
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
+	printDebug(text)
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {
 			pal = g.assets.pal
 		}
-		drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			text,
+			x, y, maxWidth, int(g.font.Height),
+			0,
+			0,
+		) {
+			return
+		}
+		g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
 		return
 	}
 	if g != nil && g.font != nil {
+		if g.drawRetailFilmCJKCylindrical(
+			c,
+			text,
+			x, y, maxWidth, int(g.font.Height),
+			0,
+			0,
+		) {
+			return
+		}
 		c.UITextWidth(g.font, text, x, y, maxWidth, fntColor)
 	}
 

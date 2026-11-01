@@ -340,7 +340,7 @@ func (g *gameShell) drawOnlineChat(c *client.Client, p *ui.Panel) {
 			c.UITextWidth(g.font, text, x, y, width, g.guiColor(15))
 			return
 		}
-		drawRetailGAFTextLit(c, font, text, x, y, width, pal, 0)
+		g.drawRetailGAFTextLit(c, font, text, x, y, width, pal, 0)
 	}
 	pitch := max(metric, 1)
 	for row, line := range onlineChatLayout(r.chat.lines, measure, onlineChatW, onlineChatRows) {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/formats"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -396,16 +395,3 @@ func (g *gameShell) restoreMapRemovalMount(selected string, cause error) error {
 	}
 	return cause
 }
-
-type glyphCacheKey struct {
-	rn   rune
-	size int
-}
-
-type cachedGlyph struct {
-	frame *formats.GAFFrame
-}
-
-// ==========================================
-// 2. 在 gameShell 结构体中添加字段
-// ==========================================
