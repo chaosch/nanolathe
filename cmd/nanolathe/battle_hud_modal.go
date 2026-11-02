@@ -328,7 +328,6 @@ func (h *retailBattleHUD) initializeModalLabels(window *gui.Window) {
 // FNT colour is raw palette index 0: the label's colour word is the pen mode
 // and the foreground, the builder zeroes it, and no battle modal writes it.
 func (h *retailBattleHUD) drawModalLabelGAF(c *client.Client, window *gui.Window, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, common *formats.FNT) {
-	c.PrintDebug(text)
 	measure, metric, ok := retailLabelFaceMetrics(h.modalFontSmall, common)
 	if c == nil || !ok || text == "" {
 		return

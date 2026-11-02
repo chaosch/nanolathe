@@ -1473,5 +1473,7 @@
   "Vehicle Plant": "战车工厂",
   "Cost": "造价",
   "Statistics": "统计信息",
-  "Max Velocity": "最高速度"
+  "Max Velocity": "最高速度",
+  "Cloaked": "隐身",
+  "Visible": "可见"
 }

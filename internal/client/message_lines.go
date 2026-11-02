@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
@@ -123,7 +122,6 @@ func (c *Client) drawMessageLines() {
 // XOffset and its capital-I-normalized YOffset subtracted from the pen, then
 // advances by its frame width [03 R-FONT-01 §6][07 §4].
 func (c *Client) drawMessageGAFText(text string, x, y int) {
-	fmt.Printf("DrawMessageGAFText:%s\r\n", text)
 	glyph := func(code byte) *formats.GAFFrame {
 		if code < 0x20 || int(code) >= len(c.messageGAF.Frames) {
 			return nil
@@ -133,7 +131,12 @@ func (c *Client) drawMessageGAFText(text string, x, y int) {
 	baseline := 0
 	if f := glyph('I'); f != nil {
 		baseline = int(f.Height)
+		c.PrintDebug(f.Height)
+		if c.DrawRetailFilmCJKCylindrical(text, 200, 200, -1, int(f.Height)+10, 0, 0) {
+			return
+		}
 	}
+
 	for i := 0; i < len(text) && text[i] != 0; i++ {
 		f := glyph(text[i])
 		if f == nil {
