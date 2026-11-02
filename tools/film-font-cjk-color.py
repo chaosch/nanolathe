@@ -18,7 +18,7 @@ WIDTH = 2048
 FORCED_EM = {"display": 121, "body": 125}
 FORCED_SCALE = 1.964
 WEIGHT = {"display": 800, "body": 400}
-EXTRA = "简体中文界面"
+EXTRA = "简体中文界面ABCDEFGHIJKLMNOPQRSTUVWXYabcdefghijklmnopqrstuvwxyz0123456789"
 
 # 调色板 (64~79) 从亮黄到极暗黄
 PALETTE = [
@@ -27,8 +27,13 @@ PALETTE = [
     (67, 67, 35), (51, 51, 23), (35, 35, 15), (27, 27, 7),
     (23, 23, 7), (19, 19, 0), (15, 15, 0), (11, 11, 0)
 ]
-EDGE_COLOR = PALETTE[-1]  # 描边用最黑
+# 整条调色板统一压暗：0.78 表示亮度乘 0.78，可调 0.7~0.85。
+DARKEN = 0.85
+PALETTE = [tuple(int(c * DARKEN) for c in color) for color in PALETTE]
 
+# 描边配置
+OUTLINE_WIDTH = 5                          # 描边像素宽，1/2/3...
+OUTLINE_COLOR = (0, 0, 0)                  # 描边颜色，纯黑
 
 def gray_to_palette(gray_val):
     if gray_val == 0: return (0, 0, 0)
@@ -64,7 +69,7 @@ def load_face(source, weight, size):
 # 2. 核心渲染 (水平柱面光照 + 细描边)
 # ==========================================
 def render_colored_glyph(char, font, w, h, left, top):
-    pad = 2
+    pad = max(2, OUTLINE_WIDTH)
     cell_w = w + pad * 2
     cell_h = h + pad * 2
 
@@ -76,18 +81,24 @@ def render_colored_glyph(char, font, w, h, left, top):
     d = ImageDraw.Draw(base)
     d.text((draw_x, draw_y), char, font=font, fill=255, anchor="ls")
 
-    # 2. 1像素极细描边
+    # 2. 描边：半径 OUTLINE_WIDTH，圆形笔刷
     outline = Image.new('L', (cell_w, cell_h), 0)
     do = ImageDraw.Draw(outline)
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
+    r = OUTLINE_WIDTH
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx * dx + dy * dy > r * r:   # 圆形笔刷，去掉方角
+                continue
             do.text((draw_x + dx, draw_y + dy), char, font=font, fill=255, anchor="ls")
 
     res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
 
     # 3. 贴描边底色
-    edge_layer = Image.new('RGBA', (cell_w, cell_h), (*EDGE_COLOR, 255))
+    edge_layer = Image.new('RGBA', (cell_w, cell_h), (*OUTLINE_COLOR, 255))
     res.paste(edge_layer, (0, 0), outline)
+
+    # 4. 水平柱面光照计算
+    ...
 
     # 4. 水平柱面光照计算
     center_y = cell_h / 2.0

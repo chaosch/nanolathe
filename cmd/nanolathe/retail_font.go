@@ -136,7 +136,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
-	if g.drawRetailFilmCJKCylindrical(
+	if g.drawLocalizedFont(
 		c,
 		text,
 		x, y, maxWidth, baselineHeight,
@@ -183,7 +183,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
 
-	if g.drawRetailFilmCJKCylindrical(
+	if g.drawLocalizedFont(
 		c,
 		text,
 		x, y, maxWidth, baselineHeight,
@@ -239,7 +239,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		if g.assets != nil {
 			pal = g.assets.pal
 		}
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			text,
 			x, y, maxWidth, int(g.font.Height),
@@ -252,7 +252,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		return
 	}
 	if g != nil && g.font != nil {
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			text,
 			x, y, maxWidth, int(g.font.Height),

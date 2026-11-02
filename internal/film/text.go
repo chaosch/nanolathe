@@ -137,7 +137,7 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	for _, item := range placed {
 		g := item.g
 		// A texel covers Units face Units: one for the Latin faces, more for
-		// glyphs rasterized below the atlas resolution (the CJK additions).
+		// glyphs rasterized below the atlas resolution (the cjk additions).
 		u := g.Units()
 		level, factor := 0, 1.0
 		for level+1 < len(g.Levels) && scale*u*factor < 0.5 {

@@ -313,7 +313,7 @@ func (h *retailBattleHUD) drawBattleInfoLabel(c *client.Client, window *gui.Wind
 	if h == nil || c == nil || window == nil || text == "" {
 		return
 	}
-	if h.shell.drawRetailFilmCJKCylindrical(c, text, int(r.X), int(r.Y), int(r.W), int(r.H), h.guiColor(byte(gad.ColorF)), gad.Attribs) {
+	if h.shell.drawLocalizedFont(c, text, int(r.X), int(r.Y), int(r.W), int(r.H), h.guiColor(byte(gad.ColorF)), gad.Attribs) {
 		return
 	}
 	if window.FontRecord(gad.FontNumber) != gui.NoFontRecord {

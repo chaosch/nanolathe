@@ -298,7 +298,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	selected := g.windowGadgetFont(p, gad)
 	if gad.Kind == gui.KindLabel && selected != nil {
 		color, _ := g.retailTextPen(p, index, gad)
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			retailGadgetText(p, index, gad),
 			int(r.X),
@@ -315,7 +315,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			retailGadgetText(p, index, gad),
 			int(r.X),
@@ -335,7 +335,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	measure, lineStep := g.retailTextMetrics(selected)
 	if gad.Kind == gui.KindButton {
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			retailGadgetText(p, index, gad),
 			int(r.X),
@@ -351,7 +351,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	if gad.Kind == gui.KindTextBox {
-		if g.drawRetailFilmCJKCylindrical(
+		if g.drawLocalizedFont(
 			c,
 			retailGadgetText(p, index, gad),
 			int(r.X),
@@ -418,7 +418,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		}
 		return
 	}
-	if g.drawRetailFilmCJKCylindrical(
+	if g.drawLocalizedFont(
 		c,
 		retailGadgetText(p, index, gad),
 		int(r.X),

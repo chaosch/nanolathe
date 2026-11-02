@@ -75,7 +75,7 @@ func (g *gameShell) completeLanguage(ready bool, err error) {
 	}
 	if err != nil {
 		g.languagePending = ""
-		fmt.Fprintf(os.Stderr, "nanolathe: Chinese fonts failed: logical path film, providers searched [browser], expected CJK atlases: %v\n", err)
+		fmt.Fprintf(os.Stderr, "nanolathe: Chinese fonts failed: logical path film, providers searched [browser], expected cjk atlases: %v\n", err)
 		if s := nlScreenInst; s != nil && s.open && s.shell() == g {
 			s.retainLanguageChoice(g)
 			s.toast, s.toastLeft = "Chinese fonts could not load. Apply to retry.", 6

@@ -9,6 +9,9 @@ import "image"
 type TypefaceGlyph struct {
 	// Levels are coverage mipmaps; level 0 is the atlas resolution.
 	Levels []*image.Gray
+	// Colors is the true-colour level 0 for a glyph drawn as a sprite; nil
+	// for the Latin faces, which are shaded from Style.Top/Bottom.
+	Colors []*image.NRGBA
 	// Left and Top place level 0's inked box relative to the pen; Top is
 	// negative above the baseline. The border is not part of these.
 	Left, Top int
@@ -16,7 +19,7 @@ type TypefaceGlyph struct {
 	Advance   float64
 	// Scale is how many face Units one atlas pixel covers, for a face whose
 	// glyphs are rasterized below the atlas resolution tools/film-font uses
-	// (the CJK additions, docs/DESIGN_I18N.md). Zero means one, the value
+	// (the cjk additions, docs/DESIGN_I18N.md). Zero means one, the value
 	// every Latin Glyph carries implicitly.
 	Scale float64
 }
@@ -45,7 +48,7 @@ func FilmTypeface(name string) *Typeface {
 		if len(runes) != 1 {
 			continue
 		}
-		out.Glyphs[runes[0]] = TypefaceGlyph{Levels: g.Levels, Left: g.Left, Top: g.Top, W: g.W, H: g.H, Advance: g.Advance, Scale: g.Scale}
+		out.Glyphs[runes[0]] = TypefaceGlyph{Levels: g.Levels, Colors: g.Colors, Left: g.Left, Top: g.Top, W: g.W, H: g.H, Advance: g.Advance, Scale: g.Scale}
 	}
 	return out
 }

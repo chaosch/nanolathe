@@ -26,6 +26,7 @@ type Font struct {
 
 type fontGlyph struct {
 	levels  []*ebiten.Image
+	colors  []*ebiten.Image // true-colour level 0, CJK sprites only
 	left    float64
 	top     float64
 	advance float64
@@ -71,9 +72,18 @@ func NewFont(face *film.Typeface) *Font {
 		for _, level := range g.Levels {
 			fg.levels = append(fg.levels, coverageImage(level))
 		}
+		for _, level := range g.Colors {
+			fg.colors = append(fg.colors, spriteImage(level))
+		}
 		f.glyphs[r] = fg
 	}
 	return f
+}
+
+// spriteImage uploads a true-colour glyph level as-is. Ebitengine premultiplies
+// on upload, so the atlas colours reach the screen unchanged.
+func spriteImage(src image.Image) *ebiten.Image {
+	return ebiten.NewImageFromImage(src)
 }
 
 // coverageImage turns a coverage level into a white image whose alpha is the
@@ -162,7 +172,7 @@ func (f *Font) measure(text string, s Style) float64 {
 // Draw sets a run on its baseline at (x, y) and returns its width.
 func (f *Font) Draw(dst *ebiten.Image, text string, x, y float64, s Style) float64 {
 	text = s.text(text)
-	fmt.Printf("Draw:%s\r\n", text)
+	//fmt.Printf("Draw:%s\r\n", text)
 	w := f.measure(text, s)
 	switch s.Align {
 	case 1:
@@ -170,7 +180,9 @@ func (f *Font) Draw(dst *ebiten.Image, text string, x, y float64, s Style) float
 	case 2:
 		x -= w
 	}
-	if s.Shadow > 0 {
+	// CJK glyphs are sprites; a shadow copy would paint a dark duplicate over
+	// the original colours, so leave shadowing to the Latin faces only.
+	if s.Shadow > 0 && !f.spriteRun(text) {
 		shadow := s
 		shadow.Top, shadow.Bottom, shadow.Shadow = color.RGBA{0, 0, 0, uint8(float64(s.Top.A) * 0.85)}, color.RGBA{}, 0
 		shadow.Align, shadow.Upper = 0, false
@@ -178,6 +190,23 @@ func (f *Font) Draw(dst *ebiten.Image, text string, x, y float64, s Style) float
 	}
 	f.run(dst, text, x, y, s)
 	return w
+}
+
+// spriteRun reports whether every drawn glyph in the run is a CJK sprite.
+// It keeps Draw from laying a shadow copy over sprites set as-is.
+func (f *Font) spriteRun(text string) bool {
+	seen := false
+	for _, r := range text {
+		g, _ := f.glyph(r)
+		if len(g.levels) == 0 {
+			continue
+		}
+		if g.units == 1 {
+			return false
+		}
+		seen = true
+	}
+	return seen
 }
 
 func (f *Font) run(dst *ebiten.Image, text string, x, y float64, s Style) {
@@ -197,6 +226,27 @@ func (f *Font) run(dst *ebiten.Image, text string, x, y float64, s Style) {
 			pen += g.advance * scale
 			continue
 		}
+
+		// CJK glyphs are sprites: draw the level-0 atlas image as-is, placed
+		// by left/top and advanced by advance. No mip selection, no border
+		// inset, no cap-line shading, and a white modulation so the sprite's
+		// own colours come through unchanged.
+		if g.units != 1 {
+			img := g.levels[0]
+			if len(g.colors) > 0 {
+				img = g.colors[0]
+			}
+			b := img.Bounds()
+			gw := float64(b.Dx()) * g.units * scale
+			gh := float64(b.Dy()) * g.units * scale
+			gx := pen + g.left*scale
+			gy := y + g.top*scale
+			white := color.RGBA{255, 255, 255, 255}
+			drawQuad(dst, img, gx, gy, gw, gh, white, white, white, white)
+			pen += g.advance * scale
+			continue
+		}
+
 		// Pick the mip whose texel footprint is closest to one pixel from
 		// above, so linear filtering never has to span more than two texels.
 		// A level-0 texel covers units face units, so a glyph rasterized below

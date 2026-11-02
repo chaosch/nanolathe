@@ -19,6 +19,11 @@ type atlasGlyph struct {
 	// resolution the Latin faces use.
 	Scale  float64
 	Levels []*image.Gray
+	// Colors carries the atlas colour of level 0 for glyphs whose atlas is
+	// not monochrome: the CJK additions are set as sprites, so their pixels
+	// are drawn as authored rather than through the coverage shader. Latin
+	// glyphs leave it nil and keep using Levels.
+	Colors []*image.NRGBA
 }
 
 // Units is how many face Units one atlas texel of the Glyph covers.
@@ -56,6 +61,11 @@ func loadAtlasFace(name string) *atlasFace {
 	if err != nil {
 		panic(err)
 	}
+	// Keep a true-colour copy of the atlas for glyphs drawn as sprites.
+	// png.Decode may return NRGBA already; normalise so every glyph slices
+	// from one image type.
+	nrgba := image.NewNRGBA(atlas.Bounds())
+	draw.Draw(nrgba, nrgba.Bounds(), atlas, atlas.Bounds().Min, draw.Src)
 	for _, g := range face.Glyphs {
 		if g.W == 0 || g.H == 0 {
 			continue
@@ -65,6 +75,11 @@ func loadAtlasFace(name string) *atlasFace {
 		base := image.NewGray(image.Rect(0, 0, g.W+4, g.H+4))
 		draw.Draw(base, image.Rect(2, 2, g.W+2, g.H+2), atlas, image.Pt(g.X, g.Y), draw.Src)
 		g.Levels = append(g.Levels, base)
+		// Colour level 0, same border, so the sprite path can place it with
+		// the same geometry the coverage path uses.
+		colorBase := image.NewNRGBA(image.Rect(0, 0, g.W+4, g.H+4))
+		draw.Draw(colorBase, image.Rect(2, 2, g.W+2, g.H+2), nrgba, image.Pt(g.X, g.Y), draw.Src)
+		g.Colors = append(g.Colors, colorBase)
 		for base.Bounds().Dx() > 8 && base.Bounds().Dy() > 8 {
 			next := image.NewGray(image.Rect(0, 0, (base.Bounds().Dx()+1)/2, (base.Bounds().Dy()+1)/2))
 			for y := 0; y < next.Bounds().Dy(); y++ {
@@ -96,7 +111,7 @@ var filmFaces = sync.OnceValue(func() map[string]*atlasFace {
 
 // cjkEnabled gates the optional Chinese face. It is off until a language that
 // needs it is selected, so a battle or a menu in English or Ukrainian never
-// decodes the CJK atlases or pays for their mipmaps.
+// decodes the cjk atlases or pays for their mipmaps.
 var cjkEnabled atomic.Bool
 
 // cjkReady reports whether the Chinese atlases can be read. An embedded build
@@ -134,7 +149,7 @@ func CJKError() error {
 }
 
 // cjkFaces is the base pair with the Chinese additions merged in, built once
-// on first use. The CJK atlas carries every Glyph it draws, so a key already
+// on first use. The cjk atlas carries every Glyph it draws, so a key already
 // present in the base face keeps the base entry.
 var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 	faces := make(map[string]*atlasFace, 2)

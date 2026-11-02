@@ -558,6 +558,7 @@ func runGameShell(launch, opts Options, cs *contentSet) error {
 	// window lays out at the display's resolution and the preview draws above
 	// the scaled retail canvas, so the minimap keeps its full detail.
 	options.NativeOverlay = &mapsPreviewOverlay{shell: func() *gameShell { return host.shell }}
+	options.NativeOverlay = &globalCJKOverlay{}
 	// A trace of menu play is the player's own session, not a benchmark: it
 	// takes no benchmark lock (a game should not wait on one) and saves
 	// settings as usual. It starts at the first battle.
@@ -1588,7 +1589,7 @@ func (g *gameShell) drawRetailFilmCJKCylindrical(c *client.Client, text string, 
 		return false
 	}
 	if c == nil || !film.CJKReady() {
-		fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
+		fmt.Printf("drawLocalizedFont returned:%s\n", "cjk not ready!")
 		return false
 	}
 	// === 0. 解析字体前缀 ===
