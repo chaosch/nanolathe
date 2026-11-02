@@ -11,7 +11,7 @@ import (
 // sinks, while focus, text and caret remain retained Panel state
 // [07 R-WGT-01 §6].
 func drawTextEditorState(c *client.Client, p *ui.Panel, index int, gad gui.Gadget, r gui.Rect, text string, measure func(string) int, lineStep int, background, caret byte, fill func(x, y, w, h int, color byte), draw func(text string, x, y, width int)) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if c == nil || p == nil || measure == nil || fill == nil || draw == nil {
 		return
 	}

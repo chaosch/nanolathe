@@ -298,8 +298,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	selected := g.windowGadgetFont(p, gad)
 	if gad.Kind == gui.KindLabel && selected != nil {
 		color, _ := g.retailTextPen(p, index, gad)
-		if g.drawRetailFilmCJKCylindrical(
-			c,
+		if c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -315,8 +314,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
-		if g.drawRetailFilmCJKCylindrical(
-			c,
+		if c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -335,8 +333,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	measure, lineStep := g.retailTextMetrics(selected)
 	if gad.Kind == gui.KindButton {
-		if g.drawRetailFilmCJKCylindrical(
-			c,
+		if c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -351,8 +348,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	if gad.Kind == gui.KindTextBox {
-		if g.drawRetailFilmCJKCylindrical(
-			c,
+		if c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -418,8 +414,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		}
 		return
 	}
-	if g.drawRetailFilmCJKCylindrical(
-		c,
+	if c.DrawRetailFilmCJKCylindrical(
 		retailGadgetText(p, index, gad),
 		int(r.X),
 		int(r.Y),
@@ -533,7 +528,7 @@ func (g *gameShell) retailTextMetrics(selected *formats.FNT) (measure func(strin
 // with the width limit dropped (`maxW = -1`) and the selected record's FNT —
 // or the common font when the gadget selected none [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y, maxWidth int, color byte, shade int, selected *formats.FNT) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if selected == nil || g.retailGAFTextFont() != nil {
 		g.drawRetailStringLit(c, text, x, y, maxWidth, color, shade)
 		return
@@ -556,7 +551,7 @@ func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y
 // The GAF pen's wrap-or-single-line choice belongs to the other branch and
 // never runs here.
 func (g *gameShell) drawRetailLabelFNT(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT, color byte) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if c == nil || font == nil || text == "" {
 		return
 	}
@@ -595,7 +590,7 @@ func retailLabelPenX(_ *gui.Window, gad gui.Gadget, r gui.Rect, textWidth int) i
 // `shade` (the label's live colour word); the FNT fallback draws in that word
 // raw [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, color byte, shade int) {
-	printDebug(text)
+	c.PrintDebug(text)
 	measure, metric, ok := g.retailLabelTextMetrics()
 	if c == nil || !ok || text == "" {
 		return
@@ -634,7 +629,6 @@ func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Ga
 // label width `w`, so a zero-width label draws nothing; on the FNT fallback
 // the limit is dropped.
 func drawRetailLabelLines(window *gui.Window, gad gui.Gadget, r gui.Rect, text string, measure func(string) int, metric int, draw func(line string, x, y int)) {
-	printDebug(text)
 	x, y := retailLabelPenX(window, gad, r, measure(text)), int(r.Y)
 	if 2*metric < int(r.H)-1 {
 		for _, line := range retailLabelWrapLines(text, measure, int(r.W), int(r.H), metric+2) {

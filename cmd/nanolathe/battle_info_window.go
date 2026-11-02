@@ -309,11 +309,11 @@ func (h *retailBattleHUD) drawBattleInfoWindow(c *client.Client, b *battleSessio
 //     runs only for a label taller than two metrics, which no appended row
 //     (height 15) is.
 func (h *retailBattleHUD) drawBattleInfoLabel(c *client.Client, window *gui.Window, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, clip gui.Rect) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if h == nil || c == nil || window == nil || text == "" {
 		return
 	}
-	if h.shell.drawRetailFilmCJKCylindrical(c, text, int(r.X), int(r.Y), int(r.W), int(r.H), h.guiColor(byte(gad.ColorF)), gad.Attribs) {
+	if c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y), int(r.W), int(r.H), h.guiColor(byte(gad.ColorF)), gad.Attribs) {
 		return
 	}
 	if window.FontRecord(gad.FontNumber) != gui.NoFontRecord {

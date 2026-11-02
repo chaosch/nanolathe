@@ -1463,5 +1463,15 @@
   "rendered": "渲染",
   "reclaim": "回收",
   "{#} of {#} community maps": "\\s12社区地图中的\\n{}/{}",
-  "{#} community maps": "\\s12共{}张社区地图"
+  "{#} community maps": "\\s12共{}张社区地图",
+
+  "Standby": "待机中",
+  "Nanolathing": "纳米浇筑",
+  "Under construction": "建造中",
+  "Produces Vehicles": "生产战车",
+  "Vehicle Plant {}": "战车工厂：{}",
+  "Vehicle Plant": "战车工厂",
+  "Cost": "造价",
+  "Statistics": "统计信息",
+  "Max Velocity": "最高速度"
 }

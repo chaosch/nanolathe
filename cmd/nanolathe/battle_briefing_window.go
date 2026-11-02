@@ -188,10 +188,10 @@ func (h *retailBattleHUD) drawBattleBriefingText(c *client.Client, b *battleSess
 // width, so nothing here truncates: the wrapper is what keeps a line inside
 // the region [07 R-HUD-03 §10].
 func (h *retailBattleHUD) drawBattleBriefingLine(c *client.Client, text string, x, y int, color byte) {
-	printDebug(text)
 	if c == nil || text == "" {
 		return
 	}
+	c.PrintDebug()
 	if h.info.briefingFont != nil {
 		width, _ := c.Size()
 		c.UITextWidth(h.info.briefingFont, text, x, y, width-x, color)

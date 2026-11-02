@@ -270,7 +270,7 @@ func (h *retailBattleHUD) drawGUIWindowState(c *client.Client, window *gui.Windo
 					if h.modalFont != nil {
 						h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					} else {
-						if h.shell.drawRetailFilmCJKCylindrical(c, text, x, y, width, int(clip.H), 0, 2) {
+						if c.DrawRetailFilmCJKCylindrical(text, x, y, width, int(clip.H), 0, 2) {
 							return
 						}
 						c.UITextWidthClipped(fallback, text, x, y, width, color, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
@@ -328,7 +328,7 @@ func (h *retailBattleHUD) initializeModalLabels(window *gui.Window) {
 // FNT colour is raw palette index 0: the label's colour word is the pen mode
 // and the foreground, the builder zeroes it, and no battle modal writes it.
 func (h *retailBattleHUD) drawModalLabelGAF(c *client.Client, window *gui.Window, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, common *formats.FNT) {
-	printDebug(text)
+	c.PrintDebug(text)
 	measure, metric, ok := retailLabelFaceMetrics(h.modalFontSmall, common)
 	if c == nil || !ok || text == "" {
 		return
@@ -361,7 +361,7 @@ func retailBattleButtonText(gad gui.Gadget, panel *ui.Panel, index, stage int) s
 // Each window keeps its private-surface clip for every GAF glyph; the FNT path
 // retains the pen's no-width-limit fallback [03 R-FONT-01 §6].
 func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, textWidth, metric int, flash uint16) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if c == nil || text == "" {
 		return
 	}
@@ -417,7 +417,7 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 		draw(suffix, x+measure(letter), color)
 	} else {
 		//text = text + "(" + text[key:key+1] + ")"
-		h.shell.drawRetailFilmCJKCylindrical(c, text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), 0, uint32(AlignCenter))
+		c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), 0, 2)
 		//h.shell.drawRetailFilmCJKCylindrical(c, "("+text[key:key+1]+")", int(clip.W), y, int(clip.W), retailGAFBaselineHeight(h.modalFont), 0, 0)
 
 	}
@@ -481,7 +481,7 @@ func (h *retailBattleHUD) modalGadgetArtFrames(gad gui.Gadget, page *formats.GAF
 // window surface bounds it, and no stock modal window authors a font record,
 // so nothing reaches this path with a caption wider than its window.
 func (h *retailBattleHUD) drawModalLabelFNT(c *client.Client, window *gui.Window, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT) {
-	printDebug(text)
+	c.PrintDebug(text)
 	if c == nil || window == nil || font == nil || text == "" {
 		return
 	}
