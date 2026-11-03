@@ -3,8 +3,9 @@ package film
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"image"
-	"image/draw"
 	"image/png"
 	"sync"
 	"sync/atomic"
@@ -63,7 +64,30 @@ func loadAtlasFace(name string) *atlasFace {
 		// A transparent border prevents neighbouring glyphs from bleeding
 		// into the filtered edge. Mips preserve coverage in small captions.
 		base := image.NewGray(image.Rect(0, 0, g.W+4, g.H+4))
-		draw.Draw(base, image.Rect(2, 2, g.W+2, g.H+2), atlas, image.Pt(g.X, g.Y), draw.Src)
+		ab := atlas.Bounds()
+		for ty := 0; ty < g.H; ty++ {
+			for tx := 0; tx < g.W; tx++ {
+				sx, sy := g.X+tx, g.Y+ty
+				if sx < ab.Min.X || sx >= ab.Max.X || sy < ab.Min.Y || sy >= ab.Max.Y {
+					continue
+				}
+				r, gg, bl, a := atlas.At(sx, sy).RGBA()
+				if a == 0 {
+					continue // 透明保持 0
+				}
+				// 纯黑描边（Python OUTLINE_COLOR=(0,0,0)）标记为 1，与透明(0)区分
+				if r < 8*257 && gg < 8*257 && bl < 8*257 {
+					base.Pix[(ty+2)*base.Stride+(tx+2)] = 1
+					continue
+				}
+				// 正常字形：NTSC 灰度
+				gray := uint8((int(r>>8)*299 + int(gg>>8)*587 + int(bl>>8)*114) / 1000)
+				if gray == 0 {
+					gray = 1 // 避免和透明撞
+				}
+				base.Pix[(ty+2)*base.Stride+(tx+2)] = gray
+			}
+		}
 		g.Levels = append(g.Levels, base)
 		for base.Bounds().Dx() > 8 && base.Bounds().Dy() > 8 {
 			next := image.NewGray(image.Rect(0, 0, (base.Bounds().Dx()+1)/2, (base.Bounds().Dy()+1)/2))
@@ -137,24 +161,38 @@ func CJKError() error {
 // on first use. The CJK atlas carries every Glyph it draws, so a key already
 // present in the base face keeps the base entry.
 var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
-	faces := make(map[string]*atlasFace, 2)
-	for _, name := range []string{"display", "body"} {
-		base := filmFaces()[name]
-		cjk := loadAtlasFace(name + "-cjk")
-		merged := &atlasFace{
-			Cap:     base.Cap,
-			Glyphs:  make(map[string]*atlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
-			Kerning: base.Kerning,
-		}
-		for k, g := range base.Glyphs {
-			merged.Glyphs[k] = g
-		}
-		for k, g := range cjk.Glyphs {
-			if _, ok := merged.Glyphs[k]; !ok {
+	faces := make(map[string]*atlasFace)
+	all := filmFaces()
+	for _, name := range []string{"display", "body", "large", "medium", "normal", "small", "title"} {
+		cjk := loadAtlasFace(i18n.Language() + "-" + name + "-cjk")
+		base := all[name]
+
+		switch {
+		case cjk == nil && base == nil:
+			fmt.Printf("WARN: face %q has neither cjk nor base atlas, skipped\n", name)
+			continue
+		case cjk == nil:
+			// 只有基础面：直接用
+			faces[name] = base
+		case base == nil:
+			// 只有 CJK 面：你的 chinese-*-cjk 已含完整字形集，直接当完整面用
+			faces[name] = cjk
+		default:
+			merged := &atlasFace{
+				Cap:     base.Cap,
+				Glyphs:  make(map[string]*atlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
+				Kerning: base.Kerning,
+			}
+			for k, g := range base.Glyphs {
 				merged.Glyphs[k] = g
 			}
+			for k, g := range cjk.Glyphs {
+				if _, ok := merged.Glyphs[k]; !ok {
+					merged.Glyphs[k] = g
+				}
+			}
+			faces[name] = merged
 		}
-		faces[name] = merged
 	}
 	return faces
 })
