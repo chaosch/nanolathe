@@ -96,7 +96,7 @@ func PrintStackTrace() {
 		}
 	}
 }
-func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) bool {
+func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
 	if cjkCache == nil {
 		cjkCache = make(map[glyphCacheKey]*cachedGlyph)
 	}
@@ -105,22 +105,22 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	}
 	if len(text) == 0 {
 		c.PrintDebug("text is empty")
-		return false
+		return 0, false
 	}
 	if i18n.Language() != "chinese" {
 		c.PrintDebug("not chinese interface!")
-		return false
+		return 0, false
 	}
 	tr := ""
 	if tr = i18n.T(text); tr == text {
 		if _, exists := printed[text]; !exists {
 			c.PrintDebugInternal("translate text not found!", text)
 		}
-		return false
+		return 0, false
 	}
 	if c == nil || !film.CJKReady() {
 		fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
-		return false
+		return 0, false
 	}
 	// === 0. 解析字体前缀 ===
 	faceName := "display"
@@ -140,7 +140,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	face := film.TextFace(faceName)
 	if face == nil || face.Cap <= 0 {
 		c.PrintDebug("input error!")
-		return false
+		return 0, false
 	}
 
 	// 调色板范围设定 (64是亮黄，72是暗黄，79是描边)
@@ -220,6 +220,8 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	currentLineY := baselineY + paddingY
 	curSize := defaultSize
 
+	maxLineWidth := 0.0
+
 	for _, line := range lines {
 		var lineW float64
 		// 为了正确计算居中，先遍历一次获取本行最终的 curSize（如果行内有 \s 控制符）
@@ -229,11 +231,17 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				lineSize = tk.size
 			}
 			sz := lineSize
-			if tk.rn < 128 {
-				lineW += float64(sz/2 + 1)
+			// 修改 1：行宽计算，一视同仁，按字体实际的 advance 宽度算。
+			// 既然图集已经把英文做成了半角比例，不能再用 sz+1 强塞方块宽度。
+			glyph, _ := face.Glyph(tk.rn)
+			if glyph != nil {
+				lineW += glyph.Advance * float64(sz) / face.Cap
 			} else {
 				lineW += float64(sz + 1)
 			}
+		}
+		if lineW > maxLineWidth {
+			maxLineWidth = lineW
 		}
 
 		cursorX := float64(x)
@@ -262,25 +270,16 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 
 			glyph, _ := face.Glyph(rn)
 			if glyph == nil || len(glyph.Levels) == 0 {
-				if rn < 128 {
-					cursorX += float64(size/2 + 1)
-				} else {
-					cursorX += float64(size + 1)
-				}
+				cursorX += float64(size/2 + 1)
 				continue
 			}
 			srcMask := glyph.Levels[0]
 			b := srcMask.Bounds()
 			if b.Empty() {
-				if rn < 128 {
-					cursorX += float64(size/2 + 1)
-				} else {
-					cursorX += float64(size + 1)
-				}
+				cursorX += float64(size + 1)
 				continue
 			}
 
-			isASCII := rn < 128
 			cacheKey := glyphCacheKey{rn: rn, size: size, face: faceName}
 			cached, exists := cjkCache[cacheKey]
 
@@ -288,16 +287,11 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				origW := float64(b.Dx())
 				origH := float64(b.Dy())
 
+				// 修改 2：按图集原本的长宽比例缩放，不再针对 ASCII 做强硬截断。
 				scale := float64(size) / 110.0
 				w := int(origW * scale)
 				h := int(origH * scale)
 
-				if isASCII {
-					w = size / 2
-					if h > size {
-						h = size
-					}
-				}
 				if w < 1 {
 					w = 1
 				}
@@ -370,20 +364,13 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			}
 
 			if cached == nil || cached.frame == nil {
-				if rn < 128 {
-					cursorX += float64(size/2 + 1)
-				} else {
-					cursorX += float64(size + 1)
-				}
+				cursorX += float64(size + 1)
 				continue
 			}
 
-			startY := currentLineY + (size-int(cached.frame.Height))/2
-			if !isASCII {
-				startY += 1
-			} else {
-				startY += 2
-			}
+			// 修改 3：垂直定位一视同仁。因为 Python 端所有字符都在统一基线上切图并留有正确的上下空白，
+			// 所以这里不再对 y 轴进行居中偏移，直接顺着 currentLineY 画下去。
+			startY := currentLineY
 
 			sprite := drawlist.Sprite{
 				Frame: cached.frame, X: int32(cursorX - 1), Y: int32(startY - 1),
@@ -392,11 +379,9 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			}
 			c.List().RecordSprite(sprite)
 
-			if rn < 128 {
-				cursorX += float64(size/2 + 1)
-			} else {
-				cursorX += float64(size + 1)
-			}
+			// 修改 4：水平推进一视同仁，按图块物理宽度推进
+			cursorX += float64(cached.frame.Width) - 2 // 减去 padding 恢复原本的视觉前进量
+
 		}
 
 		// ★ 核心：渲染完这一行后，直接按本行最后生效的字号计算行距，推挤下一行
@@ -406,11 +391,43 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		}
 		currentLineY += lineStep
 	}
-	return true
+	return int(maxLineWidth + 0.5), true
 }
 
 // DrawRetailFilmCJKCylindrical keeps the original signature.
-func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) bool {
-	ok := c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
-	return ok
+func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
+}
+
+// fntGlyphFrame turns one FNT glyph into a GAF frame the keyed blitter can
+// draw. Bits are one bit per texel; ink becomes the GAF frame's opaque pixel,
+// everything else stays transparent.
+func (c *Client) fntGlyphFrame(fnt *formats.FNT, code byte) *formats.GAFFrame {
+	if fnt == nil || code < fnt.FirstCode {
+		return nil
+	}
+	idx := int(code) - int(fnt.FirstCode)
+	if idx < 0 || idx >= len(fnt.Glyphs) || fnt.Glyphs[idx] == nil {
+		return nil
+	}
+	g := fnt.Glyphs[idx]
+	if g.Width == 0 || g.Height == 0 {
+		return nil
+	}
+	w, h := int(g.Width), int(g.Height)
+	pixels := make([]byte, w*h)
+	transparent := make([]bool, w*h)
+	stride := (w + 7) / 8
+	ink := c.GUIColor(15) // 白色，或你的 UI 前景索引
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := y*w + x
+			if g.Bits[y*stride+x/8]&(1<<(7-uint(x%8))) != 0 {
+				pixels[i] = ink
+			} else {
+				transparent[i] = true
+			}
+		}
+	}
+	return &formats.GAFFrame{Width: uint16(w), Height: uint16(h), Pixels: pixels, Transparent: transparent}
 }
