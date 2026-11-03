@@ -184,7 +184,7 @@ func (c *Client) UITextWidth(fnt *formats.FNT, text string, x, y, maxWidth int, 
 	// controlHeight 用 fnt.Height（行高），attribs 按调用方传；
 	// UITextWidth 没有 attribs，默认 0（左对齐）。
 	height := int(fnt.Height)
-	if drawn := c.DrawRetailFilmCJK(text, x, y, maxWidth, height, color, 0); drawn {
+	if _, drawn := c.DrawRetailFilmCJK(text, x, y, maxWidth, height, color, 0); drawn {
 		return
 	}
 	// 翻译缺失或字体未就绪时落回 GAF，保持原行为。

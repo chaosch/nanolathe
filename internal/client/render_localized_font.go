@@ -231,11 +231,8 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				lineSize = tk.size
 			}
 			sz := lineSize
-			// 修改 1：行宽计算，一视同仁，按字体实际的 advance 宽度算。
-			// 既然图集已经把英文做成了半角比例，不能再用 sz+1 强塞方块宽度。
-			glyph, _ := face.Glyph(tk.rn)
-			if glyph != nil {
-				lineW += glyph.Advance * float64(sz) / face.Cap
+			if tk.rn < 128 {
+				lineW += float64(sz/2 + 1)
 			} else {
 				lineW += float64(sz + 1)
 			}
@@ -270,16 +267,25 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 
 			glyph, _ := face.Glyph(rn)
 			if glyph == nil || len(glyph.Levels) == 0 {
-				cursorX += float64(size/2 + 1)
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
+				} else {
+					cursorX += float64(size + 1)
+				}
 				continue
 			}
 			srcMask := glyph.Levels[0]
 			b := srcMask.Bounds()
 			if b.Empty() {
-				cursorX += float64(size + 1)
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
+				} else {
+					cursorX += float64(size + 1)
+				}
 				continue
 			}
 
+			isASCII := rn < 128
 			cacheKey := glyphCacheKey{rn: rn, size: size, face: faceName}
 			cached, exists := cjkCache[cacheKey]
 
@@ -287,90 +293,180 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				origW := float64(b.Dx())
 				origH := float64(b.Dy())
 
-				// 修改 2：按图集原本的长宽比例缩放，不再针对 ASCII 做强硬截断。
 				scale := float64(size) / 110.0
 				w := int(origW * scale)
 				h := int(origH * scale)
 
-				if w < 1 {
-					w = 1
-				}
-				if h < 1 {
-					h = 1
-				}
-
-				paddedW := w + 2
-				paddedH := h + 2
-
-				pixels := make([]byte, paddedW*paddedH)
-				transparent := make([]bool, paddedW*paddedH)
-				for j := range transparent {
-					transparent[j] = true
-				}
-
-				shape := make([]byte, paddedW*paddedH)
-				for ty := 0; ty < h; ty++ {
-					for tx := 0; tx < w; tx++ {
-						x0 := b.Min.X + int(float64(tx)*origW/float64(w))
-						y0 := b.Min.Y + int(float64(ty)*origH/float64(h))
-						if x0 >= b.Max.X {
-							x0 = b.Max.X - 1
-						}
-						if y0 >= b.Max.Y {
-							y0 = b.Max.Y - 1
-						}
-						shape[(ty+1)*paddedW+(tx+1)] = srcMask.GrayAt(x0, y0).Y
+				if isASCII {
+					w = size / 2
+					if h > size {
+						h = size
 					}
 				}
 
-				for ty := 0; ty < paddedH; ty++ {
-					for tx := 0; tx < paddedW; tx++ {
-						idx := ty*paddedW + tx
-						grayVal := shape[idx]
+				if !isASCII {
+					if w < 1 {
+						w = 1
+					}
+					if h < 1 {
+						h = 1
+					}
 
-						if grayVal > 0 {
-							transparent[idx] = false
-							ratio := float64(grayVal) / 255.0
-							colorRange := float64(COLOR_BASE_DARK - COLOR_BASE_BRIGHT)
-							palIdx := float64(COLOR_BASE_BRIGHT) + (1.0-ratio)*colorRange
-							pixels[idx] = byte(palIdx)
-						} else {
-							isOutline := false
-							for oy := -1; oy <= 1; oy++ {
-								for ox := -1; ox <= 1; ox++ {
-									nx, ny := tx+ox, ty+oy
-									if nx >= 0 && nx < paddedW && ny >= 0 && ny < paddedH {
-										if shape[ny*paddedW+nx] > 0 {
-											isOutline = true
+					paddedW := w + 2
+					paddedH := h + 2
+
+					pixels := make([]byte, paddedW*paddedH)
+					transparent := make([]bool, paddedW*paddedH)
+					for j := range transparent {
+						transparent[j] = true
+					}
+
+					shape := make([]byte, paddedW*paddedH)
+					for ty := 0; ty < h; ty++ {
+						for tx := 0; tx < w; tx++ {
+							x0 := b.Min.X + int(float64(tx)*origW/float64(w))
+							y0 := b.Min.Y + int(float64(ty)*origH/float64(h))
+							if x0 >= b.Max.X {
+								x0 = b.Max.X - 1
+							}
+							if y0 >= b.Max.Y {
+								y0 = b.Max.Y - 1
+							}
+							shape[(ty+1)*paddedW+(tx+1)] = srcMask.GrayAt(x0, y0).Y
+						}
+					}
+
+					for ty := 0; ty < paddedH; ty++ {
+						for tx := 0; tx < paddedW; tx++ {
+							idx := ty*paddedW + tx
+							grayVal := shape[idx]
+
+							if grayVal > 0 {
+								transparent[idx] = false
+								ratio := float64(grayVal) / 255.0
+								colorRange := float64(COLOR_BASE_DARK - COLOR_BASE_BRIGHT)
+								palIdx := float64(COLOR_BASE_BRIGHT) + (1.0-ratio)*colorRange
+								pixels[idx] = byte(palIdx)
+							} else {
+								isOutline := false
+								for oy := -1; oy <= 1; oy++ {
+									for ox := -1; ox <= 1; ox++ {
+										nx, ny := tx+ox, ty+oy
+										if nx >= 0 && nx < paddedW && ny >= 0 && ny < paddedH {
+											if shape[ny*paddedW+nx] > 0 {
+												isOutline = true
+											}
 										}
 									}
 								}
-							}
-							if isOutline {
-								pixels[idx] = COLOR_EDGE
-								transparent[idx] = false
+								if isOutline {
+									pixels[idx] = COLOR_EDGE
+									transparent[idx] = false
+								}
 							}
 						}
 					}
-				}
 
-				cached = &cachedGlyph{
-					frame: &formats.GAFFrame{
-						Width: uint16(paddedW), Height: uint16(paddedH),
-						Pixels: pixels, Transparent: transparent,
-					},
+					cached = &cachedGlyph{
+						frame: &formats.GAFFrame{
+							Width: uint16(paddedW), Height: uint16(paddedH),
+							Pixels: pixels, Transparent: transparent,
+						},
+					}
+				} else {
+					// ASCII：优先用 developerFont，然后 GAF，最后 messageFNT
+					var frame *formats.GAFFrame
+
+					//// 1. 首选 developerFont（完整、规范）
+					//if c.developerFont != nil && int(rn) >= int(c.developerFont.FirstCode) {
+					//	idx := int(rn) - int(c.developerFont.FirstCode)
+					//	if idx >= 0 && idx < len(c.developerFont.Glyphs) {
+					//		if g := c.developerFont.Glyphs[idx]; g != nil && g.Width > 0 && g.Height > 0 {
+					//			fw, fh := int(g.Width), int(g.Height)
+					//			pixels := make([]byte, fw*fh)
+					//			transparent := make([]bool, fw*fh)
+					//			ink := c.GUIColor(15) // 白色，或者 250
+					//			stride := (fw + 7) / 8
+					//			for y := 0; y < fh; y++ {
+					//				for x := 0; x < fw; x++ {
+					//					i := y*fw + x
+					//					bi := y*stride + x/8
+					//					if bi < len(g.Bits) && g.Bits[bi]&(1<<(7-uint(x%8))) != 0 {
+					//						pixels[i] = ink
+					//					} else {
+					//						transparent[i] = true
+					//					}
+					//				}
+					//			}
+					//			frame = &formats.GAFFrame{
+					//				Width: uint16(fw), Height: uint16(fh),
+					//				Pixels: pixels, Transparent: transparent,
+					//			}
+					//		}
+					//	}
+					//}
+
+					// 2. 其次 GAF
+					if frame == nil && c.messageGAF != nil && len(c.messageGAF.Frames) > 0 && int(rn) < len(c.messageGAF.Frames) {
+						if f := c.messageGAF.Frames[rn].Frame; f != nil {
+							frame = f
+						}
+					}
+
+					// 3. 再其次 messageFNT
+					if frame == nil && c.messageFNT != nil {
+						idx := int(rn) - int(c.messageFNT.FirstCode)
+						if idx >= 0 && idx < len(c.messageFNT.Glyphs) {
+							if g := c.messageFNT.Glyphs[idx]; g != nil && g.Width > 0 && g.Height > 0 {
+								fw, fh := int(g.Width), int(g.Height)
+								pixels := make([]byte, fw*fh)
+								transparent := make([]bool, fw*fh)
+								ink := c.GUIColor(15)
+								stride := (fw + 7) / 8
+								for y := 0; y < fh; y++ {
+									for x := 0; x < fw; x++ {
+										i := y*fw + x
+										bi := y*stride + x/8
+										if bi < len(g.Bits) && g.Bits[bi]&(1<<(7-uint(x%8))) != 0 {
+											pixels[i] = ink
+										} else {
+											transparent[i] = true
+										}
+									}
+								}
+								frame = &formats.GAFFrame{
+									Width: uint16(fw), Height: uint16(fh),
+									Pixels: pixels, Transparent: transparent,
+								}
+							}
+						}
+					}
+
+					if frame != nil {
+						cached = &cachedGlyph{frame: frame}
+					}
 				}
-				cjkCache[cacheKey] = cached
+				if cached.frame != nil {
+					cjkCache[cacheKey] = cached
+				}
 			}
 
 			if cached == nil || cached.frame == nil {
-				cursorX += float64(size + 1)
+				if rn < 128 {
+					cursorX += float64(size/2 + 1)
+
+				} else {
+					cursorX += float64(size + 1)
+				}
 				continue
 			}
 
-			// 修改 3：垂直定位一视同仁。因为 Python 端所有字符都在统一基线上切图并留有正确的上下空白，
-			// 所以这里不再对 y 轴进行居中偏移，直接顺着 currentLineY 画下去。
-			startY := currentLineY
+			startY := currentLineY + (size-int(cached.frame.Height))/2
+			if !isASCII {
+				startY += 1
+			} else {
+				startY += 2
+			}
 
 			sprite := drawlist.Sprite{
 				Frame: cached.frame, X: int32(cursorX - 1), Y: int32(startY - 1),
@@ -379,9 +475,11 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			}
 			c.List().RecordSprite(sprite)
 
-			// 修改 4：水平推进一视同仁，按图块物理宽度推进
-			cursorX += float64(cached.frame.Width) - 2 // 减去 padding 恢复原本的视觉前进量
-
+			if rn < 128 {
+				cursorX += float64(cached.frame.Width)
+			} else {
+				cursorX += float64(size + 1)
+			}
 		}
 
 		// ★ 核心：渲染完这一行后，直接按本行最后生效的字号计算行距，推挤下一行
@@ -397,37 +495,4 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 // DrawRetailFilmCJKCylindrical keeps the original signature.
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
 	return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
-}
-
-// fntGlyphFrame turns one FNT glyph into a GAF frame the keyed blitter can
-// draw. Bits are one bit per texel; ink becomes the GAF frame's opaque pixel,
-// everything else stays transparent.
-func (c *Client) fntGlyphFrame(fnt *formats.FNT, code byte) *formats.GAFFrame {
-	if fnt == nil || code < fnt.FirstCode {
-		return nil
-	}
-	idx := int(code) - int(fnt.FirstCode)
-	if idx < 0 || idx >= len(fnt.Glyphs) || fnt.Glyphs[idx] == nil {
-		return nil
-	}
-	g := fnt.Glyphs[idx]
-	if g.Width == 0 || g.Height == 0 {
-		return nil
-	}
-	w, h := int(g.Width), int(g.Height)
-	pixels := make([]byte, w*h)
-	transparent := make([]bool, w*h)
-	stride := (w + 7) / 8
-	ink := c.GUIColor(15) // 白色，或你的 UI 前景索引
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			i := y*w + x
-			if g.Bits[y*stride+x/8]&(1<<(7-uint(x%8))) != 0 {
-				pixels[i] = ink
-			} else {
-				transparent[i] = true
-			}
-		}
-	}
-	return &formats.GAFFrame{Width: uint16(w), Height: uint16(h), Pixels: pixels, Transparent: transparent}
 }

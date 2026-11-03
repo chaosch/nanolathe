@@ -298,7 +298,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	selected := g.windowGadgetFont(p, gad)
 	if gad.Kind == gui.KindLabel && selected != nil {
 		color, _ := g.retailTextPen(p, index, gad)
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -306,7 +306,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 			int(r.H), // <--- 新增：传入控件高度
 			palColor,
 			gad.Attribs,
-		) {
+		); ok {
 			return
 		}
 		g.drawRetailLabelFNT(c, p, gad, r, text, selected, color)
@@ -314,7 +314,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -322,7 +322,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 			int(r.H), // <--- 新增：传入控件高度
 			palColor,
 			gad.Attribs,
-		) {
+		); ok {
 			return
 		}
 		g.drawRetailLabelGAF(c, p, gad, r, text, color, shade)
@@ -333,7 +333,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	measure, lineStep := g.retailTextMetrics(selected)
 	if gad.Kind == gui.KindButton {
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -341,14 +341,14 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 			int(r.H), // <--- 新增：传入控件高度
 			palColor,
 			gad.Attribs,
-		) {
+		); ok {
 			return
 		}
 		g.drawRetailButtonCaption(c, p, index, gad, r, text, selected, measure, lineStep)
 		return
 	}
 	if gad.Kind == gui.KindTextBox {
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
@@ -356,7 +356,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 			int(r.H), // <--- 新增：传入控件高度
 			palColor,
 			gad.Attribs,
-		) {
+		); ok {
 			return
 		}
 		color, shade := g.retailTextPen(p, index, gad)
@@ -414,7 +414,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		}
 		return
 	}
-	if c.DrawRetailFilmCJKCylindrical(
+	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		retailGadgetText(p, index, gad),
 		int(r.X),
 		int(r.Y),
@@ -422,7 +422,7 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		int(r.H), // <--- 新增：传入控件高度
 		palColor,
 		gad.Attribs,
-	) {
+	); ok {
 		return
 	}
 	g.drawRetailStringSelected(c, text, x, y, maxWidth, color, shade, selected)

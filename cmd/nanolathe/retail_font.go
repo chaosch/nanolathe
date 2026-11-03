@@ -136,12 +136,12 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
-	if c.DrawRetailFilmCJKCylindrical(
+	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
 		0,
 		0,
-	) {
+	); ok {
 		return
 	}
 	for i := 0; i < len(text); i++ {
@@ -182,12 +182,12 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 	baselineHeight := retailGAFBaselineHeight(font)
 	remaining := maxWidth
 
-	if c.DrawRetailFilmCJKCylindrical(
+	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
 		0,
 		2,
-	) {
+	); ok {
 		return
 	}
 
@@ -237,24 +237,24 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		if g.assets != nil {
 			pal = g.assets.pal
 		}
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			text,
 			x, y, maxWidth, int(g.font.Height),
 			0,
 			0,
-		) {
+		); ok {
 			return
 		}
 		g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
 		return
 	}
 	if g != nil && g.font != nil {
-		if c.DrawRetailFilmCJKCylindrical(
+		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			text,
 			x, y, maxWidth, int(g.font.Height),
 			0,
 			0,
-		) {
+		); ok {
 			return
 		}
 		c.UITextWidth(g.font, text, x, y, maxWidth, fntColor)

@@ -132,7 +132,7 @@ func (c *Client) drawMessageGAFText(text string, x, y int) {
 	if f := glyph('I'); f != nil {
 		baseline = int(f.Height)
 		c.PrintDebug(f.Height)
-		if c.DrawRetailFilmCJKCylindrical(text, 200, 200, -1, int(f.Height)+10, 0, 0) {
+		if _, ok := c.DrawRetailFilmCJKCylindrical(text, 200, 200, -1, int(f.Height)+10, 0, 0); ok {
 			return
 		}
 	}
