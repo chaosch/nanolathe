@@ -421,7 +421,11 @@ the target; `GlideTo`/`StepGlide` are the message-source and next-unit glides;
 jump family's table; `StoreBookmark`/`RecallBookmark` are Ctrl+F5..F8 and
 F5..F8 `[07 R-CAM-01 §12]` `[07 R-CAM-01 §14]`. The `n` and F3 glide
 writers preserve the tracked object; its next follow pass can replace the
-desired origin written by the glide `[07 R-CAM-01 §12]`.
+desired origin written by the glide `[07 R-CAM-01 §12]`. The non-retail
+pans — middle-drag and trackpad pan — call `ClearFollow` whenever the
+player pans, as the scroll pass does, so a Ctrl+C or `t` follow never pulls a
+panned view back (issue #183). Middle-drag is pointer input, so it also
+re-latches the follow sample as the drag-scroll entry does.
 
 The `t`/`T` input adapter scans selected slots relative to the tracked slot,
 even when that unit has been deselected. Its inclusive owner range comes
@@ -6285,6 +6289,20 @@ and carries the terrain-derived click height raised to sea level when needed.
 All mutable terrain and feature reads occur through a read-only session query;
 the host owns only the deterministic scan and command substitution
 [community patch engine CP-CON-6][I6].
+
+**Occupied deposits (Nanolathe host policy).** The published patch counts every
+metal cell regardless of what stands on it, so a deposit already under a
+building pulls the snap onto an off-centre or overlapping site. Nanolathe's
+extractor count skips a footprint cell whose ground occupant is a live
+building-class unit (finished or a nanoframe) that the commanding player owns
+or can currently see by the ordinary unit visibility predicate [03 §3.2]. A
+mobile unit on a deposit does not hide it, since it moves or is cleared from a
+construction site, and an unseen enemy structure does not either, so the
+cursor never reveals a building through fog. The rule changes only the
+position the order carries: placement validation, geothermal and reclaim snap,
+and the computer players are unchanged, and it reads the same read-only
+session query, so no tick state or RNG stream is touched. It applies wherever
+the feature table enables click snap; Strict 3.1 leaves click snap off.
 
 When construction kickout is enabled, the placement rectangle follows the
 patch's two drawers. `communityBuildSnap` reports when the patch's click-snap
