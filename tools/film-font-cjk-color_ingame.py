@@ -11,13 +11,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # ==========================================
 # 1. 强制写死的配置 (输入输出)
 # ==========================================
-# 默认大字体源（用于 small/normal 等带光影的字）
 SOURCE_FONT = r"..\..\NotoSansSC.ttf"
-
-# ★ 新增：tiny 专用 16px 点阵字体
-# PIXEL_FONT_16 = r"..\..\ZhengGeDianHei-16.ttf"
-Pixel_Font_12 = r"..\..\ZLabsPixel_12px_M_CN.ttf"
-PIXEL_FONT_16 = r"..\..\ZhengGeDianHei-16.ttf"
+Pixel_Font_12 = r"..\..\ChangBanDianSong-16-SC.ttf"
+PIXEL_FONT_16 = r"..\..\ChangBanDianSong-16-SC.ttf"
 
 CATALOG_JSON = r"..\internal\i18n\locales\chinese.json"
 OUT = Path(__file__).resolve().parent.parent / "internal/film/assets"
@@ -26,12 +22,8 @@ WIDTH = 2048
 
 OLD_FACE = {}
 NEW_FACE = {
-    "tiny": {"em": 12, "weight": 800, "scale": 1,"fontFile": r"..\..\ZLabsPixel_12px_M_CN.ttf"},
-    "small":    {"em": 16, "weight": 800, "scale": 1, "fontFile": r"..\..\ZhengGeDianHei-16.ttf"},
-    #     "normal":   {"em": 28, "weight": 800, "scale": 1},
-    #     "medium":   {"em": 36, "weight": 800, "scale": 1},
-    #     "large":    {"em": 44, "weight": 800, "scale": 1},
-    #     "title":    {"em": 52, "weight": 800, "scale": 1},
+    "tiny":  {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12},
+    "small": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
@@ -53,19 +45,10 @@ OUTLINE_COLOR = (0, 0, 0)
 
 def get_outline_width(em, is_tiny):
     if is_tiny:
-        return 0
-    if em <= 20:
-        return 0
-    elif em <= 30:
         return 1
-    elif em <= 40:
+    if em >= 16:
         return 1
-    elif em <= 50:
-        return 1
-    elif em <= 60:
-        return 1
-    else:
-        return 7
+    return 0
 
 
 def gray_to_palette(gray_val):
@@ -99,33 +82,30 @@ def load_face(source, weight, size):
 
 
 def render_colored_glyph(char, font, w, h, outline_width, is_tiny=False):
-    pad = 0 if is_tiny else max(2, outline_width)
+    # 只有 tiny 没有 pad，small 有 1px pad
+    is_tiny= False
+    pad = 0 if is_tiny else max(2, outline_width) if outline_width > 0 else 0
     cell_w = w + pad * 2
     cell_h = h + pad * 2
 
-    # 1. 提取字形遮罩
+    # 1. 提取字形遮罩（使用原生 16px 渲染）
     base = Image.new('L', (cell_w, cell_h), 0)
     d = ImageDraw.Draw(base)
     d.text((pad, pad), char, font=font, fill=255, anchor="lt")
 
     res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
 
-    # ★ 如果是 tiny：直接输出纯白像素，取消抗锯齿灰边，无描边
+    # ★ tiny：纯白像素，取消抗锯齿，无描边
     if is_tiny:
-        color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
-        px_res = color_layer.load()
+        px_res = res.load()
         px_base = base.load()
-
         for y in range(cell_h):
             for x in range(cell_w):
-                # 如果用 255,255,255 就是纯白；如果是其他 RGB，就填进去
                 if px_base[x, y] > 128:
-                    px_res[x, y] = (255, 255, 255, 255) # 把这里改成你想要的 RGB，例如 (250, 200, 50)
-
-        res.alpha_composite(color_layer)
+                    px_res[x, y] = (255, 255, 255, 255)
         return res
 
-    # --- 以下是普通字号的光照和描边逻辑 ---
+    # --- 以下是普通字号（包含 small）的光照和描边逻辑 ---
     outline = Image.new('L', (cell_w, cell_h), 0)
     do = ImageDraw.Draw(outline)
     r = outline_width
@@ -173,21 +153,19 @@ def render_colored_glyph(char, font, w, h, outline_width, is_tiny=False):
 
 def build(chars, name, target_em, weight, scale, fontFile):
     CAP = 180
-    is_tiny = (target_em < 20)
+    is_tiny = (name == "tiny")
+    # ★ 只要在 NEW_FACE 里配置了独立字体的（tiny、small），都强制用原生尺寸，绝不压缩
+    is_native_size = name in ["tiny", "small"]
 
-    # ★ 核心：按名字选择字体源和描边宽度
-    if is_tiny:
-        outline_width = 0
-        real_em = target_em  # 强制 16px
-    else:
-        outline_width = get_outline_width(target_em, False)
-        real_em = target_em - (outline_width * 2)
+    outline_width = get_outline_width(target_em, is_tiny)
 
-    font_path = fontFile
+    # ★ 强制 real_em = target_em，不要减去描边
+    real_em = target_em
+
     if real_em < 6:
         real_em = 6
 
-    font = load_face(font_path, weight, real_em)
+    font = load_face(fontFile, weight, real_em)
 
     max_h = 0
     max_w = 0
@@ -198,10 +176,10 @@ def build(chars, name, target_em, weight, scale, fontFile):
         if h > max_h: max_h = h
         if w > max_w: max_w = w
 
-    # 大字体防超高逻辑，tiny 不触发
-    while not is_tiny and max_h + outline_width * 2 > target_em and real_em > 6:
+    # ★ 防超高逻辑：对于原生尺寸（点阵），允许它因为加描边变大，绝不缩字号
+    while not is_native_size and max_h + outline_width * 2 > target_em and real_em > 6:
         real_em -= 1
-        font = load_face(font_path, weight, real_em)
+        font = load_face(fontFile, weight, real_em)
         max_h = 0
         max_w = 0
         for char in chars:
@@ -247,7 +225,7 @@ def build(chars, name, target_em, weight, scale, fontFile):
 
     for char, px, py, w, h in rows:
         char_img = render_colored_glyph(char, font, w, h, outline_width, is_tiny=is_tiny)
-        pad = 0 if is_tiny else max(2, outline_width)
+        pad = 0 if is_tiny else max(2, outline_width) if outline_width > 0 else 0
         atlas.paste(char_img, (px - pad, py - pad), char_img)
 
     out_png = OUT / f"{LANGUAGE}-{name}-cjk.png"
@@ -260,11 +238,11 @@ def build(chars, name, target_em, weight, scale, fontFile):
             separators=(",", ":"), ensure_ascii=False
         ) + "\n")
 
-    print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(font_path)}, max_h={max_h}")
+    print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(fontFile)}, max_h={max_h}")
 
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     chars = wanted([CATALOG_JSON])
     for face_name, cfg in ALL_FACE.items():
-        build(chars, face_name, cfg["em"], cfg["weight"], cfg["scale"],cfg["fontFile"])
+        build(chars, face_name, cfg["em"], cfg["weight"], cfg["scale"], cfg["fontFile"])

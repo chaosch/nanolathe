@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {installFilmFonts} from './film.js';
 
-const names = ['display-cjk.json', 'display-cjk.png', 'body-cjk.json', 'body-cjk.png'];
+const names = ['display-cjk.json', 'chinese-display-cjk.png', 'chinese-body-cjk.json', 'body-cjk.png'];
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const deferred = () => {
   let resolve;

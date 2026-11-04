@@ -364,7 +364,9 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 			func(x, y, w, h int, fill byte) { c.UIFillRect(x, y, w, h, fill) },
 			func(text string, x, y, width int) {
 				if selected != nil && g.retailGAFTextFont() == nil {
-					c.UITextWidth(selected, text, x, y, width, color)
+					g.drawRetailLabelFNT(c, p, gad, r, text, selected, color)
+
+					//c.UITextWidth(selected, text, x, y, width, color)
 				} else {
 					g.drawRetailStringLit(c, text, x, y, width, color, shade)
 				}

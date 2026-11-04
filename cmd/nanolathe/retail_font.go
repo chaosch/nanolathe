@@ -239,7 +239,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		}
 		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			text,
-			x, y, maxWidth, int(g.font.Height),
+			x, y, maxWidth, y,
 			0,
 			0,
 		); ok {
@@ -251,8 +251,8 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 	if g != nil && g.font != nil {
 		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			text,
-			x, y, maxWidth, int(g.font.Height),
-			0,
+			x, y, maxWidth, y,
+			fntColor,
 			0,
 		); ok {
 			return

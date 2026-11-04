@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-FILM_CJK = ('display-cjk.json', 'display-cjk.png', 'body-cjk.json', 'body-cjk.png')
+FILM_CJK = ('display-cjk.json', 'chinese-display-cjk.png', 'chinese-body-cjk.json', 'body-cjk.png')
 
 
 def browser_bundle(source: Path, out: Path, build: dict, font_source: Optional[Path] = None) -> str:

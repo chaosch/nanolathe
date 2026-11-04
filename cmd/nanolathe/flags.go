@@ -254,6 +254,10 @@ type Options struct {
 	CPUProfile     string // pprof CPU profile of the --shot compose path
 	MemProfile     string // pprof allocation profile of the --shot compose path
 	ProfileSeconds int    // with --shot, drive the real viewer loop headlessly for this many seconds of battle time before capturing
+
+	//Dir for  film assets like /chinese direction where textface display,body,tiny,small for chinese language .Key-value translations are also stored here such as chinese.json
+	//External atlases in the locale directory take precedence over the embedded assets/.
+	LocalesDir string
 }
 
 // ErrHelp reports that usage was requested and printed.
@@ -721,7 +725,9 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 		fmt.Fprintln(out, err)
 		return opts, err
 	}
+
 	return opts, nil
+
 }
 
 // validateReplayOptions keeps the replay flags to the runs that take them: a

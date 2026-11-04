@@ -1455,5 +1455,9 @@
   "Statistics": "统计信息",
   "Max Velocity": "最高速度",
   "Cloaked": "隐身",
-  "Visible": "可见"
+  "Visible": "可见",
+  "Wind Speed : {#}": "风速：{}",
+  "END": "结束",
+  "Gravity : {#}": "重力：{}"
+
 }

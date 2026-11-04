@@ -1,6 +1,6 @@
 // Optional presentation assets stay pinned to this module's host directory
 // (DESIGN_BROWSER_HOST §4 contract 7), and are requested only by the engine.
-const names = ['display-cjk.json', 'display-cjk.png', 'body-cjk.json', 'body-cjk.png'];
+const names = ['display-cjk.json', 'chinese-display-cjk.png', 'chinese-body-cjk.json', 'body-cjk.png'];
 const hex = bytes => Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
 
 async function fetchFonts(win, base, signal, cache) {

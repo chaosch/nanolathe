@@ -117,6 +117,13 @@ var filmFaces = sync.OnceValue(func() map[string]*atlasFace {
 	}
 	return faces
 })
+var otherFilms = sync.OnceValue(func() map[string]*atlasFace {
+	faces := make(map[string]*atlasFace, 2)
+	for _, name := range []string{"large", "medium", "normal", "small", "title", "tiny"} {
+		faces[name] = loadAtlasFace(name)
+	}
+	return faces
+})
 
 // cjkEnabled gates the optional Chinese face. It is off until a language that
 // needs it is selected, so a battle or a menu in English or Ukrainian never
@@ -164,9 +171,17 @@ var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 	faces := make(map[string]*atlasFace)
 	all := filmFaces()
 	for _, name := range []string{"display", "body", "large", "medium", "normal", "small", "title", "tiny"} {
-		cjk := loadAtlasFace(i18n.Language() + "-" + name + "-cjk")
+		var cjk *atlasFace
+		if i18n.Language() != "english" {
+			cjk = loadAtlasFace(i18n.Language() + "-" + name + "-cjk")
+		} else {
+			if name == "display" || name == "body" {
+				cjk = all[name]
+			} else {
+				cjk = all["body"]
+			}
+		}
 		base := all[name]
-
 		switch {
 		case cjk == nil && base == nil:
 			fmt.Printf("WARN: face %q has neither cjk nor base atlas, skipped\n", name)
@@ -215,4 +230,8 @@ func (f *atlasFace) Glyph(r rune) (*atlasGlyph, rune) {
 		return g, r
 	}
 	return f.Glyphs[" "], ' '
+}
+
+func init() {
+
 }

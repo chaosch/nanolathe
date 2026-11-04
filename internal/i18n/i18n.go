@@ -15,6 +15,8 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -174,7 +176,40 @@ func fill(translation string, parts []string) string {
 }
 
 func load(code string) (*catalog, error) {
-	data, err := locales.ReadFile("locales/" + code + ".json")
+	if localesDir, err := defaultLocalesDir(); err == nil {
+		SetLocalesDir(localesDir)
+	}
+
+	var data []byte
+	var err error
+
+	//fname := filepath.Join(filepath.Join(localesDir, code), code) + ".json"
+	//if code == "english" {
+
+	fname := filepath.Join(code + ".json")
+	//}
+
+	fmt.Println(fname)
+
+	// 优先读文件系统，当 localesDir 被设置
+	if localesDir != "" {
+		currentDir, _ := os.Getwd()
+		path := filepath.Join(currentDir, "internal", "i18n", "locales", fname)
+		data, err = os.ReadFile(path)
+		if err == nil {
+			// 磁盘读取成功，直接解析
+			var entries map[string]string
+			if err := json.Unmarshal(data, &entries); err != nil {
+				return nil, fmt.Errorf("nanolathe: language %q catalog: %v: logical path i18n/locales/%s.json, providers searched [filesystem, embedded], expected a JSON object of strings", code, err, code)
+			}
+			return build(code, entries), nil
+		}
+		// os.ReadFile失败，继续往下走，尝试内嵌
+		fmt.Println(err.Error())
+		fmt.Println(os.Getwd())
+	}
+
+	data, err = locales.ReadFile(fname)
 	if err != nil {
 		return nil, fmt.Errorf("nanolathe: language %q: logical path i18n/locales/%s.json, providers searched [embedded], expected a translation catalog", code, code)
 	}
@@ -229,4 +264,27 @@ func build(code string, entries map[string]string) *catalog {
 		})
 	}
 	return c
+}
+
+var localesDir string
+
+func SetLocalesDir(dir string) bool {
+	localesDir = "locales"
+	if _, err := os.Stat(filepath.Join(dir, Language()+".json")); err != nil {
+		return false
+	}
+	localesDir = dir
+	return true
+}
+
+func defaultLocalesDir() (string, error) {
+	dir := os.Getenv("XDG_DATA_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("nanolathe: locating the locales directory failed: logical path <replays>, providers searched [$XDG_DATA_HOME, $HOME], expected a data directory: %w", err)
+		}
+		dir = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(dir, "nanolathe", "locales"), nil
 }

@@ -44,7 +44,7 @@ class BundleTests(unittest.TestCase):
                 path.mkdir()
             (source / 'index.html').write_text('<link href="style.css"><script src="launcher.js"></script>')
             (source / 'film.js').write_text('authored loader fixture')
-            names = ('display-cjk.json', 'display-cjk.png', 'body-cjk.json', 'body-cjk.png')
+            names = ('display-cjk.json', 'chinese-display-cjk.png', 'chinese-body-cjk.json', 'body-cjk.png')
             for name in names:
                 (fonts / name).write_bytes(('first:' + name).encode())
             build = dict(wasm='same.wasm', runtime='same.js', schema=1)

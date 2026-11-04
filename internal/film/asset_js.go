@@ -22,7 +22,7 @@ var (
 )
 
 // cjkAssets are the four files the host delivers, in any order.
-var cjkAssets = []string{"display-cjk.png", "display-cjk.json", "body-cjk.png", "body-cjk.json"}
+var cjkAssets = []string{"chinese-display-cjk.png", "display-cjk.json", "body-cjk.png", "chinese-body-cjk.json"}
 
 func failCJK(err error) {
 	cjkFailure.Store(&err)

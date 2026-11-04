@@ -2,7 +2,6 @@ package client
 
 import (
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -36,7 +35,7 @@ func (c *Client) PrintDebug(args ...interface{}) {
 		prompt := fmt.Sprintf("debug message: %s:%v\n", fn.Name(), args)
 		if fn != nil {
 			if _, exists := printed[prompt]; !exists {
-				fmt.Printf(prompt)
+				fmt.Printf("%s", prompt)
 				printed[prompt]++
 			}
 		}
@@ -56,7 +55,7 @@ func (c *Client) PrintDebugInternal(args ...interface{}) {
 		prompt := fmt.Sprintf("debug message: %s:%v\n", fn.Name(), args)
 		if fn != nil {
 			if _, exists := printed[prompt]; !exists {
-				fmt.Printf(prompt)
+				fmt.Printf("%s", prompt)
 				printed[prompt]++
 			}
 		}
@@ -89,15 +88,16 @@ func PrintStackTrace() {
 // ============================================================
 type faceTier struct {
 	name string
-	em   int
+	px   int
 }
 
 var faceTiers = []faceTier{
+	{"tiny", 12},
 	{"small", 20},
-	{"normal", 30},
-	{"medium", 40},
-	{"large", 50},
-	{"title", 60},
+	//{"normal", 20},
+	//{"medium", 20},
+	//{"large", 20},
+	//{"title", 20},
 }
 
 func pickTier(targetH int) faceTier {
@@ -105,25 +105,26 @@ func pickTier(targetH int) faceTier {
 		return faceTiers[0]
 	}
 	for _, t := range faceTiers {
-		if t.em >= targetH {
+		if t.px >= targetH {
 			return t
 		}
 	}
-	return faceTiers[len(faceTiers)-1]
+	return faceTiers[len(faceTiers)-2]
 }
 
 func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	real_text := text
 	if printed == nil {
 		printed = make(map[string]int)
 	}
-	if len(text) == 0 {
-		c.PrintDebug("text is empty")
+	if len(real_text) == 0 {
+		c.PrintDebug("real_text is empty")
 		return 0, false
 	}
 	tr := ""
-	if tr = i18n.T(text); tr == text {
-		if _, exists := printed[text]; !exists {
-			c.PrintDebugInternal("translate text not found!", text)
+	if tr = i18n.T(real_text); tr == real_text {
+		if _, exists := printed[real_text]; !exists {
+			c.PrintDebugInternal("translate real_text not found!", real_text)
 		}
 		return 0, false
 	}
@@ -204,7 +205,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	// === 4. 渲染 ===
 	currentLineY := baselineY + paddingY
 	curTier := defaultTier
-	curSize := curTier.em
+	curSize := curTier.px
 	maxLineWidth := 0.0
 
 	for _, line := range lines {
@@ -217,7 +218,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		}
 
 		var lineW float64
-		c.PrintDebug("face", lineTier)
+		//c.PrintDebug("face", lineTier)
 
 		for _, tk := range line {
 			rn := tk.rn
@@ -251,7 +252,6 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		lineEndSize := lineSize
 		renderSize := curSize
 		renderTier := curTier
-
 		for _, tk := range line {
 			if tk.size > 0 {
 				renderSize = tk.size
@@ -262,8 +262,6 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				continue
 			}
 			rn := tk.rn
-			renderTier.name = "tiny"
-
 			face := film.TextFaceInGame(renderTier.name)
 			if face == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
@@ -290,20 +288,20 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				cursorX += float64(g.W)
 				continue
 			}
-			if renderTier.name == "tiny" {
-				newPixels := make([]byte, len(frame.Pixels))
-				for i := 0; i < len(frame.Pixels); i++ {
-					if !frame.Transparent[i] {
-						newPixels[i] = palColor
-					}
-				}
-				frame = &formats.GAFFrame{
-					Width:       frame.Width,
-					Height:      frame.Height,
-					Pixels:      newPixels,
-					Transparent: frame.Transparent,
-				}
-			}
+			//if renderTier.name == "tiny" && palColor > 0 {
+			//	newPixels := make([]byte, len(frame.Pixels))
+			//	for i := 0; i < len(frame.Pixels); i++ {
+			//		if !frame.Transparent[i] {
+			//			newPixels[i] = palColor
+			//		}
+			//	}
+			//	frame = &formats.GAFFrame{
+			//		Width:       frame.Width,
+			//		Height:      frame.Height,
+			//		Pixels:      newPixels,
+			//		Transparent: frame.Transparent,
+			//	}
+			//}
 			// ★ 修正 1：水平定位，使用字形的实际像素宽 W 进行对齐
 			// 如果你想保留原生的宽间距但字形居中，可以改为：
 			// drawX := int32(cursorX + (g.Advance - float64(g.W))/2.0 + float64(g.Left))

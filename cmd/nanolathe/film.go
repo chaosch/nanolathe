@@ -3,9 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"image"
 	"image/png"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -32,6 +34,7 @@ import (
 // enter RunGame only once and AppKit requires the process main thread.
 
 func runFilm(opts Options, cs *contentSet) error {
+
 	data, err := os.ReadFile(opts.Film)
 	if err != nil {
 		return fmt.Errorf("nanolathe: film: read script: logical path %s, providers searched [filesystem], expected a film script", opts.Film)
@@ -58,6 +61,7 @@ func runFilm(opts Options, cs *contentSet) error {
 		script: script, sink: sink, frames: frames,
 	}
 	game.loadScene = func(scene film.Scene) error { return game.startScene(opts, cs, scene) }
+
 	defer func() { game.cam.teardown(game.cl) }()
 	ebiten.SetWindowVisible(false)
 	ebiten.SetWindowSize(min(surfaceW, 1920), min(surfaceH, 1080))
@@ -71,6 +75,7 @@ func runFilm(opts Options, cs *contentSet) error {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "nanolathe: film: wrote %d frames to %s\n", game.drawn, opts.FilmOut)
+
 	return nil
 }
 
@@ -466,4 +471,14 @@ func (s *filmRawSink) close() error {
 	}
 	s.closed = true
 	return s.w.Flush()
+}
+
+func prepareAssetsFolder(dir string) error {
+	for _, x := range i18n.Languages {
+		err := os.MkdirAll(path.Join(dir, x.Code), 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
