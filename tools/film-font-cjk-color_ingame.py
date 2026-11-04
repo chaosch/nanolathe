@@ -11,23 +11,27 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # ==========================================
 # 1. 强制写死的配置 (输入输出)
 # ==========================================
+# 默认大字体源（用于 small/normal 等带光影的字）
 SOURCE_FONT = r"..\..\NotoSansSC.ttf"
+
+# ★ 新增：tiny 专用 16px 点阵字体
+# PIXEL_FONT_16 = r"..\..\ZhengGeDianHei-16.ttf"
+Pixel_Font_12 = r"..\..\ZLabsPixel_12px_M_CN.ttf"
+PIXEL_FONT_16 = r"..\..\ZhengGeDianHei-16.ttf"
+
 CATALOG_JSON = r"..\internal\i18n\locales\chinese.json"
 OUT = Path(__file__).resolve().parent.parent / "internal/film/assets"
-LANGUAGE="chinese"
+LANGUAGE = "chinese"
 WIDTH = 2048
 
-# 这里的 em 代表【描边后】的总高度！
-OLD_FACE = {
-    # "display": {"em": 121, "weight": 800, "scale": 1.964},
-    # "body":    {"em": 125, "weight": 400, "scale": 1.964},
-}
+OLD_FACE = {}
 NEW_FACE = {
-    "small":    {"em": 20, "weight": 800, "scale": 1},
-    "normal":   {"em": 28, "weight": 800, "scale": 1},
-    "medium":   {"em": 36, "weight": 800, "scale": 1},
-    "large":    {"em": 44, "weight": 800, "scale": 1},
-    "title":    {"em": 52, "weight": 800, "scale": 1},
+    "tiny": {"em": 12, "weight": 800, "scale": 1,"fontFile": r"..\..\ZLabsPixel_12px_M_CN.ttf"},
+    "small":    {"em": 16, "weight": 800, "scale": 1, "fontFile": r"..\..\ZhengGeDianHei-16.ttf"},
+    #     "normal":   {"em": 28, "weight": 800, "scale": 1},
+    #     "medium":   {"em": 36, "weight": 800, "scale": 1},
+    #     "large":    {"em": 44, "weight": 800, "scale": 1},
+    #     "title":    {"em": 52, "weight": 800, "scale": 1},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
@@ -46,13 +50,23 @@ PALETTE = [tuple(int(c * DARKEN) for c in color) for color in PALETTE]
 
 OUTLINE_COLOR = (0, 0, 0)
 
-def get_outline_width(em):
-    if em <= 20:    return 1
-    elif em <= 30:  return 1
-    elif em <= 40:  return 1
-    elif em <= 50:  return 1
-    elif em <= 60:  return 1
-    else:           return 7
+
+def get_outline_width(em, is_tiny):
+    if is_tiny:
+        return 0
+    if em <= 20:
+        return 0
+    elif em <= 30:
+        return 1
+    elif em <= 40:
+        return 1
+    elif em <= 50:
+        return 1
+    elif em <= 60:
+        return 1
+    else:
+        return 7
+
 
 def gray_to_palette(gray_val):
     if gray_val == 0:
@@ -61,6 +75,7 @@ def gray_to_palette(gray_val):
     idx = int((1.0 - ratio) * (len(PALETTE) - 1))
     idx = max(0, min(idx, len(PALETTE) - 1))
     return PALETTE[idx]
+
 
 def wanted(catalogs):
     chars = set(EXTRA)
@@ -73,6 +88,7 @@ def wanted(catalogs):
             chars.update(text)
     return sorted(c for c in chars if ord(c) >= 0x20 and c not in "{}")
 
+
 def load_face(source, weight, size):
     font = ImageFont.truetype(source, size)
     try:
@@ -81,17 +97,35 @@ def load_face(source, weight, size):
         pass
     return font
 
-def render_colored_glyph(char, font, w, h, outline_width):
-    pad = max(2, outline_width)
+
+def render_colored_glyph(char, font, w, h, outline_width, is_tiny=False):
+    pad = 0 if is_tiny else max(2, outline_width)
     cell_w = w + pad * 2
     cell_h = h + pad * 2
 
-    # 1. 提取绝对精准的字形遮罩（使用抗锯齿，这决定了字的外形）
+    # 1. 提取字形遮罩
     base = Image.new('L', (cell_w, cell_h), 0)
     d = ImageDraw.Draw(base)
     d.text((pad, pad), char, font=font, fill=255, anchor="lt")
 
-    # 2. 画极厚的纯黑描边（类似于 OPTIONS 那种硬边）
+    res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
+
+    # ★ 如果是 tiny：直接输出纯白像素，取消抗锯齿灰边，无描边
+    if is_tiny:
+        color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
+        px_res = color_layer.load()
+        px_base = base.load()
+
+        for y in range(cell_h):
+            for x in range(cell_w):
+                # 如果用 255,255,255 就是纯白；如果是其他 RGB，就填进去
+                if px_base[x, y] > 128:
+                    px_res[x, y] = (255, 255, 255, 255) # 把这里改成你想要的 RGB，例如 (250, 200, 50)
+
+        res.alpha_composite(color_layer)
+        return res
+
+    # --- 以下是普通字号的光照和描边逻辑 ---
     outline = Image.new('L', (cell_w, cell_h), 0)
     do = ImageDraw.Draw(outline)
     r = outline_width
@@ -101,37 +135,23 @@ def render_colored_glyph(char, font, w, h, outline_width):
                 continue
             do.text((pad + dx, pad + dy), char, font=font, fill=255, anchor="lt")
 
-    # 准备最终输出画布
-    res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
-
-    # 3. 底层铺纯黑描边
     edge_layer = Image.new('RGBA', (cell_w, cell_h), (*OUTLINE_COLOR, 255))
     res.paste(edge_layer, (0, 0), outline)
 
-    # 4. ★ 核心算法：复刻 OPTIONS 的完美水平柱面光照
-    # 先构建一个从上到下的发光渐变（最亮处接近纯白）
     grad = Image.new('L', (cell_w, cell_h), 0)
     center_y = cell_h / 2.0
     max_dist_y = cell_h / 2.0
     if max_dist_y == 0: max_dist_y = 1
-
     for y in range(cell_h):
         dist = abs(y - center_y)
         norm_dist = dist / max_dist_y
-        # 原版你用的 80 衰减。为了达到图里的高对比度，这里把高光提亮到 255，暗部压到底。
         val = 255 - int(norm_dist * 160)
         val = max(0, min(255, val))
         for x in range(cell_w):
             grad.putpixel((x, y), val)
 
-    # 高斯模糊让渐变平滑（图里那种柔和的过渡）
     grad = grad.filter(ImageFilter.GaussianBlur(1.2))
-
-    # 5. 生成字心的颜色（金色渐变字心）
-    # 直接用你 PALETTE 里最亮的那一档黄做底色，然后乘以光照渐变
-    base_color = PALETTE[0] # (213, 213, 182) 偏白亮的黄
-
-    # 将光照灰度图乘以基础颜色，得到带有光影的 RGB 图像
+    base_color = PALETTE[0]
     color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
     px_res = color_layer.load()
     px_base = base.load()
@@ -140,32 +160,35 @@ def render_colored_glyph(char, font, w, h, outline_width):
     for y in range(cell_h):
         for x in range(cell_w):
             if px_base[x, y] > 0:
-                # 用遮罩的透明度决定边缘平滑，同时用 grad 控制亮度
                 alpha = px_base[x, y]
                 brightness = px_grad[x, y] / 255.0
-
-                # 叠加光照色
                 r = int(base_color[0] * brightness)
                 g = int(base_color[1] * brightness)
                 b = int(base_color[2] * brightness)
                 px_res[x, y] = (r, g, b, alpha)
 
-    # 6. 把带光影的字心，完美覆盖在黑底描边上
     res.alpha_composite(color_layer)
-
     return res
-def build(source, name, chars, target_em, weight, scale):
-    CAP = 180
-    outline_width = get_outline_width(target_em)
 
-    # 预留描边空间
-    real_em = target_em - (outline_width * 2)
+
+def build(chars, name, target_em, weight, scale, fontFile):
+    CAP = 180
+    is_tiny = (target_em < 20)
+
+    # ★ 核心：按名字选择字体源和描边宽度
+    if is_tiny:
+        outline_width = 0
+        real_em = target_em  # 强制 16px
+    else:
+        outline_width = get_outline_width(target_em, False)
+        real_em = target_em - (outline_width * 2)
+
+    font_path = fontFile
     if real_em < 6:
         real_em = 6
 
-    font = load_face(source, weight, real_em)
+    font = load_face(font_path, weight, real_em)
 
-    # 预扫描：找最大高度和最大宽度
     max_h = 0
     max_w = 0
     for char in chars:
@@ -175,10 +198,10 @@ def build(source, name, chars, target_em, weight, scale):
         if h > max_h: max_h = h
         if w > max_w: max_w = w
 
-    # ★ 关键：如果加上描边超标，就降低字号，直到包进去为止！
-    while max_h + outline_width * 2 > target_em:
+    # 大字体防超高逻辑，tiny 不触发
+    while not is_tiny and max_h + outline_width * 2 > target_em and real_em > 6:
         real_em -= 1
-        font = load_face(source, weight, real_em)
+        font = load_face(font_path, weight, real_em)
         max_h = 0
         max_w = 0
         for char in chars:
@@ -188,9 +211,7 @@ def build(source, name, chars, target_em, weight, scale):
             if h > max_h: max_h = h
             if w > max_w: max_w = w
 
-    # 全局统一使用这个真实的最高、最宽值（强制取整）
     cell_height = int(math.ceil(max_h))
-
     rows, glyphs = [], {}
     x = 0
     y = 4
@@ -200,8 +221,6 @@ def build(source, name, chars, target_em, weight, scale):
     for char in chars:
         bbox = font.getbbox(char, anchor="lt")
         left, top, right, bottom = bbox
-
-        # 真实的宽高，强制取整
         width = int(math.ceil(right - left))
         height = int(math.ceil(bottom - top))
 
@@ -211,7 +230,6 @@ def build(source, name, chars, target_em, weight, scale):
         if x + width + SPACING * 2 > WIDTH:
             x, y, row_height = 0, y + row_height + SPACING, 0
 
-        # 写入 JSON
         glyphs[char] = dict(
             x=x, y=y, w=width, h=height,
             left=round(left * scale),
@@ -228,9 +246,8 @@ def build(source, name, chars, target_em, weight, scale):
     atlas = Image.new("RGBA", (WIDTH, atlas_h), (0, 0, 0, 0))
 
     for char, px, py, w, h in rows:
-        char_img = render_colored_glyph(char, font, w, h, outline_width)
-        pad = max(2, outline_width)
-        # 因为左上角对齐，直接贴图即可，绝不会削顶
+        char_img = render_colored_glyph(char, font, w, h, outline_width, is_tiny=is_tiny)
+        pad = 0 if is_tiny else max(2, outline_width)
         atlas.paste(char_img, (px - pad, py - pad), char_img)
 
     out_png = OUT / f"{LANGUAGE}-{name}-cjk.png"
@@ -243,11 +260,11 @@ def build(source, name, chars, target_em, weight, scale):
             separators=(",", ":"), ensure_ascii=False
         ) + "\n")
 
-    print(f"{name}-cjk: target={target_em}, actual_em={real_em}, max_h={max_h}, with_border={max_h + outline_width*2}")
+    print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(font_path)}, max_h={max_h}")
 
-    print(f"{name}-cjk target_em {target_em} (cell {cell_height} + border {outline_width*2} = {cell_height + outline_width*2})")
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     chars = wanted([CATALOG_JSON])
     for face_name, cfg in ALL_FACE.items():
-        build(SOURCE_FONT, face_name, chars, cfg["em"], cfg["weight"], cfg["scale"])
+        build(chars, face_name, cfg["em"], cfg["weight"], cfg["scale"],cfg["fontFile"])

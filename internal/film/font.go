@@ -163,7 +163,7 @@ func CJKError() error {
 var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 	faces := make(map[string]*atlasFace)
 	all := filmFaces()
-	for _, name := range []string{"display", "body", "large", "medium", "normal", "small", "title"} {
+	for _, name := range []string{"display", "body", "large", "medium", "normal", "small", "title", "tiny"} {
 		cjk := loadAtlasFace(i18n.Language() + "-" + name + "-cjk")
 		base := all[name]
 

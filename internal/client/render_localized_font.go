@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -111,8 +112,6 @@ func pickTier(targetH int) faceTier {
 	return faceTiers[len(faceTiers)-1]
 }
 
-// DrawRetailFilmCJK 直接从预烘焙好的精灵图集取字形渲染。
-// DrawRetailFilmCJK 直接从预烘焙好的精灵图集取字形渲染。
 func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
 	if printed == nil {
 		printed = make(map[string]int)
@@ -263,6 +262,8 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				continue
 			}
 			rn := tk.rn
+			renderTier.name = "tiny"
+
 			face := film.TextFaceInGame(renderTier.name)
 			if face == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
@@ -284,12 +285,25 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			}
 
 			frame := g.Frame()
-			fmt.Printf("Drawing char: frame.Width=%d, frame.Height=%d\n", frame.Width, frame.Height)
+			//fmt.Printf("Drawing char: frame.Width=%d, frame.Height=%d\n", frame.Width, frame.Height)
 			if frame == nil || frame.Width == 0 || frame.Height == 0 {
 				cursorX += float64(g.W)
 				continue
 			}
-
+			if renderTier.name == "tiny" {
+				newPixels := make([]byte, len(frame.Pixels))
+				for i := 0; i < len(frame.Pixels); i++ {
+					if !frame.Transparent[i] {
+						newPixels[i] = palColor
+					}
+				}
+				frame = &formats.GAFFrame{
+					Width:       frame.Width,
+					Height:      frame.Height,
+					Pixels:      newPixels,
+					Transparent: frame.Transparent,
+				}
+			}
 			// ★ 修正 1：水平定位，使用字形的实际像素宽 W 进行对齐
 			// 如果你想保留原生的宽间距但字形居中，可以改为：
 			// drawX := int32(cursorX + (g.Advance - float64(g.W))/2.0 + float64(g.Left))
@@ -329,5 +343,8 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	if palColor == 0 {
+		palColor = 255
+	}
 	return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
 }

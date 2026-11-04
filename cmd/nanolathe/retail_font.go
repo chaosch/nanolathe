@@ -185,7 +185,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
-		0,
+		255,
 		2,
 	); ok {
 		return
