@@ -222,7 +222,6 @@ func run(opts Options, out, errOut *os.File) error {
 	if minimum, ok := modMinimumGameplay(content.mod); ok && opts.GameplaySet && !content.savedMod && gameplayBelow(opts.Gameplay, minimum) {
 		return &missingProductError{what: "gameplay mode is below the mod's minimum", logical: "<command line>", providers: []string{"--gameplay", "--mod"}, expected: gameplayLabel(minimum) + " or Modern for " + content.mod.Name}
 	}
-	opts.LocalesDir = defaultLocalesDir()
 	if opts.VerifyReplay != "" {
 		return runVerifyReplay(opts, content, out)
 	}

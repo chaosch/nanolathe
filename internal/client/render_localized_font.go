@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -93,7 +94,8 @@ type faceTier struct {
 
 var faceTiers = []faceTier{
 	{"tiny", 12},
-	{"small", 20},
+	{"small", 14},
+	{"normal", 16},
 	//{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
@@ -121,13 +123,15 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		c.PrintDebug("real_text is empty")
 		return 0, false
 	}
-	tr := ""
-	if tr = i18n.T(real_text); tr == real_text {
+
+	// 翻译兜底：查不到只报错，不中断渲染（继续画英文）
+	tr := i18n.T(real_text)
+	if tr == real_text {
 		if _, exists := printed[real_text]; !exists {
-			c.PrintDebugInternal("translate real_text not found!", real_text)
+			c.PrintDebugInternal("translate text not found!", real_text)
 		}
-		return 0, false
 	}
+
 	if c == nil {
 		fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
 		return 0, false
@@ -138,10 +142,9 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		safeMaxWidth = 9999
 	}
 
-	// === 1. 解析控制符 ===
+	// === 1. 解析控制符（只保留 \n 换行） ===
 	type token struct {
 		rn      rune
-		size    int
 		forceNL bool
 	}
 
@@ -154,25 +157,6 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			if next == 'n' || next == 'N' {
 				tokens = append(tokens, token{forceNL: true})
 				i++
-				continue
-			}
-			if next == 's' || next == 'S' {
-				i++
-				start := i + 1
-				end := start
-				for end < len(runes) && runes[end] >= '0' && runes[end] <= '9' {
-					end++
-				}
-				if end > start {
-					size := 0
-					for k := start; k < end; k++ {
-						size = size*10 + int(runes[k]-'0')
-					}
-					if size >= 6 && size <= 32 {
-						tokens = append(tokens, token{size: size})
-					}
-					i = end - 1
-				}
 				continue
 			}
 		}
@@ -209,23 +193,17 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	maxLineWidth := 0.0
 
 	for _, line := range lines {
-		lineTier, lineSize := curTier, curSize
-		for _, tk := range line {
-			if tk.size > 0 {
-				lineSize = tk.size
-				lineTier = pickTier(lineSize)
-			}
-		}
+		lineTier := curTier
+		lineSize := curSize
 
+		// 量行宽（统一使用 g.W，确保与实际渲染推进一致）
 		var lineW float64
-		//c.PrintDebug("face", lineTier)
-
 		for _, tk := range line {
 			rn := tk.rn
 			face := film.TextFaceInGame(lineTier.name)
 			if face != nil {
-				if g := face.Glyphs[string(rn)]; g != nil && g.Advance > 0 {
-					lineW += g.Advance
+				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
+					lineW += float64(g.W)
 					continue
 				}
 			}
@@ -239,35 +217,25 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			maxLineWidth = lineW
 		}
 
+		// 对齐起点计算
 		cursorX := float64(x)
 		switch {
-		case attribs&4 != 0:
+		case attribs&4 != 0: // 右对齐
 			cursorX = float64(x+safeMaxWidth) - lineW - 3
-		case attribs&2 != 0:
+		case attribs&2 != 0: // 居中对齐
 			cursorX = float64(x) + (float64(safeMaxWidth)-lineW)/2.0
-		default:
+		default: // 左对齐
 			cursorX += 3
 		}
 
-		lineEndSize := lineSize
-		renderSize := curSize
-		renderTier := curTier
 		for _, tk := range line {
-			if tk.size > 0 {
-				renderSize = tk.size
-				renderTier = pickTier(renderSize)
-				curSize = renderSize
-				curTier = renderTier
-				lineEndSize = renderSize
-				continue
-			}
 			rn := tk.rn
-			face := film.TextFaceInGame(renderTier.name)
+			face := film.TextFaceInGame(lineTier.name)
 			if face == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-					cursorX += float64(renderSize)
+					cursorX += float64(lineSize)
 				} else {
-					cursorX += float64(renderSize / 2)
+					cursorX += float64(lineSize / 2)
 				}
 				continue
 			}
@@ -275,41 +243,43 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			g := face.Glyphs[string(rn)]
 			if g == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-					cursorX += float64(renderSize)
+					cursorX += float64(lineSize)
 				} else {
-					cursorX += float64(renderSize / 2)
+					cursorX += float64(lineSize / 2)
 				}
 				continue
 			}
 
 			frame := g.Frame()
-			//fmt.Printf("Drawing char: frame.Width=%d, frame.Height=%d\n", frame.Width, frame.Height)
 			if frame == nil || frame.Width == 0 || frame.Height == 0 {
 				cursorX += float64(g.W)
 				continue
 			}
-			//if renderTier.name == "tiny" && palColor > 0 {
-			//	newPixels := make([]byte, len(frame.Pixels))
-			//	for i := 0; i < len(frame.Pixels); i++ {
-			//		if !frame.Transparent[i] {
-			//			newPixels[i] = palColor
-			//		}
-			//	}
-			//	frame = &formats.GAFFrame{
-			//		Width:       frame.Width,
-			//		Height:      frame.Height,
-			//		Pixels:      newPixels,
-			//		Transparent: frame.Transparent,
-			//	}
-			//}
-			// ★ 修正 1：水平定位，使用字形的实际像素宽 W 进行对齐
-			// 如果你想保留原生的宽间距但字形居中，可以改为：
-			// drawX := int32(cursorX + (g.Advance - float64(g.W))/2.0 + float64(g.Left))
+
+			// ★ tiny 动态上色（深拷贝 Frame 防污染）
+			if lineTier.name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(frame.Pixels))
+				for i := 0; i < len(frame.Pixels); i++ {
+					if !frame.Transparent[i] {
+						newPixels[i] = palColor
+					}
+				}
+				frame = &formats.GAFFrame{
+					Width:       frame.Width,
+					Height:      frame.Height,
+					Pixels:      newPixels,
+					Transparent: frame.Transparent,
+				}
+			}
+
+			// 水平定位
 			drawX := int32(cursorX + float64(g.Left))
 
-			// ★ 修正 2：垂直定位，使用 (renderSize - frame.Height)/2 进行垂直居中
-			// 不再使用产生偏移的 g.Top
-			drawY := int32(currentLineY + (renderSize-int(frame.Height))/2)
+			// 垂直定位：tiny 直接顶行顶，其他字号垂直居中
+			drawY := int32(currentLineY)
+			if lineTier.name != "tiny" {
+				drawY = int32(currentLineY + (lineSize-int(frame.Height))/2)
+			}
 
 			sprite := drawlist.Sprite{
 				Frame:   frame,
@@ -317,23 +287,18 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 				Y:       drawY,
 				Kind:    drawlist.BlitKeyed,
 				Key:     0,
-				HasClip: false, // ★ 修正 3：临时关闭裁剪，确保能看清全貌。确认没问题后可改回 true
-				// HasClip: true,
-				// Clip: drawlist.Rect{
-				// 	X: int32(x), Y: int32(baselineY - 20),
-				// 	W: int32(safeMaxWidth), H: int32(controlHeight + 40),
-				// },
+				HasClip: false,
 			}
 			c.List().RecordSprite(sprite)
 
-			// ★ 修正 4：光标推进改用 g.W，彻底解决字间距过大的问题
-			// 如果你觉得现在字距太紧，可以改为：cursorX += float64(g.Advance)
+			// 推光标统一用 g.W
 			cursorX += float64(g.W)
 		}
 
-		lineStep := int(float64(lineEndSize) * 1.25)
-		if lineStep < lineEndSize+2 {
-			lineStep = lineEndSize + 2
+		// 行距推进
+		lineStep := int(float64(lineSize) * 1.25)
+		if lineStep < lineSize+2 {
+			lineStep = lineSize + 2
 		}
 		currentLineY += lineStep
 	}

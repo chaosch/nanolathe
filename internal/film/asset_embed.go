@@ -4,6 +4,7 @@ package film
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"os"
@@ -38,21 +39,46 @@ func SetAssetsDir(dir string) {
 
 // readAsset 外部优先，内部兜底
 func readAsset(name string) ([]byte, error) {
-	// 1. 优先尝试读取 locales/chinese/ 下同名的文件
-	// 比如：~/.local/share/nanolathe/locales/chinese/chinese-small-cjk.png
-	if externalAssetsDir != "" && i18n.Language() != "english" {
-		// 这里假设 externalAssetsDir 传进来的是 ~/.local/share/nanolathe/locales
-		// 拼上 chinese/name 即可
-		extPath := filepath.Join(externalAssetsDir, i18n.Language(), name)
-		if data, err := os.ReadFile(extPath); err == nil {
-			return data, nil
+	folder := selectLocalesFolder(name)
+	var data []byte
+	var err error
+	if folder == "" {
+		data, err = fontAssets.ReadFile("assets/" + name)
+	} else {
+		data, err = os.ReadFile(filepath.Join(folder, name))
+		if err != nil {
+			//local locales file
+			png := filepath.Join(folder, name) + ".png"
+			json := filepath.Join(folder, name) + ".json"
+			if FileExists(png) || FileExists(json) {
+				data, err = fontAssets.ReadFile("assets/" + name)
+			}
 		}
 	}
-	// 2. 回退到内嵌资源（保证没有外部文件时游戏能正常跑）
-	data, err := fontAssets.ReadFile("assets/" + name)
-	fmt.Printf("readAssets%s\n", data)
 	if err != nil {
 		return nil, fmt.Errorf("film: asset %q not found in external or internal: %w", name, err)
 	}
 	return data, nil
+}
+
+func selectLocalesFolder(name string) string {
+	languages := i18n.Languages
+	for _, l := range languages {
+		if l.Name == name {
+			return l.Folder
+		}
+	}
+	return ""
+}
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true // 存在
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false // 不存在
+	}
+	// 其他错误（比如权限不足），这里通常也视为不可用
+	return false
 }

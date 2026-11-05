@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -32,6 +35,9 @@ func parseLanguage(text string) (string, error) {
 // run, otherwise the saved choice. A catalog that would not load leaves the
 // interface in English with a notice.
 func (g *gameShell) applyLanguage() {
+	for _, l := range g.languages {
+		i18n.Languages = append(i18n.Languages, l)
+	}
 	code := g.requestedLanguage()
 	g.languagePending = ""
 	if code == "chinese" {
@@ -176,4 +182,106 @@ func (s *nlScreen) cardCaption(screen *ebiten.Image, text string, x, y, right, a
 	u := s.u()
 	st := screenkit.Style{Size: 10.5 * u, Top: alphaC(nlGreenText, a)}
 	s.fonts.Body.Draw(screen, text, x, y, fitStyle(s.fonts.Body, text, st, right-x, 8*u))
+}
+
+func defaultLocalesDir() (string, bool) {
+	dir := os.Getenv("XDG_DATA_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "nanolathe: data folder not found")
+			return "", false
+		}
+		dir = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(dir, "nanolathe", "locales"), true
+}
+
+func createLocalesDir() (string, bool) {
+	if localesDir, r := defaultLocalesDir(); r {
+		if exist, _ := DirExists(localesDir); exist {
+			return localesDir, true
+		}
+		if err := os.MkdirAll(localesDir, 0755); err != nil {
+			fmt.Fprintln(os.Stderr, "nanolathe: cannot create locales directory:"+err.Error())
+			return localesDir, false
+		} else {
+			return localesDir, true
+		}
+	}
+	return "", false
+}
+
+// DirExists 判断目录是否存在
+func DirExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		// 如果错误是“文件或目录不存在”，返回 false, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		// 其他错误（比如权限不足），返回 false 和具体错误
+		return false, err
+	}
+
+	// 路径存在，但检查它是不是目录
+	if !info.IsDir() {
+		return false, fmt.Errorf("路径 %s 存在，但不是一个目录", path)
+	}
+
+	return true, nil
+}
+
+// If missing, fallback to embedded localization assets.
+func (g *gameShell) ScanExternalLocales() error {
+	localesDir := ""
+	if dir, ret := createLocalesDir(); ret {
+		localesDir = dir
+	} else {
+		return errors.New("can not create locales folder or Invalid localization file")
+	}
+	entries, err := os.ReadDir(localesDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		code := entry.Name()
+
+		exists := false
+		for _, l := range g.languages {
+			if l.Code == code {
+				exists = true
+				break
+			}
+		}
+		if exists {
+			continue
+		}
+
+		// 默认名字就是 code
+		langName := code
+
+		// ★ 尝试读取 meta.json 获取原生语言名称
+		metaPath := filepath.Join(localesDir, code, "meta.json")
+		if data, err := os.ReadFile(metaPath); err == nil {
+			var meta struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(data, &meta) == nil && meta.Name != "" {
+				langName = meta.Name
+			}
+			g.languages = append(g.languages, struct{ Code, Name, Folder string }{code, langName, filepath.Join(localesDir, code)})
+		} else {
+			return errors.New(err.Error())
+		}
+	}
+	if len(g.languages) == 0 {
+		g.language = ""
+		fmt.Fprintln(os.Stderr, "nanolathe: none local locales folder")
+	}
+	return nil
 }

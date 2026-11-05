@@ -3,8 +3,6 @@ package film
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"image"
 	"image/png"
 	"sync"
@@ -50,6 +48,7 @@ func loadAtlasFace(name string) *atlasFace {
 		panic(err)
 	}
 	data, err := readAsset(name + ".png")
+	println("loadAtlasFace::" + name)
 	if err != nil {
 		panic(err)
 	}
@@ -165,49 +164,31 @@ func CJKError() error {
 }
 
 // cjkFaces is the base pair with the Chinese additions merged in, built once
-// on first use. The CJK atlas carries every Glyph it draws, so a key already
+// on first use. The CJK atlas carries every glyph it draws, so a key already
 // present in the base face keeps the base entry.
 var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
-	faces := make(map[string]*atlasFace)
-	all := filmFaces()
-	for _, name := range []string{"display", "body", "large", "medium", "normal", "small", "title", "tiny"} {
-		var cjk *atlasFace
-		if i18n.Language() != "english" {
-			cjk = loadAtlasFace(i18n.Language() + "-" + name + "-cjk")
-		} else {
-			if name == "display" || name == "body" {
-				cjk = all[name]
-			} else {
-				cjk = all["body"]
-			}
-		}
-		base := all[name]
-		switch {
-		case cjk == nil && base == nil:
-			fmt.Printf("WARN: face %q has neither cjk nor base atlas, skipped\n", name)
-			continue
-		case cjk == nil:
-			// 只有基础面：直接用
-			faces[name] = base
-		case base == nil:
-			// 只有 CJK 面：你的 chinese-*-cjk 已含完整字形集，直接当完整面用
+	faces := make(map[string]*atlasFace, 2)
+	for _, name := range []string{"display", "body", "tiny", "normal", "small"} {
+		base := filmFaces()[name]
+		cjk := loadAtlasFace(name + "-cjk")
+		if base == nil {
 			faces[name] = cjk
-		default:
-			merged := &atlasFace{
-				Cap:     base.Cap,
-				Glyphs:  make(map[string]*atlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
-				Kerning: base.Kerning,
-			}
-			for k, g := range base.Glyphs {
+			continue
+		}
+		merged := &atlasFace{
+			Cap:     base.Cap,
+			Glyphs:  make(map[string]*atlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
+			Kerning: base.Kerning,
+		}
+		for k, g := range base.Glyphs {
+			merged.Glyphs[k] = g
+		}
+		for k, g := range cjk.Glyphs {
+			if _, ok := merged.Glyphs[k]; !ok {
 				merged.Glyphs[k] = g
 			}
-			for k, g := range cjk.Glyphs {
-				if _, ok := merged.Glyphs[k]; !ok {
-					merged.Glyphs[k] = g
-				}
-			}
-			faces[name] = merged
 		}
+		faces[name] = merged
 	}
 	return faces
 })
@@ -230,8 +211,4 @@ func (f *atlasFace) Glyph(r rune) (*atlasGlyph, rune) {
 		return g, r
 	}
 	return f.Glyphs[" "], ' '
-}
-
-func init() {
-
 }

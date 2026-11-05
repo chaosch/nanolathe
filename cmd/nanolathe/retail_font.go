@@ -140,7 +140,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		text,
 		x, y, maxWidth, baselineHeight,
 		0,
-		0,
+		2,
 	); ok {
 		return
 	}
@@ -241,7 +241,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 			text,
 			x, y, maxWidth, y,
 			0,
-			0,
+			2,
 		); ok {
 			return
 		}
@@ -253,7 +253,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 			text,
 			x, y, maxWidth, y,
 			fntColor,
-			0,
+			2,
 		); ok {
 			return
 		}
