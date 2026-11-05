@@ -1490,7 +1490,14 @@
   "{}Hydross - The Search Begins!": "1: 海德罗斯 - 寻找开始",
   "{}Securing the Atoll": "2: 夺取环礁",
   "{}Sinking Core": "3: 击沉 Core",
-  "{}Lusch - Hovercraft Technology": "4: 卢施 - 气垫船技术"
+  "{}Lusch - Hovercraft Technology": "4: 卢施 - 气垫船技术",
 
+  "Survival - first wave in {}": "生存下去 - 距地一波剩余{}",
+  "Wave {#} incoming: {} from the {}": "第{}波来袭: {} 从{}而来！",
+  "north": "北",
+  "south": "南",
+  "west": "西",
+  "east": "东",
+  "hover": "两栖部队"
 
 }

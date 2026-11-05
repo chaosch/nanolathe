@@ -28,8 +28,8 @@ OLD_FACE = {}
 # mode 参数："render" = 走原版渐变光影，"color" = 纯色平涂，"white" = 纯白点阵
 NEW_FACE = {
     "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "mode": "white",  "border": 0, "color": None,"is_mask": True},
-    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": SOURCE_FONT, "mode": "render",  "border": 1, "color": TARGET_COLOR,"is_mask": False},
-    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": SOURCE_FONT, "mode": "render", "border": 1, "color": None,"is_mask": False},
+    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render",  "border": 1, "color": TARGET_COLOR,"is_mask": False},
+    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render", "border": 1, "color": None,"is_mask": False},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
