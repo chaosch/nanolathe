@@ -16,7 +16,7 @@ Pixel_Font_12 = r"ZLabsPixel_12px_M_CN.ttf"
 PIXEL_FONT_16 = r"ChangBanDianSong-16-SC.ttf"
 
 CATALOG_JSON = r"..\..\internal\i18n\locales\chinese.json"
-OUT = Path(__file__).resolve().parent.parent / "..\internal/film/assets"
+OUT = Path(__file__).resolve().parent.parent / r"..\internal/film/assets"
 LANGUAGE = "chinese"
 WIDTH = 2048
 
@@ -28,8 +28,8 @@ OLD_FACE = {}
 # mode 参数："render" = 走原版渐变光影，"color" = 纯色平涂，"white" = 纯白点阵
 NEW_FACE = {
     "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "mode": "white",  "border": 0, "color": None,"is_mask": True},
-    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render",  "border": 1, "color": TARGET_COLOR,"is_mask": False},
-    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render", "border": 1, "color": None,"is_mask": False},
+    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": SOURCE_FONT, "mode": "render",  "border": 1, "color": TARGET_COLOR,"is_mask": False},
+    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": SOURCE_FONT, "mode": "render", "border": 1, "color": None,"is_mask": False},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
@@ -180,30 +180,22 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
 
     font = load_face(fontFile, weight, real_em)
 
-    max_h = 0
-    max_w = 0
+    # ========== 底边对齐：全部字符底部齐平 ==========
+    glyph_bbox_info = {}
+    global_bottom = -9999
     for char in chars:
         bbox = font.getbbox(char, anchor="lt")
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        if h > max_h: max_h = h
-        if w > max_w: max_w = w
+        l, t, r, b = bbox
+        w = int(math.ceil(r - l))
+        if w <= 0:
+            continue
+        glyph_bbox_info[char] = (l, t, r, b)
+        if b > global_bottom:
+            global_bottom = b
+    global_top = min(v[1] for v in glyph_bbox_info.values())
+    cell_height = global_bottom - global_top
+    # ========== end ==========
 
-    # 大字体防超高逻辑（点阵字体不走这个）
-    if not is_native_size:
-        while max_h + border * 2 > target_em and real_em > 6:
-            real_em -= 1
-            font = load_face(fontFile, weight, real_em)
-            max_h = 0
-            max_w = 0
-            for char in chars:
-                bbox = font.getbbox(char, anchor="lt")
-                w = bbox[2] - bbox[0]
-                h = bbox[3] - bbox[1]
-                if h > max_h: max_h = h
-                if w > max_w: max_w = w
-
-    cell_height = int(math.ceil(max_h))
     rows, glyphs = [], {}
     x = 0
     y = 4
@@ -211,36 +203,35 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
     SPACING = 6
 
     for char in chars:
-        bbox = font.getbbox(char, anchor="lt")
-        left, top, right, bottom = bbox
-        width = int(math.ceil(right - left))
-        height = int(math.ceil(bottom - top))
-
-        if width <= 0 or height <= 0:
+        if char not in glyph_bbox_info:
             continue
+        left, top, right, bottom = glyph_bbox_info[char]
+        width = int(math.ceil(right - left))
 
         if x + width + SPACING * 2 > WIDTH:
             x, y, row_height = 0, y + row_height + SPACING, 0
 
+        dy = global_bottom - bottom  # 需要向上挪动的距离，让底边对齐global_bottom
         glyphs[char] = dict(
-            x=x, y=y, w=width, h=height,
+            x=x, y=y, w=width, h=cell_height,
             left=round(left * scale),
-            top=round(top * scale),
+            top=round((top + dy) * scale), # ✅ 同步修正json的top！核心修复点
             advance=round(font.getlength(char) * scale),
             scale=scale
         )
 
-        rows.append((char, x, y, width, height))
+        rows.append((char, x, y, width, cell_height, left, top, dy))
         x += width + SPACING
-        row_height = max(row_height, height)
+        row_height = max(row_height, cell_height)
 
     atlas_h = y + row_height + SPACING * 2
     atlas = Image.new("RGBA", (WIDTH, atlas_h), (0, 0, 0, 0))
 
-    for char, px, py, w, h in rows:
+    for char, px, py, w, h, left, top, dy in rows:
         char_img = render_colored_glyph(char, font, w, h, border, mode, color)
         pad = 0 if mode == "white" else max(2, border)
-        atlas.paste(char_img, (px - pad, py - pad), char_img)
+        # 贴图同步向上偏移 dy
+        atlas.paste(char_img, (px - pad, py - pad + dy), char_img)
 
     out_png = OUT / f"{name}-cjk.png"
     out_json = OUT / f"{name}-cjk.json"
@@ -252,7 +243,7 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
             separators=(",", ":"), ensure_ascii=False
         ) + "\n")
 
-    print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(fontFile)}, mode={mode}, max_h={max_h},out={out_png}")
+    print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(fontFile)}, mode={mode}, max_h={cell_height},out={out_png}")
 
 
 if __name__ == "__main__":

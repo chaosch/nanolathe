@@ -309,7 +309,7 @@ func (h *retailBattleHUD) drawBattleInfoWindow(c *client.Client, b *battleSessio
 //     runs only for a label taller than two metrics, which no appended row
 //     (height 15) is.
 func (h *retailBattleHUD) drawBattleInfoLabel(c *client.Client, window *gui.Window, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, clip gui.Rect) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if h == nil || c == nil || window == nil || text == "" {
 		return
 	}

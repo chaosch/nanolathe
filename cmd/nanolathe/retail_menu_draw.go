@@ -314,14 +314,26 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
+		//some label give wrong gui.rect
+		var Height, Width int
+		var Align uint32
+		if (r.H == 0 || r.W == 0) || (r.H == 12 || r.W == 12) || r.H < 12 {
+			Height = 13
+			Width = 26
+			Align = 0
+		} else {
+			Height = int(r.H)
+			Width = int(r.W)
+			Align = gad.Attribs
+		}
 		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			retailGadgetText(p, index, gad),
 			int(r.X),
 			int(r.Y),
-			int(r.W),
-			int(r.H), // <--- 新增：传入控件高度
+			int(Width),
+			int(Height), // <--- 新增：传入控件高度
 			palColor,
-			gad.Attribs,
+			Align,
 		); ok {
 			return
 		}
@@ -530,7 +542,7 @@ func (g *gameShell) retailTextMetrics(selected *formats.FNT) (measure func(strin
 // with the width limit dropped (`maxW = -1`) and the selected record's FNT —
 // or the common font when the gadget selected none [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y, maxWidth int, color byte, shade int, selected *formats.FNT) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if selected == nil || g.retailGAFTextFont() != nil {
 		g.drawRetailStringLit(c, text, x, y, maxWidth, color, shade)
 		return
@@ -553,7 +565,7 @@ func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y
 // The GAF pen's wrap-or-single-line choice belongs to the other branch and
 // never runs here.
 func (g *gameShell) drawRetailLabelFNT(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT, color byte) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if c == nil || font == nil || text == "" {
 		return
 	}
@@ -592,7 +604,7 @@ func retailLabelPenX(_ *gui.Window, gad gui.Gadget, r gui.Rect, textWidth int) i
 // `shade` (the label's live colour word); the FNT fallback draws in that word
 // raw [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, color byte, shade int) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	measure, metric, ok := g.retailLabelTextMetrics()
 	if c == nil || !ok || text == "" {
 		return

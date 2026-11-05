@@ -62,7 +62,7 @@ func constructorPatrolDarkPlate(entry *formats.GAFEntry, r gui.Rect) *formats.GA
 }
 
 func (h *retailBattleHUD) drawConstructorPatrolCaption(c *client.Client, r gui.Rect, text string) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	// Leave the authored plate's three indicators clear at the right. The
 	// caption is our own pen; the gadget geometry and cycle input stay retail's.
 	x, width := int(r.X)+6, int(r.W)-32

@@ -122,7 +122,7 @@ func (g *gameShell) retailTextHeight() int {
 // No GUI semantic-color remap or FNT tint is applied. maxWidth < 0 means no
 // width limit; otherwise the next glyph must fit in the remaining width.
 func (g *gameShell) drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
 }
 
@@ -130,17 +130,22 @@ func (g *gameShell) drawRetailGAFText(c *client.Client, font *formats.GAFEntry, 
 // window's private surface, clipping glyph bearings and text beyond the
 // authored window [07 §4].
 func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth, clipX, clipY, clipW, clipH int) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if c == nil || font == nil {
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
+	Align := 2
+	if baselineHeight <= 12 {
+		baselineHeight = 13
+		Align = 0
+	}
 	remaining := maxWidth
 	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
 		0,
-		2,
+		uint32(Align),
 	); ok {
 		return
 	}
@@ -175,7 +180,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 // non-zero level remaps it through PALETTE.LHT. Only loading-screen stage
 // labels pass a non-zero level [07 §4][03 §4.3.1].
 func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if c == nil || font == nil {
 		return
 	}
@@ -226,12 +231,12 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 }
 
 func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWidth int, fntColor byte) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	g.drawRetailStringLit(c, text, x, y, maxWidth, fntColor, 0)
 }
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {
@@ -239,9 +244,9 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		}
 		if _, ok := c.DrawRetailFilmCJKCylindrical(
 			text,
-			x, y, maxWidth, y,
+			x, y, maxWidth, g.retailTextHeight(),
 			0,
-			2,
+			0,
 		); ok {
 			return
 		}

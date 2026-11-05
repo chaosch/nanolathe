@@ -139,7 +139,7 @@ func formatHUDNumber(value float32) string {
 }
 
 func (h *retailBattleHUD) drawTextAt(c *client.Client, index int, text string, color byte) {
-	c.PrintDebug(text)
+	//c.PrintDebug(text)
 	r, ok := h.anchors.ByIndex(index)
 	if !ok || text == "" {
 		return

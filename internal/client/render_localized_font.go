@@ -6,8 +6,10 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
+	"regexp"
 	"runtime"
 	"sync"
+	"unicode/utf8"
 )
 
 const COLOR_EDGE = 79
@@ -49,12 +51,14 @@ func (c *Client) PrintDebugInternal(args ...interface{}) {
 		printed = make(map[string]int)
 	}
 	var pcindex int
-	pcindex = 2
-	pc, _, _, ok := runtime.Caller(pcindex)
+	pcindex = 3                                // 根据你的调用层级决定，如果层级不对，改成 2 或者 4
+	pc, _, line, ok := runtime.Caller(pcindex) // ★ 接住 file 和 line
 	if ok {
 		fn := runtime.FuncForPC(pc)
-		prompt := fmt.Sprintf("debug message: %s:%v\n", fn.Name(), args)
 		if fn != nil {
+			// 如果只想看文件名，可以用 filepath.Base(file) 取最后一部分
+			// 比如：prompt := fmt.Sprintf("debug message: %s (%s:%d):%v\n", fn.Name(), filepath.Base(file), line, args)
+			prompt := fmt.Sprintf("debug message: %s:%d:%v\n", fn.Name(), line, args)
 			if _, exists := printed[prompt]; !exists {
 				fmt.Printf("%s", prompt)
 				printed[prompt]++
@@ -111,16 +115,16 @@ func pickTier(targetH int) faceTier {
 			return t
 		}
 	}
-	return faceTiers[len(faceTiers)-2]
+	return faceTiers[len(faceTiers)-1]
 }
 
-func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight1 int, palColor byte, attribs uint32) (int, bool) {
 	real_text := text
 	if printed == nil {
 		printed = make(map[string]int)
 	}
 	if len(real_text) == 0 {
-		c.PrintDebug("real_text is empty")
+		//c.PrintDebug("real_text is empty")
 		return 0, false
 	}
 
@@ -128,14 +132,16 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	tr := i18n.T(real_text)
 	if tr == real_text {
 		if _, exists := printed[real_text]; !exists {
+			//if !IsDigitsAndSymbols(real_text) {
 			c.PrintDebugInternal("translate text not found!", real_text)
+			//}
+			return 0, false
 		}
 	}
-
-	if c == nil {
-		fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
-		return 0, false
-	}
+	//if c == nil {
+	//	fmt.Printf("drawRetailFilmCJKCylindrical returned:%s\n", "CJK not ready!")
+	//	return 0, false
+	//}
 
 	safeMaxWidth := maxWidth
 	if safeMaxWidth < 0 {
@@ -164,8 +170,8 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	}
 
 	// === 2. 默认字号 ===
-	const paddingY = 1
-	availHeight := controlHeight - paddingY*2
+	const paddingY = 0
+	availHeight := controlHeight1 - paddingY*2
 	if availHeight < 1 {
 		availHeight = 1
 	}
@@ -227,7 +233,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		default: // 左对齐
 			cursorX += 3
 		}
-
+		//c.PrintDebugInternal(real_text, tr, maxWidth, controlHeight1, lineTier.px)
 		for _, tk := range line {
 			rn := tk.rn
 			face := film.TextFaceInGame(lineTier.name)
@@ -276,10 +282,11 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			drawX := int32(cursorX + float64(g.Left))
 
 			// 垂直定位：tiny 直接顶行顶，其他字号垂直居中
-			drawY := int32(currentLineY)
-			if lineTier.name != "tiny" {
-				drawY = int32(currentLineY + (lineSize-int(frame.Height))/2)
-			}
+			//drawY := int32(currentLineY)
+			//if lineTier.name != "tiny" {
+			//	drawY = int32(currentLineY + (lineSize-int(frame.Height))/2)
+			//}
+			drawY := int32(baselineY + (controlHeight1-int(frame.Height))/2)
 
 			sprite := drawlist.Sprite{
 				Frame:   frame,
@@ -310,4 +317,15 @@ func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidt
 		palColor = 255
 	}
 	return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
+}
+
+func isAllASCII(s string) bool {
+	// 如果字节长度等于字符数量，说明全都是单字节字符
+	return len(s) == utf8.RuneCountInString(s)
+}
+
+// IsDigitsAndSymbols 判断字符串是否只包含数字和符号（不含字母、中文、空格）
+func IsDigitsAndSymbols(s string) bool {
+	var onlyDigitsAndSymbols = regexp.MustCompile(`^[0-9[:punct:]]+$`)
+	return onlyDigitsAndSymbols.MatchString(s)
 }
