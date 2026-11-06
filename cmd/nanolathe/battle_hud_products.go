@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -160,6 +161,9 @@ func (h *retailBattleHUD) sidebarProductCatalog(cat *content.Catalog, def *conte
 		c.pages[page] = scaffold
 		var indices []int
 		for i, g := range w.Gadgets {
+			if g.Name == "CORDEFEND" || g.Name == "CORMOVE" {
+				fmt.Println(fmt.Sprintf("sidebarProductCatalog:%s,GKind:%v", g.Name, g.Kind.RuntimeFamily()))
+			}
 			if g.Kind != gui.KindButton || g.Active == 0 || g.CommonAttribs&4 == 0 || sidebarEmptySlot(g.Name) {
 				continue
 			}

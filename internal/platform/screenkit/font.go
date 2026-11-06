@@ -6,7 +6,6 @@
 package screenkit
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -162,7 +161,7 @@ func (f *Font) measure(text string, s Style) float64 {
 // Draw sets a run on its baseline at (x, y) and returns its width.
 func (f *Font) Draw(dst *ebiten.Image, text string, x, y float64, s Style) float64 {
 	text = s.text(text)
-	fmt.Printf("Draw:%s\r\n", text)
+	//fmt.Printf("Draw:%s\r\n", text)
 	w := f.measure(text, s)
 	switch s.Align {
 	case 1:
@@ -352,7 +351,7 @@ func (f *Font) wrapParagraph(para string, s Style, width float64) []string {
 // DrawWrapped sets a paragraph from the top-left (x, top) and returns the
 // height used.
 func (f *Font) DrawWrapped(dst *ebiten.Image, text string, x, top, width, leading float64, s Style) float64 {
-	fmt.Printf("DrawWrapped:%s\r\n", text)
+	//fmt.Printf("DrawWrapped:%s\r\n", text)
 	lines := f.Wrap(text, s, width)
 	s.Verbatim = true
 	y := top + s.Size
