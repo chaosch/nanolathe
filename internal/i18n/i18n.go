@@ -270,3 +270,10 @@ func FileExists(path string) bool {
 	// 其他错误（比如权限不足），这里通常也视为不可用
 	return false
 }
+
+var TranslateCommandButtonNames map[string]string
+var commandButtonNames = [...]string{
+	"BUILD", "ORDERS", "CLOAK", "ONOFF", "MOVEORD", "FIREORD",
+	"MOVE", "STOP", "ATTACK", "DEFEND", "PATROL", "RECLAIM", "CAPTURE", "REPAIR",
+	"LOAD", "UNLOAD", "BLAST",
+}

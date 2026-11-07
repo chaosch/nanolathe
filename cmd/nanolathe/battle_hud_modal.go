@@ -9,7 +9,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/mission"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 )
@@ -383,43 +382,40 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 	draw := func(s string, px int, foreground byte) {
 		if h.modalFont != nil {
 			// GAF mode-0 glyphs carry their own colours. The foreground is still
-			// calculated so the null-slot FNT path takes the same branch.
+			// calculated so the null-slot FNT path takes the same branch.\
+			if _, ok := c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), color, 2); ok {
+				return
+			}
 			h.shell.drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 			return
 		}
 		c.UITextWidthClipped(selected, s, px, y, -1, foreground, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 	}
 	key := captionQuickKeyIndex(text, gad.QuickKey)
-	if i18n.Language() != "chinese" {
-		if key < 0 || (!build && (!centred || gad.GrayedOut&1 != 0)) {
-			draw(text, x, color)
-			return
-		}
-		prefix, letter, suffix := text[:key], text[key:key+1], text[key+1:]
-		draw(prefix, x, color)
-		// TODO(question): settle admission of a keyed later build caption;
-		// retail measures the first stored caption in that branch. Retain selected
-		// prefix spacing until its exceptional writer paths are known [07 R-WGT-01 §3].
-		x += measure(prefix)
-		keyColor := color
-		if build {
-			keyColor = h.guiColor(10)
-		}
-		draw(letter, x, keyColor)
-		if centred {
-			underline := byte(2)
-			if gad.Stages != 0 {
-				underline = 0
-			}
-			clipFill(c, x, y+metric-1, measure(letter), 1, h.guiColor(underline), clip)
-		}
-		draw(suffix, x+measure(letter), color)
-	} else {
-		//text = text + "(" + text[key:key+1] + ")"
-		c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), color, 2)
-		//h.shell.drawRetailFilmCJKCylindrical(c, "("+text[key:key+1]+")", int(clip.W), y, int(clip.W), retailGAFBaselineHeight(h.modalFont), 0, 0)
-
+	if key < 0 || (!build && (!centred || gad.GrayedOut&1 != 0)) {
+		draw(text, x, color)
+		return
 	}
+	prefix, letter, suffix := text[:key], text[key:key+1], text[key+1:]
+	draw(prefix, x, color)
+	// TODO(question): settle admission of a keyed later build caption;
+	// retail measures the first stored caption in that branch. Retain selected
+	// prefix spacing until its exceptional writer paths are known [07 R-WGT-01 §3].
+	x += measure(prefix)
+	keyColor := color
+	if build {
+		keyColor = h.guiColor(10)
+	}
+	draw(letter, x, keyColor)
+	if centred {
+		underline := byte(2)
+		if gad.Stages != 0 {
+			underline = 0
+		}
+		clipFill(c, x, y+metric-1, measure(letter), 1, h.guiColor(underline), clip)
+	}
+	draw(suffix, x+measure(letter), color)
+
 }
 
 // drawBattleRestartWindow supplies RESTART.GUI's session-owned labels and

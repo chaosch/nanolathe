@@ -376,6 +376,7 @@ func maxProductBottom(w *gui.Window) int32 {
 // a page; retain commands and every partially exposed record (HUD design §3.3).
 func (h *retailBattleHUD) coveredSidebarPlaceholder(w *gui.Window, art *formats.GAF, index int) bool {
 	g := w.Gadgets[index]
+
 	if index == 0 || g.Kind != gui.KindButton || sidebarProductSlot(g) || commandButtonName(g.Name) != "" || sidebarNavigation(g) || g.Text != "" || len(g.Labels) != 0 || g.QuickKey != 0 || g.Link != "" {
 		return false
 	}

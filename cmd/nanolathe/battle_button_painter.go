@@ -61,6 +61,7 @@ func retailButtonVerdict(gad gui.Gadget, frames, base, down, stage int, grey boo
 }
 
 func retailButtonFrameFromEntry(entry *formats.GAFEntry, gad gui.Gadget, base, down, stage int, grey bool) (*formats.GAFFrame, retailButtonRenderVerdict) {
+	//fmt.Println("retailButtonFrameFromEntry:", gad.Name, gad.Text, gad)
 	v := retailButtonVerdict(gad, 0, base, down, stage, grey)
 	if entry == nil {
 		return nil, v

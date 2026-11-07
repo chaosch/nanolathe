@@ -60,6 +60,7 @@ const sliderArtEntry = "SLIDERS"
 // kind-4 synthesis of BuildSlider — are finished by the presentation layer,
 // which holds the GAF.
 func LoadWithTranslation(fs vfs.FSOps, name string, captions CaptionTranslator) (*Window, error) {
+	//fmt.Println(fmt.Sprintf("LoadWithTranslation---:Name:%s", name))
 	if fs == nil {
 		return nil, fmt.Errorf("gui: nil VFS")
 	}
