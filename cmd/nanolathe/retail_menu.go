@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"strconv"
 	"strings"
 
@@ -231,28 +230,12 @@ func (g *gameShell) installRetailWindowButtonArt(window *gui.Window, own *format
 	if window == nil {
 		return
 	}
-	for _, gad := range window.Gadgets {
-		if commandButtonName(gad.Name) == "BUILD" {
-			if gad.ButtonArt != nil {
-				for i, j := range gad.ButtonArt.Frames {
-					client.DumpGAFFramePNG("e:/test_"+"E"+"_"+strconv.Itoa(i)+".png", j.Frame)
-				}
-			}
-		}
-	}
+
 	if g == nil || !g.quickKeyPreclearDisabled {
 		gui.PreclearButtonQuickKeys(window)
 	}
 	for i := range window.Gadgets {
-		for _, gad := range window.Gadgets {
-			if commandButtonName(gad.Name) == "BUILD" {
-				if gad.ButtonArt != nil {
-					for i, j := range gad.ButtonArt.Frames {
-						client.DumpGAFFramePNG("e:/test_"+"D"+"_"+strconv.Itoa(i)+".png", j.Frame)
-					}
-				}
-			}
-		}
+
 		gad := &window.Gadgets[i]
 		if gad.Kind == gui.KindButton {
 			// Button flash is reset before either bypass gate. This is runtime
@@ -280,38 +263,8 @@ func (g *gameShell) installRetailWindowButtonArt(window *gui.Window, own *format
 			if gad.Attribs&0x1800 != 0 {
 				continue
 			}
-			//for _, g := range window.Gadgets {
-
-			//}
-			for _, gad := range window.Gadgets {
-				if commandButtonName(gad.Name) == "BUILD" {
-					if gad.ButtonArt != nil {
-						for i, j := range gad.ButtonArt.Frames {
-							client.DumpGAFFramePNG("e:/test_"+"C"+"_"+strconv.Itoa(i)+".png", j.Frame)
-						}
-					}
-				}
-			}
 			gui.AssignButtonQuickKey(window, i)
-			for _, gad := range window.Gadgets {
-				if commandButtonName(gad.Name) == "BUILD" {
-					if gad.ButtonArt != nil {
-						for i, j := range gad.ButtonArt.Frames {
-							client.DumpGAFFramePNG("e:/test_"+"B"+"_"+strconv.Itoa(i)+".png", j.Frame)
-						}
-					}
-				}
-			}
 			art := g.buildRetailButtonArt(*gad, own)
-			for _, gad := range window.Gadgets {
-				if commandButtonName(gad.Name) == "BUILD" {
-					if gad.ButtonArt != nil {
-						for i, j := range gad.ButtonArt.Frames {
-							client.DumpGAFFramePNG("e:/test_"+"A"+"_"+strconv.Itoa(i)+".png", j.Frame)
-						}
-					}
-				}
-			}
 
 			built := art.gadget
 			built.ArtFrame = int32(art.base)
@@ -911,15 +864,6 @@ func (g *gameShell) buildRetailButtonArt(gad gui.Gadget, own *formats.GAF) retai
 	if own != nil {
 		if e, ok := own.Find(name); ok {
 			entry = e
-		}
-		if command := commandButtonName(name); command == "BUILD" {
-			//	if len(gad.ButtonArt.Frames) > 0 {
-			for i, x := range own.Entries {
-				for j, y := range x.Frames {
-					client.DumpGAFFramePNG("e:/test_"+strconv.Itoa(i)+"_"+strconv.Itoa(j)+".png", y.Frame)
-				}
-			}
-			//	}
 		}
 	}
 	common := (*formats.GAF)(nil)

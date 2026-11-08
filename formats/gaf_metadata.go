@@ -101,16 +101,16 @@ func LoadGAFMetadataWithLimits(data []byte, limits GAFLimits) (*GAFMetadata, err
 	meta.Entries = make([]GAFMetadataEntry, 0, int(count))
 	budget := gafMetadataBudget{limits: limits}
 	entryCache := make(map[uint32]GAFMetadataEntry)
-	frameCache := make(map[uint32]*GAFMetadataFrame)
+	//frameCache := make(map[uint32]*GAFMetadataFrame)
 	for i := uint64(0); i < count; i++ {
 		offset := binary.LittleEndian.Uint32(data[12+i*4 : 16+i*4])
 		if uint64(offset) > uint64(len(data)) || uint64(len(data))-uint64(offset) < 40 {
 			return nil, fmt.Errorf("gaf: entry %d points outside file", i)
 		}
-		if cached, ok := entryCache[offset]; ok {
-			meta.Entries = append(meta.Entries, cached)
-			continue
-		}
+		//if cached, ok := entryCache[offset]; ok {
+		//	meta.Entries = append(meta.Entries, cached)
+		//	continue
+		//}
 		header := data[offset : uint64(offset)+40]
 		nameBytes := header[8:40]
 		if nul := indexByte(nameBytes, 0); nul >= 0 {
@@ -136,7 +136,7 @@ func LoadGAFMetadataWithLimits(data []byte, limits GAFLimits) (*GAFMetadata, err
 			ref := data[refsStart+uint64(frame)*8 : refsStart+uint64(frame+1)*8]
 			entry.Frames[frame].Offset = binary.LittleEndian.Uint32(ref[0:4])
 			entry.Frames[frame].Value = binary.LittleEndian.Uint32(ref[4:8])
-			decoded, err := indexGAFFrame(data, entry.Frames[frame].Offset, frameCache, make(map[uint32]bool), &budget, 0)
+			decoded, err := indexGAFFrame(data, entry.Frames[frame].Offset, make(map[uint32]*GAFMetadataFrame), make(map[uint32]bool), &budget, 0)
 			if err != nil {
 				return nil, fmt.Errorf("gaf: entry %q frame %d: %w", entry.Name, frame, err)
 			}

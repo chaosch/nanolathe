@@ -1498,6 +1498,23 @@
   "south": "南",
   "west": "西",
   "east": "东",
-  "hover": "两栖部队"
+  "hover": "两栖部队",
+  "BUILD": "建造B",
+  "ORDERS": "命令O",
+  "CLOAK": "隐形K",
+  "ONOFF": "开关",
+  "MOVEORD": "移动命令",
+  "FIREORD": "开火",
+  "MOVE": "移动M",
+  "STOP": "停止S",
+  "ATTACK": "攻击A",
+  "DEFEND": "守卫G",
+  "PATROL": "巡逻P",
+  "RECLAIM": "回收R",
+  "CAPTURE": "捕获C",
+  "REPAIR": "修理R",
+  "LOAD": "装载L",
+  "UNLOAD": "卸载U",
+  "BLAST": "D枪D"
 
 }

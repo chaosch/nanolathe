@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,12 +41,16 @@ func (g *gameShell) applyLanguage() {
 	}
 	code := g.requestedLanguage()
 	g.languagePending = ""
-	if code == "chinese" {
+	//add chinese,japanese,korean support
+	if code == "chinese" || code == "japanese" || code == "korean" {
 		film.EnableCJK()
 		g.languagePending = code
 		g.pollLanguage()
 		return
 	}
+	//clean translate cache
+	//todo clean other localized cache
+	client.TranslateCache = make(map[client.TranslateCacheKey]client.TranslateValue)
 	g.setInterfaceLanguage(code)
 }
 

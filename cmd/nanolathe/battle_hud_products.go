@@ -219,7 +219,6 @@ func (h *retailBattleHUD) sidebarCombinedCommands(c *sidebarProductCatalog) bool
 			p := sidebarProduct{source: sidebarGadgetSource{s.window, s.art, i}, rect: s.window.PlacedRect(i)}
 			if command := commandButtonName(g.Name); command == "BUILD" || command == "ORDERS" {
 				c.tabs = append(c.tabs, p)
-				client.DumpGAFFrame(g.ButtonArt.Frames[0].Frame)
 			} else {
 				*dst = append(*dst, p)
 			}
@@ -257,6 +256,12 @@ func (h *retailBattleHUD) sidebarCombinedCommands(c *sidebarProductCatalog) bool
 			start = last
 		}
 		return height
+	}
+	for _, g := range c.commands {
+		for _, x := range g.source.window.Gadgets {
+			client.PrintDebug(x.Name)
+		}
+		//client.DumpGAFFrame(g.art.Entries, c.orders.window.Gadgets[g].Name)
 	}
 	margins := h.sidebarCommandMargins(build, c.orders, extra)
 
