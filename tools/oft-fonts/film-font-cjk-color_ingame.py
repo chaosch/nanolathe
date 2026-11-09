@@ -43,7 +43,7 @@ PALETTE = [
     (67, 67, 35), (51, 51, 23), (35, 35, 15), (27, 27, 7),
     (23, 23, 7), (19, 19, 0), (15, 15, 0), (11, 11, 0)
 ]
-DARKEN = 0.85
+DARKEN = 0.8
 PALETTE = [tuple(int(c * DARKEN) for c in color) for color in PALETTE]
 
 

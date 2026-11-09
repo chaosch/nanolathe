@@ -4,10 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 )
 
 // LoadGAFIsolated 完美隔離加載：保留原廠 RLE 圖案，跳過子幀表防止越界，不合成文字。
-func LoadGAFIsolated(data []byte) (*GAF, error) {
+func LoadGAFIsolated(data []byte, commands []string) (*GAF, error) {
 	limits := DefaultGAFLimits()
 	if len(data) < 12 {
 		return nil, fmt.Errorf("gaf: file is too small")
@@ -18,7 +19,6 @@ func LoadGAFIsolated(data []byte) (*GAF, error) {
 		EntryCount: binary.LittleEndian.Uint32(data[4:8]),
 		Unknown:    binary.LittleEndian.Uint32(data[8:12]),
 	}
-
 	count := uint64(0)
 	if n := int16(meta.EntryCount); n > 0 {
 		count = uint64(n)
@@ -63,7 +63,6 @@ func LoadGAFIsolated(data []byte) (*GAF, error) {
 		if err := budget.addRefs(uint64(entry.FrameCount)); err != nil {
 			return nil, fmt.Errorf("gaf: entry %q: %w", entry.Name, err)
 		}
-
 		entry.Frames = make([]GAFMetadataFrameRef, entry.FrameCount)
 		for frame := range entry.Frames {
 			ref := data[refsStart+uint64(frame)*8 : refsStart+uint64(frame+1)*8]
@@ -91,6 +90,16 @@ func LoadGAFIsolated(data []byte) (*GAF, error) {
 
 	for i := range meta.Entries {
 		source := &meta.Entries[i]
+		ignore := true
+		for _, key := range commands {
+			if !strings.Contains(source.Name, key) {
+				ignore = false
+				break
+			}
+		}
+		if ignore {
+			continue
+		}
 		entry := GAFEntry{
 			Name:       source.Name,
 			FrameCount: source.FrameCount,

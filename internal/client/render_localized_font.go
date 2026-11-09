@@ -6,7 +6,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
-	"github.com/nanolathe-gg/nanolathe/vfs"
 	"image"
 	"image/color"
 	"image/png"
@@ -99,12 +98,12 @@ func PrintStackTrace() {
 // ============================================================
 // 字体档位（与 Python NEW_FACE 一致）
 // ============================================================
-type faceTier struct {
-	name string
-	px   int
+type FaceTier struct {
+	Name string
+	Px   int
 }
 
-var faceTiers = []faceTier{
+var faceTiers = []FaceTier{
 	{"tiny", 12},
 	{"small", 14},
 	{"normal", 16}, //{"normal", 20},
@@ -113,12 +112,12 @@ var faceTiers = []faceTier{
 	//{"title", 20},
 }
 
-func pickTier(targetH int) faceTier {
+func PickTier(targetH int) FaceTier {
 	if targetH <= 0 {
 		return faceTiers[0]
 	}
 	for _, t := range faceTiers {
-		if t.px >= targetH {
+		if t.Px >= targetH {
 			return t
 		}
 	}
@@ -183,7 +182,7 @@ func (c *Client) DrawRetailFilmCJKBak(text string, x, baselineY, maxWidth int, c
 	if availHeight < 1 {
 		availHeight = 1
 	}
-	defaultTier := pickTier(availHeight)
+	defaultTier := PickTier(availHeight)
 
 	// === 3. 换行排版 ===
 	var lines [][]token
@@ -203,7 +202,7 @@ func (c *Client) DrawRetailFilmCJKBak(text string, x, baselineY, maxWidth int, c
 	// === 4. 渲染 ===
 	currentLineY := baselineY + paddingY
 	curTier := defaultTier
-	curSize := curTier.px
+	curSize := curTier.Px
 	maxLineWidth := 0.0
 
 	for _, line := range lines {
@@ -214,7 +213,7 @@ func (c *Client) DrawRetailFilmCJKBak(text string, x, baselineY, maxWidth int, c
 		var lineW float64
 		for _, tk := range line {
 			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.name)
+			face := film.TextFaceInGame(lineTier.Name)
 			if face != nil {
 				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
 					lineW += float64(g.W)
@@ -244,7 +243,7 @@ func (c *Client) DrawRetailFilmCJKBak(text string, x, baselineY, maxWidth int, c
 		//c.PrintDebugInternal(real_text, tr, maxWidth, controlHeight1, lineTier.px)
 		for _, tk := range line {
 			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.name)
+			face := film.TextFaceInGame(lineTier.Name)
 			if face == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
 					cursorX += float64(lineSize)
@@ -271,7 +270,7 @@ func (c *Client) DrawRetailFilmCJKBak(text string, x, baselineY, maxWidth int, c
 			}
 
 			// ★ tiny 动态上色（深拷贝 Frame 防污染）
-			if lineTier.name == "tiny" && palColor > 0 {
+			if lineTier.Name == "tiny" && palColor > 0 {
 				newPixels := make([]byte, len(frame.Pixels))
 				for i := 0; i < len(frame.Pixels); i++ {
 					if !frame.Transparent[i] {
@@ -411,14 +410,14 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		availHeight = 1
 	}
 
-	var defaultTier faceTier
+	var defaultTier FaceTier
 	if explicitSize > 0 {
-		defaultTier = pickTier(explicitSize)
+		defaultTier = PickTier(explicitSize)
 	} else if gridRows > 1 && gridCols > 0 {
 		cellHeight := availHeight / gridRows
-		defaultTier = pickTier(cellHeight)
+		defaultTier = PickTier(cellHeight)
 	} else {
-		defaultTier = pickTier(availHeight)
+		defaultTier = PickTier(availHeight)
 	}
 
 	// === 3. 换行排版 ===
@@ -438,7 +437,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	// === 4. 渲染 ===
 	currentLineY := baselineY + paddingY
 	curTier := defaultTier
-	curSize := curTier.px
+	curSize := curTier.Px
 	maxLineWidth := 0.0
 
 	// 判断是否多行
@@ -452,7 +451,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		var lineW float64
 		for _, tk := range line {
 			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.name)
+			face := film.TextFaceInGame(lineTier.Name)
 			if face != nil {
 				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
 					lineW += float64(g.W)
@@ -482,7 +481,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 
 		for _, tk := range line {
 			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.name)
+			face := film.TextFaceInGame(lineTier.Name)
 			if face == nil {
 				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
 					cursorX += float64(lineSize)
@@ -509,7 +508,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 			}
 
 			// tiny 动态上色（深拷贝 Frame 防污染）
-			if lineTier.name == "tiny" && palColor > 0 {
+			if lineTier.Name == "tiny" && palColor > 0 {
 				newPixels := make([]byte, len(frame.Pixels))
 				for i := 0; i < len(frame.Pixels); i++ {
 					if !frame.Transparent[i] {
@@ -961,200 +960,3 @@ func init() {
 }
 
 // 傳入：包的物理路徑，和要讀的 GAF 名字
-func LoadGAFFromArchive(fs vfs.FSOps, archiveName string, gafName string) (*formats.GAF, error) {
-	realFS, ok := fs.(*vfs.FS)
-	if !ok {
-		return nil, fmt.Errorf("非 *vfs.FS")
-	}
-
-	// 1. 透過 VFS 拿到這個 GAF 所有的來源層
-	sources := realFS.Sources(gafName)
-	if len(sources) == 0 {
-		return nil, fmt.Errorf("找不到文件: %s", gafName)
-	}
-
-	// 2. 尋找目標包的絕對路徑
-	var targetArchivePath string
-	for _, src := range sources {
-		// 用 filepath.Base 取出包名，和傳入的 archiveName 做忽略大小寫的比較
-		if strings.EqualFold(filepath.Base(src.Source.SourcePath), archiveName) {
-			targetArchivePath = src.Source.SourcePath
-			break
-		}
-	}
-
-	if targetArchivePath == "" {
-		return nil, fmt.Errorf("找不到包: %s", archiveName)
-	}
-
-	// 3. 建立一個乾淨的臨時 VFS，用反查出來的絕對路徑直接掛載
-	tempFS := vfs.New()
-	_, err := tempFS.MountArchive(targetArchivePath, 0)
-	if err != nil {
-		return nil, fmt.Errorf("掛載 %s 失敗: %w", targetArchivePath, err)
-	}
-	defer tempFS.Close()
-
-	// 4. 從這個乾淨的 VFS 直接讀取
-	file, err := tempFS.OpenMount(0, gafName)
-	if err != nil {
-		return nil, fmt.Errorf("包裡找不到 %s: %w", gafName, err)
-	}
-	defer file.Close()
-
-	// 5. 輸出數據
-	data, err := vfs.WholeBytes(file)
-	if err != nil {
-		return nil, err
-	}
-	PrintDebug(len(data))
-	os.WriteFile("e:/raw_commongui.gaf", data, 0644)
-	return formats.LoadGAFIsolated(data)
-}
-
-func TranslateCommands(gaf *formats.GAF, keys []string) {
-	for i, _ := range gaf.Entries {
-		cmd := gaf.Entries[i].Name
-		realCmd := ""
-		needTranslate := false
-		for _, k := range keys {
-			if strings.Contains(cmd, k) {
-				realCmd = i18n.T(k)
-				needTranslate = true
-				break
-			}
-		}
-		if needTranslate {
-			RenderCjkFontToGAF(&gaf.Entries[i], realCmd)
-		}
-	}
-}
-
-// 傳入 Entry 的指針，直接在內部修改像素
-
-func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
-	// 定義常量（你可以根據實際情況調整數值）
-	const (
-		PaddingY       = 2 // 上下留白像素
-		PressedOffsetY = 1 // 按下（第1幀）文字下沉的像素
-	)
-
-	for i := range entry.Frames {
-		frame := entry.Frames[i].Frame
-		if frame == nil || len(frame.Pixels) == 0 {
-			continue
-		}
-
-		width := int(frame.Width)
-		height := int(frame.Height)
-
-		// 1. 計算扣除留白後的有效高度
-		availHeight := height - PaddingY*2
-		if availHeight < 1 {
-			availHeight = 1
-		}
-
-		// 2. 根據有效高度決定字體大小
-		curTier := pickTier(availHeight)
-		face := film.TextFaceInGame(curTier.name)
-		if face == nil {
-			continue
-		}
-		lineSize := curTier.px
-
-		// 3. 決定顏色（根據幀狀態：0=正常, 1=按下, 2=禁用）
-		var palColor uint8 = 15 // 正常
-		if i == 1 {
-			palColor = 14 // 按下
-		} else if i == 2 {
-			palColor = 8 // 禁用
-		}
-
-		// 4. 計算行寬
-		var lineW float64
-		for _, rn := range text {
-			g := face.Glyphs[string(rn)]
-			if g != nil && g.W > 0 {
-				lineW += float64(g.W)
-				continue
-			}
-			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-				lineW += float64(lineSize)
-			} else {
-				lineW += float64(lineSize) / 2
-			}
-		}
-
-		// 5. 水平居中對齊起點
-		cursorX := (float64(width) - lineW) / 2.0
-
-		// 6. 逐字渲染與貼圖
-		for _, rn := range text {
-			g := face.Glyphs[string(rn)]
-			if g == nil || g.Frame() == nil {
-				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-					cursorX += float64(lineSize)
-				} else {
-					cursorX += float64(lineSize) / 2
-				}
-				continue
-			}
-
-			glyphFrame := g.Frame()
-			if glyphFrame.Width == 0 || glyphFrame.Height == 0 || len(glyphFrame.Pixels) == 0 {
-				cursorX += float64(g.W)
-				continue
-			}
-
-			var finalPixels []byte
-			var finalTransparent []bool
-
-			// tiny 動態上色，small/normal 直接渲染
-			if curTier.name == "tiny" && palColor > 0 {
-				newPixels := make([]byte, len(glyphFrame.Pixels))
-				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
-					if pIdx < len(glyphFrame.Transparent) && !glyphFrame.Transparent[pIdx] {
-						newPixels[pIdx] = palColor
-					}
-				}
-				finalPixels = newPixels
-				finalTransparent = glyphFrame.Transparent
-			} else {
-				finalPixels = glyphFrame.Pixels
-				finalTransparent = glyphFrame.Transparent
-			}
-
-			// 7. 定位（加入留白與下沉邏輯）
-			drawX := int(cursorX + float64(g.Left))
-
-			// 垂直居中：起點為 PaddingY，加上有效高度和字體高度的居中偏移
-			drawY := PaddingY + (availHeight-int(glyphFrame.Height))/2
-
-			// 按下狀態文字下沉
-			if i == 1 {
-				drawY += PressedOffsetY
-			}
-
-			// 8. 像素 Blit（原地寫入 frame.Pixels）
-			for gy := 0; gy < int(glyphFrame.Height); gy++ {
-				for gx := 0; gx < int(glyphFrame.Width); gx++ {
-					px := drawX + gx
-					py := drawY + gy
-
-					if px >= 0 && px < width && py >= 0 && py < height {
-						idx := py*width + px
-						gIdx := gy*int(glyphFrame.Width) + gx
-
-						if gIdx >= 0 && gIdx < len(finalPixels) && gIdx < len(finalTransparent) {
-							if !finalTransparent[gIdx] {
-								frame.Pixels[idx] = finalPixels[gIdx]
-							}
-						}
-					}
-				}
-			}
-
-			cursorX += float64(g.W)
-		}
-	}
-}

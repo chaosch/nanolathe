@@ -11,10 +11,10 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
+	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/mission"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/internal/render"
@@ -320,16 +320,9 @@ func loadRetailBattleHUDForOwner(fs vfs.FSOps, sess *session.Session, cat *conte
 	common := &formats.GAF{}
 	//c jk fonts:load empty buttons from totala1.hpi anims/commongui.GAF for render fonts
 	//todo applyLanguage()
-	//common := factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
-	if i18n.Language() != "english" {
-		var e error
-		common, e = client.LoadGAFFromArchive(fs, "totala1.hpi", "anims/commongui.GAF")
-		if e != nil {
-			common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
-		}
-		client.TranslateCommands(common, []string(commandButtonNames[:]))
-	} else {
-		common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
+	common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
+	if film.CJKReady() {
+		RenderCommandButtons(shell.cs.unmappedMount, common)
 	}
 	oldMain := loadGAFOptional(fs, "anims/oldmain.gaf", "oldmain.gaf")
 	share := loadGAFOptional(fs, "anims/share.gaf", "share.gaf")
