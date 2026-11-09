@@ -21,15 +21,21 @@ LANGUAGE = "chinese"
 WIDTH = 2048
 
 # 定义你要的颜色 (R, G, B)
-TARGET_COLOR = (229, 223, 189)
+TARGET_COLOR = (195, 195, 155)
 OUTLINE_COLOR = (0, 0, 0)
+
+WEN_QUAN12=r"WenQuanYi.Bitmap.Song.12px.ttf"
+WEN_QUAN13=r"WenQuanYi.Bitmap.Song.13px.ttf"
+WEN_QUAN14=r"WenQuanYi.Bitmap.Song.14px.ttf"
+WEN_QUAN15=r"WenQuanYi.Bitmap.Song.15px.ttf"
+WEN_QUAN16=r"WenQuanYi.Bitmap.Song.16px.ttf"
 
 OLD_FACE = {}
 # mode 参数："render" = 走原版渐变光影，"color" = 纯色平涂，"white" = 纯白点阵
 NEW_FACE = {
-    "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "mode": "white",  "border": 0, "color": None,"is_mask": True},
-    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render",  "border": 1, "color": TARGET_COLOR,"is_mask": False},
-    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "mode": "render", "border": 1, "color": None,"is_mask": False},
+    "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": WEN_QUAN12, "variable": False, "mode": "white",  "border": 0, "color": None,         "is_mask": True},
+    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "white", "border": 1, "color": TARGET_COLOR, "is_mask": False},
+    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": WEN_QUAN16, "variable": False, "mode": "render", "border": 1, "color": None,         "is_mask": False},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
@@ -43,7 +49,7 @@ PALETTE = [
     (67, 67, 35), (51, 51, 23), (35, 35, 15), (27, 27, 7),
     (23, 23, 7), (19, 19, 0), (15, 15, 0), (11, 11, 0)
 ]
-DARKEN = 0.8
+DARKEN = 0.70
 PALETTE = [tuple(int(c * DARKEN) for c in color) for color in PALETTE]
 
 
@@ -59,14 +65,31 @@ def wanted(catalogs):
     return sorted(c for c in chars if ord(c) >= 0x20 and c not in "{}")
 
 
-def load_face(source, weight, size):
+def load_face(source, weight, size, variable=False):
     font = ImageFont.truetype(source, size)
+    if not variable:
+        return font
+    # 可变字体：显式按轴设置，并做存在性校验
     try:
-        font.set_variation_by_axes([weight])
-    except Exception:
-        pass
+        axes = font.get_variation_axes()
+        if not axes:
+            print(f"[WARN] {os.path.basename(source)} 标记为 variable 但未发现设计轴，忽略 weight={weight}")
+            return font
+        # weight 对应 wght 轴；这里按轴顺序传入，单轴字体即 wght
+        axis_tags = [a.get("tag") for a in axes]
+        if "wght" in axis_tags:
+            values = []
+            for a in axes:
+                if a.get("tag") == "wght":
+                    values.append(weight)
+                else:
+                    values.append(a.get("default", a.get("min", 0)))
+            font.set_variation_by_axes(values)
+        else:
+            print(f"[WARN] {os.path.basename(source)} 无可用的 wght 轴，忽略 weight={weight}")
+    except Exception as e:
+        print(f"[WARN] 设置可变轴失败 {os.path.basename(source)}: {e}")
     return font
-
 
 def render_colored_glyph(char, font, w, h, border, mode, color):
     # tiny 不需要留白，其他字体外扩 border 像素
