@@ -39,20 +39,18 @@ func SetAssetsDir(dir string) {
 
 // readAsset 外部优先，内部兜底
 func readAsset(name string) ([]byte, error) {
-	folder := selectLocalesFolder(name)
+	folder := selectLocalesFolder()
 	var data []byte
 	var err error
 	if folder == "" {
 		data, err = fontAssets.ReadFile("assets/" + name)
+		println("load  internal locales face from folder:", name, "assets")
 	} else {
 		data, err = os.ReadFile(filepath.Join(folder, name))
+		println("load  external locales face from folder:%", filepath.Join(folder, name))
 		if err != nil {
-			//local locales file
-			png := filepath.Join(folder, name) + ".png"
-			json := filepath.Join(folder, name) + ".json"
-			if FileExists(png) || FileExists(json) {
-				data, err = fontAssets.ReadFile("assets/" + name)
-			}
+			data, err = fontAssets.ReadFile("assets/" + name)
+			println("load  internal face  from folder fallback", name, "assets", "fallback")
 		}
 	}
 	if err != nil {
@@ -61,10 +59,10 @@ func readAsset(name string) ([]byte, error) {
 	return data, nil
 }
 
-func selectLocalesFolder(name string) string {
+func selectLocalesFolder() string {
 	languages := i18n.Languages
 	for _, l := range languages {
-		if l.Name == name {
+		if l.Code == i18n.Language() {
 			return l.Folder
 		}
 	}

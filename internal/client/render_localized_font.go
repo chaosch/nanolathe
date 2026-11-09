@@ -960,3 +960,15 @@ func init() {
 }
 
 // 傳入：包的物理路徑，和要讀的 GAF 名字
+
+func NeedCjkTranslate() bool {
+	return needCjkTranslate(i18n.Language())
+}
+func needCjkTranslate(language string) bool {
+	for _, l := range i18n.CjkLanguage {
+		if l == language {
+			return true
+		}
+	}
+	return false
+}

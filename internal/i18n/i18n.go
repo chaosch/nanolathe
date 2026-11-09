@@ -178,7 +178,7 @@ func fill(translation string, parts []string) string {
 
 func load(code string) (*catalog, error) {
 
-	dir := selectLocalesFolder(code)
+	dir := selectLocalesFolder()
 	var data []byte
 	var err error
 
@@ -186,11 +186,13 @@ func load(code string) (*catalog, error) {
 
 	if dir == "" {
 		data, err = locales.ReadFile("locales/" + code + ".json")
+		println("load  internal translation  from folder:", "assets", code)
 	} else {
-		if FileExists(filename) {
-			data, err = os.ReadFile(filename)
-		} else {
+		data, err = os.ReadFile(filename)
+		println("load  external translation from folder:", filepath.Join(dir, code), code)
+		if err != nil {
 			data, err = locales.ReadFile("locales/" + code + ".json")
+			println("load  internal translation  from folder:", "assets", code, "fallback")
 		}
 	}
 	if err != nil {
@@ -249,10 +251,11 @@ func build(code string, entries map[string]string) *catalog {
 	return c
 }
 
-func selectLocalesFolder(name string) string {
+func selectLocalesFolder() string {
 	languages := Languages
+	fmt.Println(Language())
 	for _, l := range languages {
-		if l.Name == name {
+		if l.Code == Language() {
 			return l.Folder
 		}
 	}
@@ -271,9 +274,23 @@ func FileExists(path string) bool {
 	return false
 }
 
-var TranslateCommandButtonNames map[string]string
-var commandButtonNames = [...]string{
-	"BUILD", "ORDERS", "CLOAK", "ONOFF", "MOVEORD", "FIREORD",
-	"MOVE", "STOP", "ATTACK", "DEFEND", "PATROL", "RECLAIM", "CAPTURE", "REPAIR",
-	"LOAD", "UNLOAD", "BLAST",
+var CjkLanguage = []string{"chinese", "japanese", "korean"}
+
+func LanguageNeedCJK(language string) bool {
+	for _, l := range CjkLanguage {
+		if l == language {
+			return true
+		}
+	}
+	return false
+}
+func I18nLanguageNeedCJK() bool {
+	return LanguageNeedCJK(Language())
+}
+
+func MatchLanguage(language, code string) bool {
+	if language == Language() {
+		return true
+	}
+	return false
 }

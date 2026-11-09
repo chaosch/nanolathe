@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,22 +34,22 @@ func parseLanguage(text string) (string, error) {
 // run, otherwise the saved choice. A catalog that would not load leaves the
 // interface in English with a notice.
 func (g *gameShell) applyLanguage() {
-	for _, l := range g.languages {
-		i18n.Languages = append(i18n.Languages, l)
-	}
 	code := g.requestedLanguage()
 	g.languagePending = ""
 	//add chinese,japanese,korean support
-	if code == "chinese" || code == "japanese" || code == "korean" {
+	if i18n.LanguageNeedCJK(code) {
 		film.EnableCJK()
+		//renderedButtonCache.Clear()
+		//client.TranslateCache = make(map[client.TranslateCacheKey]client.TranslateValue)
 		g.languagePending = code
 		g.pollLanguage()
 		return
 	}
 	//clean translate cache
 	//todo clean other localized cache
-	client.TranslateCache = make(map[client.TranslateCacheKey]client.TranslateValue)
+
 	g.setInterfaceLanguage(code)
+
 }
 
 func (g *gameShell) requestedLanguage() string {
@@ -256,37 +254,38 @@ func (g *gameShell) ScanExternalLocales() error {
 		}
 		code := entry.Name()
 
-		exists := false
-		for _, l := range g.languages {
+		languageIdx := -1
+		for idx, l := range i18n.Languages {
 			if l.Code == code {
-				exists = true
+				languageIdx = idx
 				break
 			}
 		}
-		if exists {
-			continue
-		}
-
+		var scaned struct{ Code, Name, Folder string }
 		// 默认名字就是 code
-		langName := code
-
-		// ★ 尝试读取 meta.json 获取原生语言名称
-		metaPath := filepath.Join(localesDir, code, "meta.json")
-		if data, err := os.ReadFile(metaPath); err == nil {
-			var meta struct {
-				Name string `json:"name"`
+		scaned.Code = code
+		scaned.Name = code
+		scaned.Folder = filepath.Join(localesDir, entry.Name())
+		if i18n.LanguageNeedCJK(entry.Name()) {
+			if languageIdx == -1 {
+				i18n.Languages = append(i18n.Languages, scaned)
+			} else {
+				i18n.Languages[languageIdx].Folder = scaned.Folder
 			}
-			if json.Unmarshal(data, &meta) == nil && meta.Name != "" {
-				langName = meta.Name
-			}
-			g.languages = append(g.languages, struct{ Code, Name, Folder string }{code, langName, filepath.Join(localesDir, code)})
-		} else {
-			return errors.New(err.Error())
+			println("find %s external locales folder:%s", scaned.Code, scaned.Folder)
 		}
-	}
-	if len(g.languages) == 0 {
-		g.language = ""
-		fmt.Fprintln(os.Stderr, "nanolathe: none local locales folder")
 	}
 	return nil
+}
+
+func verifyLocalesFolder(baseDir, folder string) bool {
+	files := []string{"tiny-cjk.png", "normal-cjk.png", "small-cjk.json", "normal-cjk.json", "body-cjk.png", "tiny-cjk.json", "display-cjk.png", "small-cjk.png", "display.json", "display-cjk.json", "body-cjk.json", "display.png", "body.png", "body.json"}
+	files = append(files, folder+".json")
+	for _, file := range files {
+		filename := filepath.Join(baseDir, folder, file)
+		if info, err := os.Stat(filename); err != nil || info.IsDir() {
+			return false
+		}
+	}
+	return true
 }

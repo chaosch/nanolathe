@@ -552,10 +552,10 @@ func (s *nlScreen) apply() {
 	s.draft = s.freshDraft(g)
 	s.retainLanguageChoice(g)
 	s.toast, s.toastLeft = "Settings saved", 2.2
-	if g.requestedLanguage() == "chinese" && i18n.Language() != "chinese" {
-		s.toast, s.toastLeft = "Loading Chinese fonts...", 6
+	if client.NeedCjkTranslate() && !i18n.I18nLanguageNeedCJK() {
+		s.toast, s.toastLeft = "Loading cjk fonts...", 6
 		if film.CJKError() != nil {
-			s.toast = "Chinese fonts could not load. Apply to retry."
+			s.toast = "cjk fonts could not load. Apply to retry."
 		}
 	}
 	g.playMenuCue("BigButton")

@@ -13,14 +13,8 @@ import (
 	"sync"
 )
 
-func CopyGAFEntry(fontEntry *formats.GAFEntry, targetGAF *formats.GAFEntry) {
-	// 直接把 fontEntry 裡已經渲染好的幀，整個覆蓋給 targetGAF
-	targetGAF.Frames = fontEntry.Frames
-	targetGAF.FrameCount = fontEntry.FrameCount
-}
-
 func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
-	if !film.CJKReady() {
+	if !client.NeedCjkTranslate() {
 		return
 	}
 	//buttonnGAF是所有按钮GAF
@@ -39,8 +33,17 @@ func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
 				gafs.Entries[i].Frames = cachedEntry.Frames
 				gafs.Entries[i].FrameCount = cachedEntry.FrameCount
 			} else {
-				// 沒命中，直接跳過
-				continue
+				//第三方阵营，只能用其中一个来其中一个来匹配。
+				fallbackName := commandButtonName(gafs.Entries[i].Name)
+				fallbackName = "ARM" + fallbackName
+				if fallbackCached, ex := renderedButtonCache.Load(fallbackName); ex {
+					fallbackCachedEntry := fallbackCached.(*formats.GAFEntry)
+					// 命中緩存，直接覆蓋指針
+					gafs.Entries[i].Frames = fallbackCachedEntry.Frames
+					gafs.Entries[i].FrameCount = fallbackCachedEntry.FrameCount
+				} else {
+					continue
+				}
 			}
 		}
 	}
@@ -265,13 +268,17 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 		return
 	}
 	const (
-		PaddingY       = 2  // 上下留白像素
-		PressedOffsetY = 1  // 按下（第1幀）文字下沉的像素
-		PaddingLeft    = 4  // 左側留白（避開邊框）
-		PaddingRight   = 24 // 右側留白（避開原廠指示燈）
+		PaddingY               = 2   // 上下留白像素
+		PressedOffsetY         = 1   // 按下（第1幀）文字下沉的像素
+		PaddingLeft            = 25  // 左側留白（避開邊框）
+		PaddingLeftNormal      = 4   // 普通按鈕左留白
+		PaddingRight           = 0   // 右側留白（避開原廠指示燈）
+		UnderlineColor         = 38  // 下劃線顏色（正常綠色）
+		UnderlineColorDisabled = 248 // 下劃線顏色（禁用狀態灰色）
+		UnderlineOffsetY       = 1   // 被劃線字母上移的像素
 	)
 
-	// 只有這四個按鈕需要按 "|" 切分多狀態文字
+	// 1. 判斷是否為狀態按鈕
 	isStateButton := false
 	var textParts []string
 	cmd := commandButtonName(entry.Name)
@@ -292,7 +299,7 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 			if i < len(textParts) {
 				currentText = textParts[i]
 			} else {
-				currentText = textParts[len(textParts)-1] // 幀數多於文字數，預設用最後一個
+				currentText = textParts[len(textParts)-1]
 			}
 		}
 
@@ -311,6 +318,7 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 		}
 		lineSize := curTier.Px
 
+		// 決定顏色
 		var palColor uint8 = 15 // 正常
 		if i == 1 {
 			palColor = 14 // 按下
@@ -333,9 +341,33 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 			}
 		}
 
-		availWidth := float64(width) - float64(PaddingLeft+PaddingRight)
-		cursorX := float64(PaddingLeft) + (availWidth-lineW)/2.0
+		// 根據按鈕類型選擇左留白
+		currentPaddingLeft := PaddingLeftNormal
+		if isStateButton {
+			currentPaddingLeft = PaddingLeft
+		}
 
+		availWidth := float64(width) - float64(currentPaddingLeft+PaddingRight)
+		cursorX := float64(currentPaddingLeft)
+
+		// 普通按鈕居中，狀態按鈕左對齊
+		if !isStateButton {
+			cursorX += (availWidth - lineW) / 2.0
+		}
+
+		// 暫存所有需要繪製的字母信息
+		type drawInfo struct {
+			runes            rune
+			drawX            int
+			drawY            int
+			width            int
+			height           int
+			finalPixels      []byte
+			finalTransparent []bool
+		}
+		var drawList []drawInfo
+
+		// 第一步：計算位置並收集信息
 		for _, rn := range currentText {
 			g := face.Glyphs[string(rn)]
 			if g == nil || g.Frame() == nil {
@@ -356,6 +388,7 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 			var finalPixels []byte
 			var finalTransparent []bool
 
+			// 需求 5：保留非 tiny 字體的立體感
 			if curTier.Name == "tiny" && palColor > 0 {
 				newPixels := make([]byte, len(glyphFrame.Pixels))
 				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
@@ -378,21 +411,59 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 				drawY += PressedOffsetY
 			}
 
-			for gy := 0; gy < int(glyphFrame.Height); gy++ {
-				for gx := 0; gx < int(glyphFrame.Width); gx++ {
-					px := drawX + gx
-					py := drawY + gy
+			drawList = append(drawList, drawInfo{
+				runes: rn, drawX: drawX, drawY: drawY,
+				width: int(glyphFrame.Width), height: int(glyphFrame.Height),
+				finalPixels: finalPixels, finalTransparent: finalTransparent,
+			})
+
+			cursorX += float64(g.W)
+		}
+
+		// 第二步：找到需要畫下劃線的字母（最後一個英文字母）
+		underlineIdx := -1
+		for idx := len(drawList) - 1; idx >= 0; idx-- {
+			if drawList[idx].runes < 128 {
+				underlineIdx = idx
+				break
+			}
+		}
+
+		// 第三步：執行繪製
+		for idx, item := range drawList {
+			actualDrawY := item.drawY
+			// 需要劃線的字母整體上移
+			if idx == underlineIdx {
+				actualDrawY -= UnderlineOffsetY
+			}
+
+			// 畫字母
+			for gy := 0; gy < item.height; gy++ {
+				for gx := 0; gx < item.width; gx++ {
+					px := item.drawX + gx
+					py := actualDrawY + gy
 
 					if px >= 0 && px < width && py >= 0 && py < height {
-						idx := py*width + px
-						gIdx := gy*int(glyphFrame.Width) + gx
+						idxPix := py*width + px
+						gIdx := gy*item.width + gx
 
-						if gIdx >= 0 && gIdx < len(finalPixels) && gIdx < len(finalTransparent) {
-							if !finalTransparent[gIdx] {
-								if i == 2 {
-									frame.Pixels[idx] = 8
+						if gIdx >= 0 && gIdx < len(item.finalPixels) && gIdx < len(item.finalTransparent) {
+							if !item.finalTransparent[gIdx] {
+								pixel := item.finalPixels[gIdx]
+
+								// 需求 1 & 2：狀態按鈕第3幀不變灰，普通按鈕第3幀變灰
+								if i == 2 && !isStateButton {
+									if curTier.Name == "tiny" {
+										frame.Pixels[idxPix] = 8
+									} else {
+										if pixel >= 10 && pixel <= 31 {
+											frame.Pixels[idxPix] = 8
+										} else {
+											frame.Pixels[idxPix] = pixel
+										}
+									}
 								} else {
-									frame.Pixels[idx] = finalPixels[gIdx]
+									frame.Pixels[idxPix] = pixel
 								}
 							}
 						}
@@ -400,7 +471,26 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 				}
 			}
 
-			cursorX += float64(g.W)
+			// 畫下劃線
+			if idx == underlineIdx {
+				underlineY := actualDrawY + item.height
+				if underlineY >= height {
+					underlineY = height - 1
+				}
+
+				// 【核心改動】：普通按鈕第三幀用灰色下劃線
+				ulColor := uint8(UnderlineColor)
+				if i == 2 && !isStateButton || isStateButton && i == 4 && cmd == "ONOFF" {
+					ulColor = UnderlineColorDisabled
+				}
+
+				for ux := 0; ux < item.width; ux++ {
+					ulx := item.drawX + ux
+					if ulx >= 0 && ulx < width && underlineY >= 0 && underlineY < height {
+						frame.Pixels[underlineY*width+ulx] = ulColor
+					}
+				}
+			}
 		}
 	}
 

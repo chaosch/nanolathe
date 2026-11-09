@@ -31,11 +31,11 @@ WEN_QUAN15=r"WenQuanYi.Bitmap.Song.15px.ttf"
 WEN_QUAN16=r"WenQuanYi.Bitmap.Song.16px.ttf"
 
 OLD_FACE = {}
-# mode 参数："render" = 走原版渐变光影，"color" = 纯色平涂，"white" = 纯白点阵
+# mode 参数："mask" = 纯白蒙版（彻底隔离）, "brush" = 纯色平涂, "render" = 渐变光影
 NEW_FACE = {
-    "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": WEN_QUAN12, "variable": False, "mode": "white",  "border": 0, "color": None,         "is_mask": True},
-    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "white", "border": 1, "color": TARGET_COLOR, "is_mask": False},
-    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": WEN_QUAN16, "variable": False, "mode": "render", "border": 1, "color": None,         "is_mask": False},
+    "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "variable": False, "mode": "mask",   "border": 0, "color": None},
+    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "render", "border": 1, "color": TARGET_COLOR},
+    "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "render",  "border": 1, "color": TARGET_COLOR},
 }
 ALL_FACE = {}
 ALL_FACE.update(OLD_FACE)
@@ -49,8 +49,13 @@ PALETTE = [
     (67, 67, 35), (51, 51, 23), (35, 35, 15), (27, 27, 7),
     (23, 23, 7), (19, 19, 0), (15, 15, 0), (11, 11, 0)
 ]
-DARKEN = 0.70
-PALETTE = [tuple(int(c * DARKEN) for c in color) for color in PALETTE]
+
+# ==========================================
+# 全局调节参数
+# ==========================================
+DARKEN = 1              # 调色板整体压暗系数
+SHADOW_STRENGTH = 160   # 边缘最暗处的衰减强度（值越大边缘越黑）
+SHADOW_START = 0.4      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
 
 
 def wanted(catalogs):
@@ -69,13 +74,11 @@ def load_face(source, weight, size, variable=False):
     font = ImageFont.truetype(source, size)
     if not variable:
         return font
-    # 可变字体：显式按轴设置，并做存在性校验
     try:
         axes = font.get_variation_axes()
         if not axes:
             print(f"[WARN] {os.path.basename(source)} 标记为 variable 但未发现设计轴，忽略 weight={weight}")
             return font
-        # weight 对应 wght 轴；这里按轴顺序传入，单轴字体即 wght
         axis_tags = [a.get("tag") for a in axes]
         if "wght" in axis_tags:
             values = []
@@ -91,119 +94,118 @@ def load_face(source, weight, size, variable=False):
         print(f"[WARN] 设置可变轴失败 {os.path.basename(source)}: {e}")
     return font
 
-def render_colored_glyph(char, font, w, h, border, mode, color):
-    # tiny 不需要留白，其他字体外扩 border 像素
-    pad = 0 if mode == "white" else max(2, border)
+
+def render_mask_glyph(char, font, w, h):
+    cell_w = w
+    cell_h = h
+
+    base = Image.new('L', (cell_w, cell_h), 0)
+    d = ImageDraw.Draw(base)
+    d.text((0, 0), char, font=font, fill=255, anchor="lt")
+
+    base = base.point(lambda p: 255 if p > 128 else 0)
+
+    res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
+    px_res = res.load()
+    px_base = base.load()
+    for y in range(cell_h):
+        for x in range(cell_w):
+            if px_base[x, y] == 255:
+                px_res[x, y] = (255, 255, 255, 255)
+    return res
+
+
+def render_styled_glyph(char, font, w, h, border, mode, color):
+    pad = max(2, border)
     cell_w = w + pad * 2
     cell_h = h + pad * 2
 
-    # 1. 提取字形遮罩
     base = Image.new('L', (cell_w, cell_h), 0)
     d = ImageDraw.Draw(base)
     d.text((pad, pad), char, font=font, fill=255, anchor="lt")
 
+    base = base.point(lambda p: 255 if p > 128 else 0)
+
     res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
 
-    # ★ 1. tiny：纯白像素（Go 端直接 dynamic 替换为 palColor）
-    if mode == "white":
-        px_res = res.load()
-        px_base = base.load()
-        for y in range(cell_h):
-            for x in range(cell_w):
-                if px_base[x, y] > 128:
-                    px_res[x, y] = (255, 255, 255, 255)
-        return res
-
-    # --- 以下是纯外围描边逻辑 ---
-    px_res = res.load()
-    px_base = base.load()
-
-    # 2. 生成纯黑的描边遮罩
-    outline_mask = Image.new('L', (cell_w, cell_h), 0)
-    px_outline = outline_mask.load()
-
     if border > 0:
-        for y in range(cell_h):
-            for x in range(cell_w):
-                # 如果当前像素不是字形内部，但周边有字形
-                if px_base[x, y] <= 128:
-                    is_near_base = False
-                    # 检查周围一圈（包含 1px 偏移）
-                    for dy in range(-border, border + 1):
-                        for dx in range(-border, border + 1):
-                            nx, ny = x + dx, y + dy
-                            if 0 <= nx < cell_w and 0 <= ny < cell_h:
-                                if px_base[nx, ny] > 128:
-                                    is_near_base = True
-                                    break
-                        if is_near_base:
-                            break
-                    if is_near_base:
-                        px_outline[x, y] = 255 # 标记为外围黑边
-
-        # 把外围黑边铺在底层
+        filter_size = border * 2 + 1
+        outline_mask = base.filter(ImageFilter.MaxFilter(filter_size))
         edge_layer = Image.new('RGBA', (cell_w, cell_h), (*OUTLINE_COLOR, 255))
         res.paste(edge_layer, (0, 0), outline_mask)
 
-    # 3. 上色逻辑（保证字心原封不动地盖在黑边上方）
-    if mode == "color":
+    if mode == "brush":
+        color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
+        px_color = color_layer.load()
+        px_base = base.load()
+        use_color = color if color else (255, 255, 255)
+
         for y in range(cell_h):
             for x in range(cell_w):
-                if px_base[x, y] > 128:
-                    # 字心纯色
-                    px_res[x, y] = (*color, 255)
+                if px_base[x, y] == 255:
+                    px_color[x, y] = (*use_color, 255)
+
+        res.alpha_composite(color_layer)
         return res
 
-    # 4. normal：原有柱面光影逻辑
     if mode == "render":
         grad = Image.new('L', (cell_w, cell_h), 0)
         center_y = cell_h / 2.0
         max_dist_y = cell_h / 2.0
         if max_dist_y == 0: max_dist_y = 1
+
+        px_grad = grad.load()
         for y in range(cell_h):
             dist = abs(y - center_y)
-            norm_dist = dist / max_dist_y
-            val = 255 - int(norm_dist * 160)
+            norm_dist = dist / max_dist_y  # 归一化距离 (0.0 到 1.0)
+
+            # ★ 核心修改：计算带起始范围的渐变比例
+            if norm_dist <= SHADOW_START:
+                # 离中心太近，不产生暗部，保持纯亮
+                shadow_ratio = 0.0
+            else:
+                # 离中心超过 SHADOW_START 后，重新映射 0.0 ~ 1.0 的比例
+                shadow_ratio = (norm_dist - SHADOW_START) / (1.0 - SHADOW_START)
+
+            # 结合衰减强度计算最终亮度
+            val = 255 - int(shadow_ratio * SHADOW_STRENGTH)
             val = max(0, min(255, val))
+
             for x in range(cell_w):
-                grad.putpixel((x, y), val)
+                px_grad[x, y] = val
 
         grad = grad.filter(ImageFilter.GaussianBlur(1.2))
-        base_color = PALETTE[0]
+        base_color = color if color else PALETTE[0]
+
         color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
         px_color = color_layer.load()
         px_grad = grad.load()
+        px_base = base.load()
 
         for y in range(cell_h):
             for x in range(cell_w):
-                # 这里用 px_base > 128 保证字体原本的硬边大小不被吃掉
-                if px_base[x, y] > 128:
+                if px_base[x, y] == 255:
                     brightness = px_grad[x, y] / 255.0
                     r = int(base_color[0] * brightness)
                     g = int(base_color[1] * brightness)
                     b = int(base_color[2] * brightness)
                     px_color[x, y] = (r, g, b, 255)
 
-        # 将带光影的字心盖在刚才的黑边上面
         res.alpha_composite(color_layer)
         return res
 
     return res
 
 
-def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
+def build(chars, name, target_em, weight, scale, fontFile, variable, mode, border, color):
     CAP = 180
 
-    # 只要是独立配置的点阵字体，强制用原生尺寸
-    is_native_size = True
     real_em = target_em
-
     if real_em < 6:
         real_em = 6
 
-    font = load_face(fontFile, weight, real_em)
+    font = load_face(fontFile, weight, real_em, variable)
 
-    # ========== 底边对齐：全部字符底部齐平 ==========
     glyph_bbox_info = {}
     global_bottom = -9999
     for char in chars:
@@ -217,7 +219,6 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
             global_bottom = b
     global_top = min(v[1] for v in glyph_bbox_info.values())
     cell_height = global_bottom - global_top
-    # ========== end ==========
 
     rows, glyphs = [], {}
     x = 0
@@ -234,11 +235,11 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
         if x + width + SPACING * 2 > WIDTH:
             x, y, row_height = 0, y + row_height + SPACING, 0
 
-        dy = global_bottom - bottom  # 需要向上挪动的距离，让底边对齐global_bottom
+        dy = global_bottom - bottom
         glyphs[char] = dict(
             x=x, y=y, w=width, h=cell_height,
             left=round(left * scale),
-            top=round((top + dy) * scale), # ✅ 同步修正json的top！核心修复点
+            top=round((top + dy) * scale),
             advance=round(font.getlength(char) * scale),
             scale=scale
         )
@@ -251,9 +252,13 @@ def build(chars, name, target_em, weight, scale, fontFile, mode, border, color):
     atlas = Image.new("RGBA", (WIDTH, atlas_h), (0, 0, 0, 0))
 
     for char, px, py, w, h, left, top, dy in rows:
-        char_img = render_colored_glyph(char, font, w, h, border, mode, color)
-        pad = 0 if mode == "white" else max(2, border)
-        # 贴图同步向上偏移 dy
+        if mode == "mask":
+            char_img = render_mask_glyph(char, font, w, h)
+            pad = 0
+        else:
+            char_img = render_styled_glyph(char, font, w, h, border, mode, color)
+            pad = max(2, border)
+
         atlas.paste(char_img, (px - pad, py - pad + dy), char_img)
 
     out_png = OUT / f"{name}-cjk.png"
@@ -273,4 +278,7 @@ if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     chars = wanted([CATALOG_JSON])
     for face_name, cfg in ALL_FACE.items():
-        build(chars, face_name, cfg["em"], cfg["weight"], cfg["scale"], cfg["fontFile"], cfg["mode"], cfg["border"], cfg["color"])
+        build(
+            chars, face_name, cfg["em"], cfg["weight"], cfg["scale"],
+            cfg["fontFile"], cfg.get("variable", False), cfg["mode"], cfg["border"], cfg["color"]
+        )

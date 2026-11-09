@@ -22,6 +22,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
 	"github.com/nanolathe-gg/nanolathe/vfs"
+	"strconv"
 	"strings"
 )
 
@@ -323,6 +324,11 @@ func loadRetailBattleHUDForOwner(fs vfs.FSOps, sess *session.Session, cat *conte
 	common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
 	if film.CJKReady() {
 		RenderCommandButtons(shell.cs.unmappedMount, common)
+		for i, _ := range common.Entries {
+			for j, _ := range common.Entries[i].Frames {
+				client.DumpGAFFrame(common.Entries[i].Frames[j].Frame, common.Entries[i].Name+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(j))
+			}
+		}
 	}
 	oldMain := loadGAFOptional(fs, "anims/oldmain.gaf", "oldmain.gaf")
 	share := loadGAFOptional(fs, "anims/share.gaf", "share.gaf")
