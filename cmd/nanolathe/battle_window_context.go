@@ -44,6 +44,7 @@ func (c *battleWindowContext) install(window *gui.Window, page, common *formats.
 		// shell's shared one while its windows are built.
 		saved := c.shell.battleCommon
 		c.shell.battleCommon = common
+		RenderCommandButtons(c.shell.cs.unmappedMount, common)
 		c.shell.installRetailWindowButtonArt(window, page)
 		c.shell.battleCommon = saved
 		return

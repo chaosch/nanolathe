@@ -7,7 +7,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/vfs"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -90,7 +89,6 @@ func LoadGAFFromArchive(fs *vfs.FS, archiveName string, gafName string) (*format
 		return nil, err
 	}
 	client.PrintDebug(len(data))
-	os.WriteFile("e:/raw_commongui.gaf", data, 0644)
 	return formats.LoadGAFIsolated(data, commandButtonNames[:])
 }
 

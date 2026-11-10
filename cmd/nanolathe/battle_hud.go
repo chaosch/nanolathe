@@ -11,7 +11,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/content"
-	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
@@ -22,7 +21,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
 	"github.com/nanolathe-gg/nanolathe/vfs"
-	"strconv"
 	"strings"
 )
 
@@ -322,14 +320,6 @@ func loadRetailBattleHUDForOwner(fs vfs.FSOps, sess *session.Session, cat *conte
 	//c jk fonts:load empty buttons from totala1.hpi anims/commongui.GAF for render fonts
 	//todo applyLanguage()
 	common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
-	if film.CJKReady() {
-		RenderCommandButtons(shell.cs.unmappedMount, common)
-		for i, _ := range common.Entries {
-			for j, _ := range common.Entries[i].Frames {
-				client.DumpGAFFrame(common.Entries[i].Frames[j].Frame, common.Entries[i].Name+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(j))
-			}
-		}
-	}
 	oldMain := loadGAFOptional(fs, "anims/oldmain.gaf", "oldmain.gaf")
 	share := loadGAFOptional(fs, "anims/share.gaf", "share.gaf")
 	logoPath := "textures/logos.gaf"
