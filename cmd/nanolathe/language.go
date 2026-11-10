@@ -3,14 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/platform/screenkit"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // The interface language (docs/DESIGN_I18N.md): the saved choice, a
@@ -35,21 +35,36 @@ func parseLanguage(text string) (string, error) {
 // interface in English with a notice.
 func (g *gameShell) applyLanguage() {
 	code := g.requestedLanguage()
-	g.languagePending = ""
-	//add chinese,japanese,korean support
-	if i18n.LanguageNeedCJK(code) {
-		film.EnableCJK()
-		//renderedButtonCache.Clear()
-		//client.TranslateCache = make(map[client.TranslateCacheKey]client.TranslateValue)
-		g.languagePending = code
-		g.pollLanguage()
+
+	// 1. 如果當前已經生效的語言和目標一致，且沒有待處理的切換，直接返回，避免死循環。
+	if code == i18n.Language() && g.languagePending == "" {
 		return
 	}
-	//clean translate cache
-	//todo clean other localized cache
 
+	// 2. 找出目標語言是否需要 CJK
+	var isCJK bool
+	for _, l := range i18n.Languages {
+		if l.Code == code {
+			isCJK = l.IsCJK
+			break
+		}
+	}
+
+	// 3. 清理所有舊緩存
+	client.ClearCjkTranslateCache()
+	renderedButtonCache.Clear()
+	// 如果 film 有 ResetFontCache 也加上：film.ResetFontCache()
+
+	// 4. 如果是 CJK，啟動異步加載
+	if isCJK {
+		g.languagePending = code
+		film.EnableCJKForLanguage(code)
+		return
+	}
+
+	// 5. 非 CJK（英文、烏克蘭），同步直接切換字典
+	g.languagePending = ""
 	g.setInterfaceLanguage(code)
-
 }
 
 func (g *gameShell) requestedLanguage() string {
@@ -83,11 +98,12 @@ func (g *gameShell) completeLanguage(ready bool, err error) {
 		return
 	}
 	if err != nil {
+		code := g.languagePending
 		g.languagePending = ""
-		fmt.Fprintf(os.Stderr, "nanolathe: Chinese fonts failed: logical path film, providers searched [browser], expected CJK atlases: %v\n", err)
+		fmt.Fprintf(os.Stderr, "nanolathe: %s fonts failed: logical path film, providers searched [browser], expected CJK atlases: %v\n", code, err)
 		if s := nlScreenInst; s != nil && s.open && s.shell() == g {
 			s.retainLanguageChoice(g)
-			s.toast, s.toastLeft = "Chinese fonts could not load. Apply to retry.", 6
+			s.toast, s.toastLeft = fmt.Sprintf("%s fonts could not load. Apply to retry.", code), 6
 		}
 		return
 	}
@@ -136,8 +152,10 @@ func languageCodeIndex(code string) int {
 // A shell rebind can occur before an optional download completes. Keep its
 // requested choice available for Apply without replacing a newer draft edit.
 func (s *nlScreen) retainLanguageChoice(g *gameShell) {
-	if g.requestedLanguage() == "chinese" && i18n.Language() != "chinese" && !s.touched["language"] {
-		s.draft.language = languageCodeIndex("chinese")
+	req := g.requestedLanguage()
+	// 如果目標是需要 CJK 的語言，且當前還沒切換過去
+	if i18n.LanguageNeedCJK(req) && i18n.Language() != req && !s.touched["language"] {
+		s.draft.language = languageCodeIndex(req)
 	}
 }
 
@@ -146,18 +164,27 @@ func (s *nlScreen) retainLanguageChoice(g *gameShell) {
 // running language still finds theirs.
 func (s *nlScreen) languageCard() nlCard {
 	steps := make([]string, len(i18n.Languages))
-	subs := []string{"The interface as written", "Інтерфейс українською", "简体中文界面"}
+	subs := make([]string, len(i18n.Languages))
+
 	for i, l := range i18n.Languages {
+		// 預設顯示它自己的名字
 		steps[i] = l.Name
-		if l.Code == "chinese" && !film.CJKReady() {
-			// The Chinese name is written in Chinese so a player who cannot
-			// read the running language still finds it, but those glyphs live
-			// in the atlases only Chinese decodes. Until then the card spells
-			// it in Latin, which the base faces always carry.
-			steps[i] = "Chinese"
-			subs[i] = "Chinese interface"
+		subs[i] = l.Name + " interface"
+
+		// 特殊處理英文和烏克蘭的專屬小字
+		if l.Code == i18n.English {
+			subs[i] = "The interface as written"
+		} else if l.Code == "ukrainian" {
+			subs[i] = "Інтерфейс українською"
+		}
+
+		// 【核心邏輯】：如果這個語言是 CJK，且字體還沒加載好（防豆腐塊）
+		if l.IsCJK && !film.CJKReady() {
+			steps[i] = l.EnglishName
+			subs[i] = l.EnglishName + " interface"
 		}
 	}
+
 	return nlCard{
 		key: "language", label: "Language", pics: []string{"armcom", "corcom"}, kind: nlHalves,
 		steps: steps, subs: subs,
@@ -236,47 +263,6 @@ func DirExists(path string) (bool, error) {
 }
 
 // If missing, fallback to embedded localization assets.
-func (g *gameShell) ScanExternalLocales() error {
-	localesDir := ""
-	if dir, ret := createLocalesDir(); ret {
-		localesDir = dir
-	} else {
-		return errors.New("can not create locales folder or Invalid localization file")
-	}
-	entries, err := os.ReadDir(localesDir)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		code := entry.Name()
-
-		languageIdx := -1
-		for idx, l := range i18n.Languages {
-			if l.Code == code {
-				languageIdx = idx
-				break
-			}
-		}
-		var scaned struct{ Code, Name, Folder string }
-		// 默认名字就是 code
-		scaned.Code = code
-		scaned.Name = code
-		scaned.Folder = filepath.Join(localesDir, entry.Name())
-		if i18n.LanguageNeedCJK(entry.Name()) {
-			if languageIdx == -1 {
-				i18n.Languages = append(i18n.Languages, scaned)
-			} else {
-				i18n.Languages[languageIdx].Folder = scaned.Folder
-			}
-			println("find %s external locales folder:%s", scaned.Code, scaned.Folder)
-		}
-	}
-	return nil
-}
 
 func verifyLocalesFolder(baseDir, folder string) bool {
 	files := []string{"tiny-cjk.png", "normal-cjk.png", "small-cjk.json", "normal-cjk.json", "body-cjk.png", "tiny-cjk.json", "display-cjk.png", "small-cjk.png", "display.json", "display-cjk.json", "body-cjk.json", "display.png", "body.png", "body.json"}

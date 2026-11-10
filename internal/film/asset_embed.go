@@ -11,72 +11,72 @@ import (
 	"path/filepath"
 )
 
-// These are presentation assets, independent of the retail game's fonts.
-// Provenance, reproduction instructions and OFL terms accompany the atlases.
-// The executable keeps both the base pair and the Chinese additions: the latter
-// cost nothing until a language asks for them, which is what keeps nanolathe.exe
-// a single file.
-//
 //go:embed assets/*.png assets/*.json assets/OFL.txt assets/README.md
 var fontAssets embed.FS
 
 func init() {
-	// An embedded build always has the Chinese atlases at hand, so asking for
-	// them is all it takes.
 	startCJKFetch = func() { cjkReady.Store(true) }
 }
 
-//func readAsset(name string) ([]byte, error) {
-//	return fontAssets.ReadFile("assets/" + name)
-//}
+// 記錄當前正在加載的目標語言代碼
+var loadingLangCode string
 
-var externalAssetsDir string
-
-// SetAssetsDir 设置外部字体图集的基础路径
-func SetAssetsDir(dir string) {
-	externalAssetsDir = dir
+// EnableCJKForLanguage 由外部調用，明確指定要加載哪個語言的字體
+func EnableCJKForLanguage(code string) {
+	loadingLangCode = code
+	EnableCJK() // 呼叫原本的加載邏輯
 }
 
-// readAsset 外部优先，内部兜底
+// selectLocalesFolder 優先讀取正在加載的目標語言，解決異步切換的時間差
+func selectLocalesFolder() string {
+	targetCode := loadingLangCode
+	if targetCode == "" {
+		targetCode = i18n.Language()
+	}
+	fmt.Printf("[film] 查詢字體 Folder: 目標 code='%s'\n", targetCode)
+
+	for _, l := range i18n.Languages {
+		if l.Code == targetCode {
+			fmt.Printf("[film] 找到語言 %s, Folder='%s'\n", l.Code, l.Folder)
+			return l.Folder
+		}
+	}
+	fmt.Printf("[film] 警告：在 Languages 列表中找不到 code='%s'\n", targetCode)
+	return ""
+}
+
+// readAsset 外部優先，內部兜底
 func readAsset(name string) ([]byte, error) {
 	folder := selectLocalesFolder()
 	var data []byte
 	var err error
+
 	if folder == "" {
+		// 沒有外部資料夾，讀取內置字體
 		data, err = fontAssets.ReadFile("assets/" + name)
-		println("load  internal locales face from folder:", name, "assets")
+		if err == nil {
+			fmt.Printf("[film] 載入內置字體 (embedded): %s\n", name)
+		}
 	} else {
-		data, err = os.ReadFile(filepath.Join(folder, name))
-		println("load  external locales face from folder:%", filepath.Join(folder, name))
-		if err != nil {
+		// 有外部資料夾，優先讀取外部字體
+		extPath := filepath.Join(folder, name)
+		data, err = os.ReadFile(extPath)
+		if err == nil {
+			fmt.Printf("[film] 載入外部字體 (external): %s\n", extPath)
+		} else {
+			// 外部讀取失敗，回退到內置
+			fmt.Printf("[film] 外部字體讀取失敗 (%v)，回退載入內置字體: %s\n", err, name)
 			data, err = fontAssets.ReadFile("assets/" + name)
-			println("load  internal face  from folder fallback", name, "assets", "fallback")
 		}
 	}
+
 	if err != nil {
-		return nil, fmt.Errorf("film: asset %q not found in external or internal: %w", name, err)
+		return nil, fmt.Errorf("film: asset %q not found: %w", name, err)
 	}
 	return data, nil
 }
 
-func selectLocalesFolder() string {
-	languages := i18n.Languages
-	for _, l := range languages {
-		if l.Code == i18n.Language() {
-			return l.Folder
-		}
-	}
-	return ""
-}
-
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
-	if err == nil {
-		return true // 存在
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false // 不存在
-	}
-	// 其他错误（比如权限不足），这里通常也视为不可用
-	return false
+	return err == nil || !errors.Is(err, os.ErrNotExist)
 }

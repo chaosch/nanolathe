@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"io"
 	"os"
 	"sort"
@@ -484,6 +485,9 @@ func newGameShell(opts Options, cs *contentSet) (*gameShell, error) {
 // launch is the command line as given, which a start that must drop the saved
 // mod remounts from.
 func runGameShell(launch, opts Options, cs *contentSet) error {
+	if err := i18n.ScanExternalLocales(); err != nil {
+		fmt.Fprintf(os.Stderr, "nanolathe: warning: failed to scan external locales: %v\n", err)
+	}
 	if opts.Map != "" || opts.Mission != "" {
 		return runBattleView(launch, opts, cs)
 	}

@@ -53,7 +53,6 @@ func applyGlowStrength(cl *client.Client, d settings.Display) {
 // applySettings installs a loaded block over the shell's default setup: the
 // base block with the running mod's layers over it (modsettings.go).
 func (g *gameShell) applySettings(s settings.Settings) {
-	g.ScanExternalLocales()
 	s.Normalize()
 	g.baseSettings = s
 	// Lock approval is part of the file, and must govern the layers loaded

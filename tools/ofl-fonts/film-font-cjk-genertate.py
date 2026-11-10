@@ -15,12 +15,14 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # ==========================================
 # 路径设置
 # ==========================================
-SCRIPT_DIR = Path(__file__).resolve().parent        # 脚本所在的 tools 目录
-OUTPUT_DIR = SCRIPT_DIR.parent                      # 语言包根目录
+# 强制读取和输出都在脚本所在的 tools 目录
+SCRIPT_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = SCRIPT_DIR
 
 # ==========================================
 # CONFIG 区域 (请根据你的语言包修改)
 # ==========================================
+# 直接在 tools 目录下找翻译文件
 DICTIONARY_FILE = "chinese.json"
 
 # 字体文件路径定义 (请放在 tools 目录下)

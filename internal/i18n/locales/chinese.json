@@ -1511,6 +1511,6 @@
   "REPAIR": "修理R",
   "LOAD": "装载L",
   "UNLOAD": "卸载U",
-  "BLAST": "解构D"
-
+  "BLAST": "解构D",
+  "USOC": "解构D"
 }

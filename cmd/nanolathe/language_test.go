@@ -189,23 +189,3 @@ func TestPendingChineseFlagKeepsItsOneRunScope(t *testing.T) {
 		t.Fatalf("retry promoted the flag: flag=%q saved=%q running=%q", g.opts.Language, g.captureSettings().Language, i18n.Language())
 	}
 }
-
-func TestGameShell_ScanExternalLocales(t *testing.T) {
-	o := new(Options)
-	if LocalesDir, r := createLocalesDir(); !r {
-		o.LocalesDir = LocalesDir
-		g := new(gameShell)
-		g.opts.LocalesDir = ""
-		if e := g.ScanExternalLocales(); e != nil {
-			t.Fatal(e)
-		}
-		if g.opts.LocalesDir == "" {
-			t.Fatal("game shell did not set local locales")
-		}
-		if g.opts.LocalesDir == "" {
-			t.Fatal("game shell did not set local locales")
-		}
-	} else {
-		t.Fatal("game shell did not set local locales:")
-	}
-}
