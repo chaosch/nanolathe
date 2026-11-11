@@ -140,7 +140,6 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		baselineHeight = 13
 		Align = 0
 	}
-	remaining := maxWidth
 	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
@@ -149,31 +148,33 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 	); ok {
 		return
 	}
-	for i := 0; i < len(text); i++ {
-		code := text[i]
-		if code == 0 {
-			return
-		}
-		frame := retailGAFGlyph(font, code)
-		if frame == nil {
-			continue
-		}
-		advance := int(frame.Width)
-		if remaining >= 0 && remaining < advance {
-			return
-		}
-		if code != 0x20 {
-			c.UIBlitClipped(frame,
-				x-int(frame.XOffset),
-				y-(int(frame.YOffset)-baselineHeight),
-				clipX, clipY, clipW, clipH,
-			)
-		}
-		x += advance
-		if remaining >= 0 {
-			remaining -= advance
-		}
-	}
+	interceptUIBlitClipped(c, font, text, x, y, maxWidth, clipX, clipY, clipW, clipH)
+	//remaining := maxWidth
+	//for i := 0; i < len(text); i++ {
+	//	code := text[i]
+	//	if code == 0 {
+	//		return
+	//	}
+	//	frame := retailGAFGlyph(font, code)
+	//	if frame == nil {
+	//		continue
+	//	}
+	//	advance := int(frame.Width)
+	//	if remaining >= 0 && remaining < advance {
+	//		return
+	//	}
+	//	if code != 0x20 {
+	//		c.UIBlitClipped(frame,
+	//			x-int(frame.XOffset),
+	//			y-(int(frame.YOffset)-baselineHeight),
+	//			clipX, clipY, clipW, clipH,
+	//		)
+	//	}
+	//	x += advance
+	//	if remaining >= 0 {
+	//		remaining -= advance
+	//	}
+	//}
 }
 
 // drawRetailGAFTextLit draws each glyph normally at shade level zero; a
@@ -185,7 +186,6 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
-	remaining := maxWidth
 
 	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
@@ -195,39 +195,41 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 	); ok {
 		return
 	}
-
-	for i := 0; i < len(text); i++ {
-		code := text[i]
-		if code == 0 {
-			return
-		}
-		frame := retailGAFGlyph(font, code)
-		if frame == nil {
-			continue
-		}
-		advance := int(frame.Width)
-		if remaining >= 0 && remaining < advance {
-			return
-		}
-		if code != 0x20 {
-			// Font loading normalizes each frame's YOffset by the capital-I
-			// height. Glyph placement subtracts that normalized value and the
-			// frame XOffset from the text pen; ordinary GUI art uses a different
-			// placement contract [07 §4].
-			c.UIBlitLit(frame,
-				x-int(frame.XOffset),
-				y-(int(frame.YOffset)-baselineHeight),
-				pal, shade,
-			)
-		}
-		x += advance
-		if remaining >= 0 {
-			remaining -= advance
-			if remaining < 0 {
-				return
-			}
-		}
-	}
+	interceptUIBlitLit(c, font, text, x, y, maxWidth, pal, shade)
+	return
+	//remaining := maxWidth
+	//for i := 0; i < len(text); i++ {
+	//	code := text[i]
+	//	if code == 0 {
+	//		return
+	//	}
+	//	frame := retailGAFGlyph(font, code)
+	//	if frame == nil {
+	//		continue
+	//	}
+	//	advance := int(frame.Width)
+	//	if remaining >= 0 && remaining < advance {
+	//		return
+	//	}
+	//	if code != 0x20 {
+	//		// Font loading normalizes each frame's YOffset by the capital-I
+	//		// height. Glyph placement subtracts that normalized value and the
+	//		// frame XOffset from the text pen; ordinary GUI art uses a different
+	//		// placement contract [07 §4].
+	//		c.UIBlitLit(frame,
+	//			x-int(frame.XOffset),
+	//			y-(int(frame.YOffset)-baselineHeight),
+	//			pal, shade,
+	//		)
+	//	}
+	//	x += advance
+	//	if remaining >= 0 {
+	//		remaining -= advance
+	//		if remaining < 0 {
+	//			return
+	//		}
+	//	}
+	//}
 }
 
 func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWidth int, fntColor byte) {

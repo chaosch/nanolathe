@@ -11,6 +11,17 @@ import (
 // pointer capture and the current down word do not [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailButtonCaption(c *client.Client, p *ui.Panel, index int, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, measure func(string) int, metric int) {
 	//c.PrintDebug(text)
+	if _, ok := c.EmitGlyphsIntercept(
+		text,
+		int(r.X),
+		int(r.Y),
+		int(r.W),
+		int(r.H),
+		0,
+		2, // 預設居中
+	); ok {
+		return // 成功了，直接滾蛋！
+	}
 	x, y, build, centred := retailButtonCaptionPen(gad, r, measure(text), metric)
 	color, shade := g.retailTextPen(p, index, gad)
 	draw := func(run string, px int, color byte) {

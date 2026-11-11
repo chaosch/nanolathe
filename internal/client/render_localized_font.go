@@ -105,8 +105,8 @@ type FaceTier struct {
 
 var faceTiers = []FaceTier{
 	{"tiny", 12},
-	{"small", 14},
-	{"normal", 16}, //{"normal", 20},
+	{"small", 13},
+	{"normal", 14}, //{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
 	//{"title", 20},
@@ -1143,7 +1143,7 @@ func RenderCJKToPixels(
 	}
 
 	// 3. 決定字號
-	const paddingY = 0
+	const paddingY = 1
 	availHeight := controlHeight - paddingY*2
 	if availHeight < 1 {
 		availHeight = 1
