@@ -46,14 +46,14 @@ FACES = {
     },
 
     # === Nanolathe 现代设置界面文字 (Modern UI) ===
-    "body": {
-        "em": 125, "weight": 400, "variable": True, "mode": "brush",
-        "border": 0, "color": (220, 220, 220), "scale": 1.964, "fontFile": FONT_HD
-    },
-    "display": {
-        "em": 121, "weight": 800, "variable": True, "mode": "brush",
-        "border": 0, "color": (255, 255, 255), "scale": 1.964, "fontFile": FONT_HD
-    },
+    # "body": {
+    #     "em": 125, "weight": 400, "variable": True, "mode": "brush",
+    #     "border": 0, "color": (220, 220, 220), "scale": 1.964, "fontFile": FONT_HD
+    # },
+    # "display": {
+    #     "em": 121, "weight": 800, "variable": True, "mode": "brush",
+    #     "border": 0, "color": (255, 255, 255), "scale": 1.964, "fontFile": FONT_HD
+    # },
 }
 
 # ==========================================
