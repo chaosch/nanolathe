@@ -213,6 +213,18 @@ func (c *Client) emitHalo(h drawlist.Halo) {
 // emitGlyphs records one FNT text run (the health-bar walk's control-group
 // digit, WU-1.5).
 func (c *Client) emitGlyphs(g drawlist.Glyphs) {
+	if _, drawn := c.EmitGlyphsIntercept(
+		g.Text,
+		int(g.X),
+		int(g.Y), // ★ 直接用 Y，不要減任何東西！
+		int(g.MaxWidth),
+		12,
+		g.Color,
+		0,
+	); drawn {
+		return
+	}
+
 	g.HasClip, g.Clip = c.clipUISprite(g.HasClip, g.Clip)
 	c.list.RecordGlyphs(g)
 }

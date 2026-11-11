@@ -368,6 +368,30 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	return 0, false
+	if !i18n.I18nLanguageNeedCJK() {
+		return 0, false
+	}
+	key := TranslateCacheKey{
+		text,
+		x,
+		baselineY,
+		maxWidth,
+		controlHeight,
+		palColor,
+		attribs,
+	}
+	if cache, ok := TranslateCache[key]; ok {
+		sprites := cache.Sprites
+		for _, sprite := range sprites {
+			c.List().RecordSprite(sprite)
+		}
+		return 0, true
+	} else {
+		return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
+	}
+}
+func (c *Client) EmitGlyphsIntercept(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
 	if !i18n.I18nLanguageNeedCJK() {
 		return 0, false
 	}
@@ -778,4 +802,602 @@ func needCjkTranslate(language string) bool {
 func ClearCjkTranslateCache() {
 	TranslateCache = make(map[TranslateCacheKey]TranslateValue)
 
+}
+
+// DrawCJKToCanvas 將中文字串直接渲染到目標畫布 (frame) 中。
+func DrawCJKToCanvas(
+	frame []uint8, width, height int,
+	text string,
+	x, baselineY, maxWidth int,
+	controlHeight int,
+	palColor byte,
+	attribs uint32,
+	clipX, clipY, clipW, clipH int,
+) (int, bool) {
+	real_text := text
+	if printed == nil {
+		printed = make(map[string]int)
+	}
+	if len(real_text) == 0 {
+		return 0, false
+	}
+
+	// 翻译兜底
+	tr := i18n.T(real_text)
+	if tr == real_text {
+		if _, exists := printed[real_text]; !exists {
+			return 0, false
+		}
+	}
+
+	safeMaxWidth := maxWidth
+	if safeMaxWidth < 0 {
+		safeMaxWidth = 9999
+	}
+
+	// === 1. 解析控制符 ===
+	type token struct {
+		rn      rune
+		forceNL bool
+	}
+
+	var tokens []token
+	var explicitSize = 0
+	var gridRows, gridCols = 0, 0
+
+	runes := []rune(tr)
+	i := 0
+	for i < len(runes) {
+		rn := runes[i]
+		if rn == '\\' && i+1 < len(runes) {
+			next := runes[i+1]
+			if next == 'n' || next == 'N' {
+				i += 2
+				start := i
+				for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
+					i++
+				}
+				if i > start {
+					parts := string(runes[start:i])
+					var r, c int
+					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
+						gridRows, gridCols = r, c
+					}
+				}
+				tokens = append(tokens, token{forceNL: true})
+				continue
+			}
+			if next == 's' || next == 'S' {
+				i += 2
+				start := i
+				for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
+					i++
+				}
+				if i > start {
+					fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
+				}
+				continue
+			}
+		}
+		tokens = append(tokens, token{rn: rn})
+		i++
+	}
+
+	// === 2. 决定字号 ===
+	const paddingY = 0
+	availHeight := controlHeight - paddingY*2
+	if availHeight < 1 {
+		availHeight = 1
+	}
+
+	var defaultTier FaceTier
+	if explicitSize > 0 {
+		defaultTier = PickTier(explicitSize)
+	} else if gridRows > 1 && gridCols > 0 {
+		cellHeight := availHeight / gridRows
+		defaultTier = PickTier(cellHeight)
+	} else {
+		defaultTier = PickTier(availHeight)
+	}
+
+	// === 3. 换行排版 ===
+	var lines [][]token
+	var currentLine []token
+	for _, tk := range tokens {
+		if tk.forceNL {
+			lines = append(lines, currentLine)
+			currentLine = nil
+			continue
+		}
+		currentLine = append(currentLine, tk)
+	}
+	if len(currentLine) > 0 {
+		lines = append(lines, currentLine)
+	}
+
+	// === 4. 渲染到 Canvas ===
+	currentLineY := baselineY + paddingY
+	curTier := defaultTier
+	curSize := curTier.Px
+	maxLineWidth := 0.0
+	isMultiLine := len(lines) > 1
+
+	// 邊界檢查預備
+	clipRight, clipBottom := clipX+clipW, clipY+clipH
+
+	for _, line := range lines {
+		lineTier := curTier
+		lineSize := curSize
+
+		// 量行寬
+		var lineW float64
+		for _, tk := range line {
+			rn := tk.rn
+			face := film.TextFaceInGame(lineTier.Name)
+			if face != nil {
+				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
+					lineW += float64(g.W)
+					continue
+				}
+			}
+			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+				lineW += float64(lineSize)
+			} else {
+				lineW += float64(lineSize / 2)
+			}
+		}
+		if lineW > maxLineWidth {
+			maxLineWidth = lineW
+		}
+
+		// 对齐起点计算
+		cursorX := float64(x)
+		switch {
+		case attribs&4 != 0: // 右对齐
+			cursorX = float64(x+safeMaxWidth) - lineW - 3
+		case attribs&2 != 0: // 居中对齐
+			cursorX = float64(x) + (float64(safeMaxWidth)-lineW)/2.0
+		default: // 左对齐
+			cursorX += 3
+		}
+
+		// 逐字畫像素
+		for _, tk := range line {
+			rn := tk.rn
+			face := film.TextFaceInGame(lineTier.Name)
+			if face == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(lineSize)
+				} else {
+					cursorX += float64(lineSize / 2)
+				}
+				continue
+			}
+
+			g := face.Glyphs[string(rn)]
+			if g == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(lineSize)
+				} else {
+					cursorX += float64(lineSize / 2)
+				}
+				continue
+			}
+
+			glyphFrame := g.Frame()
+			if glyphFrame == nil || glyphFrame.Width == 0 || glyphFrame.Height == 0 {
+				cursorX += float64(g.W)
+				continue
+			}
+
+			// tiny 動態上色
+			var pixelsToDraw = glyphFrame.Pixels
+			if lineTier.Name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(glyphFrame.Pixels))
+				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
+					if !glyphFrame.Transparent[pIdx] {
+						newPixels[pIdx] = palColor
+					}
+				}
+				pixelsToDraw = newPixels
+			}
+
+			// 水平與垂直定位
+			drawX := int(cursorX + float64(g.Left))
+			var drawY int
+			if !isMultiLine {
+				drawY = baselineY + (controlHeight-int(glyphFrame.Height))/2
+			} else {
+				drawY = currentLineY + (lineSize-int(glyphFrame.Height))/2
+			}
+
+			// ==========================================
+			// 核心：直接 Blit 到目標畫布 (frame)
+			// ==========================================
+			for gy := 0; gy < int(glyphFrame.Height); gy++ {
+				dy := drawY + gy
+				if dy < clipY || dy >= clipBottom || dy >= height {
+					continue
+				}
+				rowBase := dy * width
+
+				for gx := 0; gx < int(glyphFrame.Width); gx++ {
+					if glyphFrame.Transparent[gy*int(glyphFrame.Width)+gx] {
+						continue
+					}
+
+					dx := drawX + gx
+					if dx < clipX || dx >= clipRight || dx >= width {
+						continue
+					}
+
+					frame[rowBase+dx] = pixelsToDraw[gy*int(glyphFrame.Width)+gx]
+				}
+			}
+
+			cursorX += float64(g.W)
+		}
+
+		// 行距推进
+		lineStep := int(float64(lineSize) * 1.25)
+		if lineStep < lineSize+2 {
+			lineStep = lineSize + 2
+		}
+		currentLineY += lineStep
+	}
+
+	return int(maxLineWidth + 0.5), true
+}
+
+// CjkPixelCacheEntry 緩存一整塊已經渲染好、包含排版和上色的像素
+// CjkCacheKey 決定了文字最終長什麼樣的所有變數
+type CjkCacheKey struct {
+	Text          string
+	ControlHeight int
+	PalColor      byte
+	Attribs       uint32
+	MaxWidth      int
+}
+
+// 快取結構
+type CjkPixelCacheEntry struct {
+	Width  int
+	Height int
+	Pixels []byte
+}
+
+// 使用結構體作為 Key
+var cjkPixelCache = make(map[CjkCacheKey]CjkPixelCacheEntry)
+
+// RenderCJKToPixels 負責解析排版並生成最終的像素塊，不直接寫入螢幕。
+func RenderCJKToPixels(
+	text string,
+	maxWidth int,
+	controlHeight int,
+	palColor byte,
+	attribs uint32,
+) (CjkPixelCacheEntry, bool) {
+	if len(text) == 0 {
+		return CjkPixelCacheEntry{}, false
+	}
+
+	// 1. 翻譯兜底 (保留你原本的邏輯，假設 `printed` 和 `i18n` 是全局/包級可用的)
+	tr := i18n.T(text)
+	if tr == text {
+		if _, exists := printed[text]; !exists {
+			return CjkPixelCacheEntry{}, false
+		}
+	}
+
+	safeMaxWidth := maxWidth
+	if safeMaxWidth < 0 {
+		safeMaxWidth = 9999
+	}
+
+	// 2. 解析控制符 (換行 \n, 大小 \s, 網格 \nxx,xx)
+	type token struct {
+		rn      rune
+		forceNL bool
+	}
+
+	var tokens []token
+	var explicitSize = 0
+	var gridRows, gridCols = 0, 0
+
+	runes := []rune(tr)
+	i := 0
+	for i < len(runes) {
+		rn := runes[i]
+		if rn == '\\' && i+1 < len(runes) {
+			next := runes[i+1]
+			if next == 'n' || next == 'N' {
+				i += 2
+				start := i
+				for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
+					i++
+				}
+				if i > start {
+					parts := string(runes[start:i])
+					var r, c int
+					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
+						gridRows, gridCols = r, c
+					}
+				}
+				tokens = append(tokens, token{forceNL: true})
+				continue
+			}
+			if next == 's' || next == 'S' {
+				i += 2
+				start := i
+				for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
+					i++
+				}
+				if i > start {
+					fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
+				}
+				continue
+			}
+		}
+		tokens = append(tokens, token{rn: rn})
+		i++
+	}
+
+	// 3. 決定字號
+	const paddingY = 0
+	availHeight := controlHeight - paddingY*2
+	if availHeight < 1 {
+		availHeight = 1
+	}
+
+	var defaultTier FaceTier
+	if explicitSize > 0 {
+		defaultTier = PickTier(explicitSize)
+	} else if gridRows > 1 && gridCols > 0 {
+		cellHeight := availHeight / gridRows
+		defaultTier = PickTier(cellHeight)
+	} else {
+		defaultTier = PickTier(availHeight)
+	}
+
+	// 4. 換行分組
+	var lines [][]token
+	var currentLine []token
+	for _, tk := range tokens {
+		if tk.forceNL {
+			lines = append(lines, currentLine)
+			currentLine = nil
+			continue
+		}
+		currentLine = append(currentLine, tk)
+	}
+	if len(currentLine) > 0 {
+		lines = append(lines, currentLine)
+	}
+
+	// 5. 測量最終寬高
+	curTier := defaultTier
+	curSize := curTier.Px
+	maxLineWidth := 0.0
+	isMultiLine := len(lines) > 1
+
+	lineHeights := make([]int, len(lines))
+	totalHeight := 0
+
+	for lineIdx, line := range lines {
+		var lineW float64
+		for _, tk := range line {
+			rn := tk.rn
+			face := film.TextFaceInGame(curTier.Name)
+			if face != nil {
+				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
+					lineW += float64(g.W)
+					continue
+				}
+			}
+			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+				lineW += float64(curSize)
+			} else {
+				lineW += float64(curSize / 2)
+			}
+		}
+		if lineW > maxLineWidth {
+			maxLineWidth = lineW
+		}
+
+		// 行高計算 (單行直接用 controlHeight，多行用 lineSize 推算)
+		if isMultiLine {
+			lineStep := int(float64(curSize) * 1.25)
+			if lineStep < curSize+2 {
+				lineStep = curSize + 2
+			}
+			lineHeights[lineIdx] = lineStep
+			totalHeight += lineStep
+		}
+	}
+
+	if !isMultiLine {
+		totalHeight = controlHeight
+		lineHeights[0] = controlHeight
+	}
+
+	// 建立最終快取項
+	actualW := int(maxLineWidth + 0.5)
+	if actualW <= 0 {
+		actualW = 1
+	}
+	if totalHeight <= 0 {
+		totalHeight = 1
+	}
+
+	entry := CjkPixelCacheEntry{
+		Width:  actualW,
+		Height: totalHeight,
+		Pixels: make([]uint8, actualW*totalHeight),
+	}
+
+	// 6. 開始渲染到 entry.Pixels
+	currentY := 0
+	for lineIdx, line := range lines {
+		lineH := lineHeights[lineIdx]
+
+		// 根據對齊方式計算這行的起始 X (此處以相對於 0,0 的局部坐標計算)
+		cursorX := 0.0
+		switch {
+		case attribs&4 != 0: // 右對齊
+			cursorX = float64(safeMaxWidth) - maxLineWidth - 3
+		case attribs&2 != 0: // 居中對齊
+			cursorX = (float64(safeMaxWidth) - maxLineWidth) / 2.0
+		default: // 左對齊
+			cursorX += 3
+		}
+
+		// 邊界保護，避免文字因為對齊跑到負數
+		if cursorX < 0 {
+			cursorX = 0
+		}
+
+		for _, tk := range line {
+			rn := tk.rn
+			face := film.TextFaceInGame(curTier.Name)
+			if face == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(curSize)
+				} else {
+					cursorX += float64(curSize / 2)
+				}
+				continue
+			}
+
+			g := face.Glyphs[string(rn)]
+			if g == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(curSize)
+				} else {
+					cursorX += float64(curSize / 2)
+				}
+				continue
+			}
+
+			glyphFrame := g.Frame()
+			if glyphFrame == nil || glyphFrame.Width == 0 || glyphFrame.Height == 0 {
+				cursorX += float64(g.W)
+				continue
+			}
+
+			// tiny 動態上色
+			var pixelsToDraw []byte = glyphFrame.Pixels
+			if curTier.Name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(glyphFrame.Pixels))
+				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
+					if !glyphFrame.Transparent[pIdx] {
+						newPixels[pIdx] = palColor
+					}
+				}
+				pixelsToDraw = newPixels
+			}
+
+			// 計算繪製坐標
+			drawX := int(cursorX + float64(g.Left))
+			var drawY int
+			if !isMultiLine {
+				drawY = (controlHeight - int(glyphFrame.Height)) / 2
+			} else {
+				drawY = currentY + (lineH-int(glyphFrame.Height))/2
+			}
+
+			// 寫入局部像素塊
+			for gy := 0; gy < int(glyphFrame.Height); gy++ {
+				py := drawY + gy
+				if py < 0 || py >= entry.Height {
+					continue
+				}
+				rowBase := py * entry.Width
+
+				for gx := 0; gx < int(glyphFrame.Width); gx++ {
+					if glyphFrame.Transparent[gy*int(glyphFrame.Width)+gx] {
+						continue
+					}
+
+					px := drawX + gx
+					if px < 0 || px >= entry.Width {
+						continue
+					}
+
+					entry.Pixels[rowBase+px] = pixelsToDraw[gy*int(glyphFrame.Width)+gx]
+				}
+			}
+
+			cursorX += float64(g.W)
+		}
+
+		currentY += lineH
+	}
+
+	return entry, true
+}
+
+// DrawCJKEntry 是原廠 UI 呼叫中文渲染的入口。
+func DrawCJKEntry(
+	frame []uint8, width, height int,
+	text string,
+	x, baselineY, maxWidth int,
+	controlHeight int,
+	palColor byte,
+	attribs uint32,
+	clipX, clipY, clipW, clipH int,
+) bool {
+	if !i18n.I18nLanguageNeedCJK() {
+		return false
+	}
+
+	key := CjkCacheKey{
+		Text:          text,
+		ControlHeight: controlHeight,
+		PalColor:      palColor,
+		Attribs:       attribs,
+		MaxWidth:      maxWidth,
+	}
+
+	entry, ok := cjkPixelCache[key]
+
+	// 1. 如果沒命中，生成並寫入緩存
+	if !ok {
+		var handled bool
+		entry, handled = RenderCJKToPixels(text, maxWidth, controlHeight, palColor, attribs)
+		if !handled {
+			return false
+		}
+		// ★ 這裡寫入緩存
+		cjkPixelCache[key] = entry
+	}
+
+	// 2. 將快取的像素 Blit 到目標畫布
+	clipRight, clipBottom := clipX+clipW, clipY+clipH
+	startX := x
+	switch {
+	case attribs&4 != 0:
+		startX = x + maxWidth - entry.Width
+	case attribs&2 != 0:
+		startX = x + (maxWidth-entry.Width)/2
+	}
+
+	for py := 0; py < entry.Height; py++ {
+		dy := baselineY + py
+		if dy < clipY || dy >= clipBottom || dy >= height {
+			continue
+		}
+		rowBase := dy * width
+		for px := 0; px < entry.Width; px++ {
+			dx := startX + px
+			if dx < clipX || dx >= clipRight || dx >= width {
+				continue
+			}
+			col := entry.Pixels[py*entry.Width+px]
+			if col != 0 {
+				frame[rowBase+dx] = col
+			}
+		}
+	}
+
+	return true
 }

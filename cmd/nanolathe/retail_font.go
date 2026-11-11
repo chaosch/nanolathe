@@ -254,14 +254,14 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		return
 	}
 	if g != nil && g.font != nil {
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			text,
-			x, y, maxWidth, y,
-			fntColor,
-			2,
-		); ok {
-			return
-		}
+		//if _, ok := c.DrawRetailFilmCJKCylindrical(
+		//	text,
+		//	x, y, maxWidth, y,
+		//	fntColor,
+		//	2,
+		//); ok {
+		//	return
+		//}
 		c.UITextWidth(g.font, text, x, y, maxWidth, fntColor)
 	}
 

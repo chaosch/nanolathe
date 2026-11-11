@@ -151,6 +151,19 @@ func drawTextClipped(frame []uint8, width, height int, fnt *formats.FNT, text st
 	if clipW <= 0 || clipH <= 0 {
 		return
 	}
+
+	// ==========================================
+	// 【攔截分流】：如果是 CJK，走自定義的像素渲染
+	// ==========================================
+	// ...
+	if DrawCJKEntry(frame, width, height, text, x, y, maxWidth, int(fnt.Height), color, 2, clipX, clipY, clipW, clipH) {
+		return
+	}
+	// 走原廠英文邏輯...
+
+	// ==========================================
+	// 如果上面沒處理，走原廠英文 FNT 邏輯
+	// ==========================================
 	clipRight, clipBottom := clipX+clipW, clipY+clipH
 	if maxWidth > 0 {
 		text = TruncateToWidth(fnt, text, maxWidth)
