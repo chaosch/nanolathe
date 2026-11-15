@@ -59,6 +59,9 @@ func addSurvivalButton(window *gui.Window) {
 	button.Name, button.SourceName = survivalButton, survivalSource
 	button.Art, button.Text, button.QuickKey = "", "Survival", 0
 	button.Help = "Hold out with up to two allies against endless waves."
+	if t, ok := GlobalTranslations.GetUI(button.Text); ok {
+		button.Text = t.Text
+	}
 	window.Gadgets = append(window.Gadgets, button)
 }
 

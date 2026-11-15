@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
@@ -9,7 +8,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/platform/screenkit"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -117,6 +115,7 @@ func (g *gameShell) completeLanguage(ready bool, err error) {
 			}
 			s.toast, s.toastLeft = "Settings saved", 2.2
 		}
+		//GlobalTranslations.LoadAll(filepath.Join(g.opts.LocalesDir, "loose"), g.select, g.cs.fs)
 	}
 }
 
@@ -212,66 +211,4 @@ func (s *nlScreen) cardCaption(screen *ebiten.Image, text string, x, y, right, a
 	u := s.u()
 	st := screenkit.Style{Size: 10.5 * u, Top: alphaC(nlGreenText, a)}
 	s.fonts.Body.Draw(screen, text, x, y, fitStyle(s.fonts.Body, text, st, right-x, 8*u))
-}
-
-func defaultLocalesDir() (string, bool) {
-	dir := os.Getenv("XDG_DATA_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "nanolathe: data folder not found")
-			return "", false
-		}
-		dir = filepath.Join(home, ".local", "share")
-	}
-	return filepath.Join(dir, "nanolathe", "locales"), true
-}
-
-func createLocalesDir() (string, bool) {
-	if localesDir, r := defaultLocalesDir(); r {
-		if exist, _ := DirExists(localesDir); exist {
-			return localesDir, true
-		}
-		if err := os.MkdirAll(localesDir, 0755); err != nil {
-			fmt.Fprintln(os.Stderr, "nanolathe: cannot create locales directory:"+err.Error())
-			return localesDir, false
-		} else {
-			return localesDir, true
-		}
-	}
-	return "", false
-}
-
-// DirExists 判断目录是否存在
-func DirExists(path string) (bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		// 如果错误是“文件或目录不存在”，返回 false, nil
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		// 其他错误（比如权限不足），返回 false 和具体错误
-		return false, err
-	}
-
-	// 路径存在，但检查它是不是目录
-	if !info.IsDir() {
-		return false, fmt.Errorf("路径 %s 存在，但不是一个目录", path)
-	}
-
-	return true, nil
-}
-
-// If missing, fallback to embedded localization assets.
-
-func verifyLocalesFolder(baseDir, folder string) bool {
-	files := []string{"tiny-cjk.png", "normal-cjk.png", "small-cjk.json", "normal-cjk.json", "body-cjk.png", "tiny-cjk.json", "display-cjk.png", "small-cjk.png", "display.json", "display-cjk.json", "body-cjk.json", "display.png", "body.png", "body.json"}
-	files = append(files, folder+".json")
-	for _, file := range files {
-		filename := filepath.Join(baseDir, folder, file)
-		if info, err := os.Stat(filename); err != nil || info.IsDir() {
-			return false
-		}
-	}
-	return true
 }

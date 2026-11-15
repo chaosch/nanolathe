@@ -98,6 +98,9 @@ func builderOptionsPage(window *gui.Window) error {
 		control := button
 		control.Name, control.SourceName, control.Text, control.Stages = row.name, row.name, row.text, row.stages
 		control.Rect.Y = y
+		if t, ok := GlobalTranslations.GetUI(control.Text); ok {
+			control.Text = t.Text
+		}
 		kept = append(kept, control)
 		y += pitch
 	}

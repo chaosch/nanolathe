@@ -4,6 +4,8 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/film"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/render"
 )
 
@@ -213,6 +215,18 @@ func (c *Client) emitHalo(h drawlist.Halo) {
 // emitGlyphs records one FNT text run (the health-bar walk's control-group
 // digit, WU-1.5).
 func (c *Client) emitGlyphs(g drawlist.Glyphs) {
+	if i18n.I18nLanguageNeedCJK() && film.CJKReady() && g.Font != nil {
+		// ★ 用现成的 PickTier 拿到对应的名称，比如 "tiny"、"small"、"normal"
+		//fmt.Println(g.Font.Height)
+		tier := PickTier(int(g.Font.Height))
+		face := film.TextFaceInGame(tier.Name)
+		//fmt.Println(tier.Name)
+		//fmt.Println(face)
+		//fmt.Println(face.GpuTex)
+		if face != nil && face.GpuTex != nil {
+			g.CJKFace = face
+		}
+	}
 	g.HasClip, g.Clip = c.clipUISprite(g.HasClip, g.Clip)
 	c.list.RecordGlyphs(g)
 }

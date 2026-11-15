@@ -80,3 +80,23 @@ func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || !errors.Is(err, os.ErrNotExist)
 }
+
+var (
+	CJKNormal *AtlasFace
+	CJKSmall  *AtlasFace
+	CJKTiny   *AtlasFace
+)
+
+func GetCJKFace(height int) *AtlasFace {
+	if CJKNormal == nil && CJKSmall == nil && CJKTiny == nil {
+		return nil // 没加载
+	}
+	switch {
+	case height >= 16:
+		return CJKNormal
+	case height >= 15:
+		return CJKSmall
+	default:
+		return CJKTiny
+	}
+}

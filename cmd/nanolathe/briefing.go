@@ -410,7 +410,7 @@ func (b *campaignBriefingController) SetTextRegion(text string, width, height, f
 	}
 	b.text = text
 	b.measure = measure
-	b.wrapped = briefingSplitBlinkRuns(retailWordWrap(text, width, measure))
+	b.wrapped = briefingSplitBlinkRunsIncludeCJK(retailWordWrapIncludeCJK(text, width, measure))
 	step := fontHeight + 2
 	lines := 1
 	if step > 0 {
@@ -505,7 +505,7 @@ func (b *campaignBriefingController) layPage() {
 	// clock the lay ran on [07 R-FE-02 §7].
 	deadline := float32(b.tick) + float32(briefingPresentationRate)
 	for _, raw := range lines[start:end] {
-		line := briefingLayLine(raw, measure, &open, briefingBlinkWordCap-runs)
+		line := briefingLayLineIncludeCJK(raw, measure, &open, briefingBlinkWordCap-runs)
 		for i := range line.Runs {
 			line.Runs[i].deadline = deadline
 		}

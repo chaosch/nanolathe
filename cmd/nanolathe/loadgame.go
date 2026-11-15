@@ -557,7 +557,7 @@ func retailSaveGameID() string {
 }
 
 // writeBetweenMissionsSave writes the continuation bank the results screen's
-// `SaveGame` produces. The writer calls Advance before writing `Mission`/`Map`
+// `SaveGame` produces. The writer calls Advance before writing `MissionTranslation`/`Map`
 // and `BetweenMissions = 1`, so the bank names the **next** mission whenever
 // one exists — win or loss — and the played mission only when it was the last
 // [08 R-CAMP-01 §8 "Between-missions save quirk"].

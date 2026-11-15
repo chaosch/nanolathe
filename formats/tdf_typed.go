@@ -71,11 +71,12 @@ func (s *Section) StringValue(key, def string) (string, bool) {
 // LanguageString tries `<language><key>` first, then the plain key, then the
 // string-accessor rules [02 §3].
 func (s *Section) LanguageString(language, key, def string) (string, bool) {
-	if language != "" {
-		if value, ok := s.StringValue(language+key, ""); ok {
-			return value, true
-		}
-	}
+	//fmt.Println(key, i18n.Language())
+	//if i18n.I18nLanguageNeedCJK() {
+	//	if value, ok := s.StringValue(i18n.Language()+key, ""); ok {
+	//		return value, true
+	//	}
+	//}
 	return s.StringValue(key, def)
 }
 

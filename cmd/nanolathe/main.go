@@ -4,6 +4,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/settings"
 	"io"
 	"os"
 	"time"
@@ -165,6 +166,21 @@ func run(opts Options, out, errOut *os.File) error {
 		opts.ReplayDir = dir
 	}
 
+	if opts.LocalesDir == "" {
+		dir, err := defaultLocalesDir()
+		if dir, err = createLocalesDir(); err != nil {
+			fmt.Fprintf(errOut, "nanolathe: warning: battles will not be recorded: %v\n", err)
+		}
+		opts.LocalesDir = dir
+	}
+	if opts.Language == "" {
+		s, _ := settings.Load()
+		if s.Language != "" {
+			opts.Language = s.Language
+		} else {
+			opts.Language = "english"
+		}
+	}
 	if opts.BattleBenchmark != "" {
 		path, err := benchlock.Path()
 		if err != nil {

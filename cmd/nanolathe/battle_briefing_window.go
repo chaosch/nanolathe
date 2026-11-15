@@ -13,6 +13,7 @@ package main
 // under [07 R-FE-02 §2][07 R-FE-01 §4].
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
@@ -94,10 +95,12 @@ func battleBriefingText(b *battleSession, name string) string {
 	if logical == "" {
 		return ""
 	}
+
 	data, err := b.hud.fs.ReadFileLimit(logical, int64(formats.DefaultTDFLimits().MaxBytes))
 	if err != nil {
 		return ""
 	}
+	fmt.Println(string(data))
 	return string(data)
 }
 
@@ -158,6 +161,7 @@ func (h *retailBattleHUD) drawBattleBriefingText(c *client.Client, b *battleSess
 	if controller == nil {
 		return
 	}
+	fmt.Println(controller.lines)
 	now := int64(0)
 	if b.millisSource != nil {
 		now = int64(b.millisSource.Millis32())
@@ -192,6 +196,7 @@ func (h *retailBattleHUD) drawBattleBriefingLine(c *client.Client, text string, 
 		return
 	}
 	//c.PrintDebug()
+	fmt.Println(text)
 	if h.info.briefingFont != nil {
 		width, _ := c.Size()
 		c.UITextWidth(h.info.briefingFont, text, x, y, width-x, color)

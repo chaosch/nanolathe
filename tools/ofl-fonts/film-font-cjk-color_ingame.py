@@ -27,7 +27,7 @@ OUTLINE_COLOR = (0, 0, 0)
 WEN_QUAN12=r"WenQuanYi.Bitmap.Song.12px.ttf"
 WEN_QUAN13=r"WenQuanYi.Bitmap.Song.13px.ttf"
 WEN_QUAN14=r"WenQuanYi.Bitmap.Song.14px.ttf"
-WEN_QUAN15=r"WenQuanYi.Bitmap.Song.15px.ttf"
+WEN_QUAN15=r"WenQuanYi.Bitmap.Song.14px.ttf"
 WEN_QUAN16=r"WenQuanYi.Bitmap.Song.16px.ttf"
 
 OLD_FACE = {}
@@ -55,7 +55,7 @@ PALETTE = [
 # ==========================================
 DARKEN = 1              # 调色板整体压暗系数
 SHADOW_STRENGTH = 160   # 边缘最暗处的衰减强度（值越大边缘越黑）
-SHADOW_START = 0.4      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
+SHADOW_START = 0.0      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
 
 
 def wanted(catalogs):

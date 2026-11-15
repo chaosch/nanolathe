@@ -241,7 +241,7 @@ func (f *InGameAtlasFace) Frame(rn rune) *formats.GAFFrame {
 // Frame 从 Levels[0] 切出 GAFFrame，Pixels 存调色板索引 64~79。
 // Levels[0] 带 2px padding，字形在 (2,2) 开始。
 // 约定：灰度 0 = 透明；灰度 1 = 纯黑描边；其余 = 字形亮度。
-func (g *atlasGlyph) Frame() *formats.GAFFrame {
+func (g *AtlasGlyph) Frame() *formats.GAFFrame {
 	if g == nil || g.W <= 0 || g.H <= 0 || len(g.Levels) == 0 {
 		return nil
 	}
@@ -295,7 +295,7 @@ func (g *atlasGlyph) Frame() *formats.GAFFrame {
 	}
 }
 
-func TextFaceInGame(name string) *atlasFace {
+func TextFaceInGame(name string) *AtlasFace {
 	key := name
 	if CJKReady() {
 		return cjkFaces()[key]

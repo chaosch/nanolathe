@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -68,11 +69,11 @@ func retailGAFGlyph(font *formats.GAFEntry, code byte) *formats.GAFFrame {
 // through its frame but is not blitted [07 §4].
 func retailGAFTextWidth(font *formats.GAFEntry, text string) int {
 	width := 0
-	for i := 0; i < len(text); i++ {
-		if text[i] == 0 {
+	for _, r := range text {
+		if r == 0 {
 			break
 		}
-		if frame := retailGAFGlyph(font, text[i]); frame != nil {
+		if frame := retailGAFGlyphDispatch(font, r); frame != nil {
 			width += int(frame.Width)
 		}
 	}
@@ -135,26 +136,25 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
-	Align := 2
-	if baselineHeight <= 12 {
-		baselineHeight = 13
-		Align = 0
-	}
+	//Align := 2
+	//if baselineHeight <= 12 {
+	//	baselineHeight = 13
+	//	//Align = 0
+	//}
+	//if _, ok := c.DrawRetailFilmCJKCylindrical(
+	//	text,
+	//	x, y, maxWidth, baselineHeight,
+	//	0,
+	//	uint32(Align),
+	//); ok {
+	//	return
+	//}
 	remaining := maxWidth
-	if _, ok := c.DrawRetailFilmCJKCylindrical(
-		text,
-		x, y, maxWidth, baselineHeight,
-		0,
-		uint32(Align),
-	); ok {
-		return
-	}
-	for i := 0; i < len(text); i++ {
-		code := text[i]
-		if code == 0 {
+	for _, r := range text {
+		if r == 0 {
 			return
 		}
-		frame := retailGAFGlyph(font, code)
+		frame := retailGAFGlyphDispatch(font, r)
 		if frame == nil {
 			continue
 		}
@@ -162,7 +162,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		if remaining >= 0 && remaining < advance {
 			return
 		}
-		if code != 0x20 {
+		if r != 0x20 {
 			c.UIBlitClipped(frame,
 				x-int(frame.XOffset),
 				y-(int(frame.YOffset)-baselineHeight),
@@ -181,27 +181,30 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 // labels pass a non-zero level [07 §4][03 §4.3.1].
 func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
 	//c.PrintDebug(text)
+	fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", text))
+
+	fmt.Println("【原始文本 string】: ", text)
+	client.PrintDebug(text)
+
 	if c == nil || font == nil {
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
+
+	//if _, ok := c.DrawRetailFilmCJKCylindrical(
+	//	text,
+	//	x, y, maxWidth, baselineHeight,
+	//	255,
+	//	2,
+	//); ok {
+	//	return
+	//}
 	remaining := maxWidth
-
-	if _, ok := c.DrawRetailFilmCJKCylindrical(
-		text,
-		x, y, maxWidth, baselineHeight,
-		255,
-		2,
-	); ok {
-		return
-	}
-
-	for i := 0; i < len(text); i++ {
-		code := text[i]
-		if code == 0 {
+	for _, r := range text {
+		if r == 0 {
 			return
 		}
-		frame := retailGAFGlyph(font, code)
+		frame := retailGAFGlyphDispatch(font, r)
 		if frame == nil {
 			continue
 		}
@@ -209,7 +212,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 		if remaining >= 0 && remaining < advance {
 			return
 		}
-		if code != 0x20 {
+		if r != 0x20 {
 			// Font loading normalizes each frame's YOffset by the capital-I
 			// height. Glyph placement subtracts that normalized value and the
 			// frame XOffset from the text pen; ordinary GUI art uses a different
@@ -237,6 +240,11 @@ func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWid
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
 	//c.PrintDebug(text)
+	fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", text))
+
+	fmt.Println("【原始文本 string】: ", text)
+	client.PrintDebug(text)
+
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {

@@ -254,6 +254,7 @@ type Glyphs struct {
 	// truncation. HasClip is false for every existing call site.
 	Clip    Rect
 	HasClip bool
+	CJKFace interface{}
 }
 
 // FillStyle selects which rectangle writer a Fill replays as

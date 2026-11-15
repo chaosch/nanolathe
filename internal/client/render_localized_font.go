@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -37,7 +38,7 @@ func PrintDebug(args ...interface{}) {
 		printed = make(map[string]int)
 	}
 	var pcindex int
-	pcindex = 1
+	pcindex = 2
 	pc, _, _, ok := runtime.Caller(pcindex)
 	if ok {
 		fn := runtime.FuncForPC(pc)
@@ -135,6 +136,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		attribs,
 	}
 	real_text := text
+
 	if printed == nil {
 		printed = make(map[string]int)
 	}
@@ -142,13 +144,9 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		return 0, false
 	}
 
-	// 翻译兜底
 	tr := i18n.T(real_text)
 	if tr == real_text {
-		if _, exists := printed[real_text]; !exists {
-			//c.PrintDebugInternal("translate text not found!", real_text)
-			return 0, false
-		}
+		return 0, false
 	}
 
 	safeMaxWidth := maxWidth
@@ -368,7 +366,12 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	return 0, false
 	if !i18n.I18nLanguageNeedCJK() {
+		return 0, false
+	}
+	//fmt.Println(text)
+	if hasCJK(text) {
 		return 0, false
 	}
 	key := TranslateCacheKey{
@@ -778,4 +781,13 @@ func needCjkTranslate(language string) bool {
 func ClearCjkTranslateCache() {
 	TranslateCache = make(map[TranslateCacheKey]TranslateValue)
 
+}
+
+func hasCJK(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) || (r >= 0x3000 && r <= 0x303F) {
+			return true
+		}
+	}
+	return false
 }

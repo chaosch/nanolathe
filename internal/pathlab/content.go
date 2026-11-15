@@ -70,6 +70,11 @@ func LoadContent(roots []string, mod string) (*Content, error) {
 		c.Mod = m.ID + "@" + m.Version
 		c.Profile, c.Features = m.Content(), m.CommunitySources()
 	}
+	// ← 新增：译文 root 追加到最后，整体压过 base 和 mod
+	if localeRoot := localeRootForLocales(); localeRoot != "" {
+		c.Roots = append(c.Roots, localeRoot)
+	}
+
 	c.FS = vfs.New()
 	if err := c.FS.MountGameDirectories(c.Roots); err != nil {
 		c.FS.Close()

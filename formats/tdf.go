@@ -85,6 +85,8 @@ func ParseTDF(data []byte) (*Document, error) {
 
 // ParseTDFWithLimits parses a TDF document under explicit bounds [fmt tdf].
 func ParseTDFWithLimits(data []byte, limits TDFLimits) (*Document, error) {
+	fmt.Printf("【TDF文件头 前20字节】: % x\n", data[:min(20, len(data))])
+
 	if limits.MaxBytes <= 0 || limits.MaxDepth <= 0 || limits.MaxItems <= 0 || limits.MaxValueBytes <= 0 || limits.MaxNameBytes <= 0 {
 		return nil, fmt.Errorf("tdf: invalid parse limits")
 	}

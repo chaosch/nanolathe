@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -347,11 +348,14 @@ func mountContent(opts Options, baseRoots []string, selection modSelection) (*co
 	// The modeled startup state selects retail's literal lowercase English
 	// default before GUI parsing. TODO(T25): host command-line/registry
 	// non-default language selection has not been integrated yet.
-	translations, err := content.LoadTranslationTable(set.fs, "english")
+	//translations, err := content.LoadTranslationTable(set.fs, opts.Language)
+	translations, err := LoadTranslationTableDispatcher(filepath.Join(opts.LocalesDir, opts.Language, "loose"), selection, set.fs, opts.Language)
+	//GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, opts.Language, "loose"), selection, set.fs)
 	if err != nil {
 		set.Close()
 		return nil, fmt.Errorf("nanolathe: loading default GUI translation table: %w", err)
 	}
+	fmt.Println("nanolathe: loaded GUI translation table", translations)
 	set.translations = translations
 
 	// The modern renderer's material annotation is authored presentation data
@@ -363,6 +367,7 @@ func mountContent(opts Options, baseRoots []string, selection modSelection) (*co
 		fmt.Fprintln(os.Stderr, err)
 	}
 	set.loadDuration = time.Since(started)
+	//GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, "loose"), selection)
 	return set, nil
 }
 

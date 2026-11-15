@@ -856,6 +856,10 @@ type retailButtonArtResolution struct {
 // runs after every selected-art arm [07 R-WGT-01 §3].
 func (g *gameShell) buildRetailButtonArt(gad gui.Gadget, own *formats.GAF) retailButtonArtResolution {
 	name := gad.Art
+	if gad.Text == "Survival" || gad.Text == "survival" {
+		fmt.Println("buildRetailButtonArt", gad.Name, gad.Text, gad.QuickKey)
+
+	}
 	if name == "" {
 		name = gad.Name
 	}

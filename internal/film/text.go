@@ -108,7 +108,7 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	face := TextFace(style.Font)
 	scale := style.Size / face.Cap
 	type placedGlyph struct {
-		g *atlasGlyph
+		g *AtlasGlyph
 		x float64
 	}
 	placed := make([]placedGlyph, 0, len(text))

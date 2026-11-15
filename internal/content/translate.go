@@ -2,6 +2,7 @@ package content
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -92,6 +93,10 @@ func (t *TranslationTable) Translate(source string) string {
 	// preserves exact equality and the identity fallback [02 "Translation table"].
 	i := sort.Search(len(t.entries), func(i int) bool { return t.entries[i].source >= source })
 	if i < len(t.entries) && t.entries[i].source == source {
+		//fmt.Println(source, t.entries[i].translation)
+		fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", t.entries[i].translation))
+
+		fmt.Println("【原始文本 string】: ", t.entries[i].translation)
 		return t.entries[i].translation
 	}
 	return source
@@ -136,4 +141,28 @@ func asciiEqualFold(a, b string) bool {
 		}
 	}
 	return true
+}
+
+// NewTranslationTable 构造一个正确的翻译表。
+func NewTranslationTable(entries map[string]string) *TranslationTable {
+	// 1. 收集所有的 source，去重
+	sources := make([]string, 0, len(entries))
+	for src := range entries {
+		sources = append(sources, src)
+	}
+
+	// 2. 按 source 的字节序排序 (byte-sorted source order)
+	sort.Strings(sources)
+
+	// 3. 按排序后的顺序组装 entries
+	t := &TranslationTable{
+		entries: make([]translationEntry, 0, len(sources)),
+	}
+	for _, src := range sources {
+		t.entries = append(t.entries, translationEntry{
+			source:      src,
+			translation: entries[src],
+		})
+	}
+	return t
 }

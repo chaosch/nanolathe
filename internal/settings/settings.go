@@ -1576,6 +1576,8 @@ func (s Settings) Save() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(path)
+	fmt.Println(fmt.Sprintf("settings: %v", s))
 	return s.SaveTo(path)
 }
 

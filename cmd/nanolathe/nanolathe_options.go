@@ -259,6 +259,9 @@ func addNanolatheOptionsCategory(window *gui.Window, inBattle bool) {
 		if name == "PLACEMENT" {
 			button.Text = "PLACEMENT"
 		}
+		if t, ok := GlobalTranslations.GetUI(button.Text); ok {
+			button.Text = t.Text
+		}
 		window.Gadgets = append(window.Gadgets, button)
 	}
 	// The battle root puts OK beneath this same column. Compress category

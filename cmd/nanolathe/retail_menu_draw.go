@@ -4,6 +4,7 @@ package main
 // drawer per control kind — art, button, text and surface [07 §5].
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -543,6 +544,11 @@ func (g *gameShell) retailTextMetrics(selected *formats.FNT) (measure func(strin
 // or the common font when the gadget selected none [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y, maxWidth int, color byte, shade int, selected *formats.FNT) {
 	//c.PrintDebug(text)
+	fmt.Println(fmt.Sprintf("drawRetailStringSelected【原始文本 Hex】: %x", text))
+
+	fmt.Println("drawRetailStringSelected【原始文本 string】: ", text)
+	client.PrintDebug(text)
+
 	if selected == nil || g.retailGAFTextFont() != nil {
 		g.drawRetailStringLit(c, text, x, y, maxWidth, color, shade)
 		return

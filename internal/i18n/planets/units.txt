@@ -1,0 +1,1735 @@
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Archer,Description:Anti-Air Ship
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Swatter,Description:Anti-Air Hovercraft
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Ambusher,Description:Pop-up Heavy Cannon
+UnitName:Protector,Description:Anti Missile Defense System
+UnitName:Pelican,Description:Amphibious Kbot
+UnitName:Anaconda,Description:Hovertank
+UnitName:Annihilator,Description:Energy weapon
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Advanced Radar Tower,Description:Long Range Radar Tower
+UnitName:Eraser,Description:Radar Jammer
+UnitName:Advanced Sonar Station,Description:Extended Sonar
+UnitName:Air Repair Pad,Description:Automatically repairs aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Advanced Torpedo Launcher
+UnitName:Atlas,Description:Air Transport
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Eagle,Description:Radar Plane
+UnitName:Millenium,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Brawler,Description:Gunship
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Bulldog,Description:Heavy Assault Tank
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:Colossus,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction KBot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Triton,Description:Amphibious Tank
+UnitName:Conqueror,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Decoy Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Stunner,Description:EMP Missile Launcher
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:FARK,Description:Fast Assist-Repair Kbot
+UnitName:Zipper,Description:Fast Attack Kbot
+UnitName:Jeffy,Description:Fast Attack Vehicle
+UnitName:Floating Dragon's Teeth,Description:Floating Dragon's Teeth
+UnitName:Stingray,Description:Floating Heavy Laser Tower
+UnitName:Fido,Description:Assault Kbot
+UnitName:Freedom Fighter,Description:Fighter
+UnitName:Flakker,Description:Anti-Air Flak Gun
+UnitName:Flash,Description:Fast Assault Tank
+UnitName:Flea,Description:Fast Light Scout Kbot
+UnitName:Floating Metal Maker,Description:Floating Metal Maker
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Defender - NS,Description:Missile Tower - Naval Series
+UnitName:Fusion Reactor,Description:Produces Energy
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Guardian,Description:Plasma Battery
+UnitName:Hammer,Description:Artillery Kbot
+UnitName:Hawk,Description:Stealth Fighter
+UnitName:Sentinel,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Jammer,Description:Mobile Radar Jammer
+UnitName:Jethro,Description:Anti-Air Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Lancet,Description:Torpedo Bomber
+UnitName:Panther,Description:Lightning Tank
+UnitName:L.L.T.,Description:Light Laser Tower
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Penetrator,Description:Mobile Energy Weapon
+UnitName:Marky,Description:Mobile Radar Kbot
+UnitName:Luger,Description:Mobile Artillery
+UnitName:Maverick,Description:Gun-slinging Kbot
+UnitName:Merl,Description:Mobile Rocket Launcher
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Wombat,Description:Hovercraft Rocket Launcher
+UnitName:Tiny,Description:Low Damage, Med. Range Mine
+UnitName:Area Mine,Description:Low Damage, Large Range Mine
+UnitName:Focused Mine,Description:Med. Damage, Small Range Mine
+UnitName:HE Area Mine,Description:Med. Damage, Large Range Mine
+UnitName:Precision Mine,Description:High Damage, Small Range Mine
+UnitName:Nuclear Mine,Description:Nuclear Mine
+UnitName:Podger,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Ranger,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Peeper,Description:Air Scout
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Phoenix,Description:Bomber
+UnitName:Skeeter,Description:Scout Ship
+UnitName:Peewee,Description:Infantry Kbot
+UnitName:Radar Tower,Description:Radar Tower
+UnitName:Defender,Description:Missile Tower
+UnitName:Rocko,Description:Rocket Kbot
+UnitName:Crusader,Description:Destroyer
+UnitName:Samson,Description:Mobile Missile Launcher
+UnitName:Scarab,Description:Mobile Missile Defense
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Fibber,Description:Sonar Jamming Sub
+UnitName:Albatross,Description:Torpedo Seaplane
+UnitName:Seer,Description:Mobile Radar
+UnitName:Seahawk,Description:Airborne Sonar
+UnitName:Tornado,Description:Seaplane Fighter
+UnitName:Skimmer,Description:Scout Hovercraft
+UnitName:Retaliator,Description:Nuclear Missile Launcher
+UnitName:Escort,Description:Radar Jammer Ship
+UnitName:Shooter,Description:Sniper Kbot
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Locates Water Units
+UnitName:Spider,Description:Spider Assault Vehicle
+UnitName:Infiltrator,Description:SPY Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Stumpy,Description:Medium Assault Tank
+UnitName:Lurker,Description:Submarine
+UnitName:Piranha,Description:Submarine Killer
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Bear,Description:Transport Hovercraft
+UnitName:Thunder,Description:Bomber
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Torpedo Launcher,Description:Torpedo Launcher
+UnitName:Hulk,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Invader,Description:Crawling Bomb
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Warrior,Description:Medium Infantry Kbot
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Phalanx,Description:Mobile Flak Vehicle
+UnitName:Zeus,Description:Assault Kbot
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Slinger,Description:Anti-Air Hovercraft
+UnitName:A.K.,Description:Infantry Kbot
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Gimp,Description:Amphibious Kbot
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Rapier,Description:Gunship
+UnitName:Advanced Radar Tower,Description:Long Range Radar
+UnitName:Shredder,Description:Anti-Air Ship
+UnitName:Advanced Sonar Station,Description:Locates Water Units
+UnitName:Air Repair Pad,Description:Automatically repairs aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Advanced Torpedo Launcher
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulture,Description:Radar Plane
+UnitName:Warlord,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Hydration Plant,Description:Creates Water
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:The Can,Description:Armored Assault Kbot
+UnitName:Hive,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Crasher,Description:Missile Kbot
+UnitName:Executioner,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Decoy Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Doomsday Machine,Description:Energy Weapon
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:Deleter,Description:Mobile Radar Jammer
+UnitName:Freaker,Description:Fast Attack Kbot
+UnitName:Weasel,Description:Scout
+UnitName:Floating Dragon's Teeth,Description:Floating Dragon's Teeth
+UnitName:Thunderbolt,Description:Floating Heavy Laser Tower
+UnitName:Fink,Description:Air Scout
+UnitName:Cobra,Description:Anti-Air Flak Gun
+UnitName:Fortitude Missile Defense,Description:Anti Missile Defense System
+UnitName:Floating Metal Maker,Description:Floating Metal Maker
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Stinger,Description:Missile Tower - Naval Series
+UnitName:Fusion Power Plant,Description:Produces Energy
+UnitName:Krogoth Gantry,Description:Builds Krogoth
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Instigator,Description:Assault Tank
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Goliath,Description:Very Heavy Assault Tank
+UnitName:Gaat Gun,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Dominator,Description:Heavy Rocket Kbot
+UnitName:Hunter,Description:Airborne Sonar
+UnitName:Hurricane,Description:Strategic Bomber
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Krogoth,Description:Experimental Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Leveler,Description:Riot Tank
+UnitName:Light Laser Tower,Description:Light Laser Tower
+UnitName:Hedgehog,Description:Mobile Missile Defense
+UnitName:Metal Maker,Description:Metal Maker
+UnitName:Mobile Artillery,Description:Mobile Artillery
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Nixer,Description:Hovercraft Rocket Launcher
+UnitName:M-104,Description:Low Damage, Med. Range Mine
+UnitName:M-209,Description:Low Damage, Large Range Mine
+UnitName:M-303,Description:Med. Damage, Med. Range Mine
+UnitName:M-420,Description:High Damage, Med. Range Mine
+UnitName:M-515,Description:High Damage, Large Range Mine
+UnitName:M-610,Description:Nuclear Mine
+UnitName:Slasher,Description:Missile Launcher
+UnitName:Spoiler,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Produces Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Morty,Description:Mobile Mortar Kbot
+UnitName:Missile Frigate,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Resurrection Kbot,Description:Resurrection Kbot
+UnitName:Immolator,Description:Plasma Tower
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Searcher,Description:Scout Ship
+UnitName:Punisher,Description:Plasma Battery
+UnitName:Pyro,Description:Assault Kbot
+UnitName:Radar Tower,Description:Radar Tower
+UnitName:Raider,Description:Medium Assault Tank
+UnitName:Reaper,Description:Heavy Assault Tank
+UnitName:Pulverizer,Description:Missile Tower
+UnitName:Roach,Description:Crawling Bomb
+UnitName:Enforcer,Description:Destroyer
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Crock,Description:Amphibious Tank
+UnitName:Typhoon,Description:Torpedo Seaplane
+UnitName:Copperhead,Description:Mobile Flak Vehicle
+UnitName:Voodoo,Description:Seaplane Fighter
+UnitName:Scrubber,Description:Scout Hovercraft
+UnitName:Shadow,Description:Bomber
+UnitName:Shark,Description:Submarine Killer
+UnitName:Silencer,Description:Nuclear Missile Launcher
+UnitName:Phantom,Description:Radar Jammer Ship
+UnitName:Snapper,Description:Hovertank
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Sonar Station
+UnitName:Spectre,Description:Radar Jammer
+UnitName:Parasite,Description:SPY Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Leviathan,Description:Battle Sub
+UnitName:Storm,Description:Rocket Kbot
+UnitName:Snake,Description:Submarine
+UnitName:Sumo,Description:Adv. Armored Assault Kbot
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Turtle,Description:Transport Hovercraft
+UnitName:Thud,Description:Artillery Kbot
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Titan,Description:Torpedo Bomber
+UnitName:Torpedo Launcher,Description:Torpedo Launcher
+UnitName:Toaster,Description:Pop-up Heavy Cannon
+UnitName:Neutron,Description:Neutron Missile Launcher
+UnitName:Truck,Description:Ground Transport
+UnitName:Envoy,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Valkyrie,Description:Air Transport
+UnitName:Vamp,Description:Stealth Fighter
+UnitName:Avenger,Description:Fighter
+UnitName:Viper,Description:Pop-Up Heavy Laser
+UnitName:Voyeur,Description:Mobile Radar Kbot
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Informer,Description:Mobile Radar
+UnitName:Diplomat,Description:Mobile Rocket Launcher
+UnitName:Wind Generator,Description:Produces Energy
+
+==ta esc
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Archer,Description:Anti-Air Ship
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Swatter,Description:Anti-Air Hovercraft
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Ambusher,Description:Pop-up Heavy Cannon
+UnitName:Protector,Description:Anti Missile Defense System
+UnitName:Pelican,Description:Amphibious Kbot
+UnitName:Anaconda,Description:Hovertank
+UnitName:Annihilator,Description:Energy weapon
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Advanced Radar Tower,Description:Long Range Radar Tower
+UnitName:Eraser,Description:Radar Jammer
+UnitName:Advanced Sonar Station,Description:Extended Sonar
+UnitName:Air Repair Pad,Description:Automatically repairs aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Advanced Torpedo Launcher
+UnitName:Atlas,Description:Air Transport
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Eagle,Description:Radar Plane
+UnitName:Millenium,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Brawler,Description:Gunship
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Bulldog,Description:Heavy Assault Tank
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:Colossus,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction KBot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Triton,Description:Amphibious Tank
+UnitName:Conqueror,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Decoy Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Stunner,Description:EMP Missile Launcher
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:FARK,Description:Fast Assist-Repair Kbot
+UnitName:Zipper,Description:Fast Attack Kbot
+UnitName:Jeffy,Description:Fast Attack Vehicle
+UnitName:Floating Dragon's Teeth,Description:Floating Dragon's Teeth
+UnitName:Stingray,Description:Floating Heavy Laser Tower
+UnitName:Fido,Description:Assault Kbot
+UnitName:Freedom Fighter,Description:Fighter
+UnitName:Flakker,Description:Anti-Air Flak Gun
+UnitName:Flash,Description:Fast Assault Tank
+UnitName:Flea,Description:Fast Light Scout Kbot
+UnitName:Floating Metal Maker,Description:Floating Metal Maker
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Defender - NS,Description:Missile Tower - Naval Series
+UnitName:Fusion Reactor,Description:Produces Energy
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Guardian,Description:Plasma Battery
+UnitName:Hammer,Description:Artillery Kbot
+UnitName:Hawk,Description:Stealth Fighter
+UnitName:Sentinel,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Jammer,Description:Mobile Radar Jammer
+UnitName:Jethro,Description:Anti-Air Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Lancet,Description:Torpedo Bomber
+UnitName:Panther,Description:Lightning Tank
+UnitName:L.L.T.,Description:Light Laser Tower
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Penetrator,Description:Mobile Energy Weapon
+UnitName:Marky,Description:Mobile Radar Kbot
+UnitName:Luger,Description:Mobile Artillery
+UnitName:Maverick,Description:Gun-slinging Kbot
+UnitName:Merl,Description:Mobile Rocket Launcher
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Wombat,Description:Hovercraft Rocket Launcher
+UnitName:Tiny,Description:Low Damage, Med. Range Mine
+UnitName:Area Mine,Description:Low Damage, Large Range Mine
+UnitName:Focused Mine,Description:Med. Damage, Small Range Mine
+UnitName:HE Area Mine,Description:Med. Damage, Large Range Mine
+UnitName:Precision Mine,Description:High Damage, Small Range Mine
+UnitName:Nuclear Mine,Description:Nuclear Mine
+UnitName:Podger,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Ranger,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Peeper,Description:Air Scout
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Phoenix,Description:Bomber
+UnitName:Skeeter,Description:Scout Ship
+UnitName:Peewee,Description:Infantry Kbot
+UnitName:Radar Tower,Description:Radar Tower
+UnitName:Defender,Description:Missile Tower
+UnitName:Rocko,Description:Rocket Kbot
+UnitName:Crusader,Description:Destroyer
+UnitName:Samson,Description:Mobile Missile Launcher
+UnitName:Scarab,Description:Mobile Missile Defense
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Fibber,Description:Sonar Jamming Sub
+UnitName:Albatross,Description:Torpedo Seaplane
+UnitName:Seer,Description:Mobile Radar
+UnitName:Seahawk,Description:Airborne Sonar
+UnitName:Tornado,Description:Seaplane Fighter
+UnitName:Skimmer,Description:Scout Hovercraft
+UnitName:Retaliator,Description:Nuclear Missile Launcher
+UnitName:Escort,Description:Radar Jammer Ship
+UnitName:Shooter,Description:Sniper Kbot
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Locates Water Units
+UnitName:Spider,Description:Spider Assault Vehicle
+UnitName:Infiltrator,Description:SPY Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Stumpy,Description:Medium Assault Tank
+UnitName:Lurker,Description:Submarine
+UnitName:Piranha,Description:Submarine Killer
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Bear,Description:Transport Hovercraft
+UnitName:Thunder,Description:Bomber
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Torpedo Launcher,Description:Torpedo Launcher
+UnitName:Hulk,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Invader,Description:Crawling Bomb
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Warrior,Description:Medium Infantry Kbot
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Phalanx,Description:Mobile Flak Vehicle
+UnitName:Zeus,Description:Assault Kbot
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Slinger,Description:Anti-Air Hovercraft
+UnitName:A.K.,Description:Infantry Kbot
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Gimp,Description:Amphibious Kbot
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Rapier,Description:Gunship
+UnitName:Advanced Radar Tower,Description:Long Range Radar
+UnitName:Shredder,Description:Anti-Air Ship
+UnitName:Advanced Sonar Station,Description:Locates Water Units
+UnitName:Air Repair Pad,Description:Automatically repairs aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Advanced Torpedo Launcher
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulture,Description:Radar Plane
+UnitName:Warlord,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Hydration Plant,Description:Creates Water
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:The Can,Description:Armored Assault Kbot
+UnitName:Hive,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Crasher,Description:Missile Kbot
+UnitName:Executioner,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Decoy Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Doomsday Machine,Description:Energy Weapon
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:Deleter,Description:Mobile Radar Jammer
+UnitName:Freaker,Description:Fast Attack Kbot
+UnitName:Weasel,Description:Scout
+UnitName:Floating Dragon's Teeth,Description:Floating Dragon's Teeth
+UnitName:Thunderbolt,Description:Floating Heavy Laser Tower
+UnitName:Fink,Description:Air Scout
+UnitName:Cobra,Description:Anti-Air Flak Gun
+UnitName:Fortitude Missile Defense,Description:Anti Missile Defense System
+UnitName:Floating Metal Maker,Description:Floating Metal Maker
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Stinger,Description:Missile Tower - Naval Series
+UnitName:Fusion Power Plant,Description:Produces Energy
+UnitName:Krogoth Gantry,Description:Builds Krogoth
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Instigator,Description:Assault Tank
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Goliath,Description:Very Heavy Assault Tank
+UnitName:Gaat Gun,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Dominator,Description:Heavy Rocket Kbot
+UnitName:Hunter,Description:Airborne Sonar
+UnitName:Hurricane,Description:Strategic Bomber
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Krogoth,Description:Experimental Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Leveler,Description:Riot Tank
+UnitName:Light Laser Tower,Description:Light Laser Tower
+UnitName:Hedgehog,Description:Mobile Missile Defense
+UnitName:Metal Maker,Description:Metal Maker
+UnitName:Mobile Artillery,Description:Mobile Artillery
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Nixer,Description:Hovercraft Rocket Launcher
+UnitName:M-104,Description:Low Damage, Med. Range Mine
+UnitName:M-209,Description:Low Damage, Large Range Mine
+UnitName:M-303,Description:Med. Damage, Med. Range Mine
+UnitName:M-420,Description:High Damage, Med. Range Mine
+UnitName:M-515,Description:High Damage, Large Range Mine
+UnitName:M-610,Description:Nuclear Mine
+UnitName:Slasher,Description:Missile Launcher
+UnitName:Spoiler,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Produces Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Morty,Description:Mobile Mortar Kbot
+UnitName:Missile Frigate,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Resurrection Kbot,Description:Resurrection Kbot
+UnitName:Immolator,Description:Plasma Tower
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Searcher,Description:Scout Ship
+UnitName:Punisher,Description:Plasma Battery
+UnitName:Pyro,Description:Assault Kbot
+UnitName:Radar Tower,Description:Radar Tower
+UnitName:Raider,Description:Medium Assault Tank
+UnitName:Reaper,Description:Heavy Assault Tank
+UnitName:Pulverizer,Description:Missile Tower
+UnitName:Roach,Description:Crawling Bomb
+UnitName:Enforcer,Description:Destroyer
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Crock,Description:Amphibious Tank
+UnitName:Typhoon,Description:Torpedo Seaplane
+UnitName:Copperhead,Description:Mobile Flak Vehicle
+UnitName:Voodoo,Description:Seaplane Fighter
+UnitName:Scrubber,Description:Scout Hovercraft
+UnitName:Shadow,Description:Bomber
+UnitName:Shark,Description:Submarine Killer
+UnitName:Silencer,Description:Nuclear Missile Launcher
+UnitName:Phantom,Description:Radar Jammer Ship
+UnitName:Snapper,Description:Hovertank
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Sonar Station
+UnitName:Spectre,Description:Radar Jammer
+UnitName:Parasite,Description:SPY Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Leviathan,Description:Battle Sub
+UnitName:Storm,Description:Rocket Kbot
+UnitName:Snake,Description:Submarine
+UnitName:Sumo,Description:Adv. Armored Assault Kbot
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Turtle,Description:Transport Hovercraft
+UnitName:Thud,Description:Artillery Kbot
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Titan,Description:Torpedo Bomber
+UnitName:Torpedo Launcher,Description:Torpedo Launcher
+UnitName:Toaster,Description:Pop-up Heavy Cannon
+UnitName:Neutron,Description:Neutron Missile Launcher
+UnitName:Truck,Description:Ground Transport
+UnitName:Envoy,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Valkyrie,Description:Air Transport
+UnitName:Vamp,Description:Stealth Fighter
+UnitName:Avenger,Description:Fighter
+UnitName:Viper,Description:Pop-Up Heavy Laser
+UnitName:Voyeur,Description:Mobile Radar Kbot
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Informer,Description:Mobile Radar
+UnitName:Diplomat,Description:Mobile Rocket Launcher
+UnitName:Wind Generator,Description:Produces Energy
+
+==ta zero==
+
+UnitName:Commander,Description:Commander of Arm Rebellion
+UnitName:Stinger,Description:T1 Anti-Air Hovercraft
+UnitName:Watchtower,Description:T1 Anti-Air Turret
+UnitName:T1 Aircraft Factory,Description:Builds T1 Air Units
+UnitName:T1 Aircraft Factory,Description:Builds T1 Air Units
+UnitName:Overseer,Description:T1 Transport/Construction Aircraft
+UnitName:Overseer,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Broadside,Description:T1 Artillery Kbot
+UnitName:Ballista,Description:T1 Mobile Rocket Launcher
+UnitName:Scorpion,Description:T1 Skirmish Tank
+UnitName:Corsair,Description:T1 Bomber
+UnitName:Custodian,Description:T1 Construction Hovercraft
+UnitName:Custodian,Description:T1 Construction Hovercraft
+UnitName:Underling,Description:T1 Construction Submarine
+UnitName:Underling,Description:T1 Construction Submarine
+UnitName:Patriot,Description:T1 Destroyer
+UnitName:Hercules,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 1000
+UnitName:Energy Storage,Description:Increases Energy Storage By 1000
+UnitName:Watchtower NS,Description:T1 Floating Anti-Air Turret
+UnitName:Settler,Description:T1 Field Engineer Kbot
+UnitName:Settler,Description:T1 Field Engineer Kbot
+UnitName:Rebel,Description:T1 Fighter
+UnitName:Frontier Extractor,Description:Extracts 2 Metal Per Second
+UnitName:Riptide,Description:T1 Submerged Mine
+UnitName:Blockade,Description:T1 Floating Perimeter Defence
+UnitName:Harpoon,Description:T1 Floating Perimeter Defence Turret
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Trident,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:Hammer,Description:T1 Artillery Turret
+UnitName:T1 Heavy Ground Factory,Description:Builds T1 Heavy Units
+UnitName:T1 Heavy Ground Factory,Description:Builds T1 Heavy Units
+UnitName:Marine,Description:T1 Infantry Kbot
+UnitName:T1 Light Ground Factory,Description:Builds T1 Light Units
+UnitName:T1 Light Ground Factory,Description:Builds T1 Light Units
+UnitName:Havoc,Description:T1 Battle Tank
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Caltrop,Description:T1 Proximity Mine
+UnitName:Metal Storage,Description:Increases Metal Storage By 1000
+UnitName:Metal Storage,Description:Increases Metal Storage By 1000
+UnitName:T1 Naval Factory,Description:Builds T1 Naval Units
+UnitName:T1 Naval Factory,Description:Builds T1 Naval Units
+UnitName:Wall,Description:T1 Perimeter Defence
+UnitName:Autogun,Description:T1 Perimeter Defence Turret
+UnitName:Vigilant,Description:T1 Radar Tower (Consumes 8 Energy Per Second)
+UnitName:Predator,Description:T1 Reconnaissance Aircraft
+UnitName:Outrider,Description:T1 Reconnaissance Hovercraft
+UnitName:Viking,Description:T1 Attack Hovercraft
+UnitName:Harasser,Description:T1 Light Attack Half-Track
+UnitName:Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Sentinel,Description:T1 Naval Sensor Station (Consumes 8 Energy Per Second)
+UnitName:Steelhead,Description:T1 Submarine
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Anarchist,Description:T2 Anti-Air Tank
+UnitName:Radical,Description:T2 Anti-Air Turret
+UnitName:T2 Aircraft Factory,Description:Builds T2 Air Units
+UnitName:T2 Aircraft Factory,Description:Builds T2 Air Units
+UnitName:Atlas,Description:T2 Transport/Construction Aircraft
+UnitName:Atlas,Description:T2 Transport/Construction Aircraft
+UnitName:Mauler,Description:T2 Artillery Vehicle
+UnitName:Varjag,Description:T2 Shock Assault Kbot
+UnitName:Vindicator,Description:T2 Tactical Bomber
+UnitName:Machinist,Description:T2 Construction Vehicle
+UnitName:Machinist,Description:T2 Construction Vehicle
+UnitName:Sapper,Description:T2 Field Engineer Kbot
+UnitName:Sapper,Description:T2 Field Engineer Kbot
+UnitName:Falcon,Description:T2 Interceptor
+UnitName:T2 Ground Factory,Description:Builds T2 Ground Units
+UnitName:T2 Ground Factory,Description:Builds T2 Ground Units
+UnitName:Liberator,Description:T2 Gunship
+UnitName:Liberator,Description:T2 Gunship
+UnitName:Defiant,Description:T2 Heavy Defence Turret
+UnitName:Blindspot,Description:T2 Radar Jammer (Consumes 4 Energy Per Second)
+UnitName:Scrambler,Description:T2 Radar Jammer Hovercraft
+UnitName:Raptor,Description:T2 Fast Attack Jumpjet Kbot
+UnitName:Retaliator,Description:T2 Tactical Missile Silo (Consumes 40 Energy Per Second)
+UnitName:High Yield Metal Extractor,Description:Extracts 6 Metal Per Second
+UnitName:Buster,Description:T2 Anti-Armor Mine
+UnitName:Dauntless,Description:T2 Perimeter Defence Turret
+UnitName:Fusion Reactor,Description:Produces 80 Energy Per Second
+UnitName:Fusion Reactor,Description:Produces 80 Energy Per Second
+UnitName:Cognizant,Description:T2 Radar Tower (Consumes 48 Energy Per Second)
+UnitName:Spotter,Description:T2 Radar Hovercraft
+UnitName:Visitant,Description:T2 Reconnaissance Aircraft
+UnitName:Devastator,Description:T2 Heavy Assault Tank
+UnitName:Infiltrator,Description:T2 Sniper/Saboteur Kbot
+UnitName:Enigma,Description:T2 Stealth Field Generator (Consumes 40 Energy Per Second)
+UnitName:Commander,Description:Commander of Core's Tactical Division
+UnitName:Sky Sweeper,Description:T1 Anti-Air Frigate
+UnitName:Tracker,Description:T1 Anti-Air Half-Track
+UnitName:Sentry,Description:T1 Anti-Air Turret
+UnitName:Incinerator,Description:T1 Area Denial Pillbox
+UnitName:T1 Air Laboratory,Description:Builds T1 Air Units
+UnitName:T1 Air Laboratory,Description:Builds T1 Air Units
+UnitName:Curator,Description:T1 Transport/Construction Aircraft
+UnitName:Curator,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Arclite,Description:T1 Artillery Tank
+UnitName:Retributor,Description:T1 Artillery Turret
+UnitName:Grunt,Description:T1 Assault Kbot
+UnitName:Executor,Description:T1 Construction Frigate
+UnitName:Executor,Description:T1 Construction Frigate
+UnitName:Laborer,Description:T1 Construction Vehicle
+UnitName:Laborer,Description:T1 Construction Vehicle
+UnitName:Proteus,Description:T1 Destroyer
+UnitName:Vector,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Sentry NS,Description:T1 Floating Anti-Air Turret
+UnitName:Hornet,Description:T1 Interceptor
+UnitName:Ward,Description:T1 Floating Perimeter Defence
+UnitName:Perforator,Description:T1 Floating Perimeter Defence Turret
+UnitName:Tidal Generator,Description:Produces 5 Energy Per Second
+UnitName:Tidal Generator,Description:Produces 5 Energy Per Second
+UnitName:Submerger,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:T1 Ground Laboratory,Description:Builds T1 Ground Units
+UnitName:T1 Ground Laboratory,Description:Builds T1 Ground Units
+UnitName:Hunter,Description:T1 Gunship
+UnitName:Hunter,Description:T1 Gunship
+UnitName:Aurora,Description:T1 Laser Bomber
+UnitName:Marauder,Description:T1 Assault Hovercraft
+UnitName:Aegis,Description:T1 Assault Tank
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:T1 Sea Laboratory,Description:Builds T1 Naval Units
+UnitName:T1 Sea Laboratory,Description:Builds T1 Naval Units
+UnitName:Hex,Description:T1 Perimeter Defence
+UnitName:Puncturer,Description:T1 Perimeter Defence Turret
+UnitName:Power Generator,Description:Produces 10 Energy Per Second
+UnitName:Power Generator,Description:Produces 10 Energy Per Second
+UnitName:Argus,Description:T1 Radar Tower (Consumes 10 Energy Per Second)
+UnitName:Enforcer,Description:T1 Fire Support Kbot
+UnitName:Triton,Description:T1 Assault Frigate
+UnitName:Errant,Description:T1 Light Attack Bike
+UnitName:Pathfinder,Description:T1 Scout Kbot
+UnitName:Warning Beacon,Description:T1 Sensor
+UnitName:Observatory,Description:T1 Naval Sensor Station (Consumes 10 Energy Per Second)
+UnitName:Neptune,Description:T1 Submarine
+UnitName:Monitor,Description:T1 Support Hovercraft
+UnitName:Monitor,Description:T1 Support Hovercraft
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Loki,Description:T2 Anti-Air Gunship
+UnitName:Crasher,Description:T2 Anti-Air Kbot
+UnitName:Artemis,Description:T2 Anti-Air Turret
+UnitName:T2 Air Laboratory,Description:Builds T2 Air Units
+UnitName:T2 Air Laboratory,Description:Builds T2 Air Units
+UnitName:Envoy,Description:T2 Transport/Construction Aircraft
+UnitName:Envoy,Description:T2 Transport/Construction Aircraft
+UnitName:Raider,Description:T2 Amphibious Stealth Tank
+UnitName:Mediator,Description:T2 Artillery Tank
+UnitName:Arbiter,Description:T2 Artillery Turret
+UnitName:Nephilim,Description:T2 Anti-Assault Kbot
+UnitName:Behemoth,Description:T2 Siege Tank
+UnitName:Artificer,Description:T2 Construction Vehicle
+UnitName:Artificer,Description:T2 Construction Vehicle
+UnitName:Blackout,Description:T2 Electronic Warfare Hovercraft
+UnitName:T2 Ground Laboratory,Description:Builds T2 Ground Units
+UnitName:T2 Ground Laboratory,Description:Builds T2 Ground Units
+UnitName:Thor,Description:T2 Gunship
+UnitName:Tyrant,Description:T2 Heavy Defence Turret
+UnitName:Umbra,Description:T2 Radar Jammer (Consumes 5 Energy Per Second)
+UnitName:Titan,Description:T2 Anti-Armor Kbot
+UnitName:Heavy Metal Extractor,Description:Extracts 6 Metal Per Second
+UnitName:Extinguisher,Description:T2 Plasma Mine
+UnitName:Adamant,Description:T2 Perimeter Defence Turret
+UnitName:Fusion Power Plant,Description:Produces 100 Energy Per Second
+UnitName:Fusion Power Plant,Description:Produces 100 Energy Per Second
+UnitName:Omniscient,Description:T2 Radar Tower (Consumes 30 Energy Per Second)
+UnitName:Beholder,Description:T2 Surveillance/Electronic Warfare Aircraft
+UnitName:Voyeur,Description:T2 Cloaked Sensor
+UnitName:Patron,Description:T2 Shield Generator (Consumes 25 Energy Per Second)
+UnitName:Bastion,Description:T2 Shield Generator (Consumes 50 Energy Per Second)
+UnitName:Inquisitor,Description:T2 Spy Kbot
+UnitName:Arcanum,Description:T2 Stealth Field Generator (Consumes 50 Energy Per Second)
+UnitName:Guardian,Description:Guardian of Kadesh
+UnitName:Harbinger,Description:T1 Anti-Air/Artillery Hovercraft
+UnitName:Stargazer,Description:T1 Anti-Air Turret
+UnitName:T1 Aero Platform,Description:Builds T1 Air Units
+UnitName:T1 Aero Platform,Description:Builds T1 Air Units
+UnitName:Eudaemon,Description:T1 Transport/Construction Aircraft
+UnitName:Eudaemon,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Disciple,Description:T1 Assault Kbot
+UnitName:Scourge,Description:T1 Anti-Tank Hovercraft
+UnitName:Dirgesinger,Description:T1 Bomber
+UnitName:Protector,Description:T1 Construction Hovercraft
+UnitName:Protector,Description:T1 Construction Hovercraft
+UnitName:Preserver,Description:T1 Construction Submarine
+UnitName:Preserver,Description:T1 Construction Submarine
+UnitName:Sea Dragon,Description:T1 Destroyer
+UnitName:Herald,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Stargazer NS,Description:T1 Floating Anti-Air Turret
+UnitName:Emissary,Description:T1 Field Engineer Hovercraft
+UnitName:Emissary,Description:T1 Field Engineer Hovercraft
+UnitName:Admonisher NS,Description:T1 Floating Perimeter Defence Turret
+UnitName:Shield Node NS,Description:T1 Floating Perimeter Shield
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Nix Rose,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:T1 Terra Platform,Description:Builds T1 Ground Units
+UnitName:T1 Terra Platform,Description:Builds T1 Land Units
+UnitName:Spectre,Description:T1 Fighter/Gunship
+UnitName:Black Dawn,Description:T1 Artillery Turret
+UnitName:Reaper,Description:T1 Heavy Support Kbot
+UnitName:Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:T1 Hydro Platform,Description:Builds T1 Naval Units
+UnitName:T1 Hydro Platform,Description:Builds T1 Naval Units
+UnitName:Star,Description:T1 Perimeter Defence
+UnitName:Admonisher,Description:T1 Perimeter Defence Turret
+UnitName:Dynamo,Description:Produces 12 Energy Per Second
+UnitName:Dynamo,Description:Produces 12 Energy Per Second
+UnitName:Jinx,Description:T1 Photon Torpedo Mine
+UnitName:Pylon,Description:T1 Radar Tower (Consumes 12 Energy Per Second)
+UnitName:Phantasm,Description:T1 Reconnaissance Probe
+UnitName:Faerie,Description:T1 Scout Hovercraft
+UnitName:Shield Node,Description:T1 Perimeter Shield
+UnitName:Pharos,Description:T1 Naval Sensor Station (Consumes 12 Energy Per Second)
+UnitName:Siren,Description:T1 Scout Submarine
+UnitName:Domina,Description:T1 Support Hovercraft
+UnitName:Underwater Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Starburst,Description:T2 Anti-Air Silo
+UnitName:Daybreak,Description:T2 Anti-Air Runnerpod
+UnitName:Fermata,Description:T2 Anti-Air Stasis Device
+UnitName:T2 Aero Platform,Description:Builds T2 Air Units
+UnitName:T2 Aero Platform,Description:Builds T2 Air Units
+UnitName:Rapture,Description:T2 Transport/Construction Aircraft
+UnitName:Rapture,Description:T2 Transport/Construction Aircraft
+UnitName:Deceiver,Description:T2 Field Engineer/Radar Jammer Aircraft
+UnitName:Nightfall,Description:T2 Artillery Runnerpod
+UnitName:Blazing Orchid,Description:T2 Artillery Turret
+UnitName:Immortal,Description:T2 Anti-Armor Runnerpod
+UnitName:Creator,Description:T2 Construction Hovercraft
+UnitName:Creator,Description:T2 Construction Hovercraft
+UnitName:Illusion NS,Description:Mimics T1 Floating Perimeter Defence Turret
+UnitName:Illusion,Description:Mimics T1 Perimeter Defence Turret
+UnitName:Wraith,Description:T2 Interceptor
+UnitName:T2 Terra Platform,Description:Builds T2 Ground Units
+UnitName:T2 Terra Platform,Description:Builds T2 Ground Units
+UnitName:Radiant,Description:T2 Gunship
+UnitName:Raveller,Description:T2 Cloaked Radar Jammer (Consumes 6 Energy Per Second)
+UnitName:Valkyrie,Description:T2 Fast Attack Jumpjet Kbot
+UnitName:Exploiter,Description:Extracts 6 Metal Per Second
+UnitName:Pillar of Light,Description:T2 Perimeter Defence Turret
+UnitName:Furnace,Description:Produces 120 Energy Per Second
+UnitName:Furnace,Description:Produces 120 Energy Per Second
+UnitName:Beacon,Description:T2 Radar Tower (Consumes 24 Energy Per Second)
+UnitName:Haven,Description:T2 Shield Generator (Consumes 40 Energy Per Second)
+UnitName:Sanctuary,Description:T2 Shield Generator (Consumes 60 Energy Per Second)
+UnitName:Caesura,Description:T2 Stasis Mine
+UnitName:Eclipse,Description:T2 Stealth Field Generator (Consumes 60 Energy Per Second)
+UnitName:Magus,Description:T2 Area Denial Hovercraft
+UnitName:Matriarch,Description:T3 Battlefield Control Runnerpod
+UnitName:Commander,Description:Commander of Arm Rebellion
+UnitName:Stinger,Description:T1 Anti-Air Hovercraft
+UnitName:Watchtower,Description:T1 Anti-Air Turret
+UnitName:T1 Aircraft Factory,Description:Builds T1 Air Units
+UnitName:T1 Aircraft Factory,Description:Builds T1 Air Units
+UnitName:Overseer,Description:T1 Transport/Construction Aircraft
+UnitName:Overseer,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Broadside,Description:T1 Artillery Kbot
+UnitName:Ballista,Description:T1 Mobile Rocket Launcher
+UnitName:Scorpion,Description:T1 Skirmish Tank
+UnitName:Corsair,Description:T1 Bomber
+UnitName:Custodian,Description:T1 Construction Hovercraft
+UnitName:Custodian,Description:T1 Construction Hovercraft
+UnitName:Underling,Description:T1 Construction Submarine
+UnitName:Underling,Description:T1 Construction Submarine
+UnitName:Patriot,Description:T1 Destroyer
+UnitName:Hercules,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 1000
+UnitName:Energy Storage,Description:Increases Energy Storage By 1000
+UnitName:Watchtower NS,Description:T1 Floating Anti-Air Turret
+UnitName:Settler,Description:T1 Field Engineer Kbot
+UnitName:Settler,Description:T1 Field Engineer Kbot
+UnitName:Rebel,Description:T1 Fighter
+UnitName:Frontier Extractor,Description:Extracts 2 Metal Per Second
+UnitName:Riptide,Description:T1 Submerged Mine
+UnitName:Blockade,Description:T1 Floating Perimeter Defence
+UnitName:Harpoon,Description:T1 Floating Perimeter Defence Turret
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Trident,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:Hammer,Description:T1 Artillery Turret
+UnitName:T1 Heavy Ground Factory,Description:Builds T1 Heavy Units
+UnitName:T1 Heavy Ground Factory,Description:Builds T1 Heavy Units
+UnitName:Marine,Description:T1 Infantry Kbot
+UnitName:T1 Light Ground Factory,Description:Builds T1 Light Units
+UnitName:T1 Light Ground Factory,Description:Builds T1 Light Units
+UnitName:Havoc,Description:T1 Battle Tank
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Caltrop,Description:T1 Proximity Mine
+UnitName:Metal Storage,Description:Increases Metal Storage By 1000
+UnitName:Metal Storage,Description:Increases Metal Storage By 1000
+UnitName:T1 Naval Factory,Description:Builds T1 Naval Units
+UnitName:T1 Naval Factory,Description:Builds T1 Naval Units
+UnitName:Wall,Description:T1 Perimeter Defence
+UnitName:Autogun,Description:T1 Perimeter Defence Turret
+UnitName:Vigilant,Description:T1 Radar Tower (Consumes 8 Energy Per Second)
+UnitName:Predator,Description:T1 Reconnaissance Aircraft
+UnitName:Outrider,Description:T1 Reconnaissance Hovercraft
+UnitName:Viking,Description:T1 Attack Hovercraft
+UnitName:Harasser,Description:T1 Light Attack Half-Track
+UnitName:Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Sentinel,Description:T1 Naval Sensor Station (Consumes 8 Energy Per Second)
+UnitName:Steelhead,Description:T1 Submarine
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Anarchist,Description:T2 Anti-Air Tank
+UnitName:Radical,Description:T2 Anti-Air Turret
+UnitName:T2 Aircraft Factory,Description:Builds T2 Air Units
+UnitName:T2 Aircraft Factory,Description:Builds T2 Air Units
+UnitName:Atlas,Description:T2 Transport/Construction Aircraft
+UnitName:Atlas,Description:T2 Transport/Construction Aircraft
+UnitName:Mauler,Description:T2 Artillery Vehicle
+UnitName:Varjag,Description:T2 Shock Assault Kbot
+UnitName:Vindicator,Description:T2 Tactical Bomber
+UnitName:Machinist,Description:T2 Construction Vehicle
+UnitName:Machinist,Description:T2 Construction Vehicle
+UnitName:Sapper,Description:T2 Field Engineer Kbot
+UnitName:Sapper,Description:T2 Field Engineer Kbot
+UnitName:Falcon,Description:T2 Interceptor
+UnitName:T2 Ground Factory,Description:Builds T2 Ground Units
+UnitName:T2 Ground Factory,Description:Builds T2 Ground Units
+UnitName:Liberator,Description:T2 Gunship
+UnitName:Liberator,Description:T2 Gunship
+UnitName:Defiant,Description:T2 Heavy Defence Turret
+UnitName:Blindspot,Description:T2 Radar Jammer (Consumes 4 Energy Per Second)
+UnitName:Scrambler,Description:T2 Radar Jammer Hovercraft
+UnitName:Raptor,Description:T2 Fast Attack Jumpjet Kbot
+UnitName:Retaliator,Description:T2 Tactical Missile Silo (Consumes 40 Energy Per Second)
+UnitName:High Yield Metal Extractor,Description:Extracts 6 Metal Per Second
+UnitName:Buster,Description:T2 Anti-Armor Mine
+UnitName:Dauntless,Description:T2 Perimeter Defence Turret
+UnitName:Fusion Reactor,Description:Produces 80 Energy Per Second
+UnitName:Fusion Reactor,Description:Produces 80 Energy Per Second
+UnitName:Cognizant,Description:T2 Radar Tower (Consumes 48 Energy Per Second)
+UnitName:Spotter,Description:T2 Radar Hovercraft
+UnitName:Visitant,Description:T2 Reconnaissance Aircraft
+UnitName:Devastator,Description:T2 Heavy Assault Tank
+UnitName:Infiltrator,Description:T2 Sniper/Saboteur Kbot
+UnitName:Enigma,Description:T2 Stealth Field Generator (Consumes 40 Energy Per Second)
+UnitName:Commander,Description:Commander of Core's Tactical Division
+UnitName:Sky Sweeper,Description:T1 Anti-Air Frigate
+UnitName:Tracker,Description:T1 Anti-Air Half-Track
+UnitName:Sentry,Description:T1 Anti-Air Turret
+UnitName:Incinerator,Description:T1 Area Denial Pillbox
+UnitName:T1 Air Laboratory,Description:Builds T1 Air Units
+UnitName:T1 Air Laboratory,Description:Builds T1 Air Units
+UnitName:Curator,Description:T1 Transport/Construction Aircraft
+UnitName:Curator,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Arclite,Description:T1 Artillery Tank
+UnitName:Retributor,Description:T1 Artillery Turret
+UnitName:Grunt,Description:T1 Assault Kbot
+UnitName:Executor,Description:T1 Construction Frigate
+UnitName:Executor,Description:T1 Construction Frigate
+UnitName:Laborer,Description:T1 Construction Vehicle
+UnitName:Laborer,Description:T1 Construction Vehicle
+UnitName:Proteus,Description:T1 Destroyer
+UnitName:Vector,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Sentry NS,Description:T1 Floating Anti-Air Turret
+UnitName:Hornet,Description:T1 Interceptor
+UnitName:Ward,Description:T1 Floating Perimeter Defence
+UnitName:Perforator,Description:T1 Floating Perimeter Defence Turret
+UnitName:Tidal Generator,Description:Produces 5 Energy Per Second
+UnitName:Tidal Generator,Description:Produces 5 Energy Per Second
+UnitName:Submerger,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:T1 Ground Laboratory,Description:Builds T1 Ground Units
+UnitName:T1 Ground Laboratory,Description:Builds T1 Ground Units
+UnitName:Hunter,Description:T1 Gunship
+UnitName:Hunter,Description:T1 Gunship
+UnitName:Aurora,Description:T1 Laser Bomber
+UnitName:Marauder,Description:T1 Assault Hovercraft
+UnitName:Aegis,Description:T1 Assault Tank
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:T1 Sea Laboratory,Description:Builds T1 Naval Units
+UnitName:T1 Sea Laboratory,Description:Builds T1 Naval Units
+UnitName:Hex,Description:T1 Perimeter Defence
+UnitName:Puncturer,Description:T1 Perimeter Defence Turret
+UnitName:Power Generator,Description:Produces 10 Energy Per Second
+UnitName:Power Generator,Description:Produces 10 Energy Per Second
+UnitName:Argus,Description:T1 Radar Tower (Consumes 10 Energy Per Second)
+UnitName:Enforcer,Description:T1 Fire Support Kbot
+UnitName:Triton,Description:T1 Assault Frigate
+UnitName:Errant,Description:T1 Light Attack Bike
+UnitName:Pathfinder,Description:T1 Scout Kbot
+UnitName:Warning Beacon,Description:T1 Sensor
+UnitName:Observatory,Description:T1 Naval Sensor Station (Consumes 10 Energy Per Second)
+UnitName:Neptune,Description:T1 Submarine
+UnitName:Monitor,Description:T1 Support Hovercraft
+UnitName:Monitor,Description:T1 Support Hovercraft
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Metal Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Loki,Description:T2 Anti-Air Gunship
+UnitName:Crasher,Description:T2 Anti-Air Kbot
+UnitName:Artemis,Description:T2 Anti-Air Turret
+UnitName:T2 Air Laboratory,Description:Builds T2 Air Units
+UnitName:T2 Air Laboratory,Description:Builds T2 Air Units
+UnitName:Envoy,Description:T2 Transport/Construction Aircraft
+UnitName:Envoy,Description:T2 Transport/Construction Aircraft
+UnitName:Raider,Description:T2 Amphibious Stealth Tank
+UnitName:Mediator,Description:T2 Artillery Tank
+UnitName:Arbiter,Description:T2 Artillery Turret
+UnitName:Nephilim,Description:T2 Anti-Assault Kbot
+UnitName:Behemoth,Description:T2 Siege Tank
+UnitName:Artificer,Description:T2 Construction Vehicle
+UnitName:Artificer,Description:T2 Construction Vehicle
+UnitName:Blackout,Description:T2 Electronic Warfare Hovercraft
+UnitName:T2 Ground Laboratory,Description:Builds T2 Ground Units
+UnitName:T2 Ground Laboratory,Description:Builds T2 Ground Units
+UnitName:Thor,Description:T2 Gunship
+UnitName:Tyrant,Description:T2 Heavy Defence Turret
+UnitName:Umbra,Description:T2 Radar Jammer (Consumes 5 Energy Per Second)
+UnitName:Titan,Description:T2 Anti-Armor Kbot
+UnitName:Heavy Metal Extractor,Description:Extracts 6 Metal Per Second
+UnitName:Extinguisher,Description:T2 Plasma Mine
+UnitName:Adamant,Description:T2 Perimeter Defence Turret
+UnitName:Fusion Power Plant,Description:Produces 100 Energy Per Second
+UnitName:Fusion Power Plant,Description:Produces 100 Energy Per Second
+UnitName:Omniscient,Description:T2 Radar Tower (Consumes 30 Energy Per Second)
+UnitName:Beholder,Description:T2 Surveillance/Electronic Warfare Aircraft
+UnitName:Voyeur,Description:T2 Cloaked Sensor
+UnitName:Patron,Description:T2 Shield Generator (Consumes 25 Energy Per Second)
+UnitName:Bastion,Description:T2 Shield Generator (Consumes 50 Energy Per Second)
+UnitName:Inquisitor,Description:T2 Spy Kbot
+UnitName:Arcanum,Description:T2 Stealth Field Generator (Consumes 50 Energy Per Second)
+UnitName:Guardian,Description:Guardian of Kadesh
+UnitName:Harbinger,Description:T1 Anti-Air/Artillery Hovercraft
+UnitName:Stargazer,Description:T1 Anti-Air Turret
+UnitName:T1 Aero Platform,Description:Builds T1 Air Units
+UnitName:T1 Aero Platform,Description:Builds T1 Air Units
+UnitName:Eudaemon,Description:T1 Transport/Construction Aircraft
+UnitName:Eudaemon,Description:T1 Transport/Construction Aircraft
+UnitName:Aircraft Repair Center,Description:Automatic Aircraft Repairing
+UnitName:Disciple,Description:T1 Assault Kbot
+UnitName:Scourge,Description:T1 Anti-Tank Hovercraft
+UnitName:Dirgesinger,Description:T1 Bomber
+UnitName:Protector,Description:T1 Construction Hovercraft
+UnitName:Protector,Description:T1 Construction Hovercraft
+UnitName:Preserver,Description:T1 Construction Submarine
+UnitName:Preserver,Description:T1 Construction Submarine
+UnitName:Sea Dragon,Description:T1 Destroyer
+UnitName:Herald,Description:T1 Transport Aircraft
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Energy Storage,Description:Increases Energy Storage By 2000
+UnitName:Stargazer NS,Description:T1 Floating Anti-Air Turret
+UnitName:Emissary,Description:T1 Field Engineer Hovercraft
+UnitName:Emissary,Description:T1 Field Engineer Hovercraft
+UnitName:Admonisher NS,Description:T1 Floating Perimeter Defence Turret
+UnitName:Shield Node NS,Description:T1 Floating Perimeter Shield
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Floating Solar Panel,Description:Produces 4 Energy Per Second
+UnitName:Nix Rose,Description:T1 Floating Torpedo Turret
+UnitName:Geothermal Power Plant,Description:Produces 30 Energy Per Second
+UnitName:T1 Terra Platform,Description:Builds T1 Ground Units
+UnitName:T1 Terra Platform,Description:Builds T1 Land Units
+UnitName:Spectre,Description:T1 Fighter/Gunship
+UnitName:Black Dawn,Description:T1 Artillery Turret
+UnitName:Reaper,Description:T1 Heavy Support Kbot
+UnitName:Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:Metal Storage,Description:Increases Metal Storage By 2000
+UnitName:T1 Hydro Platform,Description:Builds T1 Naval Units
+UnitName:T1 Hydro Platform,Description:Builds T1 Naval Units
+UnitName:Star,Description:T1 Perimeter Defence
+UnitName:Admonisher,Description:T1 Perimeter Defence Turret
+UnitName:Dynamo,Description:Produces 12 Energy Per Second
+UnitName:Dynamo,Description:Produces 12 Energy Per Second
+UnitName:Jinx,Description:T1 Photon Torpedo Mine
+UnitName:Pylon,Description:T1 Radar Tower (Consumes 12 Energy Per Second)
+UnitName:Phantasm,Description:T1 Reconnaissance Probe
+UnitName:Faerie,Description:T1 Scout Hovercraft
+UnitName:Shield Node,Description:T1 Perimeter Shield
+UnitName:Pharos,Description:T1 Naval Sensor Station (Consumes 12 Energy Per Second)
+UnitName:Siren,Description:T1 Scout Submarine
+UnitName:Domina,Description:T1 Support Hovercraft
+UnitName:Underwater Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Underwater Extractor,Description:Extracts 3 Metal Per Second
+UnitName:Starburst,Description:T2 Anti-Air Silo
+UnitName:Daybreak,Description:T2 Anti-Air Runnerpod
+UnitName:Fermata,Description:T2 Anti-Air Stasis Device
+UnitName:T2 Aero Platform,Description:Builds T2 Air Units
+UnitName:T2 Aero Platform,Description:Builds T2 Air Units
+UnitName:Rapture,Description:T2 Transport/Construction Aircraft
+UnitName:Rapture,Description:T2 Transport/Construction Aircraft
+UnitName:Deceiver,Description:T2 Field Engineer/Radar Jammer Aircraft
+UnitName:Nightfall,Description:T2 Artillery Runnerpod
+UnitName:Blazing Orchid,Description:T2 Artillery Turret
+UnitName:Immortal,Description:T2 Anti-Armor Runnerpod
+UnitName:Creator,Description:T2 Construction Hovercraft
+UnitName:Creator,Description:T2 Construction Hovercraft
+UnitName:Illusion NS,Description:Mimics T1 Floating Perimeter Defence Turret
+UnitName:Illusion,Description:Mimics T1 Perimeter Defence Turret
+UnitName:Wraith,Description:T2 Interceptor
+UnitName:T2 Terra Platform,Description:Builds T2 Ground Units
+UnitName:T2 Terra Platform,Description:Builds T2 Ground Units
+UnitName:Radiant,Description:T2 Gunship
+UnitName:Raveller,Description:T2 Cloaked Radar Jammer (Consumes 6 Energy Per Second)
+UnitName:Valkyrie,Description:T2 Fast Attack Jumpjet Kbot
+UnitName:Exploiter,Description:Extracts 6 Metal Per Second
+UnitName:Pillar of Light,Description:T2 Perimeter Defence Turret
+UnitName:Furnace,Description:Produces 120 Energy Per Second
+UnitName:Furnace,Description:Produces 120 Energy Per Second
+UnitName:Beacon,Description:T2 Radar Tower (Consumes 24 Energy Per Second)
+UnitName:Haven,Description:T2 Shield Generator (Consumes 40 Energy Per Second)
+UnitName:Sanctuary,Description:T2 Shield Generator (Consumes 60 Energy Per Second)
+UnitName:Caesura,Description:T2 Stasis Mine
+UnitName:Eclipse,Description:T2 Stealth Field Generator (Consumes 60 Energy Per Second)
+UnitName:Magus,Description:T2 Area Denial Hovercraft
+UnitName:Matriarch,Description:T3 Battlefield Control Runnerpod
+
+==ta prota
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Archer,Description:Anti-Air Ship
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Swatter,Description:Missile Hovercraft
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Ambusher,Description:Pop-up Heavy Cannon
+UnitName:Protector,Description:Anti Missile Defense System
+UnitName:Pelican,Description:Amphibious Kbot
+UnitName:Anaconda,Description:Hovertank
+UnitName:Annihilator,Description:Energy Weapon
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Apex,Description:Experimental Vehicle
+UnitName:Advanced Radar Tower,Description:Provides Extended Radar Coverage
+UnitName:Eraser,Description:Radar Jammer Kbot
+UnitName:Advanced Sonar Station,Description:Provides Extended Sonar Coverage
+UnitName:Air Repair Pad,Description:Automatically Repairs Aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Launches Advanced Torpedoes
+UnitName:Atlas,Description:Air Transport
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Eagle,Description:Radar Plane
+UnitName:Millennium,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Brawler,Description:Gunship
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Bulldog,Description:Heavy Assault Tank
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:Colossus,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Triton,Description:Amphibious Tank
+UnitName:Conqueror,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Stunner,Description:EMP Missile Launcher
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:FARK,Description:Fast Assist-Repair Kbot
+UnitName:Zipper,Description:Fast Attack Kbot
+UnitName:Jeffy,Description:Fast Attack Scout
+UnitName:Shark's Teeth,Description:Floating Dragon's Teeth
+UnitName:Stingray,Description:Floating Heavy Laser Tower
+UnitName:Fido,Description:Assault Kbot
+UnitName:Freedom Fighter,Description:Fighter
+UnitName:Flakker,Description:Anti-Air Flak Gun
+UnitName:Flash,Description:Fast Assault Tank
+UnitName:Flea,Description:Fast Light Scout Kbot
+UnitName:Floating Metal Maker,Description:Converts Energy into Metal
+UnitName:Apex Foundry,Description:Builds Apex
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Defender - NS,Description:Floating Missile Tower
+UnitName:Fusion Reactor,Description:Produces Energy
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Guardian,Description:Plasma Battery
+UnitName:Hammer,Description:Artillery Kbot
+UnitName:Hawk,Description:Stealth Fighter
+UnitName:Sentinel,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Jammer,Description:Radar Jammer Vehicle
+UnitName:Jethro,Description:Missile Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Lancet,Description:Torpedo Bomber
+UnitName:Panther,Description:Lightning Tank
+UnitName:Spark,Description:Lightning Hovertank
+UnitName:L.L.T.,Description:Light Laser Tower
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Penetrator,Description:Mobile Energy Weapon
+UnitName:Marky,Description:Radar Kbot
+UnitName:Luger,Description:Mobile Artillery
+UnitName:Maverick,Description:Gun-Slinging Kbot
+UnitName:Merl,Description:Mobile Rocket Launcher
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Wombat,Description:Hovercraft Rocket Launcher
+UnitName:Tiny,Description:Low Damage, Med. Range Mine
+UnitName:Area Mine,Description:Low Damage, Large Range Mine
+UnitName:Focused Mine,Description:Med. Damage, Small Range Mine
+UnitName:HE Area Mine,Description:Med. Damage, Large Range Mine
+UnitName:Precision Mine,Description:High Damage, Small Range Mine
+UnitName:Nuclear Mine,Description:Nuclear Mine
+UnitName:Podger,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Ranger,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Peeper,Description:Air Scout
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Phoenix,Description:Strategic Bomber
+UnitName:Skeeter,Description:Scout Ship
+UnitName:Peewee,Description:Infantry Kbot
+UnitName:Radar Tower,Description:Provides Radar Coverage
+UnitName:Defender,Description:Missile Tower
+UnitName:Rocko,Description:Rocket Kbot
+UnitName:Crusader,Description:Destroyer
+UnitName:Samson,Description:Mobile Missile Launcher
+UnitName:Scarab,Description:Mobile Missile Defense
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Fibber,Description:Sonar Jamming Sub
+UnitName:Albatross,Description:Depth Charge Seaplane
+UnitName:Seer,Description:Radar Vehicle
+UnitName:Seahawk,Description:Airborne Sonar
+UnitName:Tornado,Description:Seaplane Fighter
+UnitName:Skimmer,Description:Scout Hovercraft
+UnitName:Retaliator,Description:Nuclear Missile Launcher
+UnitName:Escort,Description:Radar Jammer Ship
+UnitName:Shooter,Description:Sniper Kbot
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Provides Sonar Coverage
+UnitName:Spider,Description:Paralyzing Spider Vehicle
+UnitName:Infiltrator,Description:Spy Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Stumpy,Description:Medium Assault Tank
+UnitName:Lurker,Description:Submarine
+UnitName:Piranha,Description:Submarine Killer
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Bear,Description:Transport Hovercraft
+UnitName:Thunder,Description:Bomber
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Torpedo Launcher,Description:Launches Torpedoes
+UnitName:Hulk,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Underwater Moho Mine,Description:Advanced Metal Extractor
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Invader,Description:Crawling Bomb
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Warrior,Description:Medium Infantry Kbot
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Phalanx,Description:Mobile Flak Vehicle
+UnitName:Zeus,Description:Heavy Assault Kbot
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Slinger,Description:Missile Hovercraft
+UnitName:A.K.,Description:Infantry Kbot
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Gimp,Description:Amphibious Kbot
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Rapier,Description:Gunship
+UnitName:Advanced Radar Tower,Description:Provides Extended Radar Coverage
+UnitName:Shredder,Description:Anti-Air Ship
+UnitName:Advanced Sonar Station,Description:Provides Extended Sonar Coverage
+UnitName:Air Repair Pad,Description:Automatically Repairs Aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Launches Advanced Torpedoes
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulture,Description:Radar Plane
+UnitName:Warlord,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Hydration Plant,Description:Creates Water
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:The Can,Description:Armored Assault Kbot
+UnitName:Hive,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Crasher,Description:Missile Kbot
+UnitName:Executioner,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Doomsday Machine,Description:Energy Weapon
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:Deleter,Description:Radar Jammer Vehicle
+UnitName:Freaker,Description:Fast Attack Kbot
+UnitName:Weasel,Description:Fast Attack Scout
+UnitName:Shark's Teeth,Description:Floating Dragon's Teeth
+UnitName:Blaze,Description:Flamethrower Hovertank
+UnitName:Thunderbolt,Description:Floating Heavy Laser Tower
+UnitName:Fink,Description:Air Scout
+UnitName:Cobra,Description:Anti-Air Flak Gun
+UnitName:Fortitude,Description:Anti Missile Defense System
+UnitName:Floating Metal Maker,Description:Converts Energy into Metal
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Stinger,Description:Floating Missile Tower
+UnitName:Fusion Power Plant,Description:Produces Energy
+UnitName:Krogoth Gantry,Description:Builds Krogoth
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Instigator,Description:Assault Tank
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Goliath,Description:Very Heavy Assault Tank
+UnitName:Gaat Gun,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Dominator,Description:Heavy Rocket Kbot
+UnitName:Hunter,Description:Airborne Sonar
+UnitName:Hurricane,Description:Strategic Bomber
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Krogoth,Description:Experimental Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Leveler,Description:Riot Tank
+UnitName:Light Laser Tower,Description:Light Laser Tower
+UnitName:Hedgehog,Description:Mobile Missile Defense
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Pillager,Description:Mobile Artillery
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Nixer,Description:Hovercraft Rocket Launcher
+UnitName:M-104,Description:Low Damage, Med. Range Mine
+UnitName:M-209,Description:Low Damage, Large Range Mine
+UnitName:M-303,Description:Med. Damage, Med. Range Mine
+UnitName:M-420,Description:High Damage, Med. Range Mine
+UnitName:M-515,Description:High Damage, Large Range Mine
+UnitName:M-610,Description:Nuclear Mine
+UnitName:Slasher,Description:Mobile Missile Launcher
+UnitName:Spoiler,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Morty,Description:Mobile Mortar Kbot
+UnitName:Hydra,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Necro,Description:Resurrection Kbot
+UnitName:Immolator,Description:Plasma Tower
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Searcher,Description:Scout Ship
+UnitName:Punisher,Description:Plasma Battery
+UnitName:Pyro,Description:Assault Kbot
+UnitName:Radar Tower,Description:Provides Radar Coverage
+UnitName:Raider,Description:Medium Assault Tank
+UnitName:Reaper,Description:Heavy Assault Tank
+UnitName:Pulverizer,Description:Missile Tower
+UnitName:Roach,Description:Crawling Bomb
+UnitName:Enforcer,Description:Destroyer
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Crock,Description:Amphibious Tank
+UnitName:Typhoon,Description:Depth Charge Seaplane
+UnitName:Copperhead,Description:Mobile Flak Vehicle
+UnitName:Voodoo,Description:Seaplane Fighter
+UnitName:Scrubber,Description:Scout Hovercraft
+UnitName:Shadow,Description:Bomber
+UnitName:Shark,Description:Submarine Killer
+UnitName:Silencer,Description:Nuclear Missile Launcher
+UnitName:Phantom,Description:Radar Jammer Ship
+UnitName:Snapper,Description:Hovertank
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Provides Sonar Coverage
+UnitName:Spectre,Description:Radar Jammer Kbot
+UnitName:Parasite,Description:Spy Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Leviathan,Description:Battle Sub
+UnitName:Storm,Description:Rocket Kbot
+UnitName:Snake,Description:Submarine
+UnitName:Sumo,Description:Adv. Armored Assault Kbot
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Turtle,Description:Transport Hovercraft
+UnitName:Thud,Description:Artillery Kbot
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Titan,Description:Torpedo Bomber
+UnitName:Torpedo Launcher,Description:Launches Torpedoes
+UnitName:Toaster,Description:Pop-up Heavy Cannon
+UnitName:Neutron,Description:Neutron Missile Launcher
+UnitName:Truck,Description:Ground Transport
+UnitName:Envoy,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Underwater Moho Mine,Description:Advanced Metal Extractor
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Valkyrie,Description:Air Transport
+UnitName:Vamp,Description:Stealth Fighter
+UnitName:Avenger,Description:Fighter
+UnitName:Viper,Description:Pop-Up Heavy Laser
+UnitName:Voyeur,Description:Radar Kbot
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Informer,Description:Radar Vehicle
+UnitName:Diplomat,Description:Mobile Rocket Launcher
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Interceptor Missile,Description:
+UnitName:Interceptor Missile,Description:
+UnitName:Nuclear Missile,Description:
+UnitName:Nuclear Missile,Description:
+UnitName:EMP Missile,Description:
+UnitName:Neutron Missile,Description:
+UnitName:welcome.to/yankspankers,Description:Spank Tower
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Archer,Description:Anti-Air Ship
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Swatter,Description:Missile Hovercraft
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Ambusher,Description:Pop-up Heavy Cannon
+UnitName:Protector,Description:Anti Missile Defense System
+UnitName:Pelican,Description:Amphibious Kbot
+UnitName:Anaconda,Description:Hovertank
+UnitName:Annihilator,Description:Energy Weapon
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Apex,Description:Experimental Vehicle
+UnitName:Advanced Radar Tower,Description:Provides Extended Radar Coverage
+UnitName:Eraser,Description:Radar Jammer Kbot
+UnitName:Advanced Sonar Station,Description:Provides Extended Sonar Coverage
+UnitName:Air Repair Pad,Description:Automatically Repairs Aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Launches Advanced Torpedoes
+UnitName:Atlas,Description:Air Transport
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Eagle,Description:Radar Plane
+UnitName:Millennium,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Brawler,Description:Gunship
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Big Bertha,Description:Long Range Plasma Cannon
+UnitName:Bulldog,Description:Heavy Assault Tank
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:Colossus,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Triton,Description:Amphibious Tank
+UnitName:Conqueror,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Stunner,Description:EMP Missile Launcher
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:FARK,Description:Fast Assist-Repair Kbot
+UnitName:Zipper,Description:Fast Attack Kbot
+UnitName:Jeffy,Description:Fast Attack Scout
+UnitName:Shark's Teeth,Description:Floating Dragon's Teeth
+UnitName:Stingray,Description:Floating Heavy Laser Tower
+UnitName:Fido,Description:Assault Kbot
+UnitName:Freedom Fighter,Description:Fighter
+UnitName:Flakker,Description:Anti-Air Flak Gun
+UnitName:Flash,Description:Fast Assault Tank
+UnitName:Flea,Description:Fast Light Scout Kbot
+UnitName:Floating Metal Maker,Description:Converts Energy into Metal
+UnitName:Apex Foundry,Description:Builds Apex
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Defender - NS,Description:Floating Missile Tower
+UnitName:Fusion Reactor,Description:Produces Energy
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Guardian,Description:Plasma Battery
+UnitName:Hammer,Description:Artillery Kbot
+UnitName:Hawk,Description:Stealth Fighter
+UnitName:Sentinel,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Jammer,Description:Radar Jammer Vehicle
+UnitName:Jethro,Description:Missile Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Lancet,Description:Torpedo Bomber
+UnitName:Panther,Description:Lightning Tank
+UnitName:Spark,Description:Lightning Hovertank
+UnitName:L.L.T.,Description:Light Laser Tower
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Penetrator,Description:Mobile Energy Weapon
+UnitName:Marky,Description:Radar Kbot
+UnitName:Luger,Description:Mobile Artillery
+UnitName:Maverick,Description:Gun-Slinging Kbot
+UnitName:Merl,Description:Mobile Rocket Launcher
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Wombat,Description:Hovercraft Rocket Launcher
+UnitName:Tiny,Description:Low Damage, Med. Range Mine
+UnitName:Area Mine,Description:Low Damage, Large Range Mine
+UnitName:Focused Mine,Description:Med. Damage, Small Range Mine
+UnitName:HE Area Mine,Description:Med. Damage, Large Range Mine
+UnitName:Precision Mine,Description:High Damage, Small Range Mine
+UnitName:Nuclear Mine,Description:Nuclear Mine
+UnitName:Podger,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Ranger,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Peeper,Description:Air Scout
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Phoenix,Description:Strategic Bomber
+UnitName:Skeeter,Description:Scout Ship
+UnitName:Peewee,Description:Infantry Kbot
+UnitName:Radar Tower,Description:Provides Radar Coverage
+UnitName:Defender,Description:Missile Tower
+UnitName:Rocko,Description:Rocket Kbot
+UnitName:Crusader,Description:Destroyer
+UnitName:Samson,Description:Mobile Missile Launcher
+UnitName:Scarab,Description:Mobile Missile Defense
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Fibber,Description:Sonar Jamming Sub
+UnitName:Albatross,Description:Depth Charge Seaplane
+UnitName:Seer,Description:Radar Vehicle
+UnitName:Seahawk,Description:Airborne Sonar
+UnitName:Tornado,Description:Seaplane Fighter
+UnitName:Skimmer,Description:Scout Hovercraft
+UnitName:Retaliator,Description:Nuclear Missile Launcher
+UnitName:Escort,Description:Radar Jammer Ship
+UnitName:Shooter,Description:Sniper Kbot
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Provides Sonar Coverage
+UnitName:Spider,Description:Paralyzing Spider Vehicle
+UnitName:Infiltrator,Description:Spy Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Stumpy,Description:Medium Assault Tank
+UnitName:Lurker,Description:Submarine
+UnitName:Piranha,Description:Submarine Killer
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Bear,Description:Transport Hovercraft
+UnitName:Thunder,Description:Bomber
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Torpedo Launcher,Description:Launches Torpedoes
+UnitName:Hulk,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Underwater Moho Mine,Description:Advanced Metal Extractor
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Invader,Description:Crawling Bomb
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Vulcan,Description:Rapid Fire Plasma Cannon
+UnitName:Warrior,Description:Medium Infantry Kbot
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Phalanx,Description:Mobile Flak Vehicle
+UnitName:Zeus,Description:Heavy Assault Kbot
+UnitName:Adv. Aircraft Plant,Description:Produces Aircraft
+UnitName:Adv. Construction Aircraft,Description:Tech Level 2
+UnitName:Adv. Construction Kbot,Description:Tech Level 2
+UnitName:Advanced Construction Sub,Description:Tech Level 2
+UnitName:Adv. Construction Vehicle,Description:Tech Level 2
+UnitName:Slinger,Description:Missile Hovercraft
+UnitName:A.K.,Description:Infantry Kbot
+UnitName:Adv. Kbot Lab,Description:Produces Kbots
+UnitName:Gimp,Description:Amphibious Kbot
+UnitName:Aircraft Plant,Description:Produces Aircraft
+UnitName:Rapier,Description:Gunship
+UnitName:Advanced Radar Tower,Description:Provides Extended Radar Coverage
+UnitName:Shredder,Description:Anti-Air Ship
+UnitName:Advanced Sonar Station,Description:Provides Extended Sonar Coverage
+UnitName:Air Repair Pad,Description:Automatically Repairs Aircraft
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Adv. Shipyard,Description:Produces Ships
+UnitName:Advanced Torpedo Launcher,Description:Launches Advanced Torpedoes
+UnitName:Adv. Vehicle Plant,Description:Produces Vehicles
+UnitName:Vulture,Description:Radar Plane
+UnitName:Warlord,Description:Battleship
+UnitName:Alien Beacon,Description:Alien Beacon
+UnitName:Hydration Plant,Description:Creates Water
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Buzzsaw,Description:Rapid Fire Plasma Cannon
+UnitName:Construction Aircraft,Description:Tech Level 1
+UnitName:The Can,Description:Armored Assault Kbot
+UnitName:Hive,Description:Light Carrier
+UnitName:Construction Hovercraft,Description:Tech Level 1
+UnitName:Construction Kbot,Description:Tech Level 1
+UnitName:Cloakable Fusion Reactor,Description:Produces Energy
+UnitName:Commander,Description:Commander
+UnitName:Crasher,Description:Missile Kbot
+UnitName:Executioner,Description:Cruiser
+UnitName:Construction Ship,Description:Tech Level 1
+UnitName:Construction Seaplane,Description:Tech Level 1
+UnitName:Construction Vehicle,Description:Tech Level 1
+UnitName:Commander,Description:Decoy Commander
+UnitName:Implosion Device,Description:Implosion Device
+UnitName:Doomsday Machine,Description:Energy Weapon
+UnitName:Dragon's Teeth,Description:Perimeter Defense
+UnitName:Energy Storage,Description:Increases Energy Storage
+UnitName:Deleter,Description:Radar Jammer Vehicle
+UnitName:Freaker,Description:Fast Attack Kbot
+UnitName:Weasel,Description:Fast Attack Scout
+UnitName:Shark's Teeth,Description:Floating Dragon's Teeth
+UnitName:Blaze,Description:Flamethrower Hovertank
+UnitName:Thunderbolt,Description:Floating Heavy Laser Tower
+UnitName:Fink,Description:Air Scout
+UnitName:Cobra,Description:Anti-Air Flak Gun
+UnitName:Fortitude,Description:Anti Missile Defense System
+UnitName:Floating Metal Maker,Description:Converts Energy into Metal
+UnitName:Fortification Wall,Description:Perimeter Defense
+UnitName:Stinger,Description:Floating Missile Tower
+UnitName:Fusion Power Plant,Description:Produces Energy
+UnitName:Krogoth Gantry,Description:Builds Krogoth
+UnitName:Galactic Gate,Description:Space Teleporter
+UnitName:Instigator,Description:Assault Tank
+UnitName:Geothermal Powerplant,Description:Produces Energy
+UnitName:Goliath,Description:Very Heavy Assault Tank
+UnitName:Gaat Gun,Description:Heavy Laser Tower
+UnitName:Hovercraft Platform,Description:Builds Hovercraft
+UnitName:Dominator,Description:Heavy Rocket Kbot
+UnitName:Hunter,Description:Airborne Sonar
+UnitName:Hurricane,Description:Strategic Bomber
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Intimidator,Description:Long Range Plasma Cannon
+UnitName:Krogoth,Description:Experimental Kbot
+UnitName:Kbot Lab,Description:Produces Kbots
+UnitName:Leveler,Description:Riot Tank
+UnitName:Light Laser Tower,Description:Light Laser Tower
+UnitName:Hedgehog,Description:Mobile Missile Defense
+UnitName:Metal Maker,Description:Converts Energy into Metal
+UnitName:Pillager,Description:Mobile Artillery
+UnitName:Metal Extractor,Description:Extracts Metal
+UnitName:Nixer,Description:Hovercraft Rocket Launcher
+UnitName:M-104,Description:Low Damage, Med. Range Mine
+UnitName:M-209,Description:Low Damage, Large Range Mine
+UnitName:M-303,Description:Med. Damage, Med. Range Mine
+UnitName:M-420,Description:High Damage, Med. Range Mine
+UnitName:M-515,Description:High Damage, Large Range Mine
+UnitName:M-610,Description:Nuclear Mine
+UnitName:Slasher,Description:Mobile Missile Launcher
+UnitName:Spoiler,Description:Mine Layer Vehicle
+UnitName:Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Moho Mine,Description:Advanced Metal Extractor
+UnitName:Morty,Description:Mobile Mortar Kbot
+UnitName:Hydra,Description:Missile Ship
+UnitName:Metal Storage,Description:Increases Metal Storage
+UnitName:Necro,Description:Resurrection Kbot
+UnitName:Immolator,Description:Plasma Tower
+UnitName:Seaplane Platform,Description:Builds Seaplanes
+UnitName:Searcher,Description:Scout Ship
+UnitName:Punisher,Description:Plasma Battery
+UnitName:Pyro,Description:Assault Kbot
+UnitName:Radar Tower,Description:Provides Radar Coverage
+UnitName:Raider,Description:Medium Assault Tank
+UnitName:Reaper,Description:Heavy Assault Tank
+UnitName:Pulverizer,Description:Missile Tower
+UnitName:Roach,Description:Crawling Bomb
+UnitName:Enforcer,Description:Destroyer
+UnitName:Scorpion,Description:Indigenous Lifeform
+UnitName:Crock,Description:Amphibious Tank
+UnitName:Typhoon,Description:Depth Charge Seaplane
+UnitName:Copperhead,Description:Mobile Flak Vehicle
+UnitName:Voodoo,Description:Seaplane Fighter
+UnitName:Scrubber,Description:Scout Hovercraft
+UnitName:Shadow,Description:Bomber
+UnitName:Shark,Description:Submarine Killer
+UnitName:Silencer,Description:Nuclear Missile Launcher
+UnitName:Phantom,Description:Radar Jammer Ship
+UnitName:Snapper,Description:Hovertank
+UnitName:Solar Collector,Description:Produces Energy
+UnitName:Sonar Station,Description:Provides Sonar Coverage
+UnitName:Spectre,Description:Radar Jammer Kbot
+UnitName:Parasite,Description:Spy Kbot
+UnitName:Sea Serpent,Description:Indigenous Lifeform
+UnitName:Leviathan,Description:Battle Sub
+UnitName:Storm,Description:Rocket Kbot
+UnitName:Snake,Description:Submarine
+UnitName:Sumo,Description:Adv. Armored Assault Kbot
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Shipyard,Description:Produces Ships
+UnitName:Targeting Facility,Description:Automatic Radar Targeting
+UnitName:Turtle,Description:Transport Hovercraft
+UnitName:Thud,Description:Artillery Kbot
+UnitName:Tidal Generator,Description:Produces Energy
+UnitName:Titan,Description:Torpedo Bomber
+UnitName:Torpedo Launcher,Description:Launches Torpedoes
+UnitName:Toaster,Description:Pop-up Heavy Cannon
+UnitName:Neutron,Description:Neutron Missile Launcher
+UnitName:Truck,Description:Ground Transport
+UnitName:Envoy,Description:Transport Ship
+UnitName:Underwater Energy Storage,Description:Increases Energy Storage
+UnitName:Underwater Fusion Plant,Description:Produces Energy
+UnitName:Underwater Metal Extractor,Description:Extracts Metal
+UnitName:Underwater Moho Metal Maker,Description:Converts Energy into Metal
+UnitName:Underwater Moho Mine,Description:Advanced Metal Extractor
+UnitName:Underwater Metal Storage,Description:Increases Metal Storage
+UnitName:Valkyrie,Description:Air Transport
+UnitName:Vamp,Description:Stealth Fighter
+UnitName:Avenger,Description:Fighter
+UnitName:Viper,Description:Pop-Up Heavy Laser
+UnitName:Voyeur,Description:Radar Kbot
+UnitName:Vehicle Plant,Description:Produces Vehicles
+UnitName:Informer,Description:Radar Vehicle
+UnitName:Diplomat,Description:Mobile Rocket Launcher
+UnitName:Wind Generator,Description:Produces Energy
+UnitName:Interceptor Missile,Description:
+UnitName:Interceptor Missile,Description:
+UnitName:Nuclear Missile,Description:
+UnitName:Nuclear Missile,Description:
+UnitName:EMP Missile,Description:
+UnitName:Neutron Missile,Description:
+UnitName:welcome.to/yankspankers,Description:Spank Tower

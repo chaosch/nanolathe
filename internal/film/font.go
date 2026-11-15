@@ -3,13 +3,15 @@ package film
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/hajimehoshi/ebiten/v2"
 	"image"
 	"image/png"
 	"sync"
 	"sync/atomic"
 )
 
-type atlasGlyph struct {
+type AtlasGlyph struct {
 	X, Y, W, H int
 	Left, Top  int
 	Advance    float64
@@ -21,29 +23,30 @@ type atlasGlyph struct {
 }
 
 // Units is how many face Units one atlas texel of the Glyph covers.
-func (g *atlasGlyph) Units() float64 {
+func (g *AtlasGlyph) Units() float64 {
 	if g.Scale == 0 {
 		return 1
 	}
 	return g.Scale
 }
 
-type atlasFace struct {
+type AtlasFace struct {
 	Cap     float64
-	Glyphs  map[string]*atlasGlyph
+	Glyphs  map[string]*AtlasGlyph
 	Kerning map[string]float64
+	GpuTex  *ebiten.Image // ★ 新增：整张大图集纹理，给 gpurender 用
 }
 
 // loadAtlasFace decodes one atlas pair into coverage mipmaps. name is the
 // asset stem: "display" and "body" for the Latin faces, "display-cjk" and
 // "body-cjk" for the optional Chinese additions. The bytes come from readAsset,
 // which the host supplies: embedded in the executable, fetched in the browser.
-func loadAtlasFace(name string) *atlasFace {
+func loadAtlasFace(name string) *AtlasFace {
 	metadata, err := readAsset(name + ".json")
 	if err != nil {
 		panic(err)
 	}
-	face := new(atlasFace)
+	face := new(AtlasFace)
 	if err := json.Unmarshal(metadata, face); err != nil {
 		panic(err)
 	}
@@ -55,6 +58,17 @@ func loadAtlasFace(name string) *atlasFace {
 	atlas, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
 		panic(err)
+	}
+	face.GpuTex = ebiten.NewImageFromImage(atlas)
+	//fmt.Println(face.GpuTex)
+	// ★ 核心：这里必须把整张 PNG 变成 GpuTex！
+	face.GpuTex = ebiten.NewImageFromImage(atlas)
+
+	// ★ 加这行打印，看看到底生成没有！
+	if face.GpuTex == nil {
+		fmt.Println("❌ loadAtlasFace GpuTex 生成失败:", name)
+	} else {
+		fmt.Println("✅ loadAtlasFace GpuTex 生成成功:", name, face.GpuTex.Bounds())
 	}
 	for _, g := range face.Glyphs {
 		if g.W == 0 || g.H == 0 {
@@ -109,15 +123,15 @@ func loadAtlasFace(name string) *atlasFace {
 }
 
 // filmFaces is the base pair every language loads: Latin and Cyrillic only.
-var filmFaces = sync.OnceValue(func() map[string]*atlasFace {
-	faces := make(map[string]*atlasFace, 2)
+var filmFaces = sync.OnceValue(func() map[string]*AtlasFace {
+	faces := make(map[string]*AtlasFace, 2)
 	for _, name := range []string{"display", "body"} {
 		faces[name] = loadAtlasFace(name)
 	}
 	return faces
 })
-var otherFilms = sync.OnceValue(func() map[string]*atlasFace {
-	faces := make(map[string]*atlasFace, 2)
+var otherFilms = sync.OnceValue(func() map[string]*AtlasFace {
+	faces := make(map[string]*AtlasFace, 2)
 	for _, name := range []string{"large", "medium", "normal", "small", "title", "tiny"} {
 		faces[name] = loadAtlasFace(name)
 	}
@@ -166,8 +180,8 @@ func CJKError() error {
 // cjkFaces is the base pair with the Chinese additions merged in, built once
 // on first use. The CJK atlas carries every glyph it draws, so a key already
 // present in the base face keeps the base entry.
-var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
-	faces := make(map[string]*atlasFace, 2)
+var cjkFaces = sync.OnceValue(func() map[string]*AtlasFace {
+	faces := make(map[string]*AtlasFace, 2)
 	for _, name := range []string{"display", "body", "tiny", "normal", "small"} {
 		base := filmFaces()[name]
 		cjk := loadAtlasFace(name + "-cjk")
@@ -175,25 +189,51 @@ var cjkFaces = sync.OnceValue(func() map[string]*atlasFace {
 			faces[name] = cjk
 			continue
 		}
-		merged := &atlasFace{
-			Cap:     base.Cap,
-			Glyphs:  make(map[string]*atlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
-			Kerning: base.Kerning,
-		}
-		for k, g := range base.Glyphs {
-			merged.Glyphs[k] = g
-		}
-		for k, g := range cjk.Glyphs {
-			if _, ok := merged.Glyphs[k]; !ok {
-				merged.Glyphs[k] = g
+		var tex *ebiten.Image
+		if name != "display" && name != "body" {
+			if cjk != nil {
+				tex = cjk.GpuTex
 			}
 		}
-		faces[name] = merged
+		if name == "display" || name == "body" {
+			// 大字型：合并原版英文，保留原图集（如果你大图集真的需要合并的话）
+			merged := &AtlasFace{
+				Cap:     base.Cap,
+				Glyphs:  make(map[string]*AtlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
+				Kerning: base.Kerning,
+				GpuTex:  cjk.GpuTex, // 用中文大图
+			}
+			for k, g := range base.Glyphs {
+				merged.Glyphs[k] = g
+			}
+			for k, g := range cjk.Glyphs {
+				if _, ok := merged.Glyphs[k]; !ok {
+					merged.Glyphs[k] = g
+				}
+			}
+			faces[name] = merged
+		} else {
+			merged := &AtlasFace{
+				Cap:     base.Cap,
+				Glyphs:  make(map[string]*AtlasGlyph, len(base.Glyphs)+len(cjk.Glyphs)),
+				Kerning: base.Kerning,
+				GpuTex:  tex,
+			}
+			for k, g := range base.Glyphs {
+				merged.Glyphs[k] = g
+			}
+			for k, g := range cjk.Glyphs {
+				if _, ok := merged.Glyphs[k]; !ok {
+					merged.Glyphs[k] = g
+				}
+			}
+			faces[name] = merged
+		}
 	}
 	return faces
 })
 
-func TextFace(name string) *atlasFace {
+func TextFace(name string) *AtlasFace {
 	key := "display"
 	if name == "body" {
 		key = "body"
@@ -206,7 +246,7 @@ func TextFace(name string) *atlasFace {
 
 // Unsupported characters retain a space's advance, preserving the existing
 // script contract instead of collapsing the rest of the line.
-func (f *atlasFace) Glyph(r rune) (*atlasGlyph, rune) {
+func (f *AtlasFace) Glyph(r rune) (*AtlasGlyph, rune) {
 	if g, ok := f.Glyphs[string(r)]; ok {
 		return g, r
 	}

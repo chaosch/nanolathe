@@ -1,6 +1,9 @@
 package gui
 
-import "github.com/nanolathe-gg/nanolathe/formats"
+import (
+	"fmt"
+	"github.com/nanolathe-gg/nanolathe/formats"
+)
 
 // PreclearButtonQuickKeys clears only button keys. It is the builder's
 // whole-window prelude; labels retain their current key for collision checks
@@ -87,7 +90,8 @@ func nulTerminatedEmpty(text string) bool {
 	return len(text) == 0 || text[0] == 0
 }
 
-func firstFreeCaptionKey(w *Window, caption string) byte {
+func firstFreeCaptionKeyASK(w *Window, caption string) byte {
+	fmt.Println("firstFreeCaptionKey:", caption)
 	for i := 0; i < len(caption); i++ {
 		candidate := caption[i]
 		if candidate == 0 {
@@ -96,7 +100,29 @@ func firstFreeCaptionKey(w *Window, caption string) byte {
 		if candidate == ' ' || quickKeyTaken(w, candidate) {
 			continue
 		}
+		fmt.Println("firstFreeCaptionKey return :", candidate)
 		return candidate
+	}
+	return 0
+}
+
+func firstFreeCaptionKey(w *Window, caption string) byte {
+	// ★ 用 rune 遍历，中文天然被跳过，绝不切碎字节
+	for _, r := range caption {
+		if r == 0 {
+			break
+		}
+
+		// 只认纯正的 ASCII 英文字母（跳过中文、数字、空格等）
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')) {
+			continue
+		}
+
+		// 将 rune 转回 byte 安全判断
+		candidate := byte(r)
+		if !quickKeyTaken(w, candidate) {
+			return candidate
+		}
 	}
 	return 0
 }

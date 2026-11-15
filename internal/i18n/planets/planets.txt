@@ -1,0 +1,212 @@
+1. 星球名称 (Planets)
+Hydross（海德罗斯）
+
+Lusch（卢施）
+
+Temblor（腾布勒）
+
+Gelidus（格利杜斯）
+
+Empyrrean（恩皮瑞安 - Arm 的主星）
+
+2. 地名/区域/特定地点 (Locations/Regions)
+Solidspire Base / Solidspire Islands（固刺基地 / 固刺群岛）
+
+Ansapp Sea（安萨普海）
+
+Less Refreshing Sea（少清爽海 / 清凉海）
+
+Kral Bay（克拉尔湾）
+
+Islands of Grace（恩典群岛）
+
+Opal Lakes（蛋白石湖）
+
+Amethyst Plain（紫水晶平原）
+
+Ravenstein Ridge（雷文斯坦山脊）
+
+Sapphire Lakes（蓝宝石湖）
+
+Chimo Island（奇莫岛）
+
+Island 445（445号岛）
+
+Arnen Inlet（阿嫩湾）
+
+Guditha Pass（古迪萨隘口）
+
+Groshen Bay / Groshen Strait（格罗申湾 / 格罗申海峡）
+
+Ice Base Baryn（巴林冰基地）
+
+Kaki Island（卡基岛）
+
+Sector 7949（7949 星区）
+
+Thermal Exchange Causeway（热能交换堤道）
+
+Cloud Isle（云岛 - 在Exp1ccb09中出现）
+
+3. 可能需要注意的阵营/专有名词
+Arm（武装 / 阿姆）
+
+Core（核心）
+
+Central Consciousness（中央意识 - Core的AI主脑）
+
+Krogoth（克罗格斯 - 巨型机器人）
+
+Serpent（巨蛇）
+
+Scorpion（蝎子）
+
+Commander（指挥官）
+
+. 新增的星球 / 卫星 (Planets / Moons)
+Novaspin IV（新星 IV / 诺瓦 IV - 卫星）
+
+Crustal 12（克鲁斯塔尔 12 号星）
+
+Rashak IV（拉沙克 IV 号星）
+
+Nayrb（奈尔布 - 卫星）
+
+（新出现的 Arm 主星 Empyrrean 之前已经有了）
+
+2. 新增的地名 / 区域 (Locations / Regions)
+Retorb Floodplain（瑞托布洪泛平原）
+
+Vetes Lava Dome（维特斯熔岩穹丘）
+
+Labrodorite plain（拉布拉多岩平原）
+
+Kerrap Shallows（凯拉普浅滩）
+
+Seed Crystal Plain（晶种平原）
+
+Prasad（普拉萨德 - 山丘名）
+
+Miniement Island（米尼门特岛）
+
+Tiebreemb River（提布林河）
+
+Yorlat River（约拉特河）
+
+Sterile Sea（死寂海 / 无菌海）
+
+Vulcans Forge（火神熔炉区）
+
+Rotrey Stream（罗特雷溪流）
+
+Zedtopt Hotsprings（泽托普特温泉）
+
+Grinding Rock Mountains（磨石山脉）
+
+Yollets Rain Forest（约莱特雨林）
+
+Yenisten Sea（耶尼斯滕海）
+
+Snake's Spine River（蛇脊河）
+
+Astrede Shoreline（阿斯特雷德海岸线）
+
+Meraldi Island（梅拉尔迪岛）
+
+Sheldon Archipelago（谢尔顿群岛）
+
+Kathos Sea（卡索斯海）
+
+Terseknos Strait（特塞克诺斯海峡）
+
+Lipar Pass（利帕尔隘口）
+
+Frozen Sea（冰冻海）
+
+Core Prime Sector 9387（核心主星 9387 星区）
+
+Sector 4395（4395 星区）
+
+Grantham Deep（格兰瑟姆深渊）
+
+Coral Sea（珊瑚海）
+
+Hammerhead Impact Basin（锤头撞击盆地）
+
+Sea of Despair（绝望之海）
+
+Sector 6895（6895 星区）
+
+Hanan Base（哈南基地）
+
+Guditha Pass（古迪萨隘口）
+
+Chimo Island（奇莫岛）
+
+Kaki Island（卡基岛）
+
+Groshen Bay（格罗申湾）
+
+
+1. 新增的星球 / 卫星 / 区域 (Planets / Moons / Regions)
+Nhanons River（南农斯河）
+
+Port Wayneston / Wayneston Ford（韦恩斯顿港 / 韦恩斯顿浅滩）
+
+Caladon Port（卡拉顿港 - 注意这是港口，不是之前的地图区域名）
+
+Kudzu Jungle（葛藤丛林）
+
+Nrowb VII（恩罗布 VII 号星）
+
+Titanium Fist Bay（钛拳湾）
+
+Harrison Hotspot（哈里森热点区）
+
+Skyreld Mesa（斯凯雷尔德台地）
+
+Pahoehoe（帕霍伊霍 - 基地名）
+
+Barack Ridge（巴拉克山脊）
+
+Webster Mountains（韦伯斯特山脉）
+
+Dalok River（达洛克河）
+
+Guardian Hill（守护者山丘）
+
+Drenigal City / Krocark Firebase Complex（德雷尼加尔市 / 克罗卡克火基地群）
+
+Destral II（德斯特拉尔 II 号星）
+
+Caladon（卡拉顿 - 森林名）
+
+Sapphire Sea（蓝宝石海）
+
+Crustal XIII（克鲁斯塔尔 XIII 号星）
+
+Jungle Base Eight（丛林八号基地）
+
+Yrdac Islands / Yrdac Base（伊尔达克群岛 / 伊尔达克基地）
+
+Pikas City（皮卡斯市）
+
+Nehagoba desert（内哈戈巴沙漠）
+
+Hasfap Mesa（哈斯法普台地）
+
+Mesa 368 / Hyenbacku Ridge（368 台地 / 海恩巴库山脊）
+
+Yerrot Foothills（耶罗特山麓）
+
+Tessop Gulf（泰索普湾）
+
+Neovestral II（新维斯彻 II 号星）
+
+Laser Plain（激光平原）
+
+Emerald Seamount（翡翠海山）
+
+Lava Rift Inlet（熔岩裂谷湾）
+
+Crustal 14（克鲁斯塔尔 14 号星）

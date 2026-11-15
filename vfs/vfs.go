@@ -224,6 +224,10 @@ type FSOps interface {
 	ReadDir(name string) ([]EntryInfo, error)
 	Stat(name string) (EntryInfo, error)
 	CacheStamp(name string) (string, error)
+	// LoadLocalesFiles mounts one HPI-family archive above every provider
+	// currently mounted, so its files win every lookup they can answer.
+	// It lets a caller that holds an FSOps extend the content set without
+	// reaching for the concrete FS.
 }
 
 var _ FSOps = (*FS)(nil)
