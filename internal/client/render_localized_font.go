@@ -105,9 +105,9 @@ type FaceTier struct {
 }
 
 var faceTiers = []FaceTier{
-	{"tiny", 12},
-	{"small", 14},
-	{"normal", 16}, //{"normal", 20},
+	{"tiny", 11},
+	//{"small", 12},
+	{"normal", 13}, //{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
 	//{"title", 20},
@@ -366,7 +366,6 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
-	return 0, false
 	if !i18n.I18nLanguageNeedCJK() {
 		return 0, false
 	}

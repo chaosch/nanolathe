@@ -13,8 +13,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # ==========================================
 SOURCE_FONT = r"NotoSansSC.ttf"
 Pixel_Font_12 = r"ZLabsPixel_12px_M_CN.ttf"
-Pixel_Font_14 = r"ChangBanDianSong-16-SC.ttf"
-PIXEL_FONT_16 = r"ChangBanDianSong-16-SC.ttf"
+Pixel_Font_14 = r"zitidi.com.ttf"
+PIXEL_FONT_16 = r"zitidi.com.ttf"
 
 CATALOG_JSON = r"..\..\internal\i18n\locales\chinese.json"
 OUT = Path(__file__).resolve().parent.parent / r"..\internal/film/assets"
@@ -56,7 +56,7 @@ PALETTE = [
 # ==========================================
 DARKEN = 1              # 调色板整体压暗系数
 SHADOW_STRENGTH = 160   # 边缘最暗处的衰减强度（值越大边缘越黑）
-SHADOW_START = 0.2      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
+SHADOW_START = 0.1      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
 
 
 def wanted(catalogs):

@@ -2,7 +2,6 @@ package content
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -93,10 +92,6 @@ func (t *TranslationTable) Translate(source string) string {
 	// preserves exact equality and the identity fallback [02 "Translation table"].
 	i := sort.Search(len(t.entries), func(i int) bool { return t.entries[i].source >= source })
 	if i < len(t.entries) && t.entries[i].source == source {
-		//fmt.Println(source, t.entries[i].translation)
-		fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", t.entries[i].translation))
-
-		fmt.Println("【原始文本 string】: ", t.entries[i].translation)
 		return t.entries[i].translation
 	}
 	return source

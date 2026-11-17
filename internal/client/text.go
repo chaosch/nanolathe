@@ -35,6 +35,8 @@ package client
 import (
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
+	"github.com/nanolathe-gg/nanolathe/internal/film"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 )
 
 // baselineDescender returns the signed FNT baseline adjustment. Glyph rows are
@@ -198,4 +200,120 @@ func drawTextClipped(frame []uint8, width, height int, fnt *formats.FNT, text st
 		}
 		curX += int(g.Width) // advance; space advances 7 via its glyph [03 §7.1]
 	}
+}
+
+// drawTextClippedCJK 是经典渲染器原生支持中文的实现版本
+// drawTextClippedCJK 是经典渲染器原生支持中文的实现版本
+// 经典渲染器原生的中文渲染版本
+func drawTextClippedCJK(frame []uint8, width, height int, fnt *formats.FNT, text string, x, y, maxWidth int, color byte, clipX, clipY, clipW, clipH int) {
+	if len(frame) < width*height || fnt == nil || width <= 0 || height <= 0 || len(text) == 0 {
+		return
+	}
+	if clipW <= 0 || clipH <= 0 {
+		return
+	}
+
+	CJKPaddingTopRatio := 0.20
+	CJKPaddingBottomRatio := 0.20
+	baseH := float64(fnt.Height)
+	padTop := int(baseH * CJKPaddingTopRatio)
+	padBottom := int(baseH * CJKPaddingBottomRatio)
+	availH := int(baseH) - padTop - padBottom
+	if availH < 1 {
+		availH = 1
+	}
+
+	tier := PickTier(availH)
+	face := film.TextFaceInGame(tier.Name)
+	if face == nil {
+		return
+	}
+
+	// 2.宽度截断
+	if maxWidth > 0 {
+		var currentW int
+		runes := []rune(text)
+		for i, r := range runes {
+			g, ok := face.Glyphs[string(r)]
+			if ok {
+				currentW += int(g.Advance)
+			} else {
+				currentW += 6
+			}
+			if currentW > maxWidth {
+				text = string(runes[:i])
+				break
+			}
+		}
+		if len(text) == 0 {
+			return
+		}
+	}
+
+	curX := x
+	boxTop := y + padTop
+	capH := int(face.Cap)
+	vertOffset := (availH - capH) / 2
+	if vertOffset < 0 {
+		vertOffset = 0
+	}
+	logicBlockTopY := boxTop + vertOffset
+
+	for _, r := range text {
+		if r == 0x0A || r == 0x00 {
+			break
+		}
+
+		glyph, ok := face.Glyphs[string(r)]
+		if !ok || glyph.W == 0 || glyph.H == 0 {
+			curX += 6
+			continue
+		}
+
+		chFrame := glyph.Frame()
+		if chFrame == nil || chFrame.Width == 0 || chFrame.Height == 0 {
+			curX += int(glyph.Advance)
+			continue
+		}
+
+		// 极简方块贴图，没有任何居中、没有任何字符特殊偏移
+		drawX := curX + glyph.Left
+		drawY := logicBlockTopY + glyph.Top
+
+		for gy := 0; gy < int(chFrame.Height); gy++ {
+			dy := drawY + gy
+			if dy < 0 || dy >= height {
+				continue
+			}
+			rowBase := dy * width
+
+			for gx := 0; gx < int(chFrame.Width); gx++ {
+				idx := gy*int(chFrame.Width) + gx
+				if !chFrame.Transparent[idx] {
+					dx := drawX + gx
+					if dx < 0 || dx >= width {
+						continue
+					}
+					// 区域裁剪
+					if dx >= clipX && dx < clipX+clipW && dy >= clipY && dy < clipY+clipH {
+						frame[rowBase+dx] = color
+					}
+				}
+			}
+		}
+		curX += int(glyph.Advance)
+	}
+}
+
+// drawTextDispatch 是经典渲染器画字的统一入口。
+// 它负责判断当前语言，并将渲染任务分发给英文渲染器或中文渲染器。
+func drawTextDispatch(frame []uint8, width, height int, fnt *formats.FNT, text string, x, y, maxWidth int, color byte, clipX, clipY, clipW, clipH int) {
+	// 如果是中文环境，走中文渲染分支
+	if i18n.I18nLanguageNeedCJK() {
+		drawTextClippedCJK(frame, width, height, fnt, text, x, y, maxWidth, color, clipX, clipY, clipW, clipH)
+		return
+	}
+
+	// 否则，走原版纯英文经典渲染
+	drawTextClipped(frame, width, height, fnt, text, x, y, maxWidth, color, clipX, clipY, clipW, clipH)
 }

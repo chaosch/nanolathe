@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
@@ -11,25 +10,12 @@ import (
 // Button captions use a single-line pen. The stage-count bit moves the pen;
 // pointer capture and the current down word do not [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailButtonCaption(c *client.Client, p *ui.Panel, index int, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, measure func(string) int, metric int) {
-	//c.PrintDebug(text)
-	fmt.Println("drawRetailButtonCaption", fmt.Sprintf("gad.quickkey%c", gad.QuickKey))
-
-	fmt.Println(fmt.Sprintf("drawRetailButtonCaption【原始文本 Hex】:%x", text))
-
-	fmt.Println("drawRetailButtonCaption【原始文本 string】: ", text)
-	client.PrintDebug(text)
-
 	x, y, build, centred := retailButtonCaptionPen(gad, r, measure(text), metric)
 	color, shade := g.retailTextPen(p, index, gad)
 	draw := func(run string, px int, color byte) {
-		fmt.Println(fmt.Sprintf("draw【原始文本 Hex】: %x", run))
-
-		fmt.Println("draw【原始文本 string】: ", run)
-		client.PrintDebug(run)
 		g.drawRetailStringSelected(c, run, px, y, int(r.W), color, shade, selected)
 	}
 	key := captionQuickKeyIndex(text, gad.QuickKey)
-	fmt.Println(key, fmt.Sprintf("%c", key))
 	if key < 0 || (!build && (!centred || gad.GrayedOut&1 != 0)) {
 		draw(text, x, color)
 		return
@@ -84,7 +70,6 @@ func captionQuickKeyIndexASC(text string, key byte) int {
 // Caption bytes and the key use the ordinary single-player ASCII case fold;
 // the first terminated-string match wins [07 R-WGT-01 §3][07 R-WGT-02 §2].
 func captionQuickKeyIndex(text string, key byte) int {
-	fmt.Println("captionQuickKeyIndex text:", text, "key:", key)
 	if key == 0 || key >= 0x80 {
 		return -1
 	}

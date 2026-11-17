@@ -503,7 +503,7 @@ func (s classicSink) clip(has bool, r drawlist.Rect) (x, y, w, h int) {
 // of its own and none passes a per-glyph callback [03 §7.1].
 func (s classicSink) Glyphs(g drawlist.Glyphs) {
 	clipX, clipY, clipW, clipH := s.clip(g.HasClip, g.Clip)
-	drawTextClipped(s.c.indexed, s.c.width, s.c.height, g.Font, g.Text, int(g.X+g.ScreenOffsetX), int(g.Y+g.ScreenOffsetY), int(g.MaxWidth), g.Color, clipX, clipY, clipW, clipH)
+	drawTextDispatch(s.c.indexed, s.c.width, s.c.height, g.Font, g.Text, int(g.X+g.ScreenOffsetX), int(g.Y+g.ScreenOffsetY), int(g.MaxWidth), g.Color, clipX, clipY, clipW, clipH)
 }
 
 // Fill replays one indexed rectangle. Solid and Outline are the plain,

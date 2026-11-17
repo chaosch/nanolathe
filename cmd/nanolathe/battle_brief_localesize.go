@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -92,47 +93,77 @@ func briefingSplitBlinkRunsIncludeCJK(text string) string {
 func briefingSplitBlinkRunsForCJK(text string) string {
 	src := []byte(text)
 	out := make([]byte, 0, len(src)+16)
-	open := false
-	var letter []byte
+	var blinkStack [][]byte
 
-	for i := 0; i < len(src) && src[i] != 0xFF; i++ {
-		// 1. 记录标签字母（如 R）
-		if src[i] == '&' {
-			if i+1 < len(src) {
+	fmt.Printf("[SplitBlinkCJK] START | input=%q\n", text)
+
+	for i := 0; i < len(src); i++ {
+		r := src[i]
+		open := len(blinkStack) > 0
+		fmt.Printf("[SplitBlinkCJK] i=%d, char=%q, open=%t, stackLen=%d\n", i, string(r), open, len(blinkStack))
+
+		if r == '&' {
+			if !open {
+				if i+1 >= len(src) {
+					out = append(out, r)
+					continue
+				}
 				j := i + 1
-				n := 1
-				if src[j]&0xE0 == 0xC0 {
+				var n int
+				switch {
+				case src[j]&0xE0 == 0xC0:
 					n = 2
-				} else if src[j]&0xF0 == 0xE0 {
+				case src[j]&0xF0 == 0xE0:
 					n = 3
-				} else if src[j]&0xF8 == 0xF0 {
+				case src[j]&0xF8 == 0xF0:
 					n = 4
+				default:
+					n = 1
 				}
-				if j+n <= len(src) {
-					letter = append(letter[:0], src[j:j+n]...)
-				} else {
-					letter = append(letter[:0], src[j:]...)
+				if j+n > len(src) {
+					out = append(out, r)
+					continue
 				}
+				letter := make([]byte, n)
+				copy(letter, src[j:j+n])
+				blinkStack = append(blinkStack, letter)
+				out = append(out, r)
+				out = append(out, letter...)
+				i += n
+				fmt.Printf("[SplitBlinkCJK] >>> OPEN TAG, letter=%q, stack=%#v\n", string(letter), blinkStack)
+			} else {
+				blinkStack = blinkStack[:len(blinkStack)-1]
+				out = append(out, r)
+				fmt.Printf("[SplitBlinkCJK] >>> CLOSE TAG, stack=%#v\n", blinkStack)
 			}
-			open = !open
-			out = append(out, src[i])
 			continue
 		}
 
-		// 2. 遇到换行符且在标签内部
-		if src[i] == '\n' && open {
-			// ★ 绝不覆盖字节，直接安全替换
-			if len(out) > 0 && out[len(out)-1] == '\r' {
-				out = out[:len(out)-1] // 砍掉 \r
-			}
-			// 补全闭合、换行、重启标签
-			out = append(out, '&', '\r', '\n', '&')
-			out = append(out, letter...)
+		// 优先处理 CRLF \r\n
+		if r == '\r' && i+1 < len(src) && src[i+1] == '\n' && open {
+			currentLetter := blinkStack[len(blinkStack)-1]
+			fmt.Printf("[SplitBlinkCJK] >>> CRLF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
+			out = append(out, '&')
+			out = append(out, '\r', '\n')
+			out = append(out, '&')
+			out = append(out, currentLetter...)
+			i++ // 吃掉 \n
+			continue
+		}
+		if r == '\n' && open {
+			currentLetter := blinkStack[len(blinkStack)-1]
+			fmt.Printf("[SplitBlinkCJK] >>> LF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
+			out = append(out, '&')
+			out = append(out, '\r', '\n')
+			out = append(out, '&')
+			out = append(out, currentLetter...)
 			continue
 		}
 
-		out = append(out, src[i])
+		out = append(out, r)
 	}
+
+	fmt.Printf("[SplitBlinkCJK] END | output=%q\n", string(out))
 	return string(out)
 }
 func retailWordWrapIncludeCJK(text string, width int, measure func(string) int) string {
@@ -149,19 +180,19 @@ func retailWordWrapForCJK(text string, width int, measure func(string) int) stri
 
 	var out strings.Builder
 	currentLineWidth := 0
-
 	runes := []rune(text)
+
 	for i := 0; i < len(runes); i++ {
 		r := runes[i]
 
-		// 1. 已有的换行符直接透传
+		// 1. 原有换行符透传
 		if r == '\n' || r == '\r' {
 			out.WriteRune(r)
 			currentLineWidth = 0
 			continue
 		}
 
-		// 2. 原样输出控制符 &R，且不占排版宽度
+		// 2. 颜色控制符透传
 		if r == '&' && i+1 < len(runes) {
 			out.WriteRune(r)
 			i++
@@ -169,19 +200,25 @@ func retailWordWrapForCJK(text string, width int, measure func(string) int) stri
 			continue
 		}
 
-		// 3. 普通字符宽度计算
-		charW := 6
+		// 3. 计算字符真实宽度
+		charW := measure(string(r)) // 先用原版逻辑（针对英文）
 		if r > 127 {
+			// ★ 核心修改：如果是中文（多字节），强制用一个合适的中文字宽。
+			// 如果你渲染出来的中文字号比较大，这里可以改成 14 或 16。
+			// 这是保证黑框不溢出的关键。
 			charW = 12
 		}
 
-		// 4. 超宽则换行（带避头标点保护）
+		// 4. 超宽换行
 		if currentLineWidth+charW > width && currentLineWidth > 0 {
-			// 标点不放在行首
-			if !strings.ContainsRune("，。！？；：、）》”", r) {
-				out.WriteString("\r\n")
-				currentLineWidth = 0
+			// 标点避头尾
+			if strings.ContainsRune("。，！？；：、）》”", r) {
+				out.WriteRune(r)
+				currentLineWidth += charW
+				continue
 			}
+			out.WriteString("\r\n")
+			currentLineWidth = 0
 		}
 
 		out.WriteRune(r)

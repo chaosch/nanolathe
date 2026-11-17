@@ -195,8 +195,6 @@ func (h *retailBattleHUD) drawBattleBriefingLine(c *client.Client, text string, 
 	if c == nil || text == "" {
 		return
 	}
-	//c.PrintDebug()
-	fmt.Println(text)
 	if h.info.briefingFont != nil {
 		width, _ := c.Size()
 		c.UITextWidth(h.info.briefingFont, text, x, y, width-x, color)

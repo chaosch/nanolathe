@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -180,12 +179,6 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 // non-zero level remaps it through PALETTE.LHT. Only loading-screen stage
 // labels pass a non-zero level [07 §4][03 §4.3.1].
 func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
-	//c.PrintDebug(text)
-	fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", text))
-
-	fmt.Println("【原始文本 string】: ", text)
-	client.PrintDebug(text)
-
 	if c == nil || font == nil {
 		return
 	}
@@ -239,12 +232,6 @@ func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWid
 }
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
-	//c.PrintDebug(text)
-	fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", text))
-
-	fmt.Println("【原始文本 string】: ", text)
-	client.PrintDebug(text)
-
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {

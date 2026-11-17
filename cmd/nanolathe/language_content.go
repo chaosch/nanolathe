@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,17 +22,21 @@ type UnitTranslation struct {
 	DescriptionFrom string
 }
 
-type MissionTranslation struct {
-	Name         string // 任务译文名
-	Code         string // 任务英文原名
-	File         string // 任务文件 (如 "Three Passes.ota")
-	CampaignCode string // 所属战役的 Code (英文文件名)
-	Briefing     []byte // 简报全文 (找不到就是 nil)
+type CampaignTranslation struct {
+	Code string // 英文 Code / 文件名 (作为 Map 的 Key)
+	Name string // 译文（如 "遭遇柯古斯"）
 }
 
-type CampaignTranslation struct {
-	Name string // 战役译文名 (读不到就是空串)
-	Code string // 英文文件名 (不含扩展名)
+type MissionTranslation struct {
+	Code     string // OTA 英文名 (作为 Map 的 Key)
+	Name     string // 译文任务名
+	Briefing []byte // 译文简报内容 (方便引擎 UI 一次性拿走)
+}
+
+// 新增：完全独立出来的 Brief 结构
+type BriefTranslation struct {
+	Name string // txt 文件名 (不带后缀，作为 Map 的 Key)
+	Text []byte // 译文纯文本
 }
 
 type UITranslation struct {
@@ -48,6 +51,7 @@ type TranslationPack struct {
 	transFS *vfs.FS   // 自己挂载的翻译包 FS (指针类型)
 	gameFS  vfs.FSOps // 外部传进来的游戏本体只读 FS
 
+	Briefs    map[string]BriefTranslation // Key: txt 文件名 (无后缀、全小写)
 	Units     map[string]UnitTranslation
 	Missions  map[string]MissionTranslation
 	Campaigns map[string]CampaignTranslation
@@ -68,17 +72,6 @@ var GlobalTranslations = &TranslationPack{
 func (p *TranslationPack) GetUnit(unitKey string) (UnitTranslation, bool) {
 	t, ok := p.Units[content.CanonicalKey(unitKey)]
 	return t, ok
-}
-
-func (p *TranslationPack) GetMission(missionFile string) (MissionTranslation, bool) {
-	key := strings.ToLower(strings.TrimSpace(missionFile))
-	m, ok := p.Missions[key]
-	return m, ok
-}
-
-func (p *TranslationPack) GetCampaign(code string) (CampaignTranslation, bool) {
-	c, ok := p.Campaigns[code]
-	return c, ok
 }
 
 func (p *TranslationPack) GetUI(code string) (UITranslation, bool) {
@@ -247,11 +240,13 @@ func (p *TranslationPack) loadUnits(modName string) {
 }
 
 func (p *TranslationPack) loadCampaignsAndMissions(modName string) {
-	// 基础目录 translation/mods/<mod>/camps
 	campsRoot := filepath.Join("translation/mods", modName, "camps")
+	campaignsDir := filepath.Join(campsRoot, "camps")
 
-	// 1. 读取 briefs 目录 (在 campsRoot 下)
-	briefFiles := make(map[string][]byte)
+	// ==========================================
+	// 1. 读取 briefs (纯文本)
+	// ==========================================
+	p.Briefs = make(map[string]BriefTranslation)
 	briefsDir := filepath.Join(campsRoot, "briefs")
 	if entries, err := p.transFS.ReadDir(briefsDir); err == nil {
 		for _, e := range entries {
@@ -259,107 +254,126 @@ func (p *TranslationPack) loadCampaignsAndMissions(modName string) {
 				continue
 			}
 			if data, err := p.transFS.ReadFileLimit(e.Path, 4<<20); err == nil {
-				baseName := strings.TrimSuffix(filepath.Base(e.Path), filepath.Ext(e.Path))
-				briefFiles[strings.ToLower(baseName)] = bytes.TrimSpace(data)
+				key := strings.ToLower(strings.TrimSuffix(filepath.Base(e.Path), filepath.Ext(e.Path)))
+				p.Briefs[key] = BriefTranslation{Name: key, Text: data}
 			}
-		}
-		if len(briefFiles) > 0 {
-			fmt.Printf("[Translation]   - 载入简报文本 %d 份 (%s)\n", len(briefFiles), briefsDir)
 		}
 	}
 
-	// 2. 读取 missions.tdf (在 campsRoot 下)，用于任务名覆盖
+	// ==========================================
+	// 2. 读取 missions.tdf
+	// ==========================================
 	missionNames := make(map[string]string)
 	missionsPath := filepath.Join(campsRoot, "missions.tdf")
 	if data, err := p.transFS.ReadFileLimit(missionsPath, 1<<20); err == nil {
 		if doc, err := formats.ParseTDF(data); err == nil && doc.Root != nil {
 			for _, sec := range doc.Root.Sections() {
-				key := strings.ToLower(strings.TrimSpace(sec.Name))
+				key := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(sec.Name), ".ota"))
 				if name, ok := sec.StringValue("missionname", ""); ok && name != "" {
-					missionNames[key] = name
+					missionNames[key] = strings.TrimSpace(name)
 				}
-			}
-			if len(missionNames) > 0 {
-				fmt.Printf("[Translation]   - 载入任务名覆盖表 %d 项 (%s)\n", len(missionNames), missionsPath)
 			}
 		}
 	}
 
-	// 3. 读取 camps/camps 目录下的战役骨架 .tdf
-	campaignsDir := filepath.Join(campsRoot, "camps")
+	// ==========================================
+	// 3. 核心：优先读取 camplist.tdf 构建 Campaigns
+	// ==========================================
+	p.Campaigns = make(map[string]CampaignTranslation) // 清空确保干净
+	camplistPath := filepath.Join(campaignsDir, "camplist.tdf")
+	fmt.Printf("[Translation] 正在加载战役列表: %s\n", camplistPath)
+
+	if data, err := p.transFS.ReadFileLimit(camplistPath, 1<<20); err == nil {
+		if doc, err := formats.ParseTDF(data); err == nil && doc.Root != nil {
+			for _, sec := range doc.Root.Sections() {
+				campCode := strings.TrimSpace(sec.Name)
+				if name, ok := sec.StringValue("campaignname", ""); ok && name != "" {
+					p.Campaigns[campCode] = CampaignTranslation{
+						Code: campCode,
+						Name: strings.TrimSpace(name),
+					}
+				}
+			}
+			fmt.Printf("[Translation] 成功从 camplist.tdf 解析了 %d 个战役\n", len(p.Campaigns))
+		} else {
+			fmt.Printf("[Translation] 解析 camplist.tdf 失败: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Translation] 找不到 camplist.tdf: %v\n", err)
+	}
+
+	// ==========================================
+	// 4. 遍历其他 TDF 组装 Missions（不再覆盖 Campaigns）
+	// ==========================================
 	entries, err := p.transFS.ReadDir(campaignsDir)
 	if err != nil {
 		return
+	}
+
+	processTDF := func(data []byte, fileName string) {
+		doc, err := formats.ParseTDF(data)
+		if err != nil || doc.Root == nil {
+			return
+		}
+
+		// 组装 Missions
+		for _, sec := range doc.Root.Sections() {
+			var mFile, mName string
+			if strings.HasPrefix(strings.ToUpper(sec.Name), "MISSION") {
+				mName, _ = sec.StringValue("missionname", "")
+				mFile, _ = sec.StringValue("missionfile", "")
+			} else if strings.HasSuffix(strings.ToLower(sec.Name), ".ota") {
+				mFile = sec.Name
+				mName, _ = sec.StringValue("missionname", "")
+			}
+
+			mFile = strings.TrimSpace(mFile)
+			if mFile == "" {
+				continue
+			}
+
+			otaKey := strings.ToLower(strings.TrimSuffix(mFile, ".ota"))
+
+			// 任务名覆盖
+			translatedName := mName
+			if overrideName, ok := missionNames[otaKey]; ok {
+				translatedName = overrideName
+			}
+
+			// 提取简报
+			var briefing []byte
+			briefName := p.extractBriefName(mFile)
+			if briefName == "" {
+				briefName = otaKey
+			}
+			briefKey := strings.ToLower(strings.TrimSuffix(filepath.Base(briefName), filepath.Ext(briefName)))
+			if b, ok := p.Briefs[briefKey]; ok {
+				briefing = b.Text
+			}
+
+			p.Missions[otaKey] = MissionTranslation{
+				Code:     mFile,
+				Name:     strings.TrimSpace(translatedName),
+				Briefing: briefing,
+			}
+		}
 	}
 
 	for _, e := range entries {
 		if e.IsDir || !strings.HasSuffix(strings.ToLower(e.Path), ".tdf") {
 			continue
 		}
+		baseName := filepath.Base(e.Path)
+		if strings.EqualFold(baseName, "camplist.tdf") {
+			continue // 跳过它，因为上面已经读了
+		}
 
 		data, err := p.transFS.ReadFileLimit(e.Path, 4<<20)
 		if err != nil {
 			continue
 		}
-
-		doc, err := formats.ParseTDF(data)
-		if err != nil || doc.Root == nil {
-			continue
-		}
-
-		// 文件名（不含扩展名）作为 Code
-		fileName := strings.TrimSuffix(filepath.Base(e.Path), filepath.Ext(e.Path))
-
-		// A. 提取战役名
-		campName := ""
-		header := doc.Root.Section("HEADER")
-		if header != nil {
-			if name, ok := header.StringValue("campaignname", ""); ok && name != "" {
-				campName = strings.TrimSpace(name)
-			}
-		}
-
-		// 存入 Campaigns Map
-		p.Campaigns[fileName] = CampaignTranslation{
-			Name: campName,
-			Code: fileName,
-		}
-
-		// B. 组装 Missions
-		for _, sec := range doc.Root.Sections() {
-			secName := strings.ToUpper(sec.Name)
-			if !strings.HasPrefix(secName, "MISSION") {
-				continue
-			}
-
-			mEnName, _ := sec.StringValue("missionname", "")
-			mFile, _ := sec.StringValue("missionfile", "") // 如 "Three Passes.ota"
-			mFileKey := strings.ToLower(strings.TrimSpace(mFile))
-
-			// 任务名查找：优先看 missions.tdf 里有没有覆盖
-			translatedMissionName := mEnName
-			if overrideName, ok := missionNames[mFileKey]; ok {
-				translatedMissionName = overrideName
-			}
-
-			var briefing []byte
-
-			// 从 gameFS 的 maps 目录直接读 .ota 提取 brief 文件名
-			briefName := p.extractBriefName(mFile)
-			if briefName != "" {
-				briefKey := strings.ToLower(strings.TrimSuffix(briefName, filepath.Ext(briefName)))
-				// 只在当前 modName 的 briefs 里找，找不到就为 nil
-				briefing = briefFiles[briefKey]
-			}
-
-			p.Missions[mFileKey] = MissionTranslation{
-				Name:         translatedMissionName,
-				Code:         mEnName,
-				File:         mFile,
-				CampaignCode: fileName, // 记录来源战役
-				Briefing:     briefing,
-			}
-		}
+		fileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+		processTDF(data, fileName)
 	}
 }
 
@@ -418,9 +432,6 @@ func (p *TranslationPack) loadUITranslations(modName string) {
 				Code: code,
 				Text: text,
 			}
-			fmt.Println(fmt.Sprintf("【原始文本 Hex】: %xs\n", text))
-
-			fmt.Println("【原始文本 string】: ", text)
 			count++
 		}
 	}
@@ -442,4 +453,46 @@ func (p *TranslationPack) AsTranslationTable() (*content.TranslationTable, error
 	}
 
 	return content.NewTranslationTable(entries), nil
+}
+
+// 1. 查战役翻译
+// 传入如 "Krogoth Encounter" 或 "Krogoth Encounter.tdf"
+func (p *TranslationPack) GetCampaign(code string) (CampaignTranslation, bool) {
+	if p == nil || code == "" {
+		return CampaignTranslation{}, false
+	}
+	// 去除可能带上的 .tdf 后缀，并处理前后空格
+	key := strings.TrimSpace(code)
+	key = strings.TrimSuffix(key, ".tdf")
+
+	c, ok := p.Campaigns[key]
+	return c, ok
+}
+
+// 2. 查任务翻译
+// 传入如 "Krogoth Encounter.ota" 或 "Krogoth Encounter"
+func (p *TranslationPack) GetMission(otaFile string) (MissionTranslation, bool) {
+	if p == nil || otaFile == "" {
+		return MissionTranslation{}, false
+	}
+	// 统一转化为小写，且去掉 .ota 后缀
+	key := strings.ToLower(strings.TrimSpace(otaFile))
+	key = strings.TrimSuffix(key, ".ota")
+
+	m, ok := p.Missions[key]
+	return m, ok
+}
+
+// 3. 查简报翻译（单独抽离的）
+// 传入如 "Krogoth" 或 "Krogoth.txt"
+func (p *TranslationPack) GetBrief(briefName string) (BriefTranslation, bool) {
+	if p == nil || briefName == "" {
+		return BriefTranslation{}, false
+	}
+	// 统一转化为小写，且去掉 .txt 后缀
+	key := strings.ToLower(strings.TrimSpace(briefName))
+	key = strings.TrimSuffix(key, ".txt")
+
+	b, ok := p.Briefs[key]
+	return b, ok
 }

@@ -170,7 +170,12 @@ func installMainMenuReplaysButton(window *gui.Window, x int32) {
 	button := window.Gadgets[mods]
 	button.Name, button.SourceName, button.Text = replaysButton, replaysButton, "REPLAYS"
 	button.Rect.X = x
+
+	if t, ok := GlobalTranslations.GetUI(button.Text); ok {
+		button.Text = t.Text
+	}
 	window.Gadgets = append(window.Gadgets, button)
+
 }
 
 // disableUnavailableReplays greys REPLAYS where Skirmish is greyed: a replay

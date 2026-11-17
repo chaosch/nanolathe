@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
@@ -9,10 +8,6 @@ import (
 )
 
 func retailGAFGlyphDispatch(font *formats.GAFEntry, r rune) *formats.GAFFrame {
-	fmt.Println("retailGAFGlyphDispatch", string(r))
-	//if font == nil || r < 0x20 || int(r) >= len(font.Frames) {
-	//	return nil
-	//}
 	if i18n.I18nLanguageNeedCJK() {
 		return retailGAFGlyphCJK(font, r)
 	}
