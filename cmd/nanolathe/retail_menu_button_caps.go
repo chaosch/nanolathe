@@ -36,6 +36,7 @@ func retailGAFGlyphCJK(font *formats.GAFEntry, r rune) *formats.GAFFrame {
 		return nil
 	}
 	f := g.Frame()
-	f.YOffset = int16(tier.Px)
+	f.Width = uint16(g.Advance)
+	f.YOffset = int16(tier.Px) + 2
 	return f
 }

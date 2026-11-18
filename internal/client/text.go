@@ -252,11 +252,22 @@ func drawTextClippedCJK(frame []uint8, width, height int, fnt *formats.FNT, text
 
 	curX := x
 	boxTop := y + padTop
-	capH := int(face.Cap)
-	vertOffset := (availH - capH) / 2
+
+	// ★ 核心修改：读取图块的真实全高，进行纯几何居中，抛弃面.Cap
+	var cellH int
+	if ag, ok := face.Glyphs["A"]; ok {
+		cellH = int(ag.H)
+	} else {
+		cellH = availH
+	}
+
+	// 计算居中偏移
+	vertOffset := (availH - cellH) / 2
 	if vertOffset < 0 {
 		vertOffset = 0
 	}
+
+	// 图块该绘制的最顶端 Y 坐标
 	logicBlockTopY := boxTop + vertOffset
 
 	for _, r := range text {
@@ -276,9 +287,10 @@ func drawTextClippedCJK(frame []uint8, width, height int, fnt *formats.FNT, text
 			continue
 		}
 
-		// 极简方块贴图，没有任何居中、没有任何字符特殊偏移
-		drawX := curX + glyph.Left
-		drawY := logicBlockTopY + glyph.Top
+		// ★ 修改点：完全信任 JSON 里的 Left 和 Top
+		// 如果是零留白图块，且 top 为 0，这里就是纯点对点贴图
+		drawX := curX + int(glyph.Left)
+		drawY := logicBlockTopY + int(glyph.Top) - 3
 
 		for gy := 0; gy < int(chFrame.Height); gy++ {
 			dy := drawY + gy

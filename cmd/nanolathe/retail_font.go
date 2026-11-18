@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
@@ -157,7 +158,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		if frame == nil {
 			continue
 		}
-		advance := int(frame.Width)
+		advance := 16 //int(frame.Width)
 		if remaining >= 0 && remaining < advance {
 			return
 		}
@@ -184,14 +185,14 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
 
-	//if _, ok := c.DrawRetailFilmCJKCylindrical(
-	//	text,
-	//	x, y, maxWidth, baselineHeight,
-	//	255,
-	//	2,
-	//); ok {
-	//	return
-	//}
+	if _, ok := c.DrawRetailFilmCJKCylindrical(
+		text,
+		x, y, maxWidth, baselineHeight,
+		255,
+		2,
+	); ok {
+		return
+	}
 	remaining := maxWidth
 	for _, r := range text {
 		if r == 0 {
@@ -202,6 +203,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 			continue
 		}
 		advance := int(frame.Width)
+		fmt.Println("advance", advance)
 		if remaining >= 0 && remaining < advance {
 			return
 		}

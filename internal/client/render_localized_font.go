@@ -365,6 +365,7 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
+	return 0, false
 	if !i18n.I18nLanguageNeedCJK() || hasCJK(text) {
 		return 0, false
 	}

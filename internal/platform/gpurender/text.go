@@ -292,6 +292,7 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 	}
 
 	baseH := float64(g.Font.Height)
+	// 【修改点 1】：去掉硬编码的 +30，恢复正常的上下 padding 逻辑
 	padTop := int(baseH * CJKPaddingTopRatio)
 	padBottom := int(baseH * CJKPaddingBottomRatio)
 	padLeft := int(baseH * CJKPaddingLeftRatio)
@@ -314,6 +315,7 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 		return
 	}
 
+	// 获取切片的真实全高（因为我们在 Python 里已经裁剪了留白，这个高度就是实际最高点到最低点）
 	var cellH int
 	if ag, ok := face.Glyphs["A"]; ok {
 		cellH = int(ag.H)
@@ -354,7 +356,9 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 		}
 
 		if maxW > 0 && currentLineW+charW > maxW {
-			break
+			lines = append(lines, currentLine)
+			currentLine = nil
+			currentLineW = 0
 		}
 		currentLine = append(currentLine, tk)
 		currentLineW += charW
@@ -364,9 +368,12 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 	}
 
 	startX := int(g.X) + padLeft
-	// ✅ 基准：这一行的基线Y（小写a/c/e底边对齐线）
-	lineBaselineY := int(g.Y) + padTop + cellH
-	currentBaselineY := lineBaselineY
+
+	// 【修改点 2】：计算纯几何居中的起始 Y 坐标
+	// 因为图集已经没有多余留白，我们直接让图块在 availH 里完美居中
+	// 这里加了 -1 的视觉补偿，因为像素字体通常视觉重心偏下，你可以根据实际效果微调这个值（比如 -1、-2 或 0）
+	drawTopY := int(g.Y) + padTop + (availH-cellH)/2 - 3
+	currentDrawY := drawTopY
 
 	col := float32(g.Color)
 	lineHeight := cellH + lineSpacing
@@ -383,30 +390,31 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 			if glyph.W > 0 {
 				var imgs [4]*ebiten.Image
 				imgs[0] = face.GpuTex
-				// ✅ drawY = 基线 + glyph.Top，Python已经算好偏移，完美对齐基线
+
+				// 【修改点 3】：点对点直接渲染，抛弃不稳定的 top 计算
+				// 因为所有切片的高度一致，直接用算好的居中起点
 				drawX := curX
-				drawY := currentBaselineY + int(glyph.Top)
+				drawY := currentDrawY
 
 				if g.HasClip {
-					if drawX+glyph.W < clipX ||
+					if drawX+int(glyph.W) < clipX ||
 						drawX > clipX+clipW ||
-						drawY+glyph.H < clipY ||
+						drawY+int(glyph.H) < clipY ||
 						drawY > clipY+clipH {
 						curX += int(glyph.Advance)
 						continue
 					}
 				}
 
-				// UV直接裁切，不做任何偏移
 				u0 := float32(glyph.X)
 				v0 := float32(glyph.Y)
 				u1 := u0 + float32(glyph.W)
 				v1 := v0 + float32(glyph.H)
 
-				if r.sched.begin(schedOpaque, drawX, drawY, drawX+glyph.W, drawY+glyph.H, imgs) {
+				if r.sched.begin(schedOpaque, drawX, drawY, drawX+int(glyph.W), drawY+int(glyph.H), imgs) {
 					r.sched.quad(schedOpaque,
 						float32(drawX), float32(drawY),
-						float32(drawX+glyph.W), float32(drawY+glyph.H),
+						float32(drawX+int(glyph.W)), float32(drawY+int(glyph.H)),
 						u0, v0,
 						u1, v1,
 						[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
@@ -414,8 +422,8 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 			}
 			curX += int(glyph.Advance)
 		}
-		// 换行：下一行基线往下挪
-		currentBaselineY += lineHeight
+		// 换行：下一行直接往下挪整个图块高度
+		currentDrawY += lineHeight
 	}
 }
 func (r *Renderer) GlyphsOriginal(g drawlist.Glyphs) {
