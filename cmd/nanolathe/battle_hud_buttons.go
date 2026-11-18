@@ -255,7 +255,7 @@ func RenderCjkFontToGAFBAK(entry *formats.GAFEntry, text string) {
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
-func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
+func RenderCjkFontToGAF2(entry *formats.GAFEntry, text string) {
 	// 定義常量
 	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
 		cachedEntry := cached.(*formats.GAFEntry)
@@ -448,6 +448,265 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 						if gIdx >= 0 && gIdx < len(item.finalPixels) && gIdx < len(item.finalTransparent) {
 							if !item.finalTransparent[gIdx] {
 								pixel := item.finalPixels[gIdx]
+
+								// 需求 1 & 2：狀態按鈕第3幀不變灰，普通按鈕第3幀變灰
+								if i == 2 && !isStateButton {
+									if curTier.Name == "tiny" {
+										frame.Pixels[idxPix] = 8
+									} else {
+										if pixel >= 10 && pixel <= 31 {
+											frame.Pixels[idxPix] = 8
+										} else {
+											frame.Pixels[idxPix] = pixel
+										}
+									}
+								} else {
+									frame.Pixels[idxPix] = pixel
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// 畫下劃線
+			if idx == underlineIdx {
+				underlineY := actualDrawY + item.height
+				if underlineY >= height {
+					underlineY = height - 1
+				}
+
+				// 【核心改動】：普通按鈕第三幀用灰色下劃線
+				ulColor := uint8(UnderlineColor)
+				if i == 2 && !isStateButton || isStateButton && i == 4 && cmd == "ONOFF" {
+					ulColor = UnderlineColorDisabled
+				}
+
+				for ux := 0; ux < item.width; ux++ {
+					ulx := item.drawX + ux
+					if ulx >= 0 && ulx < width && underlineY >= 0 && underlineY < height {
+						frame.Pixels[underlineY*width+ulx] = ulColor
+					}
+				}
+			}
+		}
+	}
+
+	// 存入緩存
+	cachedCopy := &formats.GAFEntry{
+		Name:       entry.Name,
+		FrameCount: entry.FrameCount,
+		Unknown1:   entry.Unknown1,
+		Unknown2:   entry.Unknown2,
+		Frames:     entry.Frames,
+	}
+	renderedButtonCache.Store(entry.Name, cachedCopy)
+}
+func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
+	// 定義常量
+	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
+		cachedEntry := cached.(*formats.GAFEntry)
+		entry.Frames = cachedEntry.Frames
+		entry.FrameCount = cachedEntry.FrameCount
+		entry.Unknown1 = cachedEntry.Unknown1
+		entry.Unknown2 = cachedEntry.Unknown2
+		return
+	}
+	const (
+		PaddingY               = 2   // 上下留白像素
+		PressedOffsetY         = 1   // 按下（第1幀）文字下沉的像素
+		PaddingLeft            = 25  // 左側留白（避開邊框）
+		PaddingLeftNormal      = 4   // 普通按鈕左留白
+		PaddingRight           = 0   // 右側留白（避開原廠指示燈）
+		UnderlineColor         = 38  // 下劃線顏色（正常綠色）
+		UnderlineColorDisabled = 248 // 下劃線顏色（禁用狀態灰色）
+		UnderlineOffsetY       = 1   // 被劃線字母上移的像素
+	)
+
+	// 1. 判斷是否為狀態按鈕
+	isStateButton := false
+	var textParts []string
+	cmd := commandButtonName(entry.Name)
+	if cmd == "CLOAK" || cmd == "FIREORD" || cmd == "MOVEORD" || cmd == "ONOFF" {
+		isStateButton = true
+		textParts = strings.Split(text, "|")
+	}
+
+	for i := range entry.Frames {
+		frame := entry.Frames[i].Frame
+		if frame == nil || len(frame.Pixels) == 0 {
+			continue
+		}
+
+		// 決定當前幀要畫的文字
+		currentText := text
+		if isStateButton {
+			if i < len(textParts) {
+				currentText = textParts[i]
+			} else {
+				currentText = textParts[len(textParts)-1]
+			}
+		}
+
+		width := int(frame.Width)
+		height := int(frame.Height)
+
+		availHeight := height - PaddingY*2
+		if availHeight < 1 {
+			availHeight = 1
+		}
+
+		curTier := client.PickTier(availHeight)
+		face := film.TextFaceInGame(curTier.Name)
+		if face == nil {
+			continue
+		}
+		lineSize := curTier.Px
+
+		// 決定顏色
+		var palColor uint8 = 15 // 正常
+		if i == 1 {
+			palColor = 14 // 按下
+		} else if i == 2 {
+			palColor = 8 // 禁用
+		}
+
+		// 計算行寬
+		var lineW float64
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g != nil && g.W > 0 {
+				lineW += float64(g.W)
+				continue
+			}
+			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+				lineW += float64(lineSize)
+			} else {
+				lineW += float64(lineSize) / 2
+			}
+		}
+
+		// 根據按鈕類型選擇左留白
+		currentPaddingLeft := PaddingLeftNormal
+		if isStateButton {
+			currentPaddingLeft = PaddingLeft
+		}
+
+		availWidth := float64(width) - float64(currentPaddingLeft+PaddingRight)
+		cursorX := float64(currentPaddingLeft)
+
+		// 普通按鈕居中，狀態按鈕左對齊
+		if !isStateButton {
+			cursorX += (availWidth - lineW) / 2.0
+		}
+
+		// 暫存所有需要繪製的字母信息
+		type drawInfo struct {
+			runes            rune
+			drawX            int
+			drawY            int
+			width            int
+			height           int
+			finalPixels      []byte
+			finalTransparent []bool
+		}
+		var drawList []drawInfo
+
+		// 第一步：計算位置並收集信息
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g == nil || g.Frame() == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(lineSize)
+				} else {
+					cursorX += float64(lineSize) / 2
+				}
+				continue
+			}
+
+			glyphFrame := g.Frame()
+			if glyphFrame.Width == 0 || glyphFrame.Height == 0 || len(glyphFrame.Pixels) == 0 {
+				cursorX += float64(g.W)
+				continue
+			}
+
+			var finalPixels []byte
+			var finalTransparent []bool
+
+			// 需求 5：保留非 tiny 字體的立體感
+			if curTier.Name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(glyphFrame.Pixels))
+				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
+					if pIdx < len(glyphFrame.Transparent) && !glyphFrame.Transparent[pIdx] {
+						newPixels[pIdx] = palColor
+					}
+				}
+				finalPixels = newPixels
+				finalTransparent = glyphFrame.Transparent
+			} else {
+				finalPixels = glyphFrame.Pixels
+				finalTransparent = glyphFrame.Transparent
+			}
+
+			drawX := int(cursorX + float64(g.Left))
+			drawY := PaddingY + (availHeight-int(glyphFrame.Height))/2
+
+			// 狀態切換按鈕按下時不位移
+			if i == 1 && !isStateButton {
+				drawY += PressedOffsetY
+			}
+
+			drawList = append(drawList, drawInfo{
+				runes: rn, drawX: drawX, drawY: drawY,
+				width: int(glyphFrame.Width), height: int(glyphFrame.Height),
+				finalPixels: finalPixels, finalTransparent: finalTransparent,
+			})
+
+			cursorX += float64(g.W)
+		}
+
+		// 第二步：找到需要畫下劃線的字母（最後一個英文字母）
+		underlineIdx := -1
+		for idx := len(drawList) - 1; idx >= 0; idx-- {
+			if drawList[idx].runes < 128 {
+				underlineIdx = idx
+				break
+			}
+		}
+
+		// 第三步：執行繪製
+		for idx, item := range drawList {
+			actualDrawY := item.drawY
+			// 需要劃線的字母整體上移
+			if idx == underlineIdx {
+				actualDrawY -= UnderlineOffsetY
+			}
+
+			// 畫字母
+			// 畫字母
+			for gy := 0; gy < item.height; gy++ {
+				for gx := 0; gx < item.width; gx++ {
+					px := item.drawX + gx
+					py := actualDrawY + gy
+
+					if px >= 0 && px < width && py >= 0 && py < height {
+						idxPix := py*width + px
+						gIdx := gy*item.width + gx
+
+						if gIdx >= 0 && gIdx < len(item.finalPixels) {
+							// Transparent 不足時按「不透明」處理，避免缺字
+							transparent := false
+							if gIdx < len(item.finalTransparent) {
+								transparent = item.finalTransparent[gIdx]
+							}
+
+							if !transparent {
+								pixel := item.finalPixels[gIdx]
+
+								// 【新增过滤】：如果是值 0（通常代表黑色或未定义），跳过不画，避免黑块和花屏
+								if pixel == 0 {
+									continue
+								}
 
 								// 需求 1 & 2：狀態按鈕第3幀不變灰，普通按鈕第3幀變灰
 								if i == 2 && !isStateButton {

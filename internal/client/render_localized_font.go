@@ -107,7 +107,7 @@ type FaceTier struct {
 var faceTiers = []FaceTier{
 	{"tiny", 11},
 	//{"small", 12},
-	{"normal", 13}, //{"normal", 20},
+	{"normal", 12}, //{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
 	//{"title", 20},
@@ -135,17 +135,16 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 		palColor,
 		attribs,
 	}
-	real_text := text
+	realText := text
 
 	if printed == nil {
 		printed = make(map[string]int)
 	}
-	if len(real_text) == 0 {
+	if len(realText) == 0 {
 		return 0, false
 	}
-
-	tr := i18n.T(real_text)
-	if tr == real_text {
+	tr := i18n.T(realText)
+	if tr == realText && !hasCJK(text) {
 		return 0, false
 	}
 
@@ -366,13 +365,10 @@ func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, cont
 	return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
-	if !i18n.I18nLanguageNeedCJK() {
+	if !i18n.I18nLanguageNeedCJK() || hasCJK(text) {
 		return 0, false
 	}
 	//fmt.Println(text)
-	if hasCJK(text) {
-		return 0, false
-	}
 	key := TranslateCacheKey{
 		text,
 		x,

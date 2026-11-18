@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strconv"
 	"strings"
 
@@ -328,7 +329,16 @@ func (g *gameShell) refreshMissionPanel() {
 	}
 	campaignItems := make([]string, len(g.campaignOptions))
 	for i := range g.campaignOptions {
-		campaignItems[i] = g.campaignOptions[i].Name
+		fmt.Println(g.campaignOptions[i].Name)
+		if i18n.I18nLanguageNeedCJK() {
+			if cn, ok := i18n.GlobalTranslations.GetCampaign(strings.ToLower(g.campaignOptions[i].Name)); ok {
+				campaignItems[i] = cn.Name
+			} else {
+				campaignItems[i] = g.campaignOptions[i].Name
+			}
+		} else {
+			campaignItems[i] = g.campaignOptions[i].Name
+		}
 	}
 	g.setListItems("Campaign", campaignItems, g.campaignIdx)
 	// A repaint also runs after ENDMSN or continuation installs a selected
@@ -337,7 +347,16 @@ func (g *gameShell) refreshMissionPanel() {
 	var missions []string
 	if len(g.campaignOptions) != 0 && g.campaignIdx < len(g.campaignOptions) {
 		for _, stub := range g.campaignOptions[g.campaignIdx].Missions {
-			missions = append(missions, stub.Name)
+			fmt.Println(stub.MissionFile, ",", stub.Name, ",", stub.MissionFile)
+			if i18n.I18nLanguageNeedCJK() {
+				if mn, ok := i18n.GlobalTranslations.GetMission(strings.ToLower(stub.MissionFile)); ok {
+					missions = append(missions, mn.Name)
+				} else {
+					missions = append(missions, stub.Name)
+				}
+			} else {
+				missions = append(missions, stub.Name)
+			}
 		}
 	}
 	if len(missions) != 0 {

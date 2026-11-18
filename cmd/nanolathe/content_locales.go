@@ -3,9 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/content"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
-	"github.com/nanolathe-gg/nanolathe/vfs"
 	"os"
 	"path/filepath"
 )
@@ -54,13 +51,4 @@ func DirExists(path string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func LoadTranslationTableDispatcher(looseDir string, sel modSelection, gameFS vfs.FSOps, language string) (*content.TranslationTable, error) {
-	if i18n.LanguageNeedCJK(language) {
-		GlobalTranslations.LoadAll(looseDir, sel, gameFS)
-		return GlobalTranslations.AsTranslationTable()
-	} else {
-		return content.LoadTranslationTable(gameFS, "")
-	}
 }

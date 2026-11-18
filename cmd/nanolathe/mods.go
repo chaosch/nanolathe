@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"maps"
 	"os"
 	"path/filepath"
@@ -736,7 +737,7 @@ func installMainMenuModsButton(window *gui.Window) {
 	// (DESIGN_INTERFACE_HUD_INPUT "Replays").
 	const gap = 8
 	button.Rect.X, button.Rect.Y = (retailScreenW-2*button.Rect.W-gap)/2, 8
-	if t, ok := GlobalTranslations.GetUI(button.Text); ok {
+	if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
 		button.Text = t.Text
 	}
 	window.Gadgets = append(window.Gadgets, button)

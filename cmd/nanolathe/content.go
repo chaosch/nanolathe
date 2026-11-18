@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"os"
 	"path/filepath"
 	"strings"
@@ -349,7 +350,11 @@ func mountContent(opts Options, baseRoots []string, selection modSelection) (*co
 	// default before GUI parsing. TODO(T25): host command-line/registry
 	// non-default language selection has not been integrated yet.
 	//translations, err := content.LoadTranslationTable(set.fs, opts.Language)
-	translations, err := LoadTranslationTableDispatcher(filepath.Join(opts.LocalesDir, opts.Language, "loose"), selection, set.fs, opts.Language)
+	var nodName = ""
+	if mod != nil {
+		nodName = mod.ID
+	}
+	translations, err := i18n.LoadTranslationTableDispatcher(filepath.Join(opts.LocalesDir, opts.Language, "loose"), nodName, set.fs, opts.Language)
 	//GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, opts.Language, "loose"), selection, set.fs)
 	if err != nil {
 		set.Close()

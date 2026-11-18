@@ -236,10 +236,7 @@ func readBriefingText(cs *contentSet, name string) string {
 	var data []byte
 	var err error
 	if i18n.I18nLanguageNeedCJK() {
-		str, _ := GlobalTranslations.GetBrief(strings.ToLower(name))
-		fmt.Printf("【GetBrief返回的Hex】: % x\n", str.Text)
-		fmt.Printf("【GetBrief返回的String】: %s\n", string(str.Text))
-
+		str, _ := i18n.GlobalTranslations.GetBrief(strings.ToLower(name))
 		return string(str.Text)
 	} else {
 		data, err = cs.fs.ReadFileLimit(briefingMediaPath(name, "txt"), int64(formats.DefaultTDFLimits().MaxBytes))
