@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/gameplay"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"os"
 	"strings"
 
@@ -260,9 +259,9 @@ func addNanolatheOptionsCategory(window *gui.Window, inBattle bool) {
 		if name == "PLACEMENT" {
 			button.Text = "PLACEMENT"
 		}
-		if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
-			button.Text = t.Text
-		}
+		//if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
+		//	button.Text = t.Text
+		//}
 		window.Gadgets = append(window.Gadgets, button)
 	}
 	// The battle root puts OK beneath this same column. Compress category

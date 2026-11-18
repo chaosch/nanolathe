@@ -10,7 +10,6 @@ package main
 // the Nanolathe options categories (DESIGN_INTERFACE_HUD_INPUT §3.4.1).
 
 import (
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strconv"
 	"strings"
 
@@ -60,9 +59,9 @@ func addSurvivalButton(window *gui.Window) {
 	button.Name, button.SourceName = survivalButton, survivalSource
 	button.Art, button.Text, button.QuickKey = "", "Survival", 0
 	button.Help = "Hold out with up to two allies against endless waves."
-	if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
-		button.Text = t.Text
-	}
+	//if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
+	//	button.Text = t.Text
+	//}
 	window.Gadgets = append(window.Gadgets, button)
 }
 

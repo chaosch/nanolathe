@@ -72,11 +72,17 @@ var GlobalTranslations = &TranslationPack{
 // ============================================================================
 
 func (p *TranslationPack) GetUnit(unitKey string) (UnitTranslation, bool) {
+	if !I18nLanguageNeedCJK() {
+		return UnitTranslation{}, false
+	}
 	t, ok := p.Units[content.CanonicalKey(unitKey)]
 	return t, ok
 }
 
 func (p *TranslationPack) GetUI(code string) (UITranslation, bool) {
+	if !I18nLanguageNeedCJK() {
+		return UITranslation{}, false
+	}
 	code = strings.TrimSpace(code)
 	u, ok := p.UI[code]
 	return u, ok
@@ -480,6 +486,9 @@ func (p *TranslationPack) GetCampaign(code string) (CampaignTranslation, bool) {
 // 2. 查任务翻译
 // 传入如 "Krogoth Encounter.ota" 或 "Krogoth Encounter"
 func (p *TranslationPack) GetMission(otaFile string) (MissionTranslation, bool) {
+	if !I18nLanguageNeedCJK() {
+		return MissionTranslation{}, false
+	}
 	if p == nil || otaFile == "" {
 		return MissionTranslation{}, false
 	}
@@ -494,6 +503,9 @@ func (p *TranslationPack) GetMission(otaFile string) (MissionTranslation, bool) 
 // 3. 查简报翻译（单独抽离的）
 // 传入如 "Krogoth" 或 "Krogoth.txt"
 func (p *TranslationPack) GetBrief(briefName string) (BriefTranslation, bool) {
+	if !I18nLanguageNeedCJK() {
+		return BriefTranslation{}, false
+	}
 	if p == nil || briefName == "" {
 		return BriefTranslation{}, false
 	}

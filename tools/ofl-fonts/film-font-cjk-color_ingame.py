@@ -12,14 +12,20 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # 1. 强制写死的配置 (输入输出)
 # ==========================================
 SOURCE_FONT = r"NotoSansSC.ttf"
-Pixel_Font_12 = r"ZLabsPixel_12px_M_CN.ttf"
+Pixel_Font_12 =r"ZLabsPixel_12px_M_CN.ttf"
+Pixel_Font_14 = r"ZLabsPixel_12px_M_CN.ttf"
 PIXEL_FONT_16 = r"ChangBanDianSong-16-SC.ttf"
 
-CATALOG_JSON = r"..\..\internal\i18n\locales\chinese.json"
-OUT = Path(__file__).resolve().parent.parent / r"..\internal/film/assets"
+# ========= 修改输入：不再读取CATALOG_JSON，改为读取脚本同目录input下所有txt/json/tdf =========
+# CATALOG_JSON = r"..\..\internal\i18n\locales\chinese.json"
+# ========= 修改输出：输出放到脚本同目录 output 文件夹 =========
+# OUT = Path(__file__).resolve().parent.parent / r"..\internal/film/assets"
+SCRIPT_DIR = Path(__file__).resolve().parent
+INPUT_DIR = SCRIPT_DIR / "input"
+OUT = SCRIPT_DIR / "output"
+
 LANGUAGE = "chinese"
 WIDTH = 2048
-
 # 定义你要的颜色 (R, G, B)
 TARGET_COLOR = (195, 195, 155)
 OUTLINE_COLOR = (0, 0, 0)
@@ -34,7 +40,7 @@ OLD_FACE = {}
 # mode 参数："mask" = 纯白蒙版（彻底隔离）, "brush" = 纯色平涂, "render" = 渐变光影
 NEW_FACE = {
     "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "variable": False, "mode": "mask",   "border": 0, "color": None},
-    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "render", "border": 1, "color": TARGET_COLOR},
+    "small":  {"em": 14, "weight": 800, "scale": 1, "fontFile": Pixel_Font_14, "variable": False, "mode": "render", "border": 1, "color": TARGET_COLOR},
     "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "render",  "border": 1, "color": TARGET_COLOR},
 }
 ALL_FACE = {}
@@ -55,20 +61,34 @@ PALETTE = [
 # ==========================================
 DARKEN = 1              # 调色板整体压暗系数
 SHADOW_STRENGTH = 160   # 边缘最暗处的衰减强度（值越大边缘越黑）
-SHADOW_START = 0.0      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
+SHADOW_START = 0.1      # 暗部开始的相对距离 (0.0 = 从中心开始暗, 0.5 = 中心一半纯亮，外围才暗)
 
-
-def wanted(catalogs):
+def wanted():
     chars = set(EXTRA)
     for code in range(0x20, 0x7F):
         chars.add(chr(code))
-    for path in catalogs:
-        if not os.path.exists(path):
-            continue
-        for text in json.loads(Path(path).read_text(encoding="utf-8")).values():
-            chars.update(text)
-    return sorted(c for c in chars if ord(c) >= 0x20 and c not in "{}")
 
+    file_list = []
+    for pat in ["*.txt", "*.json", "*.tdf"]:
+        file_list.extend(INPUT_DIR.glob(pat))
+
+    if not file_list:
+        print(f"[WARN] No files matched in {INPUT_DIR}")
+    else:
+        for fp in file_list:
+            print(f"[READ] {fp.name}")
+            try:
+                if fp.suffix.lower() == ".json":
+                    data = json.loads(fp.read_text(encoding="utf-8"))
+                    for text in data.values():
+                        chars.update(text)
+                else:
+                    raw = fp.read_text(encoding="utf-8")
+                    chars.update(raw)
+            except Exception as e:
+                print(f"[ERROR] Failed to read {fp.name}: {e}")
+
+    return sorted(c for c in chars if ord(c) >= 0x20 and c not in "{}")
 
 def load_face(source, weight, size, variable=False):
     font = ImageFont.truetype(source, size)
@@ -94,7 +114,6 @@ def load_face(source, weight, size, variable=False):
         print(f"[WARN] 设置可变轴失败 {os.path.basename(source)}: {e}")
     return font
 
-
 def render_mask_glyph(char, font, w, h):
     cell_w = w
     cell_h = h
@@ -114,7 +133,6 @@ def render_mask_glyph(char, font, w, h):
                 px_res[x, y] = (255, 255, 255, 255)
     return res
 
-
 def render_styled_glyph(char, font, w, h, border, mode, color):
     pad = max(2, border)
     cell_w = w + pad * 2
@@ -124,15 +142,29 @@ def render_styled_glyph(char, font, w, h, border, mode, color):
     d = ImageDraw.Draw(base)
     d.text((pad, pad), char, font=font, fill=255, anchor="lt")
 
+    # 二值化，干掉抗锯齿灰阶，纯黑白
     base = base.point(lambda p: 255 if p > 128 else 0)
 
     res = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
 
     if border > 0:
-        filter_size = border * 2 + 1
-        outline_mask = base.filter(ImageFilter.MaxFilter(filter_size))
+        # ========== 替换：4方向硬像素描边，不再用MaxFilter膨胀 ==========
+        outline = Image.new('L', (cell_w, cell_h), 0)
+        px_out = outline.load()
+        px_base = base.load()
+        # 仅上下左右4个方向，不加斜向，最大程度避免笔画粘连变黑块
+        dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        for y in range(cell_h):
+            for x in range(cell_w):
+                if px_base[x, y] == 255:
+                    for dx, dy in dirs:
+                        nx = x + dx
+                        ny = y + dy
+                        if 0 <= nx < cell_w and 0 <= ny < cell_h:
+                            px_out[nx, ny] = 255
+        # 把黑色描边贴到底层
         edge_layer = Image.new('RGBA', (cell_w, cell_h), (*OUTLINE_COLOR, 255))
-        res.paste(edge_layer, (0, 0), outline_mask)
+        res.paste(edge_layer, (0, 0), outline)
 
     if mode == "brush":
         color_layer = Image.new('RGBA', (cell_w, cell_h), (0, 0, 0, 0))
@@ -195,7 +227,6 @@ def render_styled_glyph(char, font, w, h, border, mode, color):
         return res
 
     return res
-
 
 def build(chars, name, target_em, weight, scale, fontFile, variable, mode, border, color):
     CAP = 180
@@ -273,12 +304,15 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
 
     print(f"{name}-cjk: real_em={real_em}, font={os.path.basename(fontFile)}, mode={mode}, max_h={cell_height},out={out_png}")
 
-
 if __name__ == "__main__":
+    # 自动创建 input output 文件夹
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
-    chars = wanted([CATALOG_JSON])
+    chars = wanted()
+    print(f"Found {len(chars)} unique characters to render.")
     for face_name, cfg in ALL_FACE.items():
         build(
             chars, face_name, cfg["em"], cfg["weight"], cfg["scale"],
             cfg["fontFile"], cfg.get("variable", False), cfg["mode"], cfg["border"], cfg["color"]
         )
+    print("Done!")

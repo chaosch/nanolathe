@@ -17,7 +17,7 @@ func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
 		return
 	}
 	//buttonnGAF是所有按钮GAF
-	butttonGAF, _ := LoadGAFFromArchive(fs, "totala1.hpi", "anims/commongui.GAF")
+	butttonGAF, _ := LoadGAFFromArchive(fs, "ccdata.ccx", "anims/commongui.GAF")
 	//翻译渲染所有按钮GAF
 	TranslateCommands(butttonGAF, commandButtonNames[:])
 	for i, _ := range gafs.Entries {
@@ -255,7 +255,7 @@ func RenderCjkFontToGAFBAK(entry *formats.GAFEntry, text string) {
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
-func RenderCjkFontToGAF2(entry *formats.GAFEntry, text string) {
+func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 	// 定義常量
 	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
 		cachedEntry := cached.(*formats.GAFEntry)
@@ -502,7 +502,7 @@ func RenderCjkFontToGAF2(entry *formats.GAFEntry, text string) {
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
-func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
+func RenderCjkFontToGAF1(entry *formats.GAFEntry, text string) {
 	// 定義常量
 	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
 		cachedEntry := cached.(*formats.GAFEntry)

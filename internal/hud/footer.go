@@ -14,6 +14,7 @@ package hud
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/internal/content"
@@ -210,6 +211,10 @@ func buildCard(out *Footer, cat *content.Catalog, gadgetName string) {
 	if !ok || def == nil {
 		return
 	}
+	if dsiplayUnit, ok := i18n.GlobalTranslations.GetUnit(def.UnitName); ok {
+		def.Name = dsiplayUnit.Name
+		def.Description = dsiplayUnit.Description
+	}
 	// Two spaces between the display name and the costs; both costs are the
 	// stored singles, truncated for integer text [07 R-HUD-03 §3].
 	out.Texts = append(out.Texts,
@@ -291,7 +296,13 @@ func unitReadout(out *Footer, f *frame.Frame, cat *content.Catalog, viewer uint8
 	// with no second localization lookup. Retail substitutes the owning
 	// player's lobby name only in a multiplayer session (kind 3), which is out
 	// of Nanolathe's scope [07 R-HUD-03 §2][08 R-OOS-01].
+	if dsiplayUnit, ok := i18n.GlobalTranslations.GetUnit(def.UnitName); ok {
+		def.Name = dsiplayUnit.Name
+		def.Description = dsiplayUnit.Description
+	}
+
 	if def != nil && def.Name != "" {
+		fmt.Println(def.UnitDefID, def.Name, def.Description, def.UnitName)
 		out.Texts = append(out.Texts, FooterText{Anchor: AnchorUnitName, Text: hover.UnitNamePrefix + def.Name, Color: rawColor(FooterTextColor), Centered: true})
 	}
 	// The bar is drawn for an own unit or a definition that does not author

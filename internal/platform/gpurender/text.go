@@ -209,237 +209,223 @@ func glyphClipBounds(g drawlist.Glyphs, width, height int) (x0, y0, x1, y1 int) 
 // vertex red channel and the glyph shader writes it where the atlas marks a set
 // bit, leaving the destination untouched elsewhere (C-G4).
 func (r *Renderer) Glyphs(g drawlist.Glyphs) {
+	r.GlyphsDispatch(g)
+}
+func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
+	if g.CJKFace == nil {
+		return
+	}
+	face := g.CJKFace.(*film.AtlasFace)
+	if face.GpuTex == nil {
+		return
+	}
+
+	CJKPaddingTopRatio := 0.20
+	CJKPaddingBottomRatio := 0.20
+	CJKPaddingLeftRatio := 0.10
+	CJKPaddingRightRatio := 0.10
+	CJKLineSpacingRatio := 0.15
+
+	if r.sched.worldOn && !r.chromeRegion {
+		fx := float64(r.sched.txx(float32(g.X)))
+		fy := float64(r.sched.txy(float32(g.Y)))
+		g.X = int32(math.Round(fx))
+		g.Y = int32(math.Round(fy))
+		r.sched.worldOn = false
+		defer func() { r.sched.worldOn = true }()
+	}
+
+	type token struct {
+		rn      rune
+		forceNL bool
+	}
+	var tokens []token
+	var explicitSize = 0
+	var gridRows, gridCols = 0, 0
+	runes := []rune(g.Text)
+	i := 0
+	for i < len(runes) {
+		rn := runes[i]
+		if rn == '\\' && i+1 < len(runes) {
+			next := runes[i+1]
+			if next == 'n' || next == 'N' {
+				i += 2
+				start := i
+				for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
+					i++
+				}
+				if i > start {
+					parts := string(runes[start:i])
+					var r, c int
+					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
+						gridRows, gridCols = r, c
+					}
+				}
+				tokens = append(tokens, token{forceNL: true})
+				continue
+			}
+			if next == 's' || next == 'S' {
+				i += 2
+				start := i
+				for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
+					i++
+				}
+				if i > start {
+					fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
+				}
+				continue
+			}
+		}
+		tokens = append(tokens, token{rn: rn})
+		i++
+	}
+
+	g.X += g.ScreenOffsetX
+	g.Y += g.ScreenOffsetY
+
+	surfaceW, surfaceH := r.w, r.h
+	if r.chromeRegion {
+		surfaceW, surfaceH = r.chromeW, r.chromeH
+	}
+	if g.Y < 0 || g.Y > int32(surfaceH) || g.X < 0 || g.X > int32(surfaceW) {
+		return
+	}
+
+	baseH := float64(g.Font.Height)
+	padTop := int(baseH * CJKPaddingTopRatio)
+	padBottom := int(baseH * CJKPaddingBottomRatio)
+	padLeft := int(baseH * CJKPaddingLeftRatio)
+	padRight := int(baseH * CJKPaddingRightRatio)
+	lineSpacing := int(baseH * CJKLineSpacingRatio)
+
+	availH := int(baseH) - padTop - padBottom
+	var tier client.FaceTier
+	if explicitSize > 0 {
+		tier = client.PickTier(explicitSize)
+	} else if gridRows > 1 && gridCols > 0 {
+		cellHeight := availH / gridRows
+		tier = client.PickTier(cellHeight)
+	} else {
+		tier = client.PickTier(availH)
+	}
+
+	face = film.TextFaceInGame(tier.Name)
+	if face == nil || face.GpuTex == nil {
+		return
+	}
+
+	var cellH int
+	if ag, ok := face.Glyphs["A"]; ok {
+		cellH = int(ag.H)
+	} else {
+		cellH = availH
+	}
+
+	clipX, clipY := 0, 0
+	clipW, clipH := surfaceW, surfaceH
+	if g.HasClip {
+		clipX = int(g.Clip.X) + int(g.ScreenOffsetX)
+		clipY = int(g.Clip.Y) + int(g.ScreenOffsetY)
+		clipW = int(g.Clip.W)
+		clipH = int(g.Clip.H)
+	}
+
+	var lines [][]token
+	var currentLine []token
+	maxW := 0
+	if g.HasClip {
+		maxW = clipW - padLeft - padRight
+	} else if int(g.MaxWidth) > 0 {
+		maxW = int(g.MaxWidth) - padLeft - padRight
+	}
+
+	currentLineW := 0
+	for _, tk := range tokens {
+		if tk.forceNL {
+			lines = append(lines, currentLine)
+			currentLine = nil
+			currentLineW = 0
+			continue
+		}
+
+		charW := 8
+		if glyph, ok := face.Glyphs[string(tk.rn)]; ok {
+			charW = int(glyph.Advance)
+		}
+
+		if maxW > 0 && currentLineW+charW > maxW {
+			break
+		}
+		currentLine = append(currentLine, tk)
+		currentLineW += charW
+	}
+	if len(currentLine) > 0 {
+		lines = append(lines, currentLine)
+	}
+
+	startX := int(g.X) + padLeft
+	// ✅ 基准：这一行的基线Y（小写a/c/e底边对齐线）
+	lineBaselineY := int(g.Y) + padTop + cellH
+	currentBaselineY := lineBaselineY
+
+	col := float32(g.Color)
+	lineHeight := cellH + lineSpacing
+
+	for _, line := range lines {
+		curX := startX
+		for _, tk := range line {
+			glyph, ok := face.Glyphs[string(tk.rn)]
+			if !ok {
+				curX += 8
+				continue
+			}
+
+			if glyph.W > 0 {
+				var imgs [4]*ebiten.Image
+				imgs[0] = face.GpuTex
+				// ✅ drawY = 基线 + glyph.Top，Python已经算好偏移，完美对齐基线
+				drawX := curX
+				drawY := currentBaselineY + int(glyph.Top)
+
+				if g.HasClip {
+					if drawX+glyph.W < clipX ||
+						drawX > clipX+clipW ||
+						drawY+glyph.H < clipY ||
+						drawY > clipY+clipH {
+						curX += int(glyph.Advance)
+						continue
+					}
+				}
+
+				// UV直接裁切，不做任何偏移
+				u0 := float32(glyph.X)
+				v0 := float32(glyph.Y)
+				u1 := u0 + float32(glyph.W)
+				v1 := v0 + float32(glyph.H)
+
+				if r.sched.begin(schedOpaque, drawX, drawY, drawX+glyph.W, drawY+glyph.H, imgs) {
+					r.sched.quad(schedOpaque,
+						float32(drawX), float32(drawY),
+						float32(drawX+glyph.W), float32(drawY+glyph.H),
+						u0, v0,
+						u1, v1,
+						[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
+				}
+			}
+			curX += int(glyph.Advance)
+		}
+		// 换行：下一行基线往下挪
+		currentBaselineY += lineHeight
+	}
+}
+func (r *Renderer) GlyphsOriginal(g drawlist.Glyphs) {
 	if r == nil || r.surfaces[0] == nil || r.scene2D == nil {
 		return
 	}
 	fnt := g.Font
-	// ★ 核心分支：如果带了中文图集，走大图集渲染
-
-	if g.CJKFace != nil {
-		face := g.CJKFace.(*film.AtlasFace)
-		if face.GpuTex == nil {
-			return
-		}
-		var (
-			// CJK 渲染全局排版留白比例（相对于传入的 g.Font.Height）
-			CJKPaddingTopRatio    = 0.20 // 顶部留白 10%
-			CJKPaddingBottomRatio = 0.20 // 底部留白 10%
-			CJKPaddingLeftRatio   = 0.10 // 左侧留白 10%
-			CJKPaddingRightRatio  = 0.10 // 右侧留白 10%
-
-			// CJK 行间距比例
-			CJKLineSpacingRatio = 0.15 // 行间距 15%
-		)
-		// 1. 坐标投影（保留）
-		if r.sched.worldOn && !r.chromeRegion {
-			g.X = int32(math.Floor(float64(r.sched.txx(float32(g.X))) + .5))
-			g.Y = int32(math.Floor(float64(r.sched.txy(float32(g.Y))) + .5))
-			r.sched.worldOn = false
-			defer func() { r.sched.worldOn = true }()
-		}
-
-		// ★ 2. 解析控制符，分离出真实的字符和网格信息（照抄上面代码的 token 解析）
-		type token struct {
-			rn      rune
-			forceNL bool
-		}
-		var tokens []token
-		var explicitSize = 0
-		var gridRows, gridCols = 0, 0
-		runes := []rune(g.Text)
-		i := 0
-		for i < len(runes) {
-			rn := runes[i]
-			if rn == '\\' && i+1 < len(runes) {
-				next := runes[i+1]
-				if next == 'n' || next == 'N' {
-					i += 2
-					start := i
-					for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
-						i++
-					}
-					if i > start {
-						parts := string(runes[start:i])
-						var r, c int
-						if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
-							gridRows, gridCols = r, c
-						}
-					}
-					tokens = append(tokens, token{forceNL: true})
-					continue
-				}
-				if next == 's' || next == 'S' {
-					i += 2
-					start := i
-					for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
-						i++
-					}
-					if i > start {
-						fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
-					}
-					continue
-				}
-			}
-			tokens = append(tokens, token{rn: rn})
-			i++
-		}
-
-		// ===== ★ 补充原版控制逻辑 =====
-		g.X += g.ScreenOffsetX
-		g.Y += g.ScreenOffsetY
-
-		surfaceW, surfaceH := r.w, r.h
-		if r.chromeRegion {
-			surfaceW, surfaceH = r.chromeW, r.chromeH
-		}
-		if g.Y < 0 || g.Y > int32(surfaceH) || g.X < 0 || g.X > int32(surfaceW) {
-			return
-		}
-
-		// ★ 3. 决定字号（按百分比留白动态计算，不兜底）
-		baseH := float64(g.Font.Height)
-
-		// 动态计算当前字号下的实际像素留白
-		padTop := int(baseH * CJKPaddingTopRatio)
-		padBottom := int(baseH * CJKPaddingBottomRatio)
-		padLeft := int(baseH * CJKPaddingLeftRatio)
-		padRight := int(baseH * CJKPaddingRightRatio)
-		lineSpacing := int(baseH * CJKLineSpacingRatio)
-
-		// 扣除上下留白，得出真实可用于字高的大小
-		availH := int(baseH) - padTop - padBottom
-
-		var tier client.FaceTier
-		if explicitSize > 0 {
-			// 强指字号
-			tier = client.PickTier(explicitSize)
-		} else if gridRows > 1 && gridCols > 0 {
-			// 网格排版
-			cellHeight := availH / gridRows
-			tier = client.PickTier(cellHeight)
-		} else {
-			// 普通文本，直接传入扣除留白后的可用高度（Picker内部会兜底）
-			tier = client.PickTier(availH)
-		}
-
-		face = film.TextFaceInGame(tier.Name)
-		if face == nil || face.GpuTex == nil {
-			return
-		}
-
-		// ★ 4. 换行与排版（含按宽度截断与省略号处理）
-		var lines [][]token
-		var currentLine []token
-
-		// 计算右侧可用宽度（扣除左右留白）
-		maxW := 0
-		if g.HasClip {
-			maxW = int(g.Clip.W) - padLeft - padRight
-		} else if int(g.MaxWidth) > 0 {
-			maxW = int(g.MaxWidth) - padLeft - padRight
-		}
-
-		currentLineW := 0
-		ellipsisW := 0
-		for _, rn := range []rune{'.', '.', '.'} {
-			if glyph, ok := face.Glyphs[string(rn)]; ok {
-				ellipsisW += int(glyph.Advance)
-			} else {
-				ellipsisW += 8
-			}
-		}
-
-		for _, tk := range tokens {
-			if tk.forceNL {
-				lines = append(lines, currentLine)
-				currentLine = nil
-				currentLineW = 0
-				continue
-			}
-
-			charW := 8
-			if glyph, ok := face.Glyphs[string(tk.rn)]; ok {
-				charW = int(glyph.Advance)
-			}
-
-			if maxW > 0 && currentLineW+charW > maxW {
-				if maxW-currentLineW >= ellipsisW {
-					currentLine = append(currentLine, token{rn: '.'}, token{rn: '.'}, token{rn: '.'})
-				}
-				tokens = nil
-				break
-			}
-
-			currentLine = append(currentLine, tk)
-			currentLineW += charW
-		}
-		if len(currentLine) > 0 {
-			lines = append(lines, currentLine)
-		}
-
-		// ★ 5. 开始绘制
-		var curY, startX int
-		if g.HasClip {
-			curY = int(g.Clip.Y) + padTop
-			startX = int(g.Clip.X) + padLeft
-		} else {
-			curY = int(g.Y) + padTop
-			startX = int(g.X) + padLeft
-		}
-
-		col := float32(g.Color)
-		baseline := int(face.Cap)
-		lineHeight := baseline + lineSpacing
-
-		for _, line := range lines {
-			curX := startX
-			for _, tk := range line {
-				glyph, ok := face.Glyphs[string(tk.rn)]
-				if !ok {
-					curX += 8
-					continue
-				}
-
-				if glyph.W > 0 {
-					var imgs [4]*ebiten.Image
-					imgs[0] = face.GpuTex
-					drawX := curX + int(glyph.Left)
-					drawY := curY
-
-					if g.HasClip {
-						// 剔除框外
-						if drawX+glyph.W < int(g.Clip.X)+padLeft ||
-							drawX > int(g.Clip.X+g.Clip.W)-padRight ||
-							drawY+glyph.H < int(g.Clip.Y)+padTop ||
-							drawY > int(g.Clip.Y+g.Clip.H)-padBottom {
-							curX += int(glyph.Advance)
-							continue
-						}
-					}
-
-					if r.sched.begin(schedOpaque, drawX, drawY, drawX+glyph.W, drawY+glyph.H, imgs) {
-						r.sched.quad(schedOpaque,
-							float32(drawX), float32(drawY),
-							float32(drawX+glyph.W), float32(drawY+glyph.H),
-							float32(glyph.X), float32(glyph.Y),
-							float32(glyph.X+glyph.W), float32(glyph.Y+glyph.H),
-							[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
-					}
-				}
-				curX += int(glyph.Advance)
-			}
-			curY += lineHeight
-		}
-		return
-	} // 原版英文逻辑（保留你原本的所有代码）
-	// ==========================================
 	if fnt == nil || fnt.Height == 0 || len(g.Text) == 0 {
 		return
 	}
-	// World text keeps native glyphs, centering and outline pixels. Project and
-	// snap its anchor once, then compile framebuffer geometry in the existing
-	// schedule so strip/fog ordering and batching remain intact (§14.2, §16.3).
-	// Magnified chrome is the exception: its glyphs scale with the region.
 	if r.sched.worldOn && !r.chromeRegion {
 		g.X = int32(math.Floor(float64(r.sched.txx(float32(g.X))) + .5))
 		g.Y = int32(math.Floor(float64(r.sched.txy(float32(g.Y))) + .5))
@@ -518,226 +504,7 @@ func (r *Renderer) Glyphs(g drawlist.Glyphs) {
 	}
 
 }
-func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
-	face := g.CJKFace.(*film.AtlasFace)
-	if face.GpuTex == nil {
-		return
-	}
 
-	// 排版留白比例
-	CJKPaddingTopRatio := 0.20
-	CJKPaddingBottomRatio := 0.20
-	CJKPaddingLeftRatio := 0.10
-	CJKPaddingRightRatio := 0.10
-	CJKLineSpacingRatio := 0.15
-
-	// 1. 坐标投影（保留原版）
-	if r.sched.worldOn && !r.chromeRegion {
-		g.X = int32(math.Floor(float64(r.sched.txx(float32(g.X))) + .5))
-		g.Y = int32(math.Floor(float64(r.sched.txy(float32(g.Y))) + .5))
-		r.sched.worldOn = false
-		defer func() { r.sched.worldOn = true }()
-	}
-
-	// 2. 解析控制符（原版逻辑）
-	type token struct {
-		rn      rune
-		forceNL bool
-	}
-	var tokens []token
-	var explicitSize = 0
-	var gridRows, gridCols = 0, 0
-	runes := []rune(g.Text)
-	i := 0
-	for i < len(runes) {
-		rn := runes[i]
-		if rn == '\\' && i+1 < len(runes) {
-			next := runes[i+1]
-			if next == 'n' || next == 'N' {
-				i += 2
-				start := i
-				for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
-					i++
-				}
-				if i > start {
-					parts := string(runes[start:i])
-					var r, c int
-					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
-						gridRows, gridCols = r, c
-					}
-				}
-				tokens = append(tokens, token{forceNL: true})
-				continue
-			}
-			if next == 's' || next == 'S' {
-				i += 2
-				start := i
-				for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
-					i++
-				}
-				if i > start {
-					fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
-				}
-				continue
-			}
-		}
-		tokens = append(tokens, token{rn: rn})
-		i++
-	}
-
-	// 补充原版控制逻辑
-	g.X += g.ScreenOffsetX
-	g.Y += g.ScreenOffsetY
-
-	surfaceW, surfaceH := r.w, r.h
-	if r.chromeRegion {
-		surfaceW, surfaceH = r.chromeW, r.chromeH
-	}
-	if g.Y < 0 || g.Y > int32(surfaceH) || g.X < 0 || g.X > int32(surfaceW) {
-		return
-	}
-
-	// 3. 决定字号
-	baseH := float64(g.Font.Height)
-	// 避免 4K 拉伸导致字太大
-	if baseH > 16 {
-		baseH = 12
-	}
-
-	padTop := int(baseH * CJKPaddingTopRatio)
-	padBottom := int(baseH * CJKPaddingBottomRatio)
-	padLeft := int(baseH * CJKPaddingLeftRatio)
-	padRight := int(baseH * CJKPaddingRightRatio)
-	lineSpacing := int(baseH * CJKLineSpacingRatio)
-
-	availH := int(baseH) - padTop - padBottom
-
-	var tier client.FaceTier
-	if explicitSize > 0 {
-		tier = client.PickTier(explicitSize)
-	} else if gridRows > 1 && gridCols > 0 {
-		cellHeight := availH / gridRows
-		tier = client.PickTier(cellHeight)
-	} else {
-		tier = client.PickTier(availH)
-	}
-
-	face = film.TextFaceInGame(tier.Name)
-	if face == nil || face.GpuTex == nil {
-		return
-	}
-
-	// 4. 构建统一的裁剪框（加上屏幕偏移）
-	clipX, clipY := 0, 0
-	clipW, clipH := surfaceW, surfaceH
-	if g.HasClip {
-		clipX = int(g.Clip.X) + int(g.ScreenOffsetX)
-		clipY = int(g.Clip.Y) + int(g.ScreenOffsetY)
-		clipW = int(g.Clip.W)
-		clipH = int(g.Clip.H)
-	}
-
-	// 5. 换行与排版
-	var lines [][]token
-	var currentLine []token
-	maxW := 0
-	if g.HasClip {
-		maxW = clipW - padLeft - padRight
-	} else if int(g.MaxWidth) > 0 {
-		maxW = int(g.MaxWidth) - padLeft - padRight
-	}
-
-	currentLineW := 0
-	ellipsisW := 0
-	for _, rn := range []rune{'.', '.', '.'} {
-		if glyph, ok := face.Glyphs[string(rn)]; ok {
-			ellipsisW += int(glyph.Advance)
-		} else {
-			ellipsisW += 8
-		}
-	}
-
-	for _, tk := range tokens {
-		if tk.forceNL {
-			lines = append(lines, currentLine)
-			currentLine = nil
-			currentLineW = 0
-			continue
-		}
-
-		charW := 8
-		if glyph, ok := face.Glyphs[string(tk.rn)]; ok {
-			charW = int(glyph.Advance)
-		}
-
-		if maxW > 0 && currentLineW+charW > maxW {
-			if maxW-currentLineW >= ellipsisW {
-				currentLine = append(currentLine, token{rn: '.'}, token{rn: '.'}, token{rn: '.'})
-			}
-			tokens = nil
-			break
-		}
-		currentLine = append(currentLine, tk)
-		currentLineW += charW
-	}
-	if len(currentLine) > 0 {
-		lines = append(lines, currentLine)
-	}
-
-	// ============【修改区】整张glyph‑cell图片在可用区域垂直居中 ============
-	startX := int(g.X) + padLeft
-	boxTop := int(g.Y) + padTop
-	baseline := int(face.Cap)
-
-	vertOffset := (availH - baseline) / 2
-	if vertOffset < 0 {
-		vertOffset = 0
-	}
-	blockTopY := boxTop + vertOffset
-
-	col := float32(g.Color)
-	lineHeight := baseline + lineSpacing
-
-	for _, line := range lines {
-		curX := startX
-		for _, tk := range line {
-			glyph, ok := face.Glyphs[string(tk.rn)]
-			if !ok {
-				curX += 8
-				continue
-			}
-
-			if glyph.W > 0 {
-				var imgs [4]*ebiten.Image
-				imgs[0] = face.GpuTex
-				// 简单方块贴图，无任何字符特殊偏移，left/top由json=0
-				drawX := curX + int(glyph.Left)
-				drawY := blockTopY + int(glyph.Top)
-
-				if g.HasClip {
-					if drawX+glyph.W < clipX ||
-						drawX > clipX+clipW ||
-						drawY+glyph.H < clipY ||
-						drawY > clipY+clipH {
-						curX += int(glyph.Advance)
-						continue
-					}
-				}
-
-				if r.sched.begin(schedOpaque, drawX, drawY, drawX+glyph.W, drawY+glyph.H, imgs) {
-					r.sched.quad(schedOpaque,
-						float32(drawX), float32(drawY),
-						float32(drawX+glyph.W), float32(drawY+glyph.H),
-						float32(glyph.X), float32(glyph.Y),
-						float32(glyph.X+glyph.W), float32(glyph.Y+glyph.H),
-						[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
-				}
-			}
-			curX += int(glyph.Advance)
-		}
-		blockTopY += lineHeight // 换行，方块顶部下移
-	}
-}
 func (r *Renderer) GlyphsDispatch(g drawlist.Glyphs) {
 	if r == nil || r.surfaces[0] == nil || r.scene2D == nil {
 		return
@@ -747,7 +514,7 @@ func (r *Renderer) GlyphsDispatch(g drawlist.Glyphs) {
 		r.CJKGlyphs(g)
 		return
 	} else {
-		r.Glyphs(g)
+		r.GlyphsOriginal(g)
 		return
 	}
 
