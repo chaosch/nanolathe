@@ -234,109 +234,98 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
     real_em = target_em if target_em >= 6 else 6
     font = load_face(fontFile, weight, real_em, variable)
 
+    # 1. 获取所有字符的精确 bbox (以基线为原点)
     glyph_bbox_info = {}
     for char in chars:
         try:
-            # 【修改点1】使用 ls (Left-Baseline) 作为锚点，能够直接获取到最准确的相对于基线的上下界
             bbox = font.getbbox(char, anchor="ls")
             l, t, r, b = bbox
-            w = int(math.ceil(r - l))
-            if w <= 0 and char != " ":
+            if r - l <= 0 and char != " ":
                 continue
             glyph_bbox_info[char] = (l, t, r, b)
         except Exception:
             continue
 
-    # ==========================================
-    # 1. 计算统一的基线 (Baseline) 与 单元格高度
-    # ==========================================
-    # 【修改点2】因为使用了 ls 锚点，(t) 是相对于基线的顶端（通常为负），(b) 是底端（通常为正）
-    max_ascent = 0   # 基线到顶部的最远距离
-    max_descent = 0  # 基线到底部的最远距离
-
-    # 加上描边边框的厚度
-    pad = max(2, border) if mode != "mask" else 0
-
+    # 2. 计算全局高度（仅计算真实有像素的部分）
+    max_ascent = 0
+    max_descent = 0
     for char, (l, t, r, b) in glyph_bbox_info.items():
         max_ascent = max(max_ascent, abs(t))
         max_descent = max(max_descent, abs(b))
 
-    # 单元格总高度 = 最高点 + 最低点 + 上下各 2px 防裁切留白
-    cell_height = int(math.ceil(max_ascent + max_descent)) + 4
+    cell_height = int(math.ceil(max_ascent + max_descent))
+    cell_baseline = int(math.ceil(max_ascent))
 
-    # 单元格内的基线绝对 Y 坐标（保证所有字的底部在此对齐）
-    cell_baseline = int(math.ceil(max_ascent)) + 2
+    # 为了保证描边不溢出，这个 pad 依然保留
+    pad = max(2, border) if mode != "mask" else 0
 
-    # ==========================================
-    # 2. 排列字形并生成 JSON 数据
-    # ==========================================
     rows, glyphs = [], {}
-    x = 0
-    y = 0
-    row_height = cell_height
-    SPACING = 4
+    x, y = 0, 0
+    row_height = cell_height + pad * 2
+    SPACING = 2 # 图集内的防糊边间隙，绝对不影响渲染时的间距
 
     for char in chars:
         if char not in glyph_bbox_info:
             continue
         left, top, right, bottom = glyph_bbox_info[char]
 
-        # 因为我们要在上下左右加 pad 描边，所以格子实际宽高要增加
-        width = int(math.ceil(right - left)) + pad * 2
+        # ★ 核心对齐：切片的实际物理宽度
+        ink_width = right - left
+        if ink_width <= 0:
+            ink_width = int(math.ceil(font.getlength(char)))
+
+        # 图块的总宽度（真实像素 + 两侧防溢出 pad）
+        width = int(math.ceil(ink_width)) + pad * 2
         height = cell_height + pad * 2
 
         if x + width + SPACING > WIDTH:
             x = 0
             y += row_height + SPACING
 
-        # 【修改点3】核心逻辑：字形顶部位置(top) 映射到格子里的偏移
-        # 根据 ls 锚点，top 是负数。格子的最高点(绝对0)对应的是 max_ascent + 2(pad白边)
-        # 字符顶部在格子里的 Y 坐标 = (max_ascent + 2) - abs(top) + pad
-        glyph_y_offset = int(cell_baseline - abs(top)) + pad
+        glyph_y_offset = cell_baseline - abs(top) + pad
 
-        # 微调：汉字底部对齐基线，但视觉上由于汉字饱满，部分像素字体可考虑上抬 1px (这里先用 0)
-        if "\u4e00" <= char <= "\u9fff":
-            # glyph_y_offset -= 1 # 如果跑出来汉字偏下，解开这行
-            pass
+        # ==========================================
+        # ★ 绝对原则：advance 完美等于 w
+        # 不再去搞复杂的原生宽度+特殊中英文补偿，图多宽就走多远
+        # ==========================================
+        advance = width
 
-        # 写入 JSON 的数据
-        # x, y 是图集中的大坐标
-        # w, h 是包含透明像素和描边的整格尺寸，渲染时整块贴图
-        # 依然保持 left=0, top=0，渲染端直接按整块下对齐即可
         glyphs[char] = dict(
             x=x, y=y, w=width, h=height,
             left=0,
             top=0,
-            advance=round(font.getlength(char) * scale),
+            advance=advance, # ★ 彻底绑定
             scale=scale
         )
 
-        rows.append((char, x, y, width, height, left, glyph_y_offset, top))
+        rows.append((char, x, y, width, height, left, glyph_y_offset))
         x += width + SPACING
 
-    # ==========================================
-    # 3. 绘制 PNG
-    # ==========================================
+    # 3. 绘制 PNG（原封不动）
     atlas_h = y + row_height + SPACING
     atlas = Image.new("RGBA", (WIDTH, atlas_h), (0, 0, 0, 0))
 
-    for char, px, py, w, h, left, offset, orig_top in rows:
-        # 这里的 offset 计算已经包含了 pad
-        # 生成字形的函数不需要再处理对齐，只需要把字画在指定位置
+    for char, px, py, w, h, left, offset in rows:
         if mode == "mask":
-            # mask 模式，宽高没有 pad
-            char_img = render_mask_glyph(char, font, w - pad*2, h - pad*2)
-            # 因为在 render_mask_glyph 里是从 (0,0) 画，所以这里直接贴到 px, py+offset-pad 处
-            atlas.paste(char_img, (px + pad, py + offset - pad), char_img)
+            char_img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(char_img)
+            target_x = -left + pad
+            draw.text((target_x, offset), char, font=font, fill=(255, 255, 255, 255), anchor="lt")
+
+            px_res = char_img.load()
+            for j in range(h):
+                for i in range(w):
+                    if px_res[i, j][3] > 128:
+                        px_res[i, j] = (255, 255, 255, 255)
+                    else:
+                        px_res[i, j] = (0, 0, 0, 0)
+            atlas.paste(char_img, (px, py), char_img)
         else:
             char_img = render_styled_glyph(char, font, w - pad*2, h - pad*2, border, mode, color)
-            # char_img 的尺寸是 w, h (自带 pad)，从 (0,0) 开始画
-            # 因为 char_img 内部自己做了 pad 填充，所以这里的原点就是 offset
-            atlas.paste(char_img, (px, py + offset - pad), char_img)
+            atlas.paste(char_img, (px, py), char_img)
 
     out_png = OUT / f"{name}-cjk.png"
     out_json = OUT / f"{name}-cjk.json"
-
     atlas.save(out_png, optimize=True)
     with open(out_json, "w", encoding="utf-8", newline="\n") as meta:
         meta.write(json.dumps(
@@ -344,8 +333,7 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
             separators=(",", ":"), ensure_ascii=False
         ) + "\n")
 
-    print(f"{name}-cjk: real_em={real_em}, cell_h={cell_height}, out={out_png}")
-
+    print(f"{name}-cjk: real_em={real_em}, cell_h={height} (with pad={pad}), out={out_png}")
 if __name__ == "__main__":
     # 自动创建 input output 文件夹
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
