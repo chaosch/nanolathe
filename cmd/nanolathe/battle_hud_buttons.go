@@ -1,13 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/vfs"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -17,8 +16,7 @@ func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
 		return
 	}
 	//buttonnGAF是所有按钮GAF
-	butttonGAF, _ := LoadGAFFromArchive(fs, "ccdata.ccx", "anims/commongui.GAF")
-	//翻译渲染所有按钮GAF
+	butttonGAF, _ := LoadGAFFromArchive(fs, "anims/commongui.GAF")
 	TranslateCommands(butttonGAF, commandButtonNames[:])
 	for i, _ := range gafs.Entries {
 		cmd := ""
@@ -44,52 +42,17 @@ func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
 					continue
 				}
 			}
+
 		}
 	}
 }
 
-func LoadGAFFromArchive(fs *vfs.FS, archiveName string, gafName string) (*formats.GAF, error) {
-	// 1. 透過 VFS 拿到這個 GAF 所有的來源層
-	sources := fs.Sources(gafName)
-	if len(sources) == 0 {
-		return nil, fmt.Errorf("找不到文件: %s", gafName)
-	}
-	// 2. 尋找目標包的絕對路徑
-	var targetArchivePath string
-	for _, src := range sources {
-		// 用 filepath.Base 取出包名，和傳入的 archiveName 做忽略大小寫的比較
-		if strings.EqualFold(filepath.Base(src.Source.SourcePath), archiveName) {
-			targetArchivePath = src.Source.SourcePath
-			break
-		}
-	}
-
-	if targetArchivePath == "" {
-		return nil, fmt.Errorf("找不到包: %s", archiveName)
-	}
-
-	// 3. 建立一個乾淨的臨時 VFS，用反查出來的絕對路徑直接掛載
-	tempFS := vfs.New()
-	_, err := tempFS.MountArchive(targetArchivePath, 0)
-	if err != nil {
-		return nil, fmt.Errorf("掛載 %s 失敗: %w", targetArchivePath, err)
-	}
-	defer tempFS.Close()
-
-	// 4. 從這個乾淨的 VFS 直接讀取
-	file, err := tempFS.OpenMount(0, gafName)
-	if err != nil {
-		return nil, fmt.Errorf("包裡找不到 %s: %w", gafName, err)
-	}
-	defer file.Close()
-
-	// 5. 輸出數據
-	data, err := vfs.WholeBytes(file)
+func LoadGAFFromArchive(fs *vfs.FS, gafName string) (*formats.GAF, error) {
+	data, err := fs.ReadFile(gafName)
 	if err != nil {
 		return nil, err
 	}
-	client.PrintDebug(len(data))
-	return formats.LoadGAFIsolated(data, commandButtonNames[:])
+	return formats.LoadGAFNoneText(data, commandButtonNames[:])
 }
 
 func TranslateCommands(gaf *formats.GAF, keys []string) {
@@ -106,6 +69,9 @@ func TranslateCommands(gaf *formats.GAF, keys []string) {
 		}
 		if needTranslate {
 			RenderCjkFontToGAF(&gaf.Entries[i], realCmd)
+			for k, _ := range gaf.Entries[i].Frames {
+				client.DumpGAFFrame(gaf.Entries[i].Frames[k].Frame, gaf.Entries[i].Name+"-Frame"+"-"+strconv.Itoa(k))
+			}
 		}
 	}
 }
@@ -760,4 +726,43 @@ func RenderCjkFontToGAF1(entry *formats.GAFEntry, text string) {
 		Frames:     entry.Frames,
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
+}
+
+func refreshGAFFrameInPlace(dst, src *formats.GAFFrame) {
+	if dst == nil || src == nil {
+		return
+	}
+	// 标量字段
+	dst.Width = src.Width
+	dst.Height = src.Height
+	dst.XOffset = src.XOffset
+	dst.YOffset = src.YOffset
+	dst.ColorKey = src.ColorKey
+	dst.Compressed = src.Compressed
+	dst.Unknown2 = src.Unknown2
+	dst.DataOffset = src.DataOffset
+	dst.Unknown3 = src.Unknown3
+	dst.SubframeCount = src.SubframeCount
+	dst.AlternateBlitter = src.AlternateBlitter
+	// compositeDepth 是未导出字段，同包内可直接赋；跨包需提供方法
+	//dst.compositeDepth = src.compositeDepth
+
+	// 像素/透明：新切片，从 data 物化出来的 src 拷贝
+	dst.Pixels = append([]byte(nil), src.Pixels...)
+	dst.Transparent = append([]bool(nil), src.Transparent...)
+	dst.PlainPixels = dst.Pixels
+	dst.PlainTransparent = dst.Transparent
+
+	// 子帧：递归原地刷新已有子帧，长度不一致时重建
+	if len(dst.Subframes) == len(src.Subframes) {
+		for k := range src.Subframes {
+			refreshGAFFrameInPlace(dst.Subframes[k], src.Subframes[k])
+		}
+	} else {
+		//dst.Subframes = make([]*formats.GAFFrame, len(src.Subframes))
+		//for k := range src.Subframes {
+		//	// 这里没有“旧指针”可刷新，只能新建
+		//	dst.Subframes[k] = cloneGAFFrame(src.Subframes[k])
+		//}
+	}
 }
