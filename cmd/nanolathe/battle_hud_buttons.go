@@ -1,22 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/vfs"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"sync"
 )
 
-func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
+func RenderCommandButtonsOld(fs *vfs.FS, gafs *formats.GAF) {
 	if !client.NeedCjkTranslate() {
 		return
 	}
 	//buttonnGAF是所有按钮GAF
-	butttonGAF, _ := LoadGAFFromArchive(fs, "anims/commongui.GAF")
+	butttonGAF, _ := LoadGAFFromArchive(fs, "ccdata.ccx", "anims/commongui.GAF")
+	//翻译渲染所有按钮GAF
 	TranslateCommands(butttonGAF, commandButtonNames[:])
 	for i, _ := range gafs.Entries {
 		cmd := ""
@@ -42,17 +44,102 @@ func RenderCommandButtons(fs *vfs.FS, gafs *formats.GAF) {
 					continue
 				}
 			}
-
 		}
 	}
 }
 
-func LoadGAFFromArchive(fs *vfs.FS, gafName string) (*formats.GAF, error) {
-	data, err := fs.ReadFile(gafName)
+func RenderCommandButtons(fs *vfs.FS) *formats.GAF {
+	if !client.NeedCjkTranslate() {
+		return nil
+	}
+	//buttonnGAF是所有按钮GAF
+	butttonGAF, _ := LoadGAFCommandButtons(fs)
+	if butttonGAF == nil {
+		return nil
+	}
+	//翻译渲染所有按钮GAF
+	TranslateCommands(butttonGAF, commandButtonNames[:])
+	return butttonGAF
+	//for i, _ := range gafs.Entries {
+	//	cmd := ""
+	//	if commandButtonName(gafs.Entries[i].Name) != "" {
+	//		cmd = commandButtonName(gafs.Entries[i].Name)
+	//	}
+	//	if cmd != "" {
+	//		if cached, ok := renderedButtonCache.Load(gafs.Entries[i].Name); ok {
+	//			cachedEntry := cached.(*formats.GAFEntry)
+	//			// 命中緩存，直接覆蓋指針
+	//			gafs.Entries[i].Frames = cachedEntry.Frames
+	//			gafs.Entries[i].FrameCount = cachedEntry.FrameCount
+	//		} else {
+	//			//第三方阵营，只能用其中一个来其中一个来匹配。
+	//			fallbackName := commandButtonName(gafs.Entries[i].Name)
+	//			fallbackName = "ARM" + fallbackName
+	//			if fallbackCached, ex := renderedButtonCache.Load(fallbackName); ex {
+	//				fallbackCachedEntry := fallbackCached.(*formats.GAFEntry)
+	//				// 命中緩存，直接覆蓋指針
+	//				gafs.Entries[i].Frames = fallbackCachedEntry.Frames
+	//				gafs.Entries[i].FrameCount = fallbackCachedEntry.FrameCount
+	//			} else {
+	//				continue
+	//			}
+	//		}
+	//	}
+	//}
+}
+func LoadGAFCommandButtons(fs *vfs.FS) (*formats.GAF, error) {
+	data, err := fs.ReadFile("anims/commongui.gaf")
 	if err != nil {
 		return nil, err
 	}
-	return formats.LoadGAFNoneText(data, commandButtonNames[:])
+	if gaf, err := formats.LoadGAFNoneText(data, commandButtonNames[:]); err != nil {
+		return nil, err
+	} else {
+		return gaf, nil
+	}
+}
+func LoadGAFFromArchive(fs *vfs.FS, archiveName string, gafName string) (*formats.GAF, error) {
+	// 1. 透過 VFS 拿到這個 GAF 所有的來源層
+	sources := fs.Sources(gafName)
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("找不到文件: %s", gafName)
+	}
+	// 2. 尋找目標包的絕對路徑
+	var targetArchivePath string
+	for _, src := range sources {
+		// 用 filepath.Base 取出包名，和傳入的 archiveName 做忽略大小寫的比較
+		if strings.EqualFold(filepath.Base(src.Source.SourcePath), archiveName) {
+			targetArchivePath = src.Source.SourcePath
+			break
+		}
+	}
+
+	if targetArchivePath == "" {
+		return nil, fmt.Errorf("找不到包: %s", archiveName)
+	}
+
+	// 3. 建立一個乾淨的臨時 VFS，用反查出來的絕對路徑直接掛載
+	tempFS := vfs.New()
+	_, err := tempFS.MountArchive(targetArchivePath, 0)
+	if err != nil {
+		return nil, fmt.Errorf("掛載 %s 失敗: %w", targetArchivePath, err)
+	}
+	defer tempFS.Close()
+
+	// 4. 從這個乾淨的 VFS 直接讀取
+	file, err := tempFS.OpenMount(0, gafName)
+	if err != nil {
+		return nil, fmt.Errorf("包裡找不到 %s: %w", gafName, err)
+	}
+	defer file.Close()
+
+	// 5. 輸出數據
+	data, err := vfs.WholeBytes(file)
+	if err != nil {
+		return nil, err
+	}
+	client.PrintDebug(len(data))
+	return formats.LoadGAFIsolated(data, commandButtonNames[:])
 }
 
 func TranslateCommands(gaf *formats.GAF, keys []string) {
@@ -69,9 +156,6 @@ func TranslateCommands(gaf *formats.GAF, keys []string) {
 		}
 		if needTranslate {
 			RenderCjkFontToGAF(&gaf.Entries[i], realCmd)
-			for k, _ := range gaf.Entries[i].Frames {
-				client.DumpGAFFrame(gaf.Entries[i].Frames[k].Frame, gaf.Entries[i].Name+"-Frame"+"-"+strconv.Itoa(k))
-			}
 		}
 	}
 }
