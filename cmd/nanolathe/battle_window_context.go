@@ -44,9 +44,9 @@ func (c *battleWindowContext) install(window *gui.Window, page, common *formats.
 		// shell's shared one while its windows are built.
 		saved := c.shell.battleCommon
 		//c.shell.battleCommon = common
-		c.shell.battleCommon = common
-		//c.shell.battleCommon = RenderCommandButtons(c.shell.cs.unmappedMount)
-		RenderCommandButtonsOld(c.shell.cs.unmappedMount, common)
+		//c.shell.battleCommon = common
+		c.shell.battleCommon = RenderCommandButtons(c.shell.cs.unmappedMount)
+		//RenderCommandButtonsOld(c.shell.cs.unmappedMount, common)
 		//for i, _ := range c.shell.battleCommon.Entries {
 		//	for k, _ := range c.shell.battleCommon.Entries[i].Frames {
 		//		client.DumpGAFFrame(c.shell.battleCommon.Entries[i].Frames[k].Frame, c.shell.battleCommon.Entries[i].Name+"-Frame-"+strconv.Itoa(i)+"-"+strconv.Itoa(k))

@@ -35,6 +35,7 @@ func materializeGAFFrameNoneText(data []byte, meta *GAFMetadataFrame, cache map[
 				continue
 			}
 			if i == 1 && commandButtonName(name, commands) != "" {
+				child.AlternateBlitter = 1
 				continue
 			}
 			compositeGAFPlainNoneText(frame, child)

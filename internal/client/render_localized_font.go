@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -443,16 +444,22 @@ func DumpGAFFrame(f *formats.GAFFrame, Name string) {
 			prompt = strings.Replace(prompt, "*", "", -1)
 			//if _, exists := printed[prompt]; !exist
 			dumped[prompt]++
-			err := dumpGAFFramePNG(filepath.Join("E:/IdeaProjects/frames/", prompt)+"_"+Name+".png", f)
+			err := dumpGAFFramePNG(filepath.Join("E:/IdeaProjects/frames/", Name+".png"), f)
 			if err != nil {
 				fmt.Println(err)
 			} else {
-				PrintDebug(filepath.Join("E:/IdeaProjects/frames/", prompt) + "_" + Name + ".png")
+				PrintDebug(filepath.Join("E:/IdeaProjects/frames/", Name+".png"))
 			}
 			//}
 		}
 	}
 
+}
+
+func DumpGAFEntry(gafEntry *formats.GAFEntry) {
+	for i, _ := range gafEntry.Frames {
+		DumpGAFFrame(gafEntry.Frames[i].Frame, gafEntry.Name+"-frame-"+strconv.Itoa(i))
+	}
 }
 
 func dumpGAFFramePNG(path string, f *formats.GAFFrame) error {
