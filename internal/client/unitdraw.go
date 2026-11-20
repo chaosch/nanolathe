@@ -3,6 +3,7 @@ package client
 import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/numeric"
 )
@@ -180,13 +181,10 @@ func (c *Client) UITextWidth(fnt *formats.FNT, text string, x, y, maxWidth int, 
 	if c.fnt == nil || fnt == nil {
 		return
 	}
-	// controlHeight 用 fnt.Height（行高），attribs 按调用方传；
-	// UITextWidth 没有 attribs，默认 0（左对齐）。
-	// 翻译缺失或字体未就绪时落回 GAF，保持原行为。
 	if _, drawn := c.DrawRetailFilmCJKCylindrical(text, x, y, maxWidth, int(fnt.Height), color, 0); drawn {
 		return
 	}
-	//fmt.Println(text)
+	text = i18n.T(text)
 	c.emitGlyphs(drawlist.Glyphs{
 		Font:     fnt,
 		Text:     text,

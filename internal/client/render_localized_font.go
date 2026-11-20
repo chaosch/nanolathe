@@ -39,7 +39,7 @@ func PrintDebug(args ...interface{}) {
 		printed = make(map[string]int)
 	}
 	var pcindex int
-	pcindex = 2
+	pcindex = 4
 	pc, _, _, ok := runtime.Caller(pcindex)
 	if ok {
 		fn := runtime.FuncForPC(pc)
@@ -106,9 +106,9 @@ type FaceTier struct {
 }
 
 var faceTiers = []FaceTier{
-	{"tiny", 11},
-	//{"small", 12},
-	{"normal", 12}, //{"normal", 20},
+	{"tiny", 9},
+	{"normal", 10},
+	//{"normal", 12}, //{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
 	//{"title", 20},

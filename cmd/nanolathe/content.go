@@ -349,13 +349,12 @@ func mountContent(opts Options, baseRoots []string, selection modSelection) (*co
 	// The modeled startup state selects retail's literal lowercase English
 	// default before GUI parsing. TODO(T25): host command-line/registry
 	// non-default language selection has not been integrated yet.
-	//translations, err := content.LoadTranslationTable(set.fs, opts.Language)
-	var nodName = ""
-	if mod != nil {
-		nodName = mod.ID
-	}
-	translations, err := i18n.LoadTranslationTableDispatcher(filepath.Join(opts.LocalesDir, opts.Language, "loose"), nodName, set.fs, opts.Language)
-	//GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, opts.Language, "loose"), selection, set.fs)
+	translations, err := content.LoadTranslationTable(set.fs, opts.Language)
+	//var nodName = ""
+	//if mod != nil {
+	//	nodName = mod.ID
+	//}
+	//translations, err := i18n.LoadTranslationTableDispatcher(filepath.Join(opts.LocalesDir, opts.Language, "loose"), nodName, set.fs, opts.Language)
 	if err != nil {
 		set.Close()
 		return nil, fmt.Errorf("nanolathe: loading default GUI translation table: %w", err)
@@ -372,7 +371,11 @@ func mountContent(opts Options, baseRoots []string, selection modSelection) (*co
 		fmt.Fprintln(os.Stderr, err)
 	}
 	set.loadDuration = time.Since(started)
-	//GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, "loose"), selection)
+	var modName = ""
+	if mod != nil {
+		modName = mod.ID
+	}
+	i18n.GlobalTranslations.LoadAll(filepath.Join(opts.LocalesDir, opts.Language, "loose"), modName, set.fs)
 	return set, nil
 }
 

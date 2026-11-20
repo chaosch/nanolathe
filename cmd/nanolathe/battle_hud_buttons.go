@@ -305,7 +305,7 @@ func RenderCjkFontToGAFBAK(entry *formats.GAFEntry, text string) {
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
-func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
+func RenderCjkFontToGAF1(entry *formats.GAFEntry, text string) {
 	// 定義常量
 	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
 		cachedEntry := cached.(*formats.GAFEntry)
@@ -552,7 +552,8 @@ func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
 	}
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
-func RenderCjkFontToGAF1(entry *formats.GAFEntry, text string) {
+
+func RenderCjkFontToGAF2(entry *formats.GAFEntry, text string) {
 	// 定義常量
 	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
 		cachedEntry := cached.(*formats.GAFEntry)
@@ -812,41 +813,588 @@ func RenderCjkFontToGAF1(entry *formats.GAFEntry, text string) {
 	renderedButtonCache.Store(entry.Name, cachedCopy)
 }
 
-func refreshGAFFrameInPlace(dst, src *formats.GAFFrame) {
-	if dst == nil || src == nil {
+func RenderCjkFontToGAF3(entry *formats.GAFEntry, text string) {
+	// 定義常量
+	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
+		cachedEntry := cached.(*formats.GAFEntry)
+		entry.Frames = cachedEntry.Frames
+		entry.FrameCount = cachedEntry.FrameCount
+		entry.Unknown1 = cachedEntry.Unknown1
+		entry.Unknown2 = cachedEntry.Unknown2
 		return
 	}
-	// 标量字段
-	dst.Width = src.Width
-	dst.Height = src.Height
-	dst.XOffset = src.XOffset
-	dst.YOffset = src.YOffset
-	dst.ColorKey = src.ColorKey
-	dst.Compressed = src.Compressed
-	dst.Unknown2 = src.Unknown2
-	dst.DataOffset = src.DataOffset
-	dst.Unknown3 = src.Unknown3
-	dst.SubframeCount = src.SubframeCount
-	dst.AlternateBlitter = src.AlternateBlitter
-	// compositeDepth 是未导出字段，同包内可直接赋；跨包需提供方法
-	//dst.compositeDepth = src.compositeDepth
+	const (
+		PaddingY               = 2   // 上下留白像素
+		PressedOffsetY         = 2   // 【修改点 1】：按下（第1帧/第二帧）文字整体下沉的像素，按你要求改为 2
+		PaddingLeft            = 25  // 左側留白（避開邊框）
+		PaddingLeftNormal      = 4   // 普通按鈕左留白
+		PaddingRight           = 0   // 右側留白（避開原廠指示燈）
+		UnderlineColor         = 38  // 下劃線顏色（正常綠色）
+		UnderlineColorDisabled = 248 // 下劃線顏色（禁用狀態灰色）
+		UnderlineOffsetY       = 1   // 被劃線字母上移的像素
+	)
 
-	// 像素/透明：新切片，从 data 物化出来的 src 拷贝
-	dst.Pixels = append([]byte(nil), src.Pixels...)
-	dst.Transparent = append([]bool(nil), src.Transparent...)
-	dst.PlainPixels = dst.Pixels
-	dst.PlainTransparent = dst.Transparent
-
-	// 子帧：递归原地刷新已有子帧，长度不一致时重建
-	if len(dst.Subframes) == len(src.Subframes) {
-		for k := range src.Subframes {
-			refreshGAFFrameInPlace(dst.Subframes[k], src.Subframes[k])
-		}
-	} else {
-		//dst.Subframes = make([]*formats.GAFFrame, len(src.Subframes))
-		//for k := range src.Subframes {
-		//	// 这里没有“旧指针”可刷新，只能新建
-		//	dst.Subframes[k] = cloneGAFFrame(src.Subframes[k])
-		//}
+	// 1. 判斷是否為狀態按鈕
+	isStateButton := false
+	var textParts []string
+	cmd := commandButtonName(entry.Name)
+	if cmd == "CLOAK" || cmd == "FIREORD" || cmd == "MOVEORD" || cmd == "ONOFF" {
+		isStateButton = true
+		textParts = strings.Split(text, "|")
 	}
+
+	for i := range entry.Frames {
+		frame := entry.Frames[i].Frame
+		if frame == nil || len(frame.Pixels) == 0 {
+			continue
+		}
+
+		// =====================================================================
+		// 【修改点 2】：锁定第二子帧，清空洗底，偏移绝对对齐第一子帧！
+		// =====================================================================
+		targetFrame := frame
+		if len(frame.Subframes) > 1 && frame.Subframes[1] != nil {
+			targetFrame = frame.Subframes[1]
+
+			// 偏移量直接抄第一子帧（或者主帧）
+			if len(frame.Subframes) > 0 && frame.Subframes[0] != nil {
+				targetFrame.XOffset = frame.Subframes[0].XOffset
+				targetFrame.YOffset = frame.Subframes[0].YOffset
+			} else {
+				targetFrame.XOffset = frame.XOffset
+				targetFrame.YOffset = frame.YOffset
+			}
+
+			// 彻底清空第二子帧原本的英文，变成全透明
+			for p := 0; p < len(targetFrame.Pixels); p++ {
+				targetFrame.Pixels[p] = 0
+				if p < len(targetFrame.Transparent) {
+					targetFrame.Transparent[p] = true
+				}
+			}
+		}
+
+		// 尺寸计算严格使用主帧，确保字号稳定
+		width := int(frame.Width)
+		height := int(frame.Height)
+		// =====================================================================
+
+		// 決定當前幀要畫的文字
+		currentText := text
+		if isStateButton {
+			if i < len(textParts) {
+				currentText = textParts[i]
+			} else {
+				currentText = textParts[len(textParts)-1]
+			}
+		}
+
+		availHeight := height - PaddingY*2
+		if availHeight < 1 {
+			availHeight = 1
+		}
+
+		curTier := client.PickTier(availHeight)
+		face := film.TextFaceInGame(curTier.Name)
+		if face == nil {
+			continue
+		}
+		lineSize := curTier.Px
+
+		// 決定顏色
+		var palColor uint8 = 15 // 正常
+		if i == 1 {
+			palColor = 14 // 按下
+		} else if i == 2 {
+			palColor = 8 // 禁用
+		}
+
+		// 計算行寬
+		var lineW float64
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g != nil && g.W > 0 {
+				lineW += float64(g.W)
+				continue
+			}
+			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+				lineW += float64(lineSize)
+			} else {
+				lineW += float64(lineSize) / 2
+			}
+		}
+
+		// 根據按鈕類型選擇左留白
+		currentPaddingLeft := PaddingLeftNormal
+		if isStateButton {
+			currentPaddingLeft = PaddingLeft
+		}
+
+		availWidth := float64(width) - float64(currentPaddingLeft+PaddingRight)
+		cursorX := float64(currentPaddingLeft)
+
+		// 普通按鈕居中，狀態按鈕左對齊
+		if !isStateButton {
+			cursorX += (availWidth - lineW) / 2.0
+		}
+
+		// 暫存所有需要繪製的字母信息
+		type drawInfo struct {
+			runes            rune
+			drawX            int
+			drawY            int
+			width            int
+			height           int
+			finalPixels      []byte
+			finalTransparent []bool
+		}
+		var drawList []drawInfo
+
+		// 第一步：計算位置並收集信息
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g == nil || g.Frame() == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(lineSize)
+				} else {
+					cursorX += float64(lineSize) / 2
+				}
+				continue
+			}
+
+			glyphFrame := g.Frame()
+			if glyphFrame.Width == 0 || glyphFrame.Height == 0 || len(glyphFrame.Pixels) == 0 {
+				cursorX += float64(g.W)
+				continue
+			}
+
+			var finalPixels []byte
+			var finalTransparent []bool
+
+			// 需求 5：保留非 tiny 字體的立體感
+			if curTier.Name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(glyphFrame.Pixels))
+				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
+					if pIdx < len(glyphFrame.Transparent) && !glyphFrame.Transparent[pIdx] {
+						newPixels[pIdx] = palColor
+					}
+				}
+				finalPixels = newPixels
+				finalTransparent = glyphFrame.Transparent
+			} else {
+				finalPixels = glyphFrame.Pixels
+				finalTransparent = glyphFrame.Transparent
+			}
+
+			drawX := int(cursorX + float64(g.Left))
+			drawY := PaddingY + (availHeight-int(glyphFrame.Height))/2
+
+			drawList = append(drawList, drawInfo{
+				runes: rn, drawX: drawX, drawY: drawY,
+				width: int(glyphFrame.Width), height: int(glyphFrame.Height),
+				finalPixels: finalPixels, finalTransparent: finalTransparent,
+			})
+
+			cursorX += float64(g.W)
+		}
+
+		// 第二步：找到需要畫下劃線的字母（最後一個英文字母）
+		underlineIdx := -1
+		for idx := len(drawList) - 1; idx >= 0; idx-- {
+			if drawList[idx].runes < 128 {
+				underlineIdx = idx
+				break
+			}
+		}
+
+		// 第三步：執行繪製
+		for idx, item := range drawList {
+			actualDrawY := item.drawY
+
+			// =====================================================================
+			// 【修改点 3】：按下状态（第二帧/普通按钮）文字下移逻辑统一放在这里
+			// =====================================================================
+			if i == 1 && !isStateButton {
+				actualDrawY += PressedOffsetY
+			}
+
+			// 需要劃線的字母整體上移
+			if idx == underlineIdx {
+				actualDrawY -= UnderlineOffsetY
+			}
+
+			// 畫字母
+			for gy := 0; gy < item.height; gy++ {
+				for gx := 0; gx < item.width; gx++ {
+					px := item.drawX + gx
+					py := actualDrawY + gy
+
+					if px >= 0 && px < width && py >= 0 && py < height {
+						idxPix := py*width + px
+						gIdx := gy*item.width + gx
+
+						if gIdx >= 0 && gIdx < len(item.finalPixels) {
+							// Transparent 不足時按「不透明」處理，避免缺字
+							transparent := false
+							if gIdx < len(item.finalTransparent) {
+								transparent = item.finalTransparent[gIdx]
+							}
+
+							if !transparent {
+								pixel := item.finalPixels[gIdx]
+
+								// 【修复发暗/黑块问题】：删除了原有的 pixel == 0 过滤，并强制让写入的像素不透明
+
+								// 需求 1 & 2：狀態按鈕第3幀不變灰，普通按鈕第3幀變灰
+								if i == 2 && !isStateButton {
+									if curTier.Name == "tiny" {
+										targetFrame.Pixels[idxPix] = 8
+										if idxPix < len(targetFrame.Transparent) {
+											targetFrame.Transparent[idxPix] = false // 强制不透明
+										}
+									} else {
+										if pixel >= 10 && pixel <= 31 {
+											targetFrame.Pixels[idxPix] = 8
+										} else {
+											targetFrame.Pixels[idxPix] = pixel
+										}
+										if idxPix < len(targetFrame.Transparent) {
+											targetFrame.Transparent[idxPix] = false // 强制不透明
+										}
+									}
+								} else {
+									targetFrame.Pixels[idxPix] = pixel
+									if idxPix < len(targetFrame.Transparent) {
+										targetFrame.Transparent[idxPix] = false // 强制不透明
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// 畫下劃線
+			if idx == underlineIdx {
+				underlineY := actualDrawY + item.height
+				if underlineY >= height {
+					underlineY = height - 1
+				}
+
+				// 【核心改動】：普通按鈕第三幀用灰色下劃線
+				ulColor := uint8(UnderlineColor)
+				if i == 2 && !isStateButton || isStateButton && i == 4 && cmd == "ONOFF" {
+					ulColor = UnderlineColorDisabled
+				}
+
+				for ux := 0; ux < item.width; ux++ {
+					ulx := item.drawX + ux
+					if ulx >= 0 && ulx < width && underlineY >= 0 && underlineY < height {
+						targetFrame.Pixels[underlineY*width+ulx] = ulColor
+						if (underlineY*width + ulx) < len(targetFrame.Transparent) {
+							targetFrame.Transparent[underlineY*width+ulx] = false // 强制不透明
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 存入緩存
+	cachedCopy := &formats.GAFEntry{
+		Name:       entry.Name,
+		FrameCount: entry.FrameCount,
+		Unknown1:   entry.Unknown1,
+		Unknown2:   entry.Unknown2,
+		Frames:     entry.Frames,
+	}
+	renderedButtonCache.Store(entry.Name, cachedCopy)
+}
+
+func RenderCjkFontToGAF(entry *formats.GAFEntry, text string) {
+	// 定義常量
+	if cached, ok := renderedButtonCache.Load(entry.Name); ok {
+		cachedEntry := cached.(*formats.GAFEntry)
+		entry.Frames = cachedEntry.Frames
+		entry.FrameCount = cachedEntry.FrameCount
+		entry.Unknown1 = cachedEntry.Unknown1
+		entry.Unknown2 = cachedEntry.Unknown2
+		return
+	}
+	const (
+		PaddingY               = 2
+		PressedOffsetY         = 2 // 按下时文字下移像素
+		PaddingLeft            = 25
+		PaddingLeftNormal      = 4
+		PaddingRight           = 0
+		UnderlineColor         = 38
+		UnderlineColorDisabled = 248
+		UnderlineOffsetY       = 1
+	)
+
+	isStateButton := false
+	var textParts []string
+	cmd := commandButtonName(entry.Name)
+	if cmd == "CLOAK" || cmd == "FIREORD" || cmd == "MOVEORD" || cmd == "ONOFF" {
+		isStateButton = true
+		textParts = strings.Split(text, "|")
+	}
+
+	for i := range entry.Frames {
+		frame := entry.Frames[i].Frame
+		if frame == nil || len(frame.Pixels) == 0 {
+			continue
+		}
+
+		width := int(frame.Width)
+		height := int(frame.Height)
+
+		// =====================================================================
+		// 【破局之法】：彻底重构第二子帧
+		// =====================================================================
+		targetFrame := frame
+		if len(frame.Subframes) > 1 && frame.Subframes[1] != nil {
+			sub := frame.Subframes[1]
+			if sub.Width != frame.Width || sub.Height != frame.Height {
+				// 如果子帧尺寸和主帧不一样，强行建一个一样大的空画布
+				targetFrame = &formats.GAFFrame{
+					Width:       frame.Width,
+					Height:      frame.Height,
+					XOffset:     frame.XOffset,
+					YOffset:     frame.YOffset,
+					Pixels:      make([]byte, width*height),
+					Transparent: make([]bool, width*height),
+				}
+				for p := 0; p < len(targetFrame.Transparent); p++ {
+					targetFrame.Transparent[p] = true
+				}
+				// 替换回原对象的切片里
+				frame.Subframes[1] = targetFrame
+			} else {
+				targetFrame = sub
+				targetFrame.XOffset = frame.XOffset
+				targetFrame.YOffset = frame.YOffset
+
+				// 尺寸一致，直接清空原本的英文
+				for p := 0; p < len(targetFrame.Pixels); p++ {
+					targetFrame.Pixels[p] = 0
+					if p < len(targetFrame.Transparent) {
+						targetFrame.Transparent[p] = true
+					}
+				}
+			}
+		}
+		// =====================================================================
+
+		currentText := text
+		if isStateButton {
+			if i < len(textParts) {
+				currentText = textParts[i]
+			} else {
+				currentText = textParts[len(textParts)-1]
+			}
+		}
+
+		availHeight := height - PaddingY*2
+		if availHeight < 1 {
+			availHeight = 1
+		}
+
+		curTier := client.PickTier(availHeight)
+		face := film.TextFaceInGame(curTier.Name)
+		if face == nil {
+			continue
+		}
+		lineSize := curTier.Px
+
+		var palColor uint8 = 15
+		if i == 1 {
+			palColor = 14
+		} else if i == 2 {
+			palColor = 8
+		}
+
+		var lineW float64
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g != nil && g.W > 0 {
+				lineW += float64(g.W)
+				continue
+			}
+			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+				lineW += float64(lineSize)
+			} else {
+				lineW += float64(lineSize) / 2
+			}
+		}
+
+		currentPaddingLeft := PaddingLeftNormal
+		if isStateButton {
+			currentPaddingLeft = PaddingLeft
+		}
+
+		availWidth := float64(width) - float64(currentPaddingLeft+PaddingRight)
+		cursorX := float64(currentPaddingLeft)
+
+		if !isStateButton {
+			cursorX += (availWidth - lineW) / 2.0
+		}
+
+		type drawInfo struct {
+			runes            rune
+			drawX            int
+			drawY            int
+			width            int
+			height           int
+			finalPixels      []byte
+			finalTransparent []bool
+		}
+		var drawList []drawInfo
+
+		for _, rn := range currentText {
+			g := face.Glyphs[string(rn)]
+			if g == nil || g.Frame() == nil {
+				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+					cursorX += float64(lineSize)
+				} else {
+					cursorX += float64(lineSize) / 2
+				}
+				continue
+			}
+
+			glyphFrame := g.Frame()
+			if glyphFrame.Width == 0 || glyphFrame.Height == 0 || len(glyphFrame.Pixels) == 0 {
+				cursorX += float64(g.W)
+				continue
+			}
+
+			var finalPixels []byte
+			var finalTransparent []bool
+
+			if curTier.Name == "tiny" && palColor > 0 {
+				newPixels := make([]byte, len(glyphFrame.Pixels))
+				for pIdx := 0; pIdx < len(glyphFrame.Pixels); pIdx++ {
+					if pIdx < len(glyphFrame.Transparent) && !glyphFrame.Transparent[pIdx] {
+						newPixels[pIdx] = palColor
+					}
+				}
+				finalPixels = newPixels
+				finalTransparent = glyphFrame.Transparent
+			} else {
+				finalPixels = glyphFrame.Pixels
+				finalTransparent = glyphFrame.Transparent
+			}
+
+			drawX := int(cursorX + float64(g.Left))
+			drawY := PaddingY + (availHeight-int(glyphFrame.Height))/2
+
+			drawList = append(drawList, drawInfo{
+				runes: rn, drawX: drawX, drawY: drawY,
+				width: int(glyphFrame.Width), height: int(glyphFrame.Height),
+				finalPixels: finalPixels, finalTransparent: finalTransparent,
+			})
+
+			cursorX += float64(g.W)
+		}
+
+		underlineIdx := -1
+		for idx := len(drawList) - 1; idx >= 0; idx-- {
+			if drawList[idx].runes < 128 {
+				underlineIdx = idx
+				break
+			}
+		}
+
+		for idx, item := range drawList {
+			actualDrawY := item.drawY
+
+			if i == 1 && !isStateButton {
+				actualDrawY += PressedOffsetY
+			}
+
+			if idx == underlineIdx {
+				actualDrawY -= UnderlineOffsetY
+			}
+
+			for gy := 0; gy < item.height; gy++ {
+				for gx := 0; gx < item.width; gx++ {
+					px := item.drawX + gx
+					py := actualDrawY + gy
+
+					// 现在按主帧宽高算，targetFrame 保证等大，绝对不越界
+					if px >= 0 && px < width && py >= 0 && py < height {
+						idxPix := py*width + px
+						gIdx := gy*item.width + gx
+
+						if gIdx >= 0 && gIdx < len(item.finalPixels) {
+							transparent := false
+							if gIdx < len(item.finalTransparent) {
+								transparent = item.finalTransparent[gIdx]
+							}
+
+							if !transparent {
+								pixel := item.finalPixels[gIdx]
+
+								if i == 2 && !isStateButton {
+									if curTier.Name == "tiny" {
+										targetFrame.Pixels[idxPix] = 8
+										if idxPix < len(targetFrame.Transparent) {
+											targetFrame.Transparent[idxPix] = false
+										}
+									} else {
+										if pixel >= 10 && pixel <= 31 {
+											targetFrame.Pixels[idxPix] = 8
+										} else {
+											targetFrame.Pixels[idxPix] = pixel
+										}
+										if idxPix < len(targetFrame.Transparent) {
+											targetFrame.Transparent[idxPix] = false
+										}
+									}
+								} else {
+									targetFrame.Pixels[idxPix] = pixel
+									if idxPix < len(targetFrame.Transparent) {
+										targetFrame.Transparent[idxPix] = false
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if idx == underlineIdx {
+				underlineY := actualDrawY + item.height
+				if underlineY >= height {
+					underlineY = height - 1
+				}
+
+				ulColor := uint8(UnderlineColor)
+				if i == 2 && !isStateButton || isStateButton && i == 4 && cmd == "ONOFF" {
+					ulColor = UnderlineColorDisabled
+				}
+
+				for ux := 0; ux < item.width; ux++ {
+					ulx := item.drawX + ux
+					if ulx >= 0 && ulx < width && underlineY >= 0 && underlineY < height {
+						idxPix := underlineY*width + ulx
+						// 这里不需要再判断越界了，因为 targetFrame 已经强制撑成主帧大小
+						targetFrame.Pixels[idxPix] = ulColor
+						if idxPix < len(targetFrame.Transparent) {
+							targetFrame.Transparent[idxPix] = false
+						}
+					}
+				}
+			}
+		}
+	}
+
+	cachedCopy := &formats.GAFEntry{
+		Name:       entry.Name,
+		FrameCount: entry.FrameCount,
+		Unknown1:   entry.Unknown1,
+		Unknown2:   entry.Unknown2,
+		Frames:     entry.Frames,
+	}
+	renderedButtonCache.Store(entry.Name, cachedCopy)
 }

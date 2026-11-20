@@ -19,6 +19,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/input"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/vfs"
@@ -313,6 +314,8 @@ func (h *retailBattleHUD) drawBattleInfoLabel(c *client.Client, window *gui.Wind
 	if h == nil || c == nil || window == nil || text == "" {
 		return
 	}
+	text = i18n.T(text)
+
 	if _, ok := c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y), int(r.W), int(r.H), h.guiColor(byte(gad.ColorF)), gad.Attribs); ok {
 		return
 	}

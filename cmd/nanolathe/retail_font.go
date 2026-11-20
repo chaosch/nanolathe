@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/palette"
 )
 
@@ -184,7 +184,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
-
+	text = i18n.T(text)
 	if _, ok := c.DrawRetailFilmCJKCylindrical(
 		text,
 		x, y, maxWidth, baselineHeight,
@@ -203,7 +203,7 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 			continue
 		}
 		advance := int(frame.Width)
-		fmt.Println("advance", advance)
+		//fmt.Println("advance", advance)
 		if remaining >= 0 && remaining < advance {
 			return
 		}
@@ -234,6 +234,7 @@ func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWid
 }
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
+	text = i18n.T(text)
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {

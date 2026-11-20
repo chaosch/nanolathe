@@ -575,5 +575,6 @@ func commandButtonFrame(entry *formats.GAFEntry, gad gui.Gadget, stage int, grey
 		down = 1
 	}
 	frame, _ := retailButtonFrameFromEntry(entry, gad, 0, down, stage, grey)
+	//client.DumpGAFFrame(frame, entry.Name+"retailButtonFrameFromEntry")
 	return frame
 }

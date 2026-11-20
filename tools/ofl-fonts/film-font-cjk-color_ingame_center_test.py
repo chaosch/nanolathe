@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 # ==========================================
 SOURCE_FONT = r"zitidi.com.ttf"
 Pixel_Font_12 =r"ZLabsPixel_12px_M_CN.ttf"
-Pixel_Font_14 = r"WenQuanYi.Bitmap.Song.14px.ttf"
+Pixel_Font_14 = r"ChangBanDianSong-16-SC.ttf"
 PIXEL_FONT_16 = r"ChangBanDianSong-16-SC.ttf"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -55,7 +55,7 @@ PALETTE = [
 # ==========================================
 DARKEN = 1
 SHADOW_STRENGTH = 160
-SHADOW_START = 0.1
+SHADOW_START = 0.3
 BASELINE_RAISE = 1
 
 def wanted():
@@ -345,12 +345,18 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
         if ink_width <= 0:
             ink_width = int(math.ceil(font.getlength(char)))
 
+        # ASCII字符收缩，CJK汉字保持原宽
+        if ord(char) < 0x80:
+            shrink = 0.82
+            ink_width = ink_width * shrink
+
         # ==========================================
         # ★ 这里的 w 就是原生的墨迹宽度 + 左右描边（如果有）
         # 坚决不加任何透明留白，是几就是几
         # ==========================================
         width = int(math.ceil(ink_width)) + border * 2
         height = cell_height + border * 2
+
 
         if x + width + SPACING > WIDTH:
             x = 0

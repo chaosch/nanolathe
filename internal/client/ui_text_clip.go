@@ -1,8 +1,11 @@
 package client
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
+	"strings"
 )
 
 // UITextWidthClipped records the usual FNT run with the private GUI surface
@@ -11,7 +14,11 @@ func (c *Client) UITextWidthClipped(fnt *formats.FNT, text string, x, y, maxWidt
 	if c == nil || c.fnt == nil || fnt == nil || clipW <= 0 || clipH <= 0 {
 		return
 	}
-
+	if strings.Contains(text, "潮汐能") || strings.Contains(text, "wind") {
+		fmt.Println("text")
+	}
+	PrintDebug(text)
+	text = i18n.T(text)
 	// controlHeight 用 fnt.Height（行高），attribs 按调用方传；
 	// UITextWidth 没有 attribs，默认 0（左对齐）。
 	height := int(fnt.Height)

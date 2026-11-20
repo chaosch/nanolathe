@@ -9,6 +9,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
 	"github.com/nanolathe-gg/nanolathe/internal/hud"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/mission"
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 )
@@ -210,6 +211,7 @@ func (h *retailBattleHUD) drawGUIWindowState(c *client.Client, window *gui.Windo
 		} else if !dynamic {
 			text = gad.Text
 		}
+		text = i18n.T(text)
 		if gad.Kind == gui.KindLabel {
 			oldX := gad.Rect.X
 			h.resolveModalLabel(window, i, text)
@@ -363,6 +365,7 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 	if c == nil || text == "" {
 		return
 	}
+	text = i18n.T(text)
 	x, y, build, centred := retailButtonCaptionPen(gad, r, textWidth, metric)
 	color := h.guiColor(byte(flash))
 	if gad.Stages != 0 {

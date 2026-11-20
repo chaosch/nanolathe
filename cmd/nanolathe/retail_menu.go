@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strconv"
 	"strings"
@@ -280,9 +279,6 @@ func (g *gameShell) installRetailWindowButtonArt(window *gui.Window, own *format
 				}
 			}
 			window.Gadgets[i] = built
-			if commandButtonName(built.Name) != "" {
-				client.DumpGAFEntry(window.Gadgets[i].ButtonArt)
-			}
 		}
 	}
 }

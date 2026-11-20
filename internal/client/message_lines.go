@@ -4,6 +4,7 @@ import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 )
 
 // SetMessageLogos binds the same loaded player-logo art the battle HUD uses.
@@ -128,6 +129,7 @@ func (c *Client) drawMessageGAFText(text string, x, y int) {
 		}
 		return c.messageGAF.Frames[code].Frame
 	}
+	text = i18n.T(text)
 	baseline := 0
 	if f := glyph('I'); f != nil {
 		baseline = int(f.Height)
@@ -136,6 +138,7 @@ func (c *Client) drawMessageGAFText(text string, x, y int) {
 			return
 		}
 	}
+	text = i18n.T(text)
 
 	for i := 0; i < len(text) && text[i] != 0; i++ {
 		f := glyph(text[i])

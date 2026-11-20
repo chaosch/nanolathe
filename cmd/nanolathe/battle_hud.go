@@ -316,10 +316,7 @@ func loadRetailBattleHUDForOwner(fs vfs.FSOps, sess *session.Session, cat *conte
 	}
 	// Optional support GAFs — degradable individually [07 §4][07 "Tab options menu and manual exit"].
 	// Missing optional assets log a provider-aware warning and leave nil so battle still enters.
-	common := &formats.GAF{}
-	//c jk fonts:load empty buttons from totala1.hpi anims/commongui.GAF for render fonts
-	//todo applyLanguage()
-	common = factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
+	common := factionSupportGAF(fs, side, loadGAFOptional(fs, "anims/commongui.gaf", "commongui.gaf"))
 	oldMain := loadGAFOptional(fs, "anims/oldmain.gaf", "oldmain.gaf")
 	share := loadGAFOptional(fs, "anims/share.gaf", "share.gaf")
 	logoPath := "textures/logos.gaf"
