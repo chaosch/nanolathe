@@ -214,7 +214,7 @@ func drawTextClippedCJK(frame []uint8, width, height int, fnt *formats.FNT, text
 	}
 
 	CJKPaddingTopRatio := 0.20
-	CJKPaddingBottomRatio := 0.20
+	CJKPaddingBottomRatio := 0.0
 	baseH := float64(fnt.Height)
 	padTop := int(baseH * CJKPaddingTopRatio)
 	padBottom := int(baseH * CJKPaddingBottomRatio)
@@ -308,7 +308,9 @@ func drawTextClippedCJK(frame []uint8, width, height int, fnt *formats.FNT, text
 					}
 					// 区域裁剪
 					if dx >= clipX && dx < clipX+clipW && dy >= clipY && dy < clipY+clipH {
-						frame[rowBase+dx] = color
+						if tier.Name == "tiny" {
+							frame[rowBase+dx] = color
+						}
 					}
 				}
 			}

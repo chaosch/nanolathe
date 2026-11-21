@@ -90,7 +90,7 @@ func briefingSplitBlinkRunsIncludeCJK(text string) string {
 		return briefingSplitBlinkRuns(text)
 	}
 }
-func briefingSplitBlinkRunsForCJK(text string) string {
+func briefingSplitBlinkRunsForCJK1(text string) string {
 	src := []byte(text)
 	out := make([]byte, 0, len(src)+16)
 	var blinkStack [][]byte
@@ -153,6 +153,72 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 		if r == '\n' && open {
 			currentLetter := blinkStack[len(blinkStack)-1]
 			fmt.Printf("[SplitBlinkCJK] >>> LF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
+			out = append(out, '&')
+			out = append(out, '\r', '\n')
+			out = append(out, '&')
+			out = append(out, currentLetter...)
+			continue
+		}
+
+		out = append(out, r)
+	}
+
+	fmt.Printf("[SplitBlinkCJK] END | output=%q\n", string(out))
+	return string(out)
+}
+func briefingSplitBlinkRunsForCJK(text string) string {
+	// 将输入按 Rune（Unicode 字符）拆分，确保一个汉字作为一个整体处理
+	src := []rune(text)
+	out := make([]rune, 0, len(src)+16)
+	var blinkStack [][]rune
+
+	fmt.Printf("[SplitBlinkCJK] START | input=%q\n", text)
+
+	for i := 0; i < len(src); i++ {
+		r := src[i]
+		open := len(blinkStack) > 0
+		fmt.Printf("[SplitBlinkCJK] i=%d, char=%q, open=%t, stackLen=%d\n", i, string(r), open, len(blinkStack))
+
+		if r == '&' {
+			if !open {
+				// 开启标签
+				if i+1 >= len(src) {
+					out = append(out, r)
+					continue
+				}
+				// 获取 & 后面的那个字符
+				letter := []rune{src[i+1]}
+				blinkStack = append(blinkStack, letter)
+				out = append(out, r)
+				out = append(out, letter...)
+				i++ // 吞掉下一个字符
+				fmt.Printf("[SplitBlinkCJK] >>> OPEN TAG, letter=%q, stack=%#v\n", string(letter), blinkStack)
+			} else {
+				// 关闭标签
+				blinkStack = blinkStack[:len(blinkStack)-1]
+				out = append(out, r)
+				fmt.Printf("[SplitBlinkCJK] >>> CLOSE TAG, stack=%#v\n", blinkStack)
+			}
+			continue
+		}
+
+		// 处理 CRLF (\r\n) 在闪烁标签内部的情况
+		if r == '\r' && i+1 < len(src) && src[i+1] == '\n' && open {
+			currentLetter := blinkStack[len(blinkStack)-1]
+			fmt.Printf("[SplitBlinkCJK] >>> CRLF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
+			out = append(out, '&')
+			out = append(out, '\r', '\n')
+			out = append(out, '&')
+			out = append(out, currentLetter...)
+			i++ // 吃掉 \n
+			continue
+		}
+
+		// 处理 LF (\n) 在闪烁标签内部的情况
+		if r == '\n' && open {
+			currentLetter := blinkStack[len(blinkStack)-1]
+			fmt.Printf("[SplitBlinkCJK] >>> LF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
+			// 如果是单独的 \n，补齐为 \r\n 或保留原样
 			out = append(out, '&')
 			out = append(out, '\r', '\n')
 			out = append(out, '&')
@@ -229,10 +295,30 @@ func retailWordWrapForCJK(text string, width int, measure func(string) int) stri
 }
 func briefingLayLineIncludeCJK(raw string, measure func(string) int, open *bool, budget int) briefingTextLine {
 	if i18n.I18nLanguageNeedCJK() {
-		return briefingLayLineForCJK(raw, measure, open, budget)
+		return briefingLayLineForCJK(raw, measureCJk, open, budget)
 	} else {
 		return briefingLayLine(raw, measure, open, budget)
 	}
+}
+
+func measureCJk(text string) int {
+	face := film.TextFaceInGame("tiny")
+	if len(text) == 0 {
+		return 0
+	}
+	width := 0
+	for _, r := range text {
+		b := r
+		if b == 0x0A || b == 0x00 { // 0x0A terminates advance; NUL also terminates [02 §7]
+			break
+		}
+		g := face.Glyphs[string(b)]
+		if g == nil { // offset 0 means absent glyph [02 §7][03 §7.1]
+			continue
+		}
+		width += int(g.Advance)
+	}
+	return width
 }
 func briefingLayLineForCJK(raw string, measure func(string) int, open *bool, budget int) briefingTextLine {
 	var out []byte

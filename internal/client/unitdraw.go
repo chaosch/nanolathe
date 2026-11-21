@@ -181,10 +181,16 @@ func (c *Client) UITextWidth(fnt *formats.FNT, text string, x, y, maxWidth int, 
 	if c.fnt == nil || fnt == nil {
 		return
 	}
-	if _, drawn := c.DrawRetailFilmCJKCylindrical(text, x, y, maxWidth, int(fnt.Height), color, 0); drawn {
+
+	// controlHeight 用 fnt.Height（行高），attribs 按调用方传；
+	// UITextWidth 没有 attribs，默认 0（左对齐）。
+	height := int(fnt.Height)
+	if _, drawn := c.DrawRetailFilmCJKCylindrical(text, x, y, maxWidth, height, color, 0); drawn {
 		return
 	}
-	text = i18n.T(text)
+	if i18n.I18nLanguageNeedCJK() && !hasCJK(text) || i18n.Language() != i18n.English {
+		text = i18n.T(text)
+	}
 	c.emitGlyphs(drawlist.Glyphs{
 		Font:     fnt,
 		Text:     text,

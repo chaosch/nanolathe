@@ -695,7 +695,9 @@ func (g *gameShell) drawBriefingLine(c *client.Client, text string, x, y int, co
 	if text == "" {
 		return
 	}
-	text = i18n.T(text)
+	//text = i18n.T(text)
+	//fmt.Println(text, g.briefingFont.Height)
+	//g.briefingFont.Height = 12
 	if g != nil && g.briefingFont != nil {
 		width, _ := c.Size()
 		c.UITextWidth(g.briefingFont, text, x, y, width-x, color)

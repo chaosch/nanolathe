@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // ============================================================================
@@ -526,4 +527,13 @@ func LoadTranslationTableDispatcher(looseDir string, modName string, gameFS vfs.
 	} else {
 		return content.LoadTranslationTable(gameFS, "")
 	}
+}
+
+func HasCJK(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) || (r >= 0x3000 && r <= 0x303F) {
+			return true
+		}
+	}
+	return false
 }

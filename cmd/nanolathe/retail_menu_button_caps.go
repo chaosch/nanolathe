@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
@@ -8,7 +9,8 @@ import (
 )
 
 func retailGAFGlyphDispatch(font *formats.GAFEntry, r rune) *formats.GAFFrame {
-	if i18n.I18nLanguageNeedCJK() {
+	fmt.Println(string(r))
+	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(string(r)) {
 		return retailGAFGlyphCJK(font, r)
 	}
 	return retailGAFGlyph(font, byte(r))
@@ -23,9 +25,6 @@ func retailGAFGlyphCJK(font *formats.GAFEntry, r rune) *formats.GAFFrame {
 	)
 
 	availHeight := retailGAFTextHeight(font) - padTop - padBottom
-	if availHeight < 1 {
-		availHeight = 1
-	}
 	tier := client.PickTier(availHeight)
 	face := film.TextFaceInGame(tier.Name)
 	if face == nil {
@@ -37,6 +36,6 @@ func retailGAFGlyphCJK(font *formats.GAFEntry, r rune) *formats.GAFFrame {
 	}
 	f := g.Frame()
 	f.Width = uint16(g.Advance)
-	f.YOffset = int16(tier.Px) + 2
+	f.YOffset = int16(tier.Px)
 	return f
 }

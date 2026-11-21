@@ -106,9 +106,9 @@ type FaceTier struct {
 }
 
 var faceTiers = []FaceTier{
+	{"normal", 14},
+	{"small", 12},
 	{"tiny", 9},
-	{"normal", 10},
-	//{"normal", 12}, //{"normal", 20},
 	//{"medium", 20},
 	//{"large", 20},
 	//{"title", 20},
@@ -116,14 +116,14 @@ var faceTiers = []FaceTier{
 
 func PickTier(targetH int) FaceTier {
 	if targetH <= 0 {
-		return faceTiers[0]
+		return faceTiers[2]
 	}
 	for _, t := range faceTiers {
-		if t.Px >= targetH {
+		if targetH >= t.Px {
 			return t
 		}
 	}
-	return faceTiers[len(faceTiers)-1]
+	return faceTiers[2]
 }
 
 func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {

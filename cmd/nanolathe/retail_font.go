@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -150,6 +151,8 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 	//	return
 	//}
 	remaining := maxWidth
+	fmt.Println(text)
+
 	for _, r := range text {
 		if r == 0 {
 			return
@@ -158,7 +161,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		if frame == nil {
 			continue
 		}
-		advance := 16 //int(frame.Width)
+		advance := int(frame.Width) //int(frame.Width)
 		if remaining >= 0 && remaining < advance {
 			return
 		}

@@ -220,8 +220,8 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 		return
 	}
 
-	CJKPaddingTopRatio := 0.20
-	CJKPaddingBottomRatio := 0.20
+	CJKPaddingTopRatio := 0.40
+	CJKPaddingBottomRatio := 0.0
 	CJKPaddingLeftRatio := 0.10
 	CJKPaddingRightRatio := 0.10
 	CJKLineSpacingRatio := 0.15
@@ -241,7 +241,7 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 	}
 	var tokens []token
 	var explicitSize = 0
-	var gridRows, gridCols = 0, 0
+	//var gridRows, gridCols = 0, 0
 	runes := []rune(g.Text)
 	i := 0
 	for i < len(runes) {
@@ -258,7 +258,7 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 					parts := string(runes[start:i])
 					var r, c int
 					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
-						gridRows, gridCols = r, c
+						//gridRows, gridCols = r, c
 					}
 				}
 				tokens = append(tokens, token{forceNL: true})
@@ -301,19 +301,14 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 
 	availH := int(baseH) - padTop - padBottom
 	var tier client.FaceTier
-	if explicitSize > 0 {
-		tier = client.PickTier(explicitSize)
-	} else if gridRows > 1 && gridCols > 0 {
-		cellHeight := availH / gridRows
-		tier = client.PickTier(cellHeight)
-	} else {
-		tier = client.PickTier(availH)
-	}
+
+	tier = client.PickTier(availH)
 
 	face = film.TextFaceInGame(tier.Name)
 	if face == nil || face.GpuTex == nil {
 		return
 	}
+	fmt.Println(g.Text, g.Font.Height, tier, padTop, padBottom, padLeft, padRight, availH)
 
 	// 获取切片的真实全高（因为我们在 Python 里已经裁剪了留白，这个高度就是实际最高点到最低点）
 	var cellH int
@@ -410,14 +405,23 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 				v0 := float32(glyph.Y)
 				u1 := u0 + float32(glyph.W)
 				v1 := v0 + float32(glyph.H)
-
 				if r.sched.begin(schedOpaque, drawX, drawY, drawX+int(glyph.W), drawY+int(glyph.H), imgs) {
-					r.sched.quad(schedOpaque,
-						float32(drawX), float32(drawY),
-						float32(drawX+int(glyph.W)), float32(drawY+int(glyph.H)),
-						u0, v0,
-						u1, v1,
-						[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
+					if tier.Name == "tiny" {
+						r.sched.quad(schedOpaque,
+							float32(drawX), float32(drawY),
+							float32(drawX+int(glyph.W)), float32(drawY+int(glyph.H)),
+							u0, v0,
+							u1, v1,
+							[4]float32{col, 0, 0, 0}, [4]float32{0, 0, 0, sceneOpGlyph})
+					} else {
+						whiteTint := [4]float32{0, 0, 0, 0}
+						r.sched.quad(schedOpaque,
+							float32(drawX), float32(drawY),
+							float32(drawX+int(glyph.W)), float32(drawY+int(glyph.H)),
+							u0, v0,
+							u1, v1,
+							whiteTint, [4]float32{0, 0, 0, sceneOpGlyph})
+					}
 				}
 			}
 			curX += int(glyph.Advance)
@@ -518,7 +522,7 @@ func (r *Renderer) GlyphsDispatch(g drawlist.Glyphs) {
 		return
 	}
 	// ★ 外层分发：如果带了中文字库，走 CJK 渲染器
-	if i18n.I18nLanguageNeedCJK() {
+	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(g.Text) {
 		r.CJKGlyphs(g)
 		return
 	} else {
