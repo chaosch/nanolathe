@@ -274,12 +274,6 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		return
 	}
 	text := retailGadgetText(p, index, gad)
-	if len(text) == 0 {
-		return
-	}
-
-	palColor, _ := g.retailTextPen(p, index, gad)
-
 	if gad.Kind == gui.KindLabel && p.Window != nil && index > 0 && index < len(p.Window.Gadgets) {
 		oldX := gad.Rect.X
 		g.resolveRetailLabel(p.Window, index, text)
@@ -301,45 +295,11 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	selected := g.windowGadgetFont(p, gad)
 	if gad.Kind == gui.KindLabel && selected != nil {
 		color, _ := g.retailTextPen(p, index, gad)
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			retailGadgetText(p, index, gad),
-			int(r.X),
-			int(r.Y),
-			int(r.W),
-			int(r.H), // <--- 新增：传入控件高度
-			palColor,
-			gad.Attribs,
-		); ok {
-			return
-		}
 		g.drawRetailLabelFNT(c, p, gad, r, text, selected, color)
 		return
 	}
 	if gad.Kind == gui.KindLabel {
 		color, shade := g.retailTextPen(p, index, gad)
-		//some label give wrong gui.rect
-		var Height, Width int
-		var Align uint32
-		if (r.H == 0 || r.W == 0) || (r.H == 12 || r.W == 12) || r.H < 12 {
-			Height = 13
-			Width = 26
-			Align = 0
-		} else {
-			Height = int(r.H)
-			Width = int(r.W)
-			Align = gad.Attribs
-		}
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			retailGadgetText(p, index, gad),
-			int(r.X),
-			int(r.Y),
-			int(Width),
-			int(Height), // <--- 新增：传入控件高度
-			palColor,
-			Align,
-		); ok {
-			return
-		}
 		g.drawRetailLabelGAF(c, p, gad, r, text, color, shade)
 		return
 	}
@@ -348,40 +308,16 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	}
 	measure, lineStep := g.retailTextMetrics(selected)
 	if gad.Kind == gui.KindButton {
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			retailGadgetText(p, index, gad),
-			int(r.X),
-			int(r.Y),
-			int(r.W),
-			int(r.H), // <--- 新增：传入控件高度
-			palColor,
-			gad.Attribs,
-		); ok {
-			return
-		}
 		g.drawRetailButtonCaption(c, p, index, gad, r, text, selected, measure, lineStep)
 		return
 	}
 	if gad.Kind == gui.KindTextBox {
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			retailGadgetText(p, index, gad),
-			int(r.X),
-			int(r.Y),
-			int(r.W),
-			int(r.H), // <--- 新增：传入控件高度
-			palColor,
-			gad.Attribs,
-		); ok {
-			return
-		}
 		color, shade := g.retailTextPen(p, index, gad)
 		drawTextEditorState(c, p, index, gad, r, text, measure, lineStep, 0, g.guiColor(9),
 			func(x, y, w, h int, fill byte) { c.UIFillRect(x, y, w, h, fill) },
 			func(text string, x, y, width int) {
 				if selected != nil && g.retailGAFTextFont() == nil {
-					g.drawRetailLabelFNT(c, p, gad, r, text, selected, color)
-
-					//c.UITextWidth(selected, text, x, y, width, color)
+					c.UITextWidth(selected, text, x, y, width, color)
 				} else {
 					g.drawRetailStringLit(c, text, x, y, width, color, shade)
 				}
@@ -429,17 +365,6 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 		for i, line := range lines {
 			g.drawRetailStringSelected(c, line, x, top+i*lineStep, maxWidth, color, shade, selected)
 		}
-		return
-	}
-	if _, ok := c.DrawRetailFilmCJKCylindrical(
-		retailGadgetText(p, index, gad),
-		int(r.X),
-		int(r.Y),
-		int(r.W),
-		int(r.H), // <--- 新增：传入控件高度
-		palColor,
-		gad.Attribs,
-	); ok {
 		return
 	}
 	g.drawRetailStringSelected(c, text, x, y, maxWidth, color, shade, selected)
@@ -567,7 +492,6 @@ func (g *gameShell) drawRetailStringSelected(c *client.Client, text string, x, y
 // The GAF pen's wrap-or-single-line choice belongs to the other branch and
 // never runs here.
 func (g *gameShell) drawRetailLabelFNT(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT, color byte) {
-	//c.PrintDebug(text)
 	if c == nil || font == nil || text == "" {
 		return
 	}
@@ -606,7 +530,6 @@ func retailLabelPenX(_ *gui.Window, gad gui.Gadget, r gui.Rect, textWidth int) i
 // `shade` (the label's live colour word); the FNT fallback draws in that word
 // raw [03 R-FONT-01 §6].
 func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Gadget, r gui.Rect, text string, color byte, shade int) {
-	//c.PrintDebug(text)
 	measure, metric, ok := g.retailLabelTextMetrics()
 	if c == nil || !ok || text == "" {
 		return

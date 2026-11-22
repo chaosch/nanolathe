@@ -20,7 +20,7 @@ func defaultLocalesDir() (string, bool) {
 	return filepath.Join(dir, "nanolathe", "locales"), true
 }
 
-func createLocalesDir() (string, bool) {
+func CreateLocalesDir() (string, bool) {
 	if localesDir, r := defaultLocalesDir(); r {
 		if exist, _ := DirExists(localesDir); exist {
 			//createExampleLocale(localesDir)
@@ -49,7 +49,7 @@ func DirExists(path string) (bool, error) {
 
 // ScanExternalLocales 掃描外部語言資料夾，並更新/追加到 Languages 列表
 func ScanExternalLocales() error {
-	localesDir, ok := createLocalesDir()
+	localesDir, ok := CreateLocalesDir()
 	if !ok {
 		return nil
 	}

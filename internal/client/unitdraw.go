@@ -162,30 +162,8 @@ func (c *Client) UIText(fnt *formats.FNT, text string, x, y int, color byte) {
 // the run and the classic sink runs the FNT rasterizer inline with the same
 // pen, control width and no per-glyph callback, so the text lands in per-frame
 // order (docs/DESIGN_GPU_RENDERER.md §2.2)[07 §7][03 §7.1].
-//func (c *Client) UITextWidth(fnt *formats.FNT, text string, x, y, maxWidth int, color byte) {
-//	fmt.Printf("UIText:%s\n", text)
-//	if c.fnt == nil || fnt == nil {
-//		return
-//	}
-//	c.emitGlyphs(drawlist.Glyphs{
-//		Font:     fnt,
-//		Text:     text,
-//		X:        int32(x),
-//		Y:        int32(y),
-//		Color:    color,
-//		MaxWidth: int32(maxWidth),
-//	})
-//}
-
 func (c *Client) UITextWidth(fnt *formats.FNT, text string, x, y, maxWidth int, color byte) {
 	if c.fnt == nil || fnt == nil {
-		return
-	}
-
-	// controlHeight 用 fnt.Height（行高），attribs 按调用方传；
-	// UITextWidth 没有 attribs，默认 0（左对齐）。
-	height := int(fnt.Height)
-	if _, drawn := c.DrawRetailFilmCJKCylindrical(text, x, y, maxWidth, height, color, 0); drawn {
 		return
 	}
 	if i18n.I18nLanguageNeedCJK() && !hasCJK(text) || i18n.Language() != i18n.English {

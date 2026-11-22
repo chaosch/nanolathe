@@ -265,7 +265,7 @@ func wide(r rune) bool {
 // noBreakBefore reports the closing punctuation a line may not start with: a
 // Chinese line breaks between characters, but never before these.
 func noBreakBefore(r rune) bool {
-	return strings.ContainsRune("。，、；:？！）〕〉》」』】’”·…％", r)
+	return strings.ContainsRune("。，、；：？！）〕〉》」』】’”·…％", r)
 }
 
 // noBreakAfter reports the opening punctuation a line may not end with.
@@ -351,7 +351,6 @@ func (f *Font) wrapParagraph(para string, s Style, width float64) []string {
 // DrawWrapped sets a paragraph from the top-left (x, top) and returns the
 // height used.
 func (f *Font) DrawWrapped(dst *ebiten.Image, text string, x, top, width, leading float64, s Style) float64 {
-	//fmt.Printf("DrawWrapped:%s\r\n", text)
 	lines := f.Wrap(text, s, width)
 	s.Verbatim = true
 	y := top + s.Size

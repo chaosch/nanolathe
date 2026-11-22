@@ -137,27 +137,3 @@ func asciiEqualFold(a, b string) bool {
 	}
 	return true
 }
-
-// NewTranslationTable 构造一个正确的翻译表。
-func NewTranslationTable(entries map[string]string) *TranslationTable {
-	// 1. 收集所有的 source，去重
-	sources := make([]string, 0, len(entries))
-	for src := range entries {
-		sources = append(sources, src)
-	}
-
-	// 2. 按 source 的字节序排序 (byte-sorted source order)
-	sort.Strings(sources)
-
-	// 3. 按排序后的顺序组装 entries
-	t := &TranslationTable{
-		entries: make([]translationEntry, 0, len(sources)),
-	}
-	for _, src := range sources {
-		t.entries = append(t.entries, translationEntry{
-			source:      src,
-			translation: entries[src],
-		})
-	}
-	return t
-}

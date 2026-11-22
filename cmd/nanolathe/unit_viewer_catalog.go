@@ -23,6 +23,7 @@ func unitViewerEntries(c *content.Catalog) []unitViewerEntry {
 		foldName, foldIdentity string
 		ordinal                int
 	}
+	content.ApplyUnitText(c)
 	records := c.UnitRecords()
 	ordered := make([]orderedEntry, 0, len(records))
 	for ordinal, def := range records {

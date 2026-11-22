@@ -115,7 +115,6 @@ func (g *gameShell) completeLanguage(ready bool, err error) {
 			}
 			s.toast, s.toastLeft = "Settings saved", 2.2
 		}
-		//GlobalTranslations.LoadAll(filepath.Join(g.opts.LocalesDir, "loose"), g.select, g.cs.fs)
 	}
 }
 
@@ -183,7 +182,6 @@ func (s *nlScreen) languageCard() nlCard {
 			subs[i] = l.EnglishName + " interface"
 		}
 	}
-
 	return nlCard{
 		key: "language", label: "Language", pics: []string{"armcom", "corcom"}, kind: nlHalves,
 		steps: steps, subs: subs,

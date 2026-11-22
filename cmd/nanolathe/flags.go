@@ -725,9 +725,7 @@ func parseFlags(args []string, out io.Writer) (Options, error) {
 		fmt.Fprintln(out, err)
 		return opts, err
 	}
-
 	return opts, nil
-
 }
 
 // validateReplayOptions keeps the replay flags to the runs that take them: a

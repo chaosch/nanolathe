@@ -36,7 +36,7 @@ func MeasureText(text string, style TextStyle) float64 {
 	return w * style.Size
 }
 
-// mask is a coverage buffer for one drawn run: the Glyph rasterizer fills it
+// mask is a coverage buffer for one drawn run: the glyph rasterizer fills it
 // once and the compositor reads it for the shadow and the face, so overlapping
 // strokes composite as one shape instead of darkening at every join.
 type mask struct {
@@ -135,7 +135,7 @@ func buildRun(text string, x, baseline float64, style TextStyle) *mask {
 	m := newMask(x0, y0, int(math.Ceil(maxX))-x0+2, int(math.Ceil(maxY))-y0+2)
 	for _, item := range placed {
 		g := item.g
-		// A texel covers Units face Units: one for the Latin faces, more for
+		// A texel covers units face units: one for the Latin faces, more for
 		// glyphs rasterized below the atlas resolution (the CJK additions).
 		u := g.Units()
 		level, factor := 0, 1.0
@@ -234,10 +234,9 @@ func blend8(dst, src uint8, a float64) uint8 {
 // DrawText draws one line with its pen at (x, baseline) and returns its width.
 // alpha scales the whole run, revealX is the wipe column (+Inf draws it all).
 func DrawText(dst *image.RGBA, text string, x, baseline float64, style TextStyle, alpha, revealX float64) float64 {
-	//fmt.Printf("DrawText:%s\r\n", text)
 	m := buildRun(text, x, baseline, style)
 	// A title crosses grass, smoke and unit art in the same line, so the face
-	// carries its own contrast: a dark outline tight against the Glyph, then
+	// carries its own contrast: a dark outline tight against the glyph, then
 	// the drop shadow, then the face itself.
 	if style.Halo > 0 {
 		r := max(1, int(math.Round(style.Halo*style.Size)))

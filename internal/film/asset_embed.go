@@ -4,7 +4,6 @@ package film
 
 import (
 	"embed"
-	"errors"
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"os"
@@ -15,6 +14,8 @@ import (
 var fontAssets embed.FS
 
 func init() {
+	// An embedded build always has the Chinese atlases at hand, so asking for
+	// them is all it takes.
 	startCJKFetch = func() { cjkReady.Store(true) }
 }
 
@@ -74,29 +75,4 @@ func readAsset(name string) ([]byte, error) {
 		return nil, fmt.Errorf("film: asset %q not found: %w", name, err)
 	}
 	return data, nil
-}
-
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil || !errors.Is(err, os.ErrNotExist)
-}
-
-var (
-	CJKNormal *AtlasFace
-	CJKSmall  *AtlasFace
-	CJKTiny   *AtlasFace
-)
-
-func GetCJKFace(height int) *AtlasFace {
-	if CJKNormal == nil && CJKSmall == nil && CJKTiny == nil {
-		return nil // 没加载
-	}
-	switch {
-	case height >= 16:
-		return CJKNormal
-	case height >= 15:
-		return CJKSmall
-	default:
-		return CJKTiny
-	}
 }

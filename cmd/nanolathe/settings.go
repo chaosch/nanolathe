@@ -190,6 +190,7 @@ func (g *gameShell) applySettings(s settings.Settings) {
 	// the shown rows is the only place a live pair is forced
 	// [08 R-SKIR-01 §1] "Shown rows only".
 	g.retailControllersSet = true
+
 	g.syncMapIndex()
 }
 

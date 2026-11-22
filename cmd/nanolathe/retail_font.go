@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -124,7 +123,6 @@ func (g *gameShell) retailTextHeight() int {
 // No GUI semantic-color remap or FNT tint is applied. maxWidth < 0 means no
 // width limit; otherwise the next glyph must fit in the remaining width.
 func (g *gameShell) drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
-	//c.PrintDebug(text)
 	g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
 }
 
@@ -137,22 +135,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
-	//Align := 2
-	//if baselineHeight <= 12 {
-	//	baselineHeight = 13
-	//	//Align = 0
-	//}
-	//if _, ok := c.DrawRetailFilmCJKCylindrical(
-	//	text,
-	//	x, y, maxWidth, baselineHeight,
-	//	0,
-	//	uint32(Align),
-	//); ok {
-	//	return
-	//}
 	remaining := maxWidth
-	fmt.Println(text)
-
 	for _, r := range text {
 		if r == 0 {
 			return
@@ -206,7 +189,6 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 			continue
 		}
 		advance := int(frame.Width)
-		//fmt.Println("advance", advance)
 		if remaining >= 0 && remaining < advance {
 			return
 		}
@@ -232,7 +214,6 @@ func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntr
 }
 
 func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWidth int, fntColor byte) {
-	//c.PrintDebug(text)
 	g.drawRetailStringLit(c, text, x, y, maxWidth, fntColor, 0)
 }
 

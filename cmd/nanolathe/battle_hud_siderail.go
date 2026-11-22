@@ -317,7 +317,6 @@ func (h *retailBattleHUD) buttonCaptionGAFFont() *formats.GAFEntry {
 // kind-7 records (nil when none matched): the active FNT the null-slot
 // fallback draws with [07 R-WGT-01 §6][03 R-FONT-01 §5].
 func (h *retailBattleHUD) drawProductButtonCaptionSelected(c *client.Client, gad gui.Gadget, r, clip gui.Rect, text string, selected *formats.FNT) {
-	//c.PrintDebug(text)
 	_, _, font, fallback := h.productButtonCaptionLayoutSelected(gad, r, text, selected)
 	var width, metric int
 	if font != nil {
@@ -575,6 +574,5 @@ func commandButtonFrame(entry *formats.GAFEntry, gad gui.Gadget, stage int, grey
 		down = 1
 	}
 	frame, _ := retailButtonFrameFromEntry(entry, gad, 0, down, stage, grey)
-	//client.DumpGAFFrame(frame, entry.Name+"retailButtonFrameFromEntry")
 	return frame
 }

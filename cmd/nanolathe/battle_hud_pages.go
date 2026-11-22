@@ -179,9 +179,6 @@ func (h *retailBattleHUD) numberedPage(name string, pageNumber int, placements [
 		}
 		gad := &window.Gadgets[index]
 		gad.Name = placement.ProductKey
-		//for _, g := range []Gadget{gad} {
-
-		//}
 		// The generated-page patch selects the per-record resource prepass;
 		// it does not rename the template art field [07 §9].
 		gad.GAFFile |= 1
@@ -441,7 +438,6 @@ func (h *retailBattleHUD) generatedProductGAF(product string) *formats.GAF {
 // gadgetButtonFrame consumes one installed art entry and the runtime button
 // words.
 func (h *retailBattleHUD) gadgetButtonFrame(gad gui.Gadget, page *formats.GAF, down, stage int, disabled bool) *formats.GAFFrame {
-	//fmt.Println(fmt.Sprintf("gadgetButtonFrame---:Name:%s", gad.Name))
 	entry := h.gadgetArtEntry(gad, page)
 	stockButtons := false
 	if entry == nil && !gad.ButtonArtResolved && !gad.ExternalArtResolved && gad.Kind == gui.KindButton && h.common != nil {
@@ -456,7 +452,6 @@ func (h *retailBattleHUD) gadgetButtonFrame(gad gui.Gadget, page *formats.GAF, d
 		base = stockButtonBase(entry, gad)
 	}
 	frame, _ := retailButtonFrameFromEntry(entry, gad, base, down, stage, disabled)
-	//fmt.Println(fmt.Sprintf("gadgetButtonFrame---:Name:%s，entry.name：%s,stage:%d", gad.Name, entry.Name, stage))
 	return frame
 }
 

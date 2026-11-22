@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/nanolathe-gg/nanolathe/internal/client"
 	"slices"
 	"strings"
 
@@ -138,7 +137,6 @@ func sidebarCommandsMatch(a, b, orders *sidebarCommandScaffold) bool {
 }
 
 func (h *retailBattleHUD) sidebarProductCatalog(cat *content.Catalog, def *content.UnitDef, count int) *sidebarProductCatalog {
-
 	key := sidebarProductCatalogKey{cat, def, count}
 	if cached, ok := h.sidebarProducts[key]; ok {
 		return cached
@@ -162,7 +160,6 @@ func (h *retailBattleHUD) sidebarProductCatalog(cat *content.Catalog, def *conte
 		c.pages[page] = scaffold
 		var indices []int
 		for i, g := range w.Gadgets {
-			//fmt.Println(fmt.Sprintf("sidebarProductCatalog:%s,GKind:%v", g.Name, g.Kind.RuntimeFamily()), g.CommonAttribs, sidebarEmptySlot(g.Name))
 			if g.Kind != gui.KindButton || g.Active == 0 || g.CommonAttribs&4 == 0 || sidebarEmptySlot(g.Name) {
 				continue
 			}
@@ -170,7 +167,6 @@ func (h *retailBattleHUD) sidebarProductCatalog(cat *content.Catalog, def *conte
 				continue
 			}
 			indices = append(indices, i)
-
 		}
 		c.cells = append(c.cells, h.sidebarBuildCells(w, art, page, indices)...)
 
@@ -257,14 +253,7 @@ func (h *retailBattleHUD) sidebarCombinedCommands(c *sidebarProductCatalog) bool
 		}
 		return height
 	}
-	for _, g := range c.commands {
-		for _, x := range g.source.window.Gadgets {
-			client.PrintDebug(x.Name)
-		}
-		//client.DumpGAFFrame(g.art.Entries, c.orders.window.Gadgets[g].Name)
-	}
 	margins := h.sidebarCommandMargins(build, c.orders, extra)
-
 	c.upperHeight = pack(c.tabs, 0, nil)
 	compose := func(panel []sidebarProduct, spacing *[]sidebarCommandGap) ([]sidebarProduct, int32) {
 		prefix, panel := slices.Clone(extra), slices.Clone(panel)
@@ -373,7 +362,6 @@ func (h *retailBattleHUD) sidebarProductsWindow(b *battleSession, f *frame.Frame
 			}
 		}
 	}
-
 	// Fitted pages count authored row groups; flat pages count logical cells.
 	// Translate through record identity when a resize changes layout kind.
 	if !reseed && len(p.starts) != 0 {

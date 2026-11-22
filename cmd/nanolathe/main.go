@@ -238,6 +238,7 @@ func run(opts Options, out, errOut *os.File) error {
 	if minimum, ok := modMinimumGameplay(content.mod); ok && opts.GameplaySet && !content.savedMod && gameplayBelow(opts.Gameplay, minimum) {
 		return &missingProductError{what: "gameplay mode is below the mod's minimum", logical: "<command line>", providers: []string{"--gameplay", "--mod"}, expected: gameplayLabel(minimum) + " or Modern for " + content.mod.Name}
 	}
+
 	if opts.VerifyReplay != "" {
 		return runVerifyReplay(opts, content, out)
 	}
@@ -245,10 +246,11 @@ func run(opts Options, out, errOut *os.File) error {
 	if opts.WalkPreview != "" {
 		return runUnitViewerWalkPreview(opts, content)
 	}
-	//set film's assets and i18n Locales
+
 	if opts.Film != "" {
 		return runFilm(opts, content)
 	}
+
 	if opts.NLShot != "" {
 		return runNLScreenShot(opts, content)
 	}

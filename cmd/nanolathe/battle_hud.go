@@ -7,6 +7,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/camera"
 	"github.com/nanolathe-gg/nanolathe/internal/client"
@@ -21,7 +23,6 @@ import (
 	"github.com/nanolathe-gg/nanolathe/internal/ui"
 	"github.com/nanolathe-gg/nanolathe/internal/world"
 	"github.com/nanolathe-gg/nanolathe/vfs"
-	"strings"
 )
 
 type retailBattleHUD struct {

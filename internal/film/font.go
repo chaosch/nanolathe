@@ -15,7 +15,7 @@ type AtlasGlyph struct {
 	X, Y, W, H int
 	Left, Top  int
 	Advance    float64
-	// Scale is how many face Units one atlas pixel covers; zero means one.
+	// Scale is how many face units one atlas pixel covers; zero means one.
 	// tools/film-font-cjk writes it for glyphs it rasterizes below the atlas
 	// resolution the Latin faces use.
 	Scale  float64
@@ -51,7 +51,6 @@ func loadAtlasFace(name string) *AtlasFace {
 		panic(err)
 	}
 	data, err := readAsset(name + ".png")
-	println("loadAtlasFace::" + name)
 	if err != nil {
 		panic(err)
 	}
@@ -126,13 +125,6 @@ func loadAtlasFace(name string) *AtlasFace {
 var filmFaces = sync.OnceValue(func() map[string]*AtlasFace {
 	faces := make(map[string]*AtlasFace, 2)
 	for _, name := range []string{"display", "body"} {
-		faces[name] = loadAtlasFace(name)
-	}
-	return faces
-})
-var otherFilms = sync.OnceValue(func() map[string]*AtlasFace {
-	faces := make(map[string]*AtlasFace, 2)
-	for _, name := range []string{"large", "medium", "normal", "small", "title", "tiny"} {
 		faces[name] = loadAtlasFace(name)
 	}
 	return faces

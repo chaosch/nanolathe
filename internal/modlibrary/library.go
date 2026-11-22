@@ -187,6 +187,7 @@ func (l *Library) Installed() ([]Mod, error) {
 	if err != nil {
 		return nil, diagnostic("reading the mod library failed: "+err.Error(), l.Root, nil, "a readable mod library directory")
 	}
+	fmt.Println(ids)
 	var mods []Mod
 	for _, idEntry := range ids {
 		id := idEntry.Name()
@@ -194,6 +195,7 @@ func (l *Library) Installed() ([]Mod, error) {
 			continue // manifest.json, .staging and anything foreign
 		}
 		versions, err := os.ReadDir(filepath.Join(l.Root, id))
+		fmt.Println(filepath.Join(l.Root, id))
 		if err != nil {
 			continue
 		}
@@ -201,6 +203,7 @@ func (l *Library) Installed() ([]Mod, error) {
 			if !versionEntry.IsDir() {
 				continue
 			}
+			fmt.Println(versionEntry.Name())
 			if mod, ok := l.readMod(id, versionEntry.Name()); ok {
 				mods = append(mods, mod)
 			}
@@ -228,6 +231,7 @@ func (l *Library) Installed() ([]Mod, error) {
 // readMod loads one <id>/<version>/ directory, or reports it incomplete.
 func (l *Library) readMod(id, version string) (Mod, bool) {
 	dir := l.modDir(id, version)
+	fmt.Println(id, version)
 	data, err := readLimited(filepath.Join(dir, MetadataFile), maxMetadataBytes)
 	if err != nil {
 		return Mod{}, false

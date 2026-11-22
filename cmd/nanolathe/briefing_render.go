@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
@@ -232,11 +233,10 @@ func readBriefingText(cs *contentSet, name string) string {
 	if cs == nil || cs.fs == nil || strings.TrimSpace(name) == "" {
 		return ""
 	}
-	fmt.Println(name)
 	var data []byte
 	var err error
 	if i18n.I18nLanguageNeedCJK() {
-		str, _ := i18n.GlobalTranslations.GetBrief(strings.ToLower(name))
+		str, _ := content.GlobalTranslations.GetBrief(i18n.Language(), strings.ToLower(name))
 		return string(str.Text)
 	} else {
 		data, err = cs.fs.ReadFileLimit(briefingMediaPath(name, "txt"), int64(formats.DefaultTDFLimits().MaxBytes))
@@ -650,27 +650,6 @@ func (g *gameShell) drawBriefingText(c *client.Client, b *campaignBriefingContro
 	if b == nil || c == nil {
 		return
 	}
-
-	// ★ 1. 如果是中文，直接無視原廠的 b.Lines()，自己接管排版！
-	if i18n.I18nLanguageNeedCJK() {
-		// 拿到你在加載時翻譯好的整段中文
-		text := b.text
-
-		// 直接呼叫你的中文字體渲染器，讓它自己去算寬高和斷行
-		if _, drawn := c.DrawRetailFilmCJKCylindrical(
-			text,
-			int(r.X)+5,  // 保留原本的左邊距
-			int(r.Y)+5,  // 頂部留點空隙
-			int(r.W)-10, // 寬度減去左右邊距
-			int(r.H),    // 傳入簡報框的總高度
-			b.PlainColor(),
-			0, // 左對齊
-		); drawn {
-			return // 成功畫出整段中文簡報，直接返回！
-		}
-	}
-
-	// 2. 英文環境，或者中文渲染失敗，走原廠邏輯
 	lines := b.Lines()
 	if len(lines) == 0 {
 		return
@@ -691,13 +670,9 @@ func (g *gameShell) drawBriefingText(c *client.Client, b *campaignBriefingContro
 // labels no width, so nothing here truncates: the wrapper is what keeps a line
 // inside the region [07 R-HUD-03 §10].
 func (g *gameShell) drawBriefingLine(c *client.Client, text string, x, y int, color byte) {
-	//c.PrintDebug(text)
 	if text == "" {
 		return
 	}
-	//text = i18n.T(text)
-	//fmt.Println(text, g.briefingFont.Height)
-	//g.briefingFont.Height = 12
 	if g != nil && g.briefingFont != nil {
 		width, _ := c.Size()
 		c.UITextWidth(g.briefingFont, text, x, y, width-x, color)

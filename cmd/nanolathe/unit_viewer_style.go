@@ -108,9 +108,9 @@ func (s *toolsScreen) clip(dst *ebiten.Image, r screenkit.Rect) *ebiten.Image {
 // editor admission and wrapping identical before and after the graphics device
 // exists; the fonts themselves are uploaded lazily by Draw.
 func unitViewerMeasure(text string, style screenkit.Style, display bool) float64 {
-	font := "body"
+	font := "small"
 	if display {
-		font = "display"
+		font = "normal"
 	}
 	if !style.Verbatim {
 		text = i18n.T(text)

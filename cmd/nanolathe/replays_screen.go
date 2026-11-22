@@ -12,7 +12,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	//"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"io/fs"
 	"os"
 	"strings"
@@ -171,12 +170,7 @@ func installMainMenuReplaysButton(window *gui.Window, x int32) {
 	button := window.Gadgets[mods]
 	button.Name, button.SourceName, button.Text = replaysButton, replaysButton, "REPLAYS"
 	button.Rect.X = x
-
-	//if t, ok := i18n.GlobalTranslations.GetUI(button.Text); ok {
-	//	button.Text = t.Text
-	//}
 	window.Gadgets = append(window.Gadgets, button)
-
 }
 
 // disableUnavailableReplays greys REPLAYS where Skirmish is greyed: a replay

@@ -14,7 +14,6 @@ package i18n
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,10 +36,16 @@ var Languages = []struct {
 	Code        string
 	Name        string
 	Folder      string
-	IsCJK       bool // 新增：標記是否需要加載 CJK 字體
+	IsCJK       bool
 	EnglishName string
 }{
-	{English, "English", "", false, "English"},
+	{"english", "English", "", false, "English"},
+	{"german", "Deutsch", "", false, "German"},
+	{"french", "Français", "", false, "French"},
+	{"spanish", "Español", "", false, "Spanish"},
+	{"italian", "Italiano", "", false, "Italian"},
+	{"polish", "Polski", "", false, "Polish"},
+	{"russian", "Русский", "", false, "Russian"},
 	{"ukrainian", "Українська", "", false, "Українська"},
 	{"chinese", "简体中文", "", true, "Chinese"},
 }
@@ -184,34 +189,37 @@ func fill(translation string, parts []string) string {
 	})
 }
 
-//func load(code string) (*catalog, error) {
-//
-//	dir := selectLocalesFolder(code)
-//	var data []byte
-//	var err error
-//
-//	filename := filepath.Join(dir, code+".json")
-//
-//	if dir == "" {
-//		data, err = locales.ReadFile("locales/" + code + ".json")
-//		println("load  internal translation  from folder:", "assets", code)
-//	} else {
-//		data, err = os.ReadFile(filename)
-//		println("load  external translation from folder:", filepath.Join(dir, code), code)
-//		if err != nil {
-//			data, err = locales.ReadFile("locales/" + code + ".json")
-//			println("load  internal translation  from folder:", "assets", code, "fallback")
-//		}
-//	}
-//	if err != nil {
-//		return nil, fmt.Errorf("nanolathe: language %q: logical path i18n/locales/%s.json, providers searched [embedded], expected a translation catalog", code, code)
-//	}
-//	var entries map[string]string
-//	if err := json.Unmarshal(data, &entries); err != nil {
-//		return nil, fmt.Errorf("nanolathe: language %q catalog: %v: logical path i18n/locales/%s.json, providers searched [embedded], expected a JSON object of strings", code, err, code)
-//	}
-//	return build(code, entries), nil
-//}
+func load(code string) (*catalog, error) {
+	dir := selectLocalesFolder(code)
+	var data []byte
+	var err error
+
+	if dir == "" {
+		// 讀取內置翻譯
+		data, err = locales.ReadFile("locales/" + code + ".json")
+		fmt.Printf("[i18n] 載入內置翻譯 (embedded): %s.json\n", code)
+	} else {
+		// 優先讀取外部翻譯
+		filename := filepath.Join(dir, code+".json")
+		data, err = os.ReadFile(filename)
+		if err == nil {
+			fmt.Printf("[i18n] 載入外部翻譯 (external): %s\n", filename)
+		} else {
+			// 外部讀取失敗，回退到內置
+			fmt.Printf("[i18n] 外部翻譯讀取失敗 (%v)，回退載入內置翻譯: %s.json\n", err, code)
+			data, err = locales.ReadFile("locales/" + code + ".json")
+		}
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("nanolathe: language %q: logical path i18n/locales/%s.json, providers searched [embedded], expected a translation catalog", code, code)
+	}
+	var entries map[string]string
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("nanolathe: language %q catalog: %v: logical path i18n/locales/%s.json, providers searched [embedded], expected a JSON object of strings", code, err, code)
+	}
+	return build(code, entries), nil
+}
 
 // build compiles a catalog's entries: exact strings and {} patterns.
 func build(code string, entries map[string]string) *catalog {
@@ -259,31 +267,6 @@ func build(code string, entries map[string]string) *catalog {
 	return c
 }
 
-//func selectLocalesFolder() string {
-//	languages := Languages
-//	fmt.Println(Language())
-//	for _, l := range languages {
-//		if l.Code == Language() {
-//			return l.Folder
-//		}
-//	}
-//	return ""
-//}
-
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true // 存在
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false // 不存在
-	}
-	// 其他错误（比如权限不足），这里通常也视为不可用
-	return false
-}
-
-//var CjkLanguage = []string{"chinese", "japanese", "korean"}
-
 func LanguageNeedCJK(language string) bool {
 	for _, l := range Languages {
 		if l.Code == language {
@@ -298,13 +281,6 @@ func I18nLanguageNeedCJK() bool {
 	return LanguageNeedCJK(Language())
 }
 
-func MatchLanguage(language, code string) bool {
-	if language == Language() {
-		return true
-	}
-	return false
-}
-
 func selectLocalesFolder(code string) string {
 	fmt.Printf("[i18n] 查詢語言 Folder: 目標 code='%s'\n", code)
 	for _, l := range Languages {
@@ -315,36 +291,4 @@ func selectLocalesFolder(code string) string {
 	}
 	fmt.Printf("[i18n] 警告：在 Languages 列表中找不到 code='%s'\n", code)
 	return ""
-}
-func load(code string) (*catalog, error) {
-	dir := selectLocalesFolder(code)
-	var data []byte
-	var err error
-
-	if dir == "" {
-		// 讀取內置翻譯
-		data, err = locales.ReadFile("locales/" + code + ".json")
-		fmt.Printf("[i18n] 載入內置翻譯 (embedded): %s.json\n", code)
-	} else {
-		// 優先讀取外部翻譯
-		filename := filepath.Join(dir, code+".json")
-		data, err = os.ReadFile(filename)
-		if err == nil {
-			fmt.Printf("[i18n] 載入外部翻譯 (external): %s\n", filename)
-		} else {
-			// 外部讀取失敗，回退到內置
-			fmt.Printf("[i18n] 外部翻譯讀取失敗 (%v)，回退載入內置翻譯: %s.json\n", err, code)
-			data, err = locales.ReadFile("locales/" + code + ".json")
-		}
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("nanolathe: language %q: logical path i18n/locales/%s.json, providers searched [embedded], expected a translation catalog", code, code)
-	}
-
-	var entries map[string]string
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, fmt.Errorf("nanolathe: language %q catalog: %v: logical path i18n/locales/%s.json, providers searched [embedded], expected a JSON object of strings", code, err, code)
-	}
-	return build(code, entries), nil
 }

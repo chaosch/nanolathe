@@ -33,7 +33,6 @@ package client
 // the overlay are passed in by the caller.
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
@@ -146,7 +145,6 @@ func TruncateToWidth(fnt *formats.FNT, text string, maxWidth int) string { // [0
 // The caller has already resolved semantic colors through the logical map
 // (C7). No simulation state is touched (I6).
 func drawTextClipped(frame []uint8, width, height int, fnt *formats.FNT, text string, x, y, maxWidth int, color byte, clipX, clipY, clipW, clipH int) {
-	fmt.Printf("DrawTextClipped:%s\r\n", text)
 	if len(frame) < width*height || fnt == nil || width <= 0 || height <= 0 || len(text) == 0 {
 		return
 	}

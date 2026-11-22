@@ -308,8 +308,6 @@ func (r *Renderer) CJKGlyphs(g drawlist.Glyphs) {
 	if face == nil || face.GpuTex == nil {
 		return
 	}
-	fmt.Println(g.Text, g.Font.Height, tier, padTop, padBottom, padLeft, padRight, availH)
-
 	// 获取切片的真实全高（因为我们在 Python 里已经裁剪了留白，这个高度就是实际最高点到最低点）
 	var cellH int
 	if ag, ok := face.Glyphs["A"]; ok {
@@ -438,6 +436,10 @@ func (r *Renderer) GlyphsOriginal(g drawlist.Glyphs) {
 	if fnt == nil || fnt.Height == 0 || len(g.Text) == 0 {
 		return
 	}
+	// World text keeps native glyphs, centering and outline pixels. Project and
+	// snap its anchor once, then compile framebuffer geometry in the existing
+	// schedule so strip/fog ordering and batching remain intact (§14.2, §16.3).
+	// Magnified chrome is the exception: its glyphs scale with the region.
 	if r.sched.worldOn && !r.chromeRegion {
 		g.X = int32(math.Floor(float64(r.sched.txx(float32(g.X))) + .5))
 		g.Y = int32(math.Floor(float64(r.sched.txy(float32(g.Y))) + .5))

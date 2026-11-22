@@ -271,9 +271,6 @@ func (h *retailBattleHUD) drawGUIWindowState(c *client.Client, window *gui.Windo
 					if h.modalFont != nil {
 						h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					} else {
-						if _, ok := c.DrawRetailFilmCJKCylindrical(text, x, y, width, int(clip.H), color, 2); ok {
-							return
-						}
 						c.UITextWidthClipped(fallback, text, x, y, width, color, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					}
 				})
@@ -361,7 +358,6 @@ func retailBattleButtonText(gad gui.Gadget, panel *ui.Panel, index, stage int) s
 // Each window keeps its private-surface clip for every GAF glyph; the FNT path
 // retains the pen's no-width-limit fallback [03 R-FONT-01 §6].
 func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rect, gad gui.Gadget, r gui.Rect, text string, selected *formats.FNT, textWidth, metric int, flash uint16) {
-	//c.PrintDebug(text)
 	if c == nil || text == "" {
 		return
 	}
@@ -418,7 +414,6 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 		clipFill(c, x, y+metric-1, measure(letter), 1, h.guiColor(underline), clip)
 	}
 	draw(suffix, x+measure(letter), color)
-
 }
 
 // drawBattleRestartWindow supplies RESTART.GUI's session-owned labels and
@@ -479,7 +474,6 @@ func (h *retailBattleHUD) modalGadgetArtFrames(gad gui.Gadget, page *formats.GAF
 // window surface bounds it, and no stock modal window authors a font record,
 // so nothing reaches this path with a caption wider than its window.
 func (h *retailBattleHUD) drawModalLabelFNT(c *client.Client, window *gui.Window, gad gui.Gadget, r gui.Rect, text string, font *formats.FNT) {
-	//c.PrintDebug(text)
 	if c == nil || window == nil || font == nil || text == "" {
 		return
 	}

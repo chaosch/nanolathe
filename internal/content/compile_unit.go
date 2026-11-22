@@ -1090,7 +1090,6 @@ func compileUnitsWithLanguage(fs vfs.FSOps, language string) (unitCompileResult,
 		if err != nil {
 			return unitCompileResult{}, err
 		}
-
 		prov := ProvenanceFrom(e)
 		doc, err := formats.ParseTDF(data)
 		if err != nil {

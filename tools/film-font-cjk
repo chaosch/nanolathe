@@ -63,7 +63,7 @@ def load_face(source, weight, size):
 def build(source, name, chars):
     # The base face supplies the cap height the additions are scaled against;
     # its glyphs and pixels are read, never written.
-    cap = json.loads((OUT / (name + ".json")).read_text(encoding="utf-8"))["cap"]
+    cap = json.loads((OUT / (name + ".json")).read_text())["cap"]
 
     probe = load_face(source, WEIGHT[name], 256)
     box = probe.getbbox("国", anchor="ls")

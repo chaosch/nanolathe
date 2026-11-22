@@ -3,6 +3,7 @@ package client
 import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
+	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/frame"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 )
@@ -123,31 +124,39 @@ func (c *Client) drawMessageLines() {
 // XOffset and its capital-I-normalized YOffset subtracted from the pen, then
 // advances by its frame width [03 R-FONT-01 §6][07 §4].
 func (c *Client) drawMessageGAFText(text string, x, y int) {
-	glyph := func(code byte) *formats.GAFFrame {
-		if code < 0x20 || int(code) >= len(c.messageGAF.Frames) {
-			return nil
+	if i18n.I18nLanguageNeedCJK() {
+		if !i18n.HasCJK(text) {
+			text = i18n.T(text)
 		}
-		return c.messageGAF.Frames[code].Frame
-	}
-	text = i18n.T(text)
-	baseline := 0
-	if f := glyph('I'); f != nil {
-		baseline = int(f.Height)
-		//c.PrintDebug(f.Height)
-		if _, ok := c.DrawRetailFilmCJKCylindrical(text, 200, 200, -1, int(f.Height)+10, 0, 2); ok {
-			return
+		face := film.TextFaceInGame("tiny")
+		for _, r := range text {
+			if r < 0x20 {
+				continue
+			}
+			f, _ := face.Glyph(rune(r))
+			c.UIBlit(f.Frame(), x, y)
+			x += int(f.Advance)
 		}
-	}
-	text = i18n.T(text)
-
-	for i := 0; i < len(text) && text[i] != 0; i++ {
-		f := glyph(text[i])
-		if f == nil {
-			continue
+	} else {
+		glyph := func(code byte) *formats.GAFFrame {
+			if code < 0x20 || int(code) >= len(c.messageGAF.Frames) {
+				return nil
+			}
+			return c.messageGAF.Frames[code].Frame
 		}
-		if text[i] != ' ' {
-			c.UIBlit(f, x-int(f.XOffset), y-(int(f.YOffset)-baseline))
+		baseline := 0
+		if f := glyph('I'); f != nil {
+			baseline = int(f.Height)
 		}
-		x += int(f.Width)
+		for i := 0; i < len(text) && text[i] != 0; i++ {
+			f := glyph(text[i])
+			if f == nil {
+				continue
+			}
+			if text[i] != ' ' {
+				c.UIBlit(f, x-int(f.XOffset), y-(int(f.YOffset)-baseline))
+			}
+			x += int(f.Width)
+		}
 	}
 }

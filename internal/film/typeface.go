@@ -2,10 +2,10 @@ package film
 
 import "image"
 
-// TypefaceGlyph is one Glyph of a bundled face as the film rasterizer holds
+// TypefaceGlyph is one glyph of a bundled face as the film rasterizer holds
 // it: coverage images with a two-pixel transparent border, halving in size
 // from level 0, plus the metrics that place it on a baseline. Every length is
-// in face Units; the face's Cap is the cap height in those Units.
+// in face units; the face's Cap is the cap height in those units.
 type TypefaceGlyph struct {
 	// Levels are coverage mipmaps; level 0 is the atlas resolution.
 	Levels []*image.Gray
@@ -14,10 +14,10 @@ type TypefaceGlyph struct {
 	Left, Top int
 	W, H      int
 	Advance   float64
-	// Scale is how many face Units one atlas pixel covers, for a face whose
+	// Scale is how many face units one atlas pixel covers, for a face whose
 	// glyphs are rasterized below the atlas resolution tools/film-font uses
 	// (the CJK additions, docs/DESIGN_I18N.md). Zero means one, the value
-	// every Latin Glyph carries implicitly.
+	// every Latin glyph carries implicitly.
 	Scale float64
 }
 
@@ -30,7 +30,7 @@ type Typeface struct {
 	kerning map[string]float64
 }
 
-// Kern is the pair adjustment between two runes, in face Units.
+// Kern is the pair adjustment between two runes, in face units.
 func (t *Typeface) Kern(previous, next rune) float64 {
 	return t.kerning[string([]rune{previous, next})]
 }

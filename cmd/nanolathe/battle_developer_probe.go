@@ -172,8 +172,8 @@ func developerProbeRows(f *frame.Frame, target developerProbeTarget, builder boo
 				if queue.Unit != u.Slot {
 					continue
 				}
-				rows = developerProbeOrders(rows, f, "MissionTranslation Q:", queue.Primary, queue.PrimaryTruncated)
-				rows = developerProbeOrders(rows, f, "Background MissionTranslation Q:", queue.Secondary, queue.SecondaryTruncated)
+				rows = developerProbeOrders(rows, f, "Mission Q:", queue.Primary, queue.PrimaryTruncated)
+				rows = developerProbeOrders(rows, f, "Background Mission Q:", queue.Secondary, queue.SecondaryTruncated)
 				break
 			}
 		}

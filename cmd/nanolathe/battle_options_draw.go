@@ -46,7 +46,6 @@ func (h *retailBattleHUD) drawBattleOptionsWindow(c *client.Client, b *battleSes
 			continue
 		}
 		r := p.Window.PlacedRect(i)
-		//fmt.Printf("[OPTS-DRAW] i=%d Kind=%d Name=%q Text=%q\n", i, gad.Kind, gad.Name, gad.Text)
 		switch gad.Kind {
 		case gui.KindPanel, gui.KindPanelAlias, gui.KindFont, gui.KindRawFile:
 			// The synthesised `PANEL` and the two file kinds paint nothing

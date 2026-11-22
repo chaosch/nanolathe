@@ -45,11 +45,10 @@ func (g *gameShell) drawRetailButtonCaption(c *client.Client, p *ui.Panel, index
 
 // Caption bytes and the key use the ordinary single-player ASCII case fold;
 // the first terminated-string match wins [07 R-WGT-01 §3][07 R-WGT-02 §2].
-func captionQuickKeyIndexASC(text string, key byte) int {
+func captionQuickKeyIndex(text string, key byte) int {
 	if key == 0 {
 		return -1
 	}
-	// 如果快捷键本身就不是 ASCII 字符，直接返回 -1
 	fold := func(b byte) byte {
 		if b >= 'A' && b <= 'Z' {
 			return b + ('a' - 'A')
@@ -57,38 +56,8 @@ func captionQuickKeyIndexASC(text string, key byte) int {
 		return b
 	}
 	for i := 0; i < len(text) && text[i] != 0; i++ {
-		if text[i] >= 0x80 {
-			continue
-		}
 		if fold(text[i]) == fold(key) {
 			return i
-		}
-	}
-	return -1
-}
-
-// Caption bytes and the key use the ordinary single-player ASCII case fold;
-// the first terminated-string match wins [07 R-WGT-01 §3][07 R-WGT-02 §2].
-func captionQuickKeyIndex(text string, key byte) int {
-	if key == 0 || key >= 0x80 {
-		return -1
-	}
-	fold := func(b byte) byte {
-		if b >= 'A' && b <= 'Z' {
-			return b + ('a' - 'A')
-		}
-		return b
-	}
-
-	// ★ 核心神改：直接遍历 rune，让中文字符天然被跳过！
-	// 这样引擎就能在 "选择e地图" 中间精准找到 'e'，且绝不会切碎汉字！
-	for i, r := range text {
-		if r == 0 {
-			break
-		}
-		// 只对 ASCII 字符进行匹配
-		if r < 0x80 && fold(byte(r)) == fold(key) {
-			return i // 注意：这里的 i 是字节索引！Go 的 range 会完美返回真实的字节偏移量
 		}
 	}
 	return -1

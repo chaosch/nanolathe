@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"github.com/nanolathe-gg/nanolathe/internal/pool"
 	"github.com/nanolathe-gg/nanolathe/internal/sim/rng"
 )
@@ -399,6 +400,11 @@ func (q *Queue) insertAt(now uint32, s Slot, unit pool.Handle, text string) bool
 		q.Count--
 	}
 	pri := slotTable[s].Priority
+	//if i18n.I18nLanguageNeedCJK() && !i18n.HasCJK(text) {
+	//	fmt.Println(text)
+	//	text = i18n.T(text)
+	//	fmt.Println(text)
+	//}
 	e := Entry{Slot: s, Frame: now, Unit: unit, Text: text, Priority: pri}
 	// insert sorted descending priority, after equals for FIFO (C16)
 	pos := 0
@@ -515,6 +521,9 @@ func (q *Queue) resolve(e Entry, now uint32, audible, showText bool) {
 			}
 		}
 		if line != "" && alive && unitName != "" {
+			if i18n.I18nLanguageNeedCJK() && !i18n.HasCJK(line) {
+				line = i18n.T(line)
+			}
 			line = unitName + ": " + line
 			if q.onSpeech != nil {
 				q.onSpeech(line)

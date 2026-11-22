@@ -737,6 +737,8 @@ func composeBattleEntryDetachedWithModels(sess *session.Session, cat *content.Ca
 	if err != nil {
 		return nil, err
 	}
+	content.ApplyUnitText(cat)
+	content.ApplyFeatureText(cat)
 	b := &battleSession{
 		sess: sess, cat: cat, cam: cam, hud: hud, fs: cs.fs, cs: cs, shell: shell, iconRoots: strategicIconSearchRoots(cs),
 		showRanges: cs.presentation.ShowRanges, modBuildPageSize: cs.buildMenuPageSize(),

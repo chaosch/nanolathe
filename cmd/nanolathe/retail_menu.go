@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/content"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strconv"
 	"strings"
@@ -231,12 +232,10 @@ func (g *gameShell) installRetailWindowButtonArt(window *gui.Window, own *format
 	if window == nil {
 		return
 	}
-
 	if g == nil || !g.quickKeyPreclearDisabled {
 		gui.PreclearButtonQuickKeys(window)
 	}
 	for i := range window.Gadgets {
-
 		gad := &window.Gadgets[i]
 		if gad.Kind == gui.KindButton {
 			// Button flash is reset before either bypass gate. This is runtime
@@ -266,12 +265,10 @@ func (g *gameShell) installRetailWindowButtonArt(window *gui.Window, own *format
 			}
 			gui.AssignButtonQuickKey(window, i)
 			art := g.buildRetailButtonArt(*gad, own)
-
 			built := art.gadget
 			built.ArtFrame = int32(art.base)
 			built.ButtonArt = art.entry
 			built.ButtonArtResolved = true
-			//fmt.Println("installRetailWindowButtonArt:", gad.Name, gad.Art, gad.Labels)
 			if art.entry != nil && art.base >= 0 && art.base < len(art.entry.Frames) {
 				if frame := art.entry.Frames[art.base].Frame; frame != nil {
 					built.Rect.W = int32(frame.Width)
@@ -331,7 +328,7 @@ func (g *gameShell) refreshMissionPanel() {
 	for i := range g.campaignOptions {
 		fmt.Println(g.campaignOptions[i].Name)
 		if i18n.I18nLanguageNeedCJK() {
-			if cn, ok := i18n.GlobalTranslations.GetCampaign(strings.ToLower(g.campaignOptions[i].Name)); ok {
+			if cn, ok := content.GlobalTranslations.GetCampaign(i18n.Language(), strings.ToLower(g.campaignOptions[i].Name)); ok {
 				campaignItems[i] = cn.Name
 			} else {
 				campaignItems[i] = g.campaignOptions[i].Name
@@ -347,9 +344,8 @@ func (g *gameShell) refreshMissionPanel() {
 	var missions []string
 	if len(g.campaignOptions) != 0 && g.campaignIdx < len(g.campaignOptions) {
 		for _, stub := range g.campaignOptions[g.campaignIdx].Missions {
-			fmt.Println(stub.MissionFile, ",", stub.Name, ",", stub.MissionFile)
 			if i18n.I18nLanguageNeedCJK() {
-				if mn, ok := i18n.GlobalTranslations.GetMission(strings.ToLower(stub.MissionFile)); ok {
+				if mn, ok := content.GlobalTranslations.GetMission(i18n.Language(), strings.ToLower(stub.MissionFile)); ok {
 					missions = append(missions, mn.Name)
 				} else {
 					missions = append(missions, stub.Name)
@@ -875,10 +871,6 @@ type retailButtonArtResolution struct {
 // runs after every selected-art arm [07 R-WGT-01 §3].
 func (g *gameShell) buildRetailButtonArt(gad gui.Gadget, own *formats.GAF) retailButtonArtResolution {
 	name := gad.Art
-	if gad.Text == "Survival" || gad.Text == "survival" {
-		fmt.Println("buildRetailButtonArt", gad.Name, gad.Text, gad.QuickKey)
-
-	}
 	if name == "" {
 		name = gad.Name
 	}

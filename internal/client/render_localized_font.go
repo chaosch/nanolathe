@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/drawlist"
-	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"image"
 	"image/color"
@@ -127,268 +126,269 @@ func PickTier(targetH int) FaceTier {
 }
 
 func (c *Client) DrawRetailFilmCJK(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
-	key := TranslateCacheKey{
-		text,
-		x,
-		baselineY,
-		maxWidth,
-		controlHeight,
-		palColor,
-		attribs,
-	}
-	realText := text
-
-	if printed == nil {
-		printed = make(map[string]int)
-	}
-	if len(realText) == 0 {
-		return 0, false
-	}
-	tr := i18n.T(realText)
-	if tr == realText && !hasCJK(text) {
-		return 0, false
-	}
-
-	safeMaxWidth := maxWidth
-	if safeMaxWidth < 0 {
-		safeMaxWidth = 9999
-	}
-
-	// === 1. 解析控制符 ===
-	type token struct {
-		rn      rune
-		forceNL bool
-	}
-
-	var tokens []token
-	var explicitSize = 0
-	var gridRows, gridCols = 0, 0
-
-	runes := []rune(tr)
-	i := 0
-	for i < len(runes) {
-		rn := runes[i]
-		if rn == '\\' && i+1 < len(runes) {
-			next := runes[i+1]
-			// 解析 \nxx,xx 或单纯的 \n
-			if next == 'n' || next == 'N' {
-				i += 2
-				start := i
-				for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
-					i++
-				}
-				if i > start {
-					parts := string(runes[start:i])
-					var r, c int
-					if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
-						gridRows, gridCols = r, c
-					}
-				}
-				// ★ 核心修复：遇到 \n，必须往 tokens 里插入一个换行标记！
-				tokens = append(tokens, token{forceNL: true})
-				continue
-			}
-			// 解析 \sNN
-			if next == 's' || next == 'S' {
-				i += 2
-				start := i
-				for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
-					i++
-				}
-				if i > start {
-					fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
-				}
-				continue
-			}
-		}
-
-		tokens = append(tokens, token{rn: rn})
-		i++
-	}
-
-	// === 2. 决定字号 ===
-	const paddingY = 0
-	availHeight := controlHeight - paddingY*2
-	if availHeight < 1 {
-		availHeight = 1
-	}
-
-	var defaultTier FaceTier
-	if explicitSize > 0 {
-		defaultTier = PickTier(explicitSize)
-	} else if gridRows > 1 && gridCols > 0 {
-		cellHeight := availHeight / gridRows
-		defaultTier = PickTier(cellHeight)
-	} else {
-		defaultTier = PickTier(availHeight)
-	}
-
-	// === 3. 换行排版 ===
-	var lines [][]token
-	var currentLine []token
-	for _, tk := range tokens {
-		if tk.forceNL {
-			lines = append(lines, currentLine)
-			currentLine = nil
-			continue
-		}
-		currentLine = append(currentLine, tk)
-	}
-	if len(currentLine) > 0 {
-		lines = append(lines, currentLine)
-	}
-	// === 4. 渲染 ===
-	currentLineY := baselineY + paddingY
-	curTier := defaultTier
-	curSize := curTier.Px
-	maxLineWidth := 0.0
-
-	// 判断是否多行
-	isMultiLine := len(lines) > 1
-	sprite := drawlist.Sprite{}
-	for _, line := range lines {
-		lineTier := curTier
-		lineSize := curSize
-
-		// 量行宽（统一使用 g.W）
-		var lineW float64
-		for _, tk := range line {
-			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.Name)
-			if face != nil {
-				if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
-					lineW += float64(g.W)
-					continue
-				}
-			}
-			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-				lineW += float64(lineSize)
-			} else {
-				lineW += float64(lineSize / 2)
-			}
-		}
-		if lineW > maxLineWidth {
-			maxLineWidth = lineW
-		}
-
-		// 对齐起点计算
-		cursorX := float64(x)
-		switch {
-		case attribs&4 != 0: // 右对齐
-			cursorX = float64(x+safeMaxWidth) - lineW - 3
-		case attribs&2 != 0: // 居中对齐
-			cursorX = float64(x) + (float64(safeMaxWidth)-lineW)/2.0
-		default: // 左对齐
-			cursorX += 3
-		}
-
-		for _, tk := range line {
-			rn := tk.rn
-			face := film.TextFaceInGame(lineTier.Name)
-			if face == nil {
-				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-					cursorX += float64(lineSize)
-				} else {
-					cursorX += float64(lineSize / 2)
-				}
-				continue
-			}
-
-			g := face.Glyphs[string(rn)]
-			if g == nil {
-				if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
-					cursorX += float64(lineSize)
-				} else {
-					cursorX += float64(lineSize / 2)
-				}
-				continue
-			}
-
-			frame := g.Frame()
-			if frame == nil || frame.Width == 0 || frame.Height == 0 {
-				cursorX += float64(g.W)
-				continue
-			}
-
-			// tiny 动态上色（深拷贝 Frame 防污染）
-			if lineTier.Name == "tiny" && palColor > 0 {
-				newPixels := make([]byte, len(frame.Pixels))
-				for i := 0; i < len(frame.Pixels); i++ {
-					if !frame.Transparent[i] {
-						newPixels[i] = palColor
-					}
-				}
-				frame = &formats.GAFFrame{
-					Width:       frame.Width,
-					Height:      frame.Height,
-					Pixels:      newPixels,
-					Transparent: frame.Transparent,
-				}
-			}
-
-			// 水平定位
-			drawX := int32(cursorX + float64(g.Left))
-
-			// ★ 垂直定位：单行居中，多行往下递推
-			var drawY int32
-			if !isMultiLine {
-				drawY = int32(baselineY + (controlHeight-int(frame.Height))/2)
-			} else {
-				drawY = int32(currentLineY + (lineSize-int(frame.Height))/2)
-			}
-
-			sprite = drawlist.Sprite{
-				Frame:   frame,
-				X:       drawX,
-				Y:       drawY,
-				Kind:    drawlist.BlitKeyed,
-				Key:     0,
-				HasClip: false,
-			}
-			c.List().RecordSprite(sprite)
-
-			cursorX += float64(g.W)
-
-			entry := TranslateCache[key]
-			entry.Sprites = append(entry.Sprites, sprite)
-			TranslateCache[key] = entry
-		}
-
-		// 行距推进
-		lineStep := int(float64(lineSize) * 1.25)
-		if lineStep < lineSize+2 {
-			lineStep = lineSize + 2
-		}
-		currentLineY += lineStep
-
-	}
-
-	return int(maxLineWidth + 0.5), true
+	return 0, false
+	//key := TranslateCacheKey{
+	//	text,
+	//	x,
+	//	baselineY,
+	//	maxWidth,
+	//	controlHeight,
+	//	palColor,
+	//	attribs,
+	//}
+	//realText := text
+	//
+	//if printed == nil {
+	//	printed = make(map[string]int)
+	//}
+	//if len(realText) == 0 {
+	//	return 0, false
+	//}
+	//tr := i18n.T(realText)
+	//if tr == realText && !hasCJK(text) {
+	//	return 0, false
+	//}
+	//
+	//safeMaxWidth := maxWidth
+	//if safeMaxWidth < 0 {
+	//	safeMaxWidth = 9999
+	//}
+	//
+	//// === 1. 解析控制符 ===
+	//type token struct {
+	//	rn      rune
+	//	forceNL bool
+	//}
+	//
+	//var tokens []token
+	//var explicitSize = 0
+	//var gridRows, gridCols = 0, 0
+	//
+	//runes := []rune(tr)
+	//i := 0
+	//for i < len(runes) {
+	//	rn := runes[i]
+	//	if rn == '\\' && i+1 < len(runes) {
+	//		next := runes[i+1]
+	//		// 解析 \nxx,xx 或单纯的 \n
+	//		if next == 'n' || next == 'N' {
+	//			i += 2
+	//			start := i
+	//			for i < len(runes) && (runes[i] >= '0' && runes[i] <= '9' || runes[i] == ',') {
+	//				i++
+	//			}
+	//			if i > start {
+	//				parts := string(runes[start:i])
+	//				var r, c int
+	//				if _, err := fmt.Sscanf(parts, "%d,%d", &r, &c); err == nil {
+	//					gridRows, gridCols = r, c
+	//				}
+	//			}
+	//			// ★ 核心修复：遇到 \n，必须往 tokens 里插入一个换行标记！
+	//			tokens = append(tokens, token{forceNL: true})
+	//			continue
+	//		}
+	//		// 解析 \sNN
+	//		if next == 's' || next == 'S' {
+	//			i += 2
+	//			start := i
+	//			for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
+	//				i++
+	//			}
+	//			if i > start {
+	//				fmt.Sscanf(string(runes[start:i]), "%d", &explicitSize)
+	//			}
+	//			continue
+	//		}
+	//	}
+	//
+	//	tokens = append(tokens, token{rn: rn})
+	//	i++
+	//}
+	//
+	//// === 2. 决定字号 ===
+	//const paddingY = 0
+	//availHeight := controlHeight - paddingY*2
+	//if availHeight < 1 {
+	//	availHeight = 1
+	//}
+	//
+	//var defaultTier FaceTier
+	//if explicitSize > 0 {
+	//	defaultTier = PickTier(explicitSize)
+	//} else if gridRows > 1 && gridCols > 0 {
+	//	cellHeight := availHeight / gridRows
+	//	defaultTier = PickTier(cellHeight)
+	//} else {
+	//	defaultTier = PickTier(availHeight)
+	//}
+	//
+	//// === 3. 换行排版 ===
+	//var lines [][]token
+	//var currentLine []token
+	//for _, tk := range tokens {
+	//	if tk.forceNL {
+	//		lines = append(lines, currentLine)
+	//		currentLine = nil
+	//		continue
+	//	}
+	//	currentLine = append(currentLine, tk)
+	//}
+	//if len(currentLine) > 0 {
+	//	lines = append(lines, currentLine)
+	//}
+	//// === 4. 渲染 ===
+	//currentLineY := baselineY + paddingY
+	//curTier := defaultTier
+	//curSize := curTier.Px
+	//maxLineWidth := 0.0
+	//
+	//// 判断是否多行
+	//isMultiLine := len(lines) > 1
+	//sprite := drawlist.Sprite{}
+	//for _, line := range lines {
+	//	lineTier := curTier
+	//	lineSize := curSize
+	//
+	//	// 量行宽（统一使用 g.W）
+	//	var lineW float64
+	//	for _, tk := range line {
+	//		rn := tk.rn
+	//		face := film.TextFaceInGame(lineTier.Name)
+	//		if face != nil {
+	//			if g := face.Glyphs[string(rn)]; g != nil && g.W > 0 {
+	//				lineW += float64(g.W)
+	//				continue
+	//			}
+	//		}
+	//		if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+	//			lineW += float64(lineSize)
+	//		} else {
+	//			lineW += float64(lineSize / 2)
+	//		}
+	//	}
+	//	if lineW > maxLineWidth {
+	//		maxLineWidth = lineW
+	//	}
+	//
+	//	// 对齐起点计算
+	//	cursorX := float64(x)
+	//	switch {
+	//	case attribs&4 != 0: // 右对齐
+	//		cursorX = float64(x+safeMaxWidth) - lineW - 3
+	//	case attribs&2 != 0: // 居中对齐
+	//		cursorX = float64(x) + (float64(safeMaxWidth)-lineW)/2.0
+	//	default: // 左对齐
+	//		cursorX += 3
+	//	}
+	//
+	//	for _, tk := range line {
+	//		rn := tk.rn
+	//		face := film.TextFaceInGame(lineTier.Name)
+	//		if face == nil {
+	//			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+	//				cursorX += float64(lineSize)
+	//			} else {
+	//				cursorX += float64(lineSize / 2)
+	//			}
+	//			continue
+	//		}
+	//
+	//		g := face.Glyphs[string(rn)]
+	//		if g == nil {
+	//			if (rn >= 0x4E00 && rn <= 0x9FFF) || (rn >= 0x3400 && rn <= 0x4DBF) {
+	//				cursorX += float64(lineSize)
+	//			} else {
+	//				cursorX += float64(lineSize / 2)
+	//			}
+	//			continue
+	//		}
+	//
+	//		frame := g.Frame()
+	//		if frame == nil || frame.Width == 0 || frame.Height == 0 {
+	//			cursorX += float64(g.W)
+	//			continue
+	//		}
+	//
+	//		// tiny 动态上色（深拷贝 Frame 防污染）
+	//		if lineTier.Name == "tiny" && palColor > 0 {
+	//			newPixels := make([]byte, len(frame.Pixels))
+	//			for i := 0; i < len(frame.Pixels); i++ {
+	//				if !frame.Transparent[i] {
+	//					newPixels[i] = palColor
+	//				}
+	//			}
+	//			frame = &formats.GAFFrame{
+	//				Width:       frame.Width,
+	//				Height:      frame.Height,
+	//				Pixels:      newPixels,
+	//				Transparent: frame.Transparent,
+	//			}
+	//		}
+	//
+	//		// 水平定位
+	//		drawX := int32(cursorX + float64(g.Left))
+	//
+	//		// ★ 垂直定位：单行居中，多行往下递推
+	//		var drawY int32
+	//		if !isMultiLine {
+	//			drawY = int32(baselineY + (controlHeight-int(frame.Height))/2)
+	//		} else {
+	//			drawY = int32(currentLineY + (lineSize-int(frame.Height))/2)
+	//		}
+	//
+	//		sprite = drawlist.Sprite{
+	//			Frame:   frame,
+	//			X:       drawX,
+	//			Y:       drawY,
+	//			Kind:    drawlist.BlitKeyed,
+	//			Key:     0,
+	//			HasClip: false,
+	//		}
+	//		c.List().RecordSprite(sprite)
+	//		c.list().RecordSprite(sprite)
+	//		cursorX += float64(g.W)
+	//
+	//		entry := TranslateCache[key]
+	//		entry.Sprites = append(entry.Sprites, sprite)
+	//		TranslateCache[key] = entry
+	//	}
+	//
+	//	// 行距推进
+	//	lineStep := int(float64(lineSize) * 1.25)
+	//	if lineStep < lineSize+2 {
+	//		lineStep = lineSize + 2
+	//	}
+	//	currentLineY += lineStep
+	//
+	//}
+	//
+	//return int(maxLineWidth + 0.5), true
 }
 func (c *Client) DrawRetailFilmCJKCylindrical(text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) (int, bool) {
 	return 0, false
-	if !i18n.I18nLanguageNeedCJK() || hasCJK(text) {
-		return 0, false
-	}
+	//if !i18n.I18nLanguageNeedCJK() || hasCJK(text) {
+	//	return 0, false
+	//}
 	//fmt.Println(text)
-	key := TranslateCacheKey{
-		text,
-		x,
-		baselineY,
-		maxWidth,
-		controlHeight,
-		palColor,
-		attribs,
-	}
-	if cache, ok := TranslateCache[key]; ok {
-		sprites := cache.Sprites
-		for _, sprite := range sprites {
-			c.List().RecordSprite(sprite)
-		}
-		return 0, true
-	} else {
-		return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
-	}
+	//key := TranslateCacheKey{
+	//	text,
+	//	x,
+	//	baselineY,
+	//	maxWidth,
+	//	controlHeight,
+	//	palColor,
+	//	attribs,
+	//}
+	//if cache, ok := TranslateCache[key]; ok {
+	//	//sprites := cache.Sprites
+	//	//for _, sprite := range sprites {
+	//	//	//c.List().RecordSprite(sprite)
+	//	//}
+	//	return 0, true
+	//} else {
+	//	return c.DrawRetailFilmCJK(text, x, baselineY, maxWidth, controlHeight, palColor, attribs)
+	//}
 }
 
 func isAllASCII(s string) bool {
