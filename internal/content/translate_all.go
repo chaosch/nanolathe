@@ -351,6 +351,11 @@ func (p *TranslationPack) LoadAll(looseDir string, sel string, gameFS vfs.FSOps)
 // ============================================================================
 
 func (p *TranslationPack) loadAllForLang(lang string) {
+	lp := p.pack(lang)
+
+	// 1. 英文底座：gameFS 的 camps/briefs 全部 txt
+	p.fillNativeBriefs(lang, lp)
+
 	p.loadUnits(lang, "ota")
 	p.loadCampaignsAndMissions(lang, "ota")
 	p.loadUITranslations(lang, "ota")
@@ -361,7 +366,7 @@ func (p *TranslationPack) loadAllForLang(lang string) {
 		p.loadUITranslations(lang, p.modeName)
 		p.loadFeatureTranslations(lang, p.modeName) // 新增
 	}
-	lp := p.pack(lang)
+	//lp := p.pack(lang)
 	lp.Full = true
 }
 
@@ -371,12 +376,7 @@ func (p *TranslationPack) loadUnits(lang, modName string) {
 	if err != nil {
 		return
 	}
-
 	doc, err := formats.ParseTDF(data)
-	if err != nil {
-		return
-	}
-
 	lp := p.pack(lang)
 	count := 0
 	for _, section := range doc.Root.Sections() {
@@ -827,11 +827,64 @@ func ApplyFeatureText(cat *Catalog) {
 		}
 	}
 }
+
 func ApplyUnitText(cat *Catalog) {
+	var machedUnit, mismachedUnit, newUnit int
 	for i, entry := range cat.unitRecords {
 		if t, ok := GlobalTranslations.GetUnit(i18n.Language(), entry.UnitName); ok {
-			cat.unitRecords[i].Name = t.Name
-			cat.unitRecords[i].Description = t.Description
+			if cat.unitRecords[i].Name == t.NameFrom && cat.unitRecords[i].Description == t.DescriptionFrom {
+				cat.unitRecords[i].Name = t.Name + "[" + cat.unitRecords[i].Name + "]"
+				cat.unitRecords[i].Description = t.Description
+				machedUnit++
+			} else {
+				//when mod applied,different translation from loaded units print for translate work
+				fmt.Println("unitKey:", cat.unitRecords[i].UnitName, ",unitName:", cat.unitRecords[i].Name, ",unitDescription:", cat.unitRecords[i].Description)
+				cat.unitRecords[i].Name = t.Name + "[" + cat.unitRecords[i].Name + "]"
+				cat.unitRecords[i].Description = t.Description
+				mismachedUnit++
+			}
+		} else {
+			//when mod applied,different translation from loaded units print for translate work
+			fmt.Println("unitKey:", cat.unitRecords[i].UnitName, ",unitName:", cat.unitRecords[i].Name, ",unitDescription:", cat.unitRecords[i].Description)
+			newUnit++
 		}
+	}
+	fmt.Println(fmt.Sprintf("单位翻译中严格匹配的单位数：%d,未严格匹配数：%d,新增单位数：%d", machedUnit, mismachedUnit, newUnit))
+}
+
+// fillNativeBriefs 从 gameFS 的 camps/briefs 读取所有英文原版简报，
+// 填进 lp.Briefs 作为底座。已存在的 key 不覆盖（语言目录后写会覆盖）。
+// fillNativeBriefs 从 gameFS 的 camps/briefs 读取所有英文原版简报，
+// 填进 lp.Briefs 作为底座。已存在的 key 不覆盖（语言目录后写会覆盖）。
+func (p *TranslationPack) fillNativeBriefs(lang string, lp *LanguagePack) {
+	if p.gameFS == nil || lp == nil {
+		return
+	}
+	briefsDir := filepath.Join("camps", "briefs")
+	entries, err := p.gameFS.ReadDir(briefsDir)
+	if err != nil {
+		return
+	}
+	count := 0
+	for _, e := range entries {
+		if e.IsDir || !strings.HasSuffix(strings.ToLower(e.Path), ".txt") {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSuffix(filepath.Base(e.Path), filepath.Ext(e.Path)))
+		if key == "" {
+			continue
+		}
+		if _, exists := lp.Briefs[key]; exists {
+			continue
+		}
+		data, err := p.gameFS.ReadFileLimit(e.Path, 4<<20)
+		if err != nil {
+			continue
+		}
+		lp.Briefs[key] = BriefTranslation{Name: key, Text: data}
+		count++
+	}
+	if count > 0 {
+		fmt.Printf("[Translation]   - [%s] 从游戏本体加载英文简报 %d 项\n", lang, count)
 	}
 }

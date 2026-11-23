@@ -187,7 +187,6 @@ func (l *Library) Installed() ([]Mod, error) {
 	if err != nil {
 		return nil, diagnostic("reading the mod library failed: "+err.Error(), l.Root, nil, "a readable mod library directory")
 	}
-	fmt.Println(ids)
 	var mods []Mod
 	for _, idEntry := range ids {
 		id := idEntry.Name()
@@ -195,7 +194,6 @@ func (l *Library) Installed() ([]Mod, error) {
 			continue // manifest.json, .staging and anything foreign
 		}
 		versions, err := os.ReadDir(filepath.Join(l.Root, id))
-		fmt.Println(filepath.Join(l.Root, id))
 		if err != nil {
 			continue
 		}

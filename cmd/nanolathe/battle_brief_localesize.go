@@ -1,14 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"github.com/nanolathe-gg/nanolathe/internal/film"
 	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 )
 
 func briefingSplitBlinkRunsIncludeCJK(text string) string {
-	if i18n.I18nLanguageNeedCJK() {
+	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(text) {
 		return briefingSplitBlinkRunsForCJK(text)
 	} else {
 		return briefingSplitBlinkRuns(text)
@@ -20,14 +19,9 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 	src := []rune(text)
 	out := make([]rune, 0, len(src)+16)
 	var blinkStack [][]rune
-
-	fmt.Printf("[SplitBlinkCJK] START | input=%q\n", text)
-
 	for i := 0; i < len(src); i++ {
 		r := src[i]
 		open := len(blinkStack) > 0
-		fmt.Printf("[SplitBlinkCJK] i=%d, char=%q, open=%t, stackLen=%d\n", i, string(r), open, len(blinkStack))
-
 		if r == '&' {
 			if !open {
 				// 开启标签
@@ -41,12 +35,10 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 				out = append(out, r)
 				out = append(out, letter...)
 				i++ // 吞掉下一个字符
-				fmt.Printf("[SplitBlinkCJK] >>> OPEN TAG, letter=%q, stack=%#v\n", string(letter), blinkStack)
 			} else {
 				// 关闭标签
 				blinkStack = blinkStack[:len(blinkStack)-1]
 				out = append(out, r)
-				fmt.Printf("[SplitBlinkCJK] >>> CLOSE TAG, stack=%#v\n", blinkStack)
 			}
 			continue
 		}
@@ -54,7 +46,6 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 		// 处理 CRLF (\r\n) 在闪烁标签内部的情况
 		if r == '\r' && i+1 < len(src) && src[i+1] == '\n' && open {
 			currentLetter := blinkStack[len(blinkStack)-1]
-			fmt.Printf("[SplitBlinkCJK] >>> CRLF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
 			out = append(out, '&')
 			out = append(out, '\r', '\n')
 			out = append(out, '&')
@@ -66,7 +57,6 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 		// 处理 LF (\n) 在闪烁标签内部的情况
 		if r == '\n' && open {
 			currentLetter := blinkStack[len(blinkStack)-1]
-			fmt.Printf("[SplitBlinkCJK] >>> LF INSIDE BLINK, split, current letter=%q\n", string(currentLetter))
 			// 如果是单独的 \n，补齐为 \r\n 或保留原样
 			out = append(out, '&')
 			out = append(out, '\r', '\n')
@@ -77,12 +67,10 @@ func briefingSplitBlinkRunsForCJK(text string) string {
 
 		out = append(out, r)
 	}
-
-	fmt.Printf("[SplitBlinkCJK] END | output=%q\n", string(out))
 	return string(out)
 }
 func retailWordWrapIncludeCJK(text string, width int, measure func(string) int) string {
-	if i18n.I18nLanguageNeedCJK() {
+	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(text) {
 		return retailWordWrapForCJK(text, width, measureCJk)
 	} else {
 		return retailWordWrap(text, width, measure)
@@ -143,7 +131,7 @@ func retailWordWrapForCJK(text string, width int, measure func(string) int) stri
 	return out.String()
 }
 func briefingLayLineIncludeCJK(raw string, measure func(string) int, open *bool, budget int) briefingTextLine {
-	if i18n.I18nLanguageNeedCJK() {
+	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(raw) {
 		return briefingLayLineForCJK(raw, measureCJk, open, budget)
 	} else {
 		return briefingLayLine(raw, measure, open, budget)

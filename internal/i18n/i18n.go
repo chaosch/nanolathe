@@ -40,12 +40,12 @@ var Languages = []struct {
 	EnglishName string
 }{
 	{"english", "English", "", false, "English"},
-	{"german", "Deutsch", "", false, "German"},
-	{"french", "Français", "", false, "French"},
-	{"spanish", "Español", "", false, "Spanish"},
-	{"italian", "Italiano", "", false, "Italian"},
-	{"polish", "Polski", "", false, "Polish"},
-	{"russian", "Русский", "", false, "Russian"},
+	//{"german", "Deutsch", "", false, "German"},
+	//{"french", "Français", "", false, "French"},
+	//{"spanish", "Español", "", false, "Spanish"},
+	//{"italian", "Italiano", "", false, "Italian"},
+	//{"polish", "Polski", "", false, "Polish"},
+	//{"russian", "Русский", "", false, "Russian"},
 	{"ukrainian", "Українська", "", false, "Українська"},
 	{"chinese", "简体中文", "", true, "Chinese"},
 }
