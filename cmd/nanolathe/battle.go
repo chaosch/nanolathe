@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/orders"
 	"io"
 	"os"
 	"time"
@@ -338,6 +339,14 @@ type battleSession struct {
 	// the committed-frame walk advances past the cursor and wraps once.
 	communityBuilderCursor pool.Handle
 	communityFactoryCursor pool.Handle
+	// pickFeature 缓存，只针对残骸FeatureContainsPoint昂贵检测
+	cachedPickSX, cachedPickSY int32
+	cachedPickCam              *camera.Camera
+	cachedPickRet              struct {
+		ground frame.FeatureView
+		pos    orders.ResolvePos
+		hit    bool
+	}
 }
 
 func (b *battleSession) fpsShown() bool {

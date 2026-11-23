@@ -122,19 +122,22 @@ func (g *gameShell) retailTextHeight() int {
 // colors, directly as PALETTE.PAL indices.
 // No GUI semantic-color remap or FNT tint is applied. maxWidth < 0 means no
 // width limit; otherwise the next glyph must fit in the remaining width.
-func (g *gameShell) drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
-	g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
+func drawRetailGAFText(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int) {
+	drawRetailGAFTextLit(c, font, text, x, y, maxWidth, nil, 0)
 }
 
 // drawRetailGAFTextClipped draws the same opaque glyphs into the modal
 // window's private surface, clipping glyph bearings and text beyond the
 // authored window [07 §4].
-func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth, clipX, clipY, clipW, clipH int) {
+func drawRetailGAFTextClipped(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth, clipX, clipY, clipW, clipH int) {
 	//c.PrintDebug(text)
 	if c == nil || font == nil {
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
+	if i18n.Language() != i18n.English || i18n.I18nLanguageNeedCJK() && !i18n.HasCJK(text) {
+		text = i18n.T(text)
+	}
 	remaining := maxWidth
 	for _, r := range text {
 		if r == 0 {
@@ -165,7 +168,7 @@ func (g *gameShell) drawRetailGAFTextClipped(c *client.Client, font *formats.GAF
 // drawRetailGAFTextLit draws each glyph normally at shade level zero; a
 // non-zero level remaps it through PALETTE.LHT. Only loading-screen stage
 // labels pass a non-zero level [07 §4][03 §4.3.1].
-func (g *gameShell) drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
+func drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string, x, y, maxWidth int, pal *palette.Tables, shade int) {
 	if c == nil || font == nil {
 		return
 	}
@@ -232,7 +235,7 @@ func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, max
 		); ok {
 			return
 		}
-		g.drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
+		drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
 		return
 	}
 	if g != nil && g.font != nil {

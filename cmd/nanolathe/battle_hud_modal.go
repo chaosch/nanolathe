@@ -269,7 +269,7 @@ func (h *retailBattleHUD) drawGUIWindowState(c *client.Client, window *gui.Windo
 				func(x, y, w, height int, fill byte) { clipFill(c, x, y, w, height, fill, clip) },
 				func(text string, x, y, width int) {
 					if h.modalFont != nil {
-						h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+						drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					} else {
 						c.UITextWidthClipped(fallback, text, x, y, width, color, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 					}
@@ -336,7 +336,7 @@ func (h *retailBattleHUD) drawModalLabelGAF(c *client.Client, window *gui.Window
 			c.UITextWidth(common, line, x, y, -1, 0)
 			return
 		}
-		h.shell.drawRetailGAFTextClipped(c, small, line, x, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+		drawRetailGAFTextClipped(c, small, line, x, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 	})
 }
 
@@ -385,7 +385,7 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 			if _, ok := c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), color, 2); ok {
 				return
 			}
-			h.shell.drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
+			drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 			return
 		}
 		c.UITextWidthClipped(selected, s, px, y, -1, foreground, int(clip.X), int(clip.Y), int(clip.W), int(clip.H))

@@ -13,6 +13,11 @@ import (
 // Modern also admits projected submerged corpse bodies in the main viewport
 // (interface design "Modern submerged wreck picking").
 func (b *battleSession) pickFeature(sx, sy int32, pos orders.ResolvePos) (frame.FeatureView, orders.ResolvePos, bool) {
+	// 缓存命中：鼠标+相机完全没变，直接返回上次结果，跳过昂贵的FeatureContainsPoint
+	if sx == b.cachedPickSX && sy == b.cachedPickSY && b.cam == b.cachedPickCam {
+		return b.cachedPickRet.ground, b.cachedPickRet.pos, b.cachedPickRet.hit
+	}
+
 	f, ok := b.currentSnapshot()
 	if !ok {
 		return frame.FeatureView{}, pos, false
@@ -29,15 +34,29 @@ func (b *battleSession) pickFeature(sx, sy int32, pos orders.ResolvePos) (frame.
 	}
 	if b.sess.Rules.Orders == nil || !b.sess.Rules.Orders.PicksSubmergedWrecks() || b.cl == nil || b.cat == nil ||
 		b.classifyPointer(sx, sy) != battlePointerViewport || b.megamapOwnsPointer(sx, sy) {
+		// 更新缓存之后再return
+		b.cachedPickSX = sx
+		b.cachedPickSY = sy
+		b.cachedPickCam = b.cam
+		b.cachedPickRet.ground = ground
+		b.cachedPickRet.pos = pos
+		b.cachedPickRet.hit = groundHit
 		return ground, pos, groundHit
 	}
 	// A visible unit keeps its ordinary target word; a wreck behind it must
 	// not substitute a different command point or feature capability.
 	if h, _, hit := b.pickPresentedUnit(f, sx, sy, f.ViewingPlayer); hit && h != 0 {
+		b.cachedPickSX = sx
+		b.cachedPickSY = sy
+		b.cachedPickCam = b.cam
+		b.cachedPickRet.ground = ground
+		b.cachedPickRet.pos = pos
+		b.cachedPickRet.hit = groundHit
 		return ground, pos, groundHit
 	}
 	// Stable committed feature order breaks a projected overlap tie. The
 	// visual hit takes precedence over an unrelated water-surface ground cell.
+	retGround, retPos, retHit := ground, pos, groundHit
 	for _, v := range f.Features {
 		if !v.Reclaimable || v.Y >= f.Visibility.SeaLevel || !b.isCorpseName(v.DefName) || !snapshotFeatureVisible(f, v, f.ViewingPlayer) {
 			continue
@@ -51,12 +70,23 @@ func (b *battleSession) pickFeature(sx, sy int32, pos orders.ResolvePos) (frame.
 			continue
 		}
 		if groundHit && ground.InstanceID == v.InstanceID && ground.CX == v.CX && ground.CZ == v.CZ {
-			return ground, pos, true // the ordinary probe already names this wreck
+			retGround, retPos, retHit = ground, pos, true
+			break
 		}
-		pos.X, pos.Y, pos.Z = wx, f.Visibility.SeaLevel, wz
-		return v, pos, true
+		retPos.X, retPos.Y, retPos.Z = wx, f.Visibility.SeaLevel, wz
+		retGround, retHit = v, true
+		break
 	}
-	return ground, pos, groundHit
+
+	// 写入缓存
+	b.cachedPickSX = sx
+	b.cachedPickSY = sy
+	b.cachedPickCam = b.cam
+	b.cachedPickRet.ground = retGround
+	b.cachedPickRet.pos = retPos
+	b.cachedPickRet.hit = retHit
+
+	return retGround, retPos, retHit
 }
 
 // A new visual contextual work click acts only on its feature workers; other

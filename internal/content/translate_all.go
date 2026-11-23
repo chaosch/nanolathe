@@ -833,13 +833,13 @@ func ApplyUnitText(cat *Catalog) {
 	for i, entry := range cat.unitRecords {
 		if t, ok := GlobalTranslations.GetUnit(i18n.Language(), entry.UnitName); ok {
 			if cat.unitRecords[i].Name == t.NameFrom && cat.unitRecords[i].Description == t.DescriptionFrom {
-				cat.unitRecords[i].Name = t.Name + "[" + cat.unitRecords[i].Name + "]"
+				cat.unitRecords[i].Name = t.Name
 				cat.unitRecords[i].Description = t.Description
 				machedUnit++
 			} else {
 				//when mod applied,different translation from loaded units print for translate work
 				fmt.Println("unitKey:", cat.unitRecords[i].UnitName, ",unitName:", cat.unitRecords[i].Name, ",unitDescription:", cat.unitRecords[i].Description)
-				cat.unitRecords[i].Name = t.Name + "[" + cat.unitRecords[i].Name + "]"
+				cat.unitRecords[i].Name = t.Name
 				cat.unitRecords[i].Description = t.Description
 				mismachedUnit++
 			}

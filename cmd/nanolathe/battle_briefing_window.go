@@ -198,7 +198,7 @@ func (h *retailBattleHUD) drawBattleBriefingLine(c *client.Client, text string, 
 	}
 	if h.modalFont != nil {
 		width, _ := c.Size()
-		h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width-x, 0, 0, width, width)
+		drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width-x, 0, 0, width, width)
 		return
 	}
 	if h.guiFont != nil {

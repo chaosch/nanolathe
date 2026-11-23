@@ -248,5 +248,5 @@ func (h *retailBattleHUD) drawScoreText(c *client.Client, text string, x, y, sha
 	if text == "" || h.modalFont == nil {
 		return
 	}
-	h.shell.drawRetailGAFTextLit(c, h.modalFont, text, x, y, hud.ScorePanelTextLimit, h.pal, shade)
+	drawRetailGAFTextLit(c, h.modalFont, text, x, y, hud.ScorePanelTextLimit, h.pal, shade)
 }

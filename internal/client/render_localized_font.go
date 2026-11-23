@@ -105,7 +105,7 @@ type FaceTier struct {
 }
 
 var faceTiers = []FaceTier{
-	//{"normal", 14},
+	{"normal", 14},
 	{"small", 12},
 	{"tiny", 9},
 	//{"medium", 20},

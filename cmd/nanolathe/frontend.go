@@ -483,6 +483,21 @@ func newGameShell(opts Options, cs *contentSet) (*gameShell, error) {
 // launch is the command line as given, which a start that must drop the saved
 // mod remounts from.
 func runGameShell(launch, opts Options, cs *contentSet) error {
+	//go func() {
+	//	log.Println("pprof: listening localhost:6060")
+	//	mux := http.NewServeMux()
+	//	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	//	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	//	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	//	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	//	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	//
+	//	err := http.ListenAndServe("127.0.0.1:6060", mux)
+	//	if err != nil {
+	//		log.Printf("pprof http err: %v", err)
+	//	}
+	//}()
+
 	if err := i18n.ScanExternalLocales(); err != nil {
 		fmt.Fprintf(os.Stderr, "nanolathe: warning: failed to scan external locales: %v\n", err)
 	}

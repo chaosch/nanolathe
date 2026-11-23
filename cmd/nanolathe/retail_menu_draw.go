@@ -548,7 +548,7 @@ func (g *gameShell) drawRetailLabelGAF(c *client.Client, p *ui.Panel, gad gui.Ga
 			c.UITextWidth(g.font, line, x, y, -1, color)
 			return
 		}
-		g.drawRetailGAFTextLit(c, font, line, x, y, int(r.W), pal, shade)
+		drawRetailGAFTextLit(c, font, line, x, y, int(r.W), pal, shade)
 	})
 }
 

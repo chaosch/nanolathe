@@ -70,7 +70,7 @@ func (h *retailBattleHUD) drawConstructorPatrolCaption(c *client.Client, r gui.R
 	}
 	if h.modalFont != nil {
 		y := int(r.Y) + (int(r.H)-retailGAFTextHeight(h.modalFont))/2
-		h.shell.drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(r.X), int(r.Y), int(r.W), int(r.H))
+		drawRetailGAFTextClipped(c, h.modalFont, text, x, y, width, int(r.X), int(r.Y), int(r.W), int(r.H))
 	} else if h.guiFont != nil {
 		y := int(r.Y) + (int(r.H)-int(h.guiFont.Height))/2
 		c.UITextWidthClipped(h.guiFont, text, x, y, width, h.guiColor(0), int(r.X), int(r.Y), int(r.W), int(r.H))

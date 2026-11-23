@@ -34,7 +34,7 @@ WEN_QUAN16=r"WenQuanYi.Bitmap.Song.16px.ttf"
 OLD_FACE = {}
 NEW_FACE = {
     "tiny":   {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_12, "variable": False, "mode": "mask",   "border": 0, "color": None},
-    "small":  {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_14, "variable": False, "mode": "render", "border": 1, "color": TARGET_COLOR},
+    "small":  {"em": 12, "weight": 800, "scale": 1, "fontFile": Pixel_Font_14, "variable": False, "mode": "brush", "border": 1, "color": TARGET_COLOR},
     "normal": {"em": 16, "weight": 800, "scale": 1, "fontFile": PIXEL_FONT_16, "variable": False, "mode": "render",  "border": 1, "color": TARGET_COLOR},
 }
 ALL_FACE = {}
@@ -311,20 +311,8 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
         if ink_width <= 0:
             ink_width = int(math.ceil(font.getlength(char)))
 
-        # ==========================================
-        # 核心修改：让 small 的宽度和 advance 强行等于 tiny
-        # ==========================================
-        if name == "small":
-            # 用这个 14px 字体的原生步进，减去多余留白，强行对齐 12px 字体
-            # 汉字宽度 = 12，英文宽度 = 6
-            if "\u4e00" <= char <= "\u9fff":
-                width = 12
-            else:
-                width = 6
-        else:
-            # tiny 等保持原样，按真实像素算
-            width = int(math.ceil(ink_width)) + pad * 2
-
+        # ========== 这里改掉：不再硬编码small的6/12，全部按墨迹宽度 ==========
+        width = int(math.ceil(ink_width)) + pad
         advance = width
         height = cell_height + pad * 2
 
@@ -332,17 +320,8 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
             x = 0
             y += row_height + SPACING
 
-        # 计算绘制坐标
-        if name == "small":
-            # 强行让小字居中：真实字宽受限于 width - border*2
-            inner_w = width - pad * 2
-            if inner_w < 1:
-                inner_w = 1
-            # 计算该字在格子内的 X 偏移
-            target_x = (inner_w - ink_width) / 2.0 - left + pad
-        else:
-            target_x = -left + pad
-
+        # 绘制坐标：不再做small专属居中，统一原有计算
+        target_x = -left + pad
         target_y = cell_baseline - abs(top) + pad
 
         glyphs[char] = dict(
@@ -430,6 +409,16 @@ def build(chars, name, target_em, weight, scale, fontFile, variable, mode, borde
                             g = int(base_color[1] * brightness)
                             b = int(base_color[2] * brightness)
                             px_color[xx, yy] = (r, g, b, 255)
+                res.alpha_composite(color_layer)
+            elif mode == "brush":
+                use_color = color if color else (255, 255, 255)
+                color_layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+                px_color = color_layer.load()
+                px_base = base.load()
+                for yy in range(h):
+                    for xx in range(w):
+                        if px_base[xx, yy] == 255:
+                            px_color[xx, yy] = (*use_color, 255)
                 res.alpha_composite(color_layer)
 
             atlas.paste(res, (px, py), res)

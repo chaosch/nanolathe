@@ -235,7 +235,7 @@ func readBriefingText(cs *contentSet, name string) string {
 	}
 	var data []byte
 	var err error
-	if i18n.I18nLanguageNeedCJK() {
+	if i18n.Language() != i18n.English {
 		str, _ := content.GlobalTranslations.GetBrief(i18n.Language(), strings.ToLower(name))
 		return string(str.Text)
 	} else {

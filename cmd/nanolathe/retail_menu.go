@@ -326,8 +326,7 @@ func (g *gameShell) refreshMissionPanel() {
 	}
 	campaignItems := make([]string, len(g.campaignOptions))
 	for i := range g.campaignOptions {
-		fmt.Println(g.campaignOptions[i].Name)
-		if i18n.I18nLanguageNeedCJK() {
+		if i18n.Language() != i18n.English {
 			if cn, ok := content.GlobalTranslations.GetCampaign(i18n.Language(), strings.ToLower(g.campaignOptions[i].Name)); ok {
 				campaignItems[i] = cn.Name
 			} else {
@@ -344,7 +343,7 @@ func (g *gameShell) refreshMissionPanel() {
 	var missions []string
 	if len(g.campaignOptions) != 0 && g.campaignIdx < len(g.campaignOptions) {
 		for _, stub := range g.campaignOptions[g.campaignIdx].Missions {
-			if i18n.I18nLanguageNeedCJK() {
+			if i18n.Language() != i18n.English {
 				if mn, ok := content.GlobalTranslations.GetMission(i18n.Language(), strings.ToLower(stub.MissionFile)); ok {
 					missions = append(missions, mn.Name)
 				} else {
