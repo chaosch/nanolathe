@@ -1,0 +1,94 @@
+[HEADER]
+{
+campaignside=CORE;
+}
+
+[MISSION0]
+{
+missionfile=Lightning Recon.ota;
+missionname=Lightning Recon;
+}
+
+[MISSION1]
+{
+missionfile=A Gentle Time.ota;
+missionname=A Gentle Time;
+}
+
+[MISSION2]
+{
+missionfile=Disintegrator Alley.ota;
+missionname=Disintegrator Alley;
+}
+
+[MISSION3]
+{
+missionfile=Two Ore Coast.ota;
+missionname=Two Ore Coast;
+}
+
+[MISSION4]
+{
+missionfile=Thrashing a Rear Guard.ota;
+missionname=Thrashing a Rear Guard;
+}
+
+[MISSION5]
+{
+missionfile=Emerald Seamount.ota;
+missionname=Emerald Seamount;
+}
+
+[MISSION6]
+{
+missionfile=Taking Island 445.ota;
+missionname=Taking Island 445;
+}
+
+[MISSION7]
+{
+missionfile=The Retorb Floodplain.ota;
+missionname=The Retorb Floodplain;
+}
+
+[MISSION8]
+{
+missionfile=Firebase.ota;
+missionname=Firebase;
+}
+
+[MISSION9]
+{
+missionfile=Battle of Chimo Island.ota;
+missionname=Battle of Chimo Island;
+}
+
+[MISSION10]
+{
+missionfile=Laser Plain.ota;
+missionname=Laser Plain;
+}
+
+[MISSION11]
+{
+missionfile=Rotrey Stream.ota;
+missionname=Rotrey Stream;
+}
+
+[MISSION12]
+{
+missionfile=Rainforest Construction.ota;
+missionname=Rainforest Construction;
+}
+
+[MISSION13]
+{
+missionfile=Yollets Rain Forest.ota;
+missionname=Yollets Rain Forest;
+}
+
+[MISSION14]
+{
+missionfile=The Phase Array Radar.ota;
+missionname=The Phase Array Radar;
+}

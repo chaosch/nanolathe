@@ -1545,5 +1545,18 @@
   "Total Units : {#}  (Max {#})":"单位数量：{}  (最大 {})",
   "Game Speed {}":"游戏速度 {}",
   "Remaining: {#}/{#}":"剩余玩家",
-  "Vet{#}":"{}级老兵"
+  "Vet{#}":"{}级老兵",
+
+  "air from the {}":"空军在{}",
+  "naval from the {}":"海军在{}",
+  "hover from the {}":"气垫在{}",
+  "the {}":"{}",
+
+  "Wave {#} incoming in {}":"第{}波将在{}内来袭。",
+  "Wave {#} - {#} attackers":"第{}波共{}单位来袭。",
+  "Wave {#} in {} - {#} attackers left":"第{}波在{}内-剩余{}。",
+  "Wave {#} incoming: {}":"第{}波来袭:{}"
+
+
+
 }

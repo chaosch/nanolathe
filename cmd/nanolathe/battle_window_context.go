@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/nanolathe-gg/nanolathe/formats"
 	"github.com/nanolathe-gg/nanolathe/internal/gui"
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 )
 
 // battleWindowContext carries the startup-selected caption table and the
@@ -44,11 +43,7 @@ func (c *battleWindowContext) install(window *gui.Window, page, common *formats.
 		// A faction side's support bank (factionSupportGAF) stands in for the
 		// shell's shared one while its windows are built.
 		saved := c.shell.battleCommon
-		if i18n.I18nLanguageNeedCJK() {
-			c.shell.battleCommon = RenderCommandButtons(c.shell.cs.unmappedMount)
-		} else {
-			c.shell.battleCommon = common
-		}
+		c.shell.battleCommon = common
 		c.shell.installRetailWindowButtonArt(window, page)
 		c.shell.battleCommon = saved
 		return

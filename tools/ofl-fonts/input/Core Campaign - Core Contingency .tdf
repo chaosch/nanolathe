@@ -1,0 +1,114 @@
+[HEADER]
+	{
+	campaignside=CORE; 
+	}
+
+[MISSION0]
+	{
+	missionfile=EXP1CC01.ota;
+	missionname=1: Arm Arrives on Hydross;
+	Germanmissionname=1: Arm erreicht Hydross;
+	Frenchmissionname=1: Débarquement de l'Arm sur Hydross;
+	Italianmissionname=1: ;
+	}
+
+[MISSION1]
+	{
+	missionfile=EXP1CC02.ota;
+	missionname=2: Wet Work;
+	Germanmissionname=2: Feuchte Arbeit;
+	Frenchmissionname=2: Les pieds dans l'eau;
+	Italianmissionname=2: ;
+	}
+
+[MISSION2]
+	{
+	missionfile=EXP1CC03.ota;
+	missionname=3: Sitting Ducks;
+	Germanmissionname=3: Ablenkungsmanöver;
+	Frenchmissionname=3: Leurre est au sacrifice;
+	Italianmissionname=3: ;
+	}
+
+[MISSION3]
+	{
+	missionfile=EXP1CC04.ota;
+	missionname=4: Lusch - Welcome to Paradise;
+	Germanmissionname=4: Lusch - Willkommen im Paradies;
+	Frenchmissionname=4: Lusch - Aux portes du Paradis;
+	Italianmissionname=4:  ;
+	}
+
+[MISSION4]
+	{
+	missionfile=EXP1CC05.ota;
+	missionname=5: Slugging and Slogging;
+	Germanmissionname=5: Wettlauf gegen die Zeit;
+	Frenchmissionname=5: Touché - Coulé;
+	Italianmissionname=5:  ;
+	}
+
+[MISSION5]
+	{
+	missionfile=EXP1CC06.ota;
+	missionname=6: Alien Bugs;
+	Germanmissionname=6: Sofortiger Einsatz!;
+	Frenchmissionname=6: Morpions extraterrestres;
+	Italianmissionname=6: ;
+	}
+
+[MISSION6]
+	{
+	missionfile=EXP1CC07.ota;
+	missionname=7: Shake, Rattle, And Die;
+	Germanmissionname=7: Holprige Jagd!;
+	Frenchmissionname=7: Secousses, tremblements et mort;
+	Italianmissionname=7: ;
+	}
+
+[MISSION7]
+	{
+	missionfile=EXP1CC08.ota;
+	missionname=8: Commanding Confusion;
+	Germanmissionname=8: Aufgeräumte Front;
+	Frenchmissionname=8: Chaos organisé;
+	Italianmissionname= 8: ;
+	}
+
+[MISSION8]
+	{
+	missionfile=EXP1CC09.ota;
+	missionname=9: Storming the Cloud Fortress;
+	Germanmissionname=9: Sturm auf die Wolkenfestung;
+	Frenchmissionname=9: Raid dans la Forteresse des Nuages;
+	Italianmissionname=9: ;
+	}
+
+[MISSION9]
+	{
+	missionfile=EXP1CC10.ota;
+	missionname=10: Cool Down ;
+	Germanmissionname=10: Verzögerungstaktik;
+	Frenchmissionname=10: Le temps se rafraîchit° !;
+	Italianmissionname=10: ;
+	}
+
+[MISSION10]
+	{
+	missionfile=EXP1CC11.ota;
+	missionname=11: Frigid Devastation;
+	Germanmissionname=11: Einsatz auf dem Treibeis;
+	Frenchmissionname=11: Banquise sanglante;
+	Italianmissionname=11: ;
+	}
+
+[MISSION11]
+	{
+	missionfile=EXP1CC12.ota;
+	missionname=12: Time to Leave;
+	Germanmissionname=12: Zeit zum Gehen;
+	Frenchmissionname=12: L'Adieu à l'Arm;
+	Italianmissionname=12: ;
+	}
+
+

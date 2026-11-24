@@ -1,0 +1,56 @@
+[Arm Campaign]
+	{
+	campaignname=Arm原版战役;
+	}
+[Core Campaign]
+	{
+	campaignname=Core原版战役;
+	}
+[Battle Tactics - Core Long]
+	{
+	campaignname=战争艺术长篇;
+	}
+[Battle Tactics - Core Medium]
+	{
+	campaignname=战争艺术中篇;
+	}
+[Battle Tactics - Core Short]
+	{
+	campaignname=战争艺术短篇;
+	}
+[Battle Tactics - Core Very Short]
+	{
+	campaignname=战争艺术极短篇;
+	}
+[Battle Tactics - Arm Long]
+	{
+	campaignname=战争艺术长篇;
+	}
+[Battle Tactics - Arm Medium]
+	{
+	campaignname=战争艺术中篇;
+	}
+[Battle Tactics - Arm Short]
+	{
+	campaignname=战争艺术短篇;
+	}
+[Battle Tactics - Arm Very Short]
+	{
+	campaignname=战争艺术——极短篇;
+	}
+[Arm Campaign - Core Contingency]
+	{
+	campaignname=CORE应急计划;
+	}
+[Core Campaign - Core Contingency]
+	{
+	campaignname=CORE应急计划;
+	}
+[Krogoth Encounter]
+	{
+	campaignname=遭遇柯古斯;
+	}
+[EXAMPLE]
+	{
+	campaignname=演习;
+	}

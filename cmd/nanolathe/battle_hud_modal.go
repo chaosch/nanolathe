@@ -382,9 +382,6 @@ func (h *retailBattleHUD) drawBattleButtonCaption(c *client.Client, clip gui.Rec
 		if h.modalFont != nil {
 			// GAF mode-0 glyphs carry their own colours. The foreground is still
 			// calculated so the null-slot FNT path takes the same branch.\
-			if _, ok := c.DrawRetailFilmCJKCylindrical(text, int(r.X), int(r.Y+int32(float64(r.H)*0.1)), int(r.W), int(r.H)-int(float64(r.H)*0.2), color, 2); ok {
-				return
-			}
 			drawRetailGAFTextClipped(c, h.modalFont, s, px, y, int(r.W), int(clip.X), int(clip.Y), int(clip.W), int(clip.H))
 			return
 		}

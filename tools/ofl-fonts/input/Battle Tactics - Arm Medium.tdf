@@ -1,0 +1,64 @@
+[HEADER]
+{
+campaignside=ARM;
+}
+
+[MISSION0]
+{
+missionfile=Lipar Pass.ota;
+missionname=Lipar Pass;
+}
+
+[MISSION1]
+{
+missionfile=Ice Base Assault.ota;
+missionname=Ice Base Assault;
+}
+
+[MISSION2]
+{
+missionfile=Pursuit.ota;
+missionname=Pursuit;
+}
+
+[MISSION3]
+{
+missionfile=Backs to the Sea.ota;
+missionname=Backs to the Sea;
+}
+
+[MISSION4]
+{
+missionfile=Spider Ambush.ota;
+missionname=Spider Ambush;
+}
+
+[MISSION5]
+{
+missionfile=Islands of Grace.ota;
+missionname=Islands of Grace;
+}
+
+[MISSION6]
+{
+missionfile=Wet and Dry.ota;
+missionname=Wet and Dry;
+}
+
+[MISSION7]
+{
+missionfile=Meraldi Amphibious Assault.ota;
+missionname=Meraldi Amphibious Assault;
+}
+
+[MISSION8]
+{
+missionfile=Miniement Landing.ota;
+missionname=Miniement Landing;
+}
+
+[MISSION9]
+{
+missionfile=Intimidator Ridge.ota;
+missionname=Intimidator Ridge;
+}

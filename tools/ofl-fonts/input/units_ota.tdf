@@ -1,0 +1,1946 @@
+[ARMAAP]
+	{
+	Name=高级飞机工厂;
+	Description=生产高级作战飞机、运输机和侦察机;
+	name-from=Adv. Aircraft Plant;
+	description-from=Produces Aircraft;
+	}
+[ARMAAS]
+	{
+	Name=弓箭手级防空舰;
+	Description=配备对空高射炮和对空、对地导弹，不具备反潜能力;
+	name-from=Archer;
+	description-from=Anti-Air Ship;
+	}
+[ARMACA]
+	{
+	Name=高级工程飞机;
+	Description=建造高级建筑;
+	name-from=Adv. Construction Aircraft;
+	description-from=Tech Level 2;
+	}
+[ARMACK]
+	{
+	Name=高级工程机甲;
+	Description=建造高级建筑;
+	name-from=Adv. Construction Kbot;
+	description-from=Tech Level 2;
+	}
+[ARMACSUB]
+	{
+	Name=高级工程潜艇;
+	Description=建造高级水下建筑;
+	name-from=Advanced Construction Sub;
+	description-from=Tech Level 2;
+	}
+[ARMACV]
+	{
+	Name=高级工程车;
+	Description=建造高级建筑;
+	name-from=Adv. Construction Vehicle;
+	description-from=Tech Level 2;
+	}
+[ARMAH]
+	{
+	Name=击蝇拍防空气垫;
+	Description=配备对空、对地导弹;
+	name-from=Swatter;
+	description-from=Anti-Air Hovercraft;
+	}
+[ARMALAB]
+	{
+	Name=高级机甲实验室;
+	Description=生产高级机甲;
+	name-from=Adv. Kbot Lab;
+	description-from=Produces Kbots;
+	}
+[ARMAMB]
+	{
+	Name=伏兵弹出式重炮;
+	Description=弹出式重炮，从地下弹出，快速攻击地面或近海面的敌人;
+	name-from=Ambusher;
+	description-from=Pop-up Heavy Cannon;
+	}
+[ARMAMD]
+	{
+	Name=保护者反导系统;
+	Description=生产反弹道导弹，自动拦截目标指向自身一定范围的敌方弹道导弹;
+	name-from=Protector;
+	description-from=Anti Missile Defense System;
+	}
+[ARMAMPH]
+	{
+	Name=塘鹅两栖机甲;
+	Description=两栖作战主力，配备对空、对地导弹和小型激光;
+	name-from=Pelican;
+	description-from=Amphibious Kbot;
+	}
+[ARMANAC]
+	{
+	Name=巨蟒突击气垫;
+	Description=海陆突击气垫，无防空能力;
+	name-from=Anaconda;
+	description-from=Hovertank;
+	}
+[ARMANNI]
+	{
+	Name=歼灭者死光炮;
+	Description=配备高能死光炮，歼灭来犯之敌;
+	name-from=Annihilator;
+	description-from=Energy weapon;
+	}
+[ARMAP]
+	{
+	Name=飞机工厂;
+	Description=生产初级作战飞机、运输机和侦察机;
+	name-from=Aircraft Plant;
+	description-from=Produces Aircraft;
+	}
+[ARMARAD]
+	{
+	Name=高级雷达塔;
+	Description=大范围雷达;
+	name-from=Advanced Radar Tower;
+	description-from=Long Range Radar Tower;
+	}
+[ARMASER]
+	{
+	Name=橡皮擦雷达干扰机甲;
+	Description=干扰敌方雷达，非战斗单位;
+	name-from=Eraser;
+	description-from=Radar Jammer;
+	}
+[ARMASON]
+	{
+	Name=高级声纳站;
+	Description=高级声纳，侦测范围较大，受到攻击会自动关闭;
+	name-from=Advanced Sonar Station;
+	description-from=Extended Sonar;
+	}
+[ARMASP]
+	{
+	Name=飞机修理平台;
+	Description=自动修复降落在平台上的飞机;
+	name-from=Air Repair Pad;
+	description-from=Automatically repairs aircraft;
+	}
+[ARMASY]
+	{
+	Name=高级船坞;
+	Description=生产高级水面和水下舰只;
+	name-from=Adv. Shipyard;
+	description-from=Produces Ships;
+	}
+[ARMATL]
+	{
+	Name=高级鱼雷发射器;
+	Description=高级鱼雷发射器，自动跟踪目标，战列舰的噩梦;
+	name-from=Advanced Torpedo Launcher;
+	description-from=Advanced Torpedo Launcher;
+	}
+[ARMATLAS]
+	{
+	Name=大力神运输机;
+	Description=初级运输机，可以抓取小型单位进行运送;
+	name-from=Atlas;
+	description-from=Air Transport;
+	}
+[ARMAVP]
+	{
+	Name=高级战车工厂;
+	Description=生产高级车辆;
+	name-from=Adv. Vehicle Plant;
+	description-from=Produces Vehicles;
+	}
+[ARMAWAC]
+	{
+	Name=鹰式预警机;
+	Description=携带机载雷达，加大侦察范围;
+	name-from=Eagle;
+	description-from=Radar Plane;
+	}
+[ARMBATS]
+	{
+	Name=千禧级战列舰;
+	Description=配备两个远程火炮组，无防空火力和反潜能力;
+	name-from=Millenium;
+	description-from=Battleship;
+	}
+[ARMBEAC]
+	{
+	Name=外星信标;
+	Description=外星信标;
+	name-from=Alien Beacon;
+	description-from=Alien Beacon;
+	}
+[ARMBRAWL]
+	{
+	Name=喧嚣者直升机;
+	Description=配备高速能量空地机关炮，空战能力弱;
+	name-from=Brawler;
+	description-from=Gunship;
+	}
+[ARMBRTHA]
+	{
+	Name=大贝莎等离子体加农炮;
+	Description=长程等离子体炮，远距攻击利器，每一次射击需消耗相当多的能量;
+	name-from=Big Bertha;
+	description-from=Long Range Plasma Cannon;
+	}
+[ARMBULL]
+	{
+	Name=牛头犬重型坦克;
+	Description=重型坦克，陆战攻坚主力;
+	name-from=Bulldog;
+	description-from=Heavy Assault Tank;
+	}
+[ARMCA]
+	{
+	Name=工程飞机;
+	Description=建造初级建筑;
+	name-from=Construction Aircraft;
+	description-from=Tech Level 1;
+	}
+[ARMCARRY]
+	{
+	Name=巨神级轻型航母;
+	Description=配备雷达和两个飞机修理平台，并可生产一定的能量;
+	name-from=Colossus;
+	description-from=Light Carrier;
+	}
+[ARMCH]
+	{
+	Name=工程气垫;
+	Description=建造海陆初级建筑;
+	name-from=Construction Hovercraft;
+	description-from=Tech Level 1;
+	}
+[ARMCK]
+	{
+	Name=工程机甲;
+	Description=建造初级建筑;
+	name-from=Construction KBot;
+	description-from=Tech Level 1;
+	}
+[ARMCKFUS]
+	{
+	Name=隐形聚变反应堆;
+	Description=具备隐形能力，隐形时消耗能量;
+	name-from=Cloakable Fusion Reactor;
+	description-from=Produces Energy;
+	}
+[ARMCOM]
+	{
+	Name=指挥官;
+	Description=军团首脑，配备小型激光和必杀武器D-GUN，建造速度极快;
+	name-from=Commander;
+	description-from=Commander;
+	}
+[ARMCROC]
+	{
+	Name=海神两栖坦克;
+	Description=两栖坦克，但在潜水时无防卫能力;
+	name-from=Triton;
+	description-from=Amphibious Tank;
+	}
+[ARMCRUS]
+	{
+	Name=征服者级巡洋舰;
+	Description=配备远程火炮和深水炸弹，具有反潜能力，但无防空能力;
+	name-from=Conqueror;
+	description-from=Cruiser;
+	}
+[ARMCS]
+	{
+	Name=工程船;
+	Description=建造初级海面建筑;
+	name-from=Construction Ship;
+	description-from=Tech Level 1;
+	}
+[ARMCSA]
+	{
+	Name=水上工程飞机;
+	Description=建造海陆初级建筑;
+	name-from=Construction Seaplane;
+	description-from=Tech Level 1;
+	}
+[ARMCV]
+	{
+	Name=工程车;
+	Description=建造初级建筑;
+	name-from=Construction Vehicle;
+	description-from=Tech Level 1;
+	}
+[ARMDECOM]
+	{
+	Name=诱饵指挥官;
+	Description=外形酷似指挥官的诱饵，配备小型激光，用来迷惑敌人;
+	name-from=Decoy Commander;
+	description-from=Decoy Commander;
+	}
+[ARMDEV1]
+	{
+	Name=内爆装置;
+	Description=内爆装置;
+	name-from=Implosion Device;
+	description-from=Implosion Device;
+	}
+[ARMDRAG]
+	{
+	Name=龙牙;
+	Description=坚固的工事，用来延缓部队机动或者用来基地防御;
+	name-from=Dragon's Teeth;
+	description-from=Perimeter Defense;
+	}
+[ARMEMP]
+	{
+	Name=电子脉冲导弹台;
+	Description=生产电子脉冲导弹，受到攻击的单位会在短时间内失去作用;
+	name-from=Stunner;
+	description-from=EMP Missile Launcher;
+	}
+[ARMESTOR]
+	{
+	Name=能量存储器;
+	Description=存储过剩的能量，增大能量的最大存储量;
+	name-from=Energy Storage;
+	description-from=Increases Energy Storage;
+	}
+[ARMFARK]
+	{
+	Name=快速支援工程机甲;
+	Description=机动力强，体积小，可快速实行辅助建造;
+	name-from=FARK;
+	description-from=Fast Assist-Repair Kbot;
+	}
+[ARMFAST]
+	{
+	Name=拉链速攻机甲;
+	Description=配备小型激光，机动力强;
+	name-from=Zipper;
+	description-from=Fast Attack Kbot;
+	}
+[ARMFAV]
+	{
+	Name=杰菲速攻战车;
+	Description=配备小型激光，机动力强，适合初期骚扰和打开视野;
+	name-from=Jeffy;
+	description-from=Fast Attack Vehicle;
+	}
+[ARMFDRAG]
+	{
+	Name=水面龙牙;
+	Description=坚固的工事，阻挡舰队快速机动，也可用来防御基地;
+	name-from=Floating Dragon's Teeth;
+	description-from=Floating Dragon's Teeth;
+	}
+[ARMFHLT]
+	{
+	Name=刺鳐重型激光塔;
+	Description=水面重型激光塔;
+	name-from=Stingray;
+	description-from=Floating Heavy Laser Tower;
+	}
+[ARMFIDO]
+	{
+	Name=猛犬型攻击机甲;
+	Description=攻击机甲;
+	name-from=Fido;
+	description-from=Assault Kbot;
+	}
+[ARMFIG]
+	{
+	Name=自由斗士战斗机;
+	Description=配备空地、空空导弹，初级战斗机;
+	name-from=Freedom Fighter;
+	description-from=Fighter;
+	}
+[ARMFLAK]
+	{
+	Name=急速高射火炮;
+	Description=高射炮，对付成群的敌机尤具优势;
+	name-from=Flakker;
+	description-from=Anti-Air Flak Gun;
+	}
+[ARMFLASH]
+	{
+	Name=闪电速攻坦克;
+	Description=配备高速能量机关炮，适于快速进攻;
+	name-from=Flash;
+	description-from=Fast Assault Tank;
+	}
+[ARMFLEA]
+	{
+	Name=跳蚤侦察机甲;
+	Description=机动能力极强，用于侦察和打开视野;
+	name-from=Flea;
+	description-from=Fast Light Scout Kbot;
+	}
+[ARMFMKR]
+	{
+	Name=水面金属转换器;
+	Description=将能量转换为金属;
+	name-from=Floating Metal Maker;
+	description-from=Floating Metal Maker;
+	}
+[ARMFORT]
+	{
+	Name=要塞城墙;
+	Description=坚固的城墙，可以修建成环形工事，保护重要目标;
+	name-from=Fortification Wall;
+	description-from=Perimeter Defense;
+	}
+[ARMFRT]
+	{
+	Name=防卫者海防导弹塔;
+	Description=漂浮在水面的导弹塔;
+	name-from=Defender - NS;
+	description-from=Missile Tower - Naval Series;
+	}
+[ARMFUS]
+	{
+	Name=聚变反应堆;
+	Description=利用原子核聚变反应提供大量能量;
+	name-from=Fusion Reactor;
+	description-from=Produces Energy;
+	}
+[ARMGATE]
+	{
+	Name=银河之门;
+	Description=太空传送器;
+	name-from=Galactic Gate;
+	description-from=Space Teleporter;
+	}
+[ARMGEO]
+	{
+	Name=地热发电站;
+	Description=收集地热能转换为能量，需建造在地热出口处;
+	name-from=Geothermal Powerplant;
+	description-from=Produces Energy;
+	}
+[ARMGUARD]
+	{
+	Name=守卫者等离子体炮;
+	Description=中长射程的对地等离子体炮;
+	name-from=Guardian;
+	description-from=Plasma Battery;
+	}
+[ARMHAM]
+	{
+	Name=战锤火炮机甲;
+	Description=初级火炮机甲;
+	name-from=Hammer;
+	description-from=Artillery Kbot;
+	}
+[ARMHAWK]
+	{
+	Name=战隼式隐形战斗机;
+	Description=隐形战斗机，配备空空、空地导弹;
+	name-from=Hawk;
+	description-from=Stealth Fighter;
+	}
+[ARMHLT]
+	{
+	Name=警戒重型激光塔;
+	Description=重型激光塔，可有效地击溃初级单位;
+	name-from=Sentinel;
+	description-from=Heavy Laser Tower;
+	}
+[ARMHP]
+	{
+	Name=气垫平台;
+	Description=生产气垫战车;
+	name-from=Hovercraft Platform;
+	description-from=Builds Hovercraft;
+	}
+[ARMJAM]
+	{
+	Name=干扰者雷达干扰车;
+	Description=雷达干扰车，干扰敌方雷达;
+	name-from=Jammer;
+	description-from=Mobile Radar Jammer;
+	}
+[ARMJETH]
+	{
+	Name=杰斯罗防空机甲;
+	Description=配备地空、地地导弹，初级防空机甲;
+	name-from=Jethro;
+	description-from=Anti-Air Kbot;
+	}
+[ARMLAB]
+	{
+	Name=机甲实验室;
+	Description=生产初级机甲;
+	name-from=Kbot Lab;
+	description-from=Produces Kbots;
+	}
+[ARMLANCE]
+	{
+	Name=枪骑兵鱼雷轰炸机;
+	Description=配备自动导航鱼雷，无对空、对地能力;
+	name-from=Lancet;
+	description-from=Torpedo Bomber;
+	}
+[ARMLATNK]
+	{
+	Name=黑豹闪电坦克;
+	Description=轻型坦克，配备地空导弹，并可用闪电攻击地面目标;
+	name-from=Panther;
+	description-from=Lightning Tank;
+	}
+[ARMLLT]
+	{
+	Name=轻型激光塔;
+	Description=早期防御激光;
+	name-from=L.L.T.;
+	description-from=Light Laser Tower;
+	}
+[ARMMAKR]
+	{
+	Name=金属转换器;
+	Description=将能量转换为金属;
+	name-from=Metal Maker;
+	description-from=Converts Energy into Metal;
+	}
+[ARMMANNI]
+	{
+	Name=破甲矛移动死光炮;
+	Description=移动能量武器;
+	name-from=Penetrator;
+	description-from=Mobile Energy Weapon;
+	}
+[ARMMARK]
+	{
+	Name=马基雷达机甲;
+	Description=配备雷达，侦测敌方目标，非战斗单位;
+	name-from=Marky;
+	description-from=Mobile Radar Kbot;
+	}
+[ARMMART]
+	{
+	Name=鲁格尔自行火炮;
+	Description=自行火炮，无防空能力;
+	name-from=Luger;
+	description-from=Mobile Artillery;
+	}
+[ARMMAV]
+	{
+	Name=小牛双枪机甲;
+	Description=配备高速双枪，陆战主力，防空能力弱;
+	name-from=Maverick;
+	description-from=Gun-slinging Kbot;
+	}
+[ARMMERL]
+	{
+	Name=乌鸦重型火箭车;
+	Description=装载重型火箭发射台，高空垂直攻击;
+	name-from=Merl;
+	description-from=Mobile Rocket Launcher;
+	}
+[ARMMEX]
+	{
+	Name=金属采集器;
+	Description=从金属资源地采集金属;
+	name-from=Metal Extractor;
+	description-from=Extracts Metal;
+	}
+[ARMMH]
+	{
+	Name=袋熊重型火箭气垫;
+	Description=装备重型火箭，无防空能力;
+	name-from=Wombat;
+	description-from=Hovercraft Rocket Launcher;
+	}
+[ARMMINE1]
+	{
+	Name=小不点地雷;
+	Description=低伤害、中范围地雷;
+	name-from=Tiny;
+	description-from=Low Damage, Med. Range Mine;
+	}
+[ARMMINE2]
+	{
+	Name=区域地雷;
+	Description=低伤害、大范围地雷;
+	name-from=Area Mine;
+	description-from=Low Damage, Large Range Mine;
+	}
+[ARMMINE3]
+	{
+	Name=聚焦地雷;
+	Description=中等伤害、小范围地雷;
+	name-from=Focused Mine;
+	description-from=Med. Damage, Small Range Mine;
+	}
+[ARMMINE4]
+	{
+	Name=高爆区域地雷;
+	Description=中等伤害、大范围地雷;
+	name-from=HE Area Mine;
+	description-from=Med. Damage, Large Range Mine;
+	}
+[ARMMINE5]
+	{
+	Name=精准地雷;
+	Description=高伤害、小范围地雷;
+	name-from=Precision Mine;
+	description-from=High Damage, Small Range Mine;
+	}
+[ARMMINE6]
+	{
+	Name=核子地雷;
+	Description=核子地雷;
+	name-from=Nuclear Mine;
+	description-from=Nuclear Mine;
+	}
+[ARMMLV]
+	{
+	Name=小矮猪布雷车;
+	Description=布雷车，可生产和储备布雷导弹;
+	name-from=Podger;
+	description-from=Mine Layer Vehicle;
+	}
+[ARMMMKR]
+	{
+	Name=高级金属转换器;
+	Description=高级金属转换器，将大量能量转换为金属;
+	name-from=Moho Metal Maker;
+	description-from=Converts Energy into Metal;
+	}
+[ARMMOHO]
+	{
+	Name=高级金属采集器;
+	Description=深层金属采集，产量较金属采集器高;
+	name-from=Moho Mine;
+	description-from=Advanced Metal Extractor;
+	}
+[ARMMSHIP]
+	{
+	Name=游骑兵导弹舰;
+	Description=配备重型火箭发射器和海空导弹，防空能力弱;
+	name-from=Ranger;
+	description-from=Missile Ship;
+	}
+[ARMMSTOR]
+	{
+	Name=金属存储器;
+	Description=用于存储过剩的金属，增大金属存储极限;
+	name-from=Metal Storage;
+	description-from=Increases Metal Storage;
+	}
+[ARMPEEP]
+	{
+	Name=偷窥者侦察机;
+	Description=配备有小型雷达，用于侦察和打开视野;
+	name-from=Peeper;
+	description-from=Air Scout;
+	}
+[ARMPLAT]
+	{
+	Name=水上飞机平台;
+	Description=生产水上飞机;
+	name-from=Seaplane Platform;
+	description-from=Builds Seaplanes;
+	}
+[ARMPNIX]
+	{
+	Name=凤凰战略轰炸机;
+	Description=高级轰炸机，配备小型激光;
+	name-from=Phoenix;
+	description-from=Bomber;
+	}
+[ARMPT]
+	{
+	Name=水翼侦察艇;
+	Description=配备小型激光和海空、海地导弹，机动能力强，适合初期骚扰;
+	name-from=Skeeter;
+	description-from=Scout Ship;
+	}
+[ARMPW]
+	{
+	Name=矮人步兵机甲;
+	Description=配备高速能量机关炮，适于快速进攻;
+	name-from=Peewee;
+	description-from=Infantry Kbot;
+	}
+[ARMRAD]
+	{
+	Name=雷达塔;
+	Description=初级雷达，侦测范围不大;
+	name-from=Radar Tower;
+	description-from=Radar Tower;
+	}
+[ARMRL]
+	{
+	Name=防卫者导弹塔;
+	Description=具有对空、对地能力;
+	name-from=Defender;
+	description-from=Missile Tower;
+	}
+[ARMROCK]
+	{
+	Name=小石头火箭机甲;
+	Description=初级火箭机甲，防空能力弱;
+	name-from=Rocko;
+	description-from=Rocket Kbot;
+	}
+[ARMROY]
+	{
+	Name=十字军级驱逐舰;
+	Description=配备中远程火炮和深水炸弹，具有反潜能力;
+	name-from=Crusader;
+	description-from=Destroyer;
+	}
+[ARMSAM]
+	{
+	Name=大力士火箭车;
+	Description=配备对空、对地导弹，初期战场的主力;
+	name-from=Samson;
+	description-from=Mobile Missile Launcher;
+	}
+[ARMSCAB]
+	{
+	Name=圣甲虫机动反导系统;
+	Description=机动反导系统，可生产反弹道导弹拦截目标在一定范围内的敌方导弹;
+	name-from=Scarab;
+	description-from=Mobile Missile Defense;
+	}
+[ARMSCORP]
+	{
+	Name=蝎子;
+	Description=本土生命体;
+	name-from=Scorpion;
+	description-from=Indigenous Lifeform;
+	}
+[ARMSCRAM]
+	{
+	Name=谎言者声纳干扰潜艇;
+	Description=装载反声纳装置，移动时反声纳失效;
+	name-from=Fibber;
+	description-from=Sonar Jamming Sub;
+	}
+[ARMSEAP]
+	{
+	Name=信天翁鱼雷战斗机;
+	Description=配备制导鱼雷和空地、空空导弹;
+	name-from=Albatross;
+	description-from=Torpedo Seaplane;
+	}
+[ARMSEER]
+	{
+	Name=预言家移动雷达;
+	Description=装载有雷达，非战斗单位;
+	name-from=Seer;
+	description-from=Mobile Radar;
+	}
+[ARMSEHAK]
+	{
+	Name=海鹰声纳飞机;
+	Description=配备机载声纳，用于侦测水面和水下舰只;
+	name-from=Seahawk;
+	description-from=Airborne Sonar;
+	}
+[ARMSFIG]
+	{
+	Name=旋风式水上战斗机;
+	Description=配备空地、空空导弹;
+	name-from=Tornado;
+	description-from=Seaplane Fighter;
+	}
+[ARMSH]
+	{
+	Name=掠行者侦察气垫;
+	Description=侦察气垫;
+	name-from=Skimmer;
+	description-from=Scout Hovercraft;
+	}
+[ARMSILO]
+	{
+	Name=报复者核弹井;
+	Description=建造和储备核子导弹，随时给敌人致命一击;
+	name-from=Retaliator;
+	description-from=Nuclear Missile Launcher;
+	}
+[ARMSJAM]
+	{
+	Name=护卫者雷达干扰舰;
+	Description=干扰敌方雷达，非战斗单位;
+	name-from=Escort;
+	description-from=Radar Jammer Ship;
+	}
+[ARMSNIPE]
+	{
+	Name=狙击手机甲;
+	Description=攻击准确，致命，无防空能力;
+	name-from=Shooter;
+	description-from=Sniper Kbot;
+	}
+[ARMSOLAR]
+	{
+	Name=太阳能采集器;
+	Description=收集太阳能，生产少许能量;
+	name-from=Solar Collector;
+	description-from=Produces Energy;
+	}
+[ARMSONAR]
+	{
+	Name=声纳站;
+	Description=侦测水下舰只;
+	name-from=Sonar Station;
+	description-from=Locates Water Units;
+	}
+[ARMSPID]
+	{
+	Name=蜘蛛攻击战车;
+	Description=配备小型激光，并可麻痹敌方单位，可翻越陡峭的山坡;
+	name-from=Spider;
+	description-from=Spider Assault Vehicle;
+	}
+[ARMSPY]
+	{
+	Name=渗透者间谍机甲;
+	Description=间谍机甲;
+	name-from=Infiltrator;
+	description-from=SPY Kbot;
+	}
+[ARMSS]
+	{
+	Name=海蛇;
+	Description=本土生命体;
+	name-from=Sea Serpent;
+	description-from=Indigenous Lifeform;
+	}
+[ARMSTUMP]
+	{
+	Name=胖子中型坦克;
+	Description=中型坦克;
+	name-from=Stumpy;
+	description-from=Medium Assault Tank;
+	}
+[ARMSUB]
+	{
+	Name=潜伏者级潜艇;
+	Description=初级潜艇;
+	name-from=Lurker;
+	description-from=Submarine;
+	}
+[ARMSUBK]
+	{
+	Name=食人鱼级猎潜艇;
+	Description=猎潜艇;
+	name-from=Piranha;
+	description-from=Submarine Killer;
+	}
+[ARMSY]
+	{
+	Name=船坞;
+	Description=生产初级水面和水下舰只;
+	name-from=Shipyard;
+	description-from=Produces Ships;
+	}
+[ARMTARG]
+	{
+	Name=自动火控系统;
+	Description=指引所有单位向射程内雷达侦测到的单位目标自动开火;
+	name-from=Targeting Facility;
+	description-from=Automatic Radar Targeting;
+	}
+[ARMTHOVR]
+	{
+	Name=熊式运输气垫;
+	Description=运输气垫，可以运载大量初级单位;
+	name-from=Bear;
+	description-from=Transport Hovercraft;
+	}
+[ARMTHUND]
+	{
+	Name=雷霆轰炸机;
+	Description=初级轰炸机;
+	name-from=Thunder;
+	description-from=Bomber;
+	}
+[ARMTIDE]
+	{
+	Name=潮汐发电机;
+	Description=利用潮汐能生产能量;
+	name-from=Tidal Generator;
+	description-from=Produces Energy;
+	}
+[ARMTL]
+	{
+	Name=鱼雷发射器;
+	Description=初级鱼雷发射器，攻击水面和水下舰只;
+	name-from=Torpedo Launcher;
+	description-from=Torpedo Launcher;
+	}
+[ARMTSHIP]
+	{
+	Name=大个子运输舰;
+	Description=运输舰，可装载大量小型单位;
+	name-from=Hulk;
+	description-from=Transport Ship;
+	}
+[ARMUWES]
+	{
+	Name=水下能量存储器;
+	Description=存储过剩的能量，增大能量存储上限;
+	name-from=Underwater Energy Storage;
+	description-from=Increases Energy Storage;
+	}
+[ARMUWFUS]
+	{
+	Name=水下聚变发电站;
+	Description=水下核反应堆，生产大量能量;
+	name-from=Underwater Fusion Plant;
+	description-from=Produces Energy;
+	}
+[ARMUWMEX]
+	{
+	Name=水下金属采集器;
+	Description=建造于水下矿脉，生产少量金属;
+	name-from=Underwater Metal Extractor;
+	description-from=Extracts Metal;
+	}
+[ARMUWMS]
+	{
+	Name=水下金属存储器;
+	Description=存储过剩的金属，增大金属存储上限;
+	name-from=Underwater Metal Storage;
+	description-from=Increases Metal Storage;
+	}
+[ARMVADER]
+	{
+	Name=侵略者蠕虫炸弹;
+	Description=靠近敌人自爆以伤害敌人;
+	name-from=Invader;
+	description-from=Crawling Bomb;
+	}
+[ARMVP]
+	{
+	Name=战车工厂;
+	Description=生产初级战车;
+	name-from=Vehicle Plant;
+	description-from=Produces Vehicles;
+	}
+[ARMVULC]
+	{
+	Name=火山速射长程等离子体炮;
+	Description=大贝莎的升级火炮，装填速度极快，地面部队的噩梦;
+	name-from=Vulcan;
+	description-from=Rapid Fire Plasma Cannon;
+	}
+[ARMWAR]
+	{
+	Name=勇士中型步兵机甲;
+	Description=装备小型火炮和高速能量机关炮;
+	name-from=Warrior;
+	description-from=Medium Infantry Kbot;
+	}
+[ARMWIN]
+	{
+	Name=风力发电机;
+	Description=利用风能生产少许能量;
+	name-from=Wind Generator;
+	description-from=Produces Energy;
+	}
+[ARMYORK]
+	{
+	Name=方阵移动高炮;
+	Description=移动高炮，机动防空;
+	name-from=Phalanx;
+	description-from=Mobile Flak Vehicle;
+	}
+[ARMZEUS]
+	{
+	Name=宙斯攻击机甲;
+	Description=闪电攻击;
+	name-from=Zeus;
+	description-from=Assault Kbot;
+	}
+[CORAAP]
+	{
+	Name=高级飞机工厂;
+	Description=生产高级飞机;
+	name-from=Adv. Aircraft Plant;
+	description-from=Produces Aircraft;
+	}
+[CORACA]
+	{
+	Name=高级工程飞机;
+	Description=建造高级地面建筑;
+	name-from=Adv. Construction Aircraft;
+	description-from=Tech Level 2;
+	}
+[CORACK]
+	{
+	Name=高级工程机甲;
+	Description=建造高级地面建筑;
+	name-from=Adv. Construction Kbot;
+	description-from=Tech Level 2;
+	}
+[CORACSUB]
+	{
+	Name=高级工程潜艇;
+	Description=建造高级水面和水下建筑;
+	name-from=Advanced Construction Sub;
+	description-from=Tech Level 2;
+	}
+[CORACV]
+	{
+	Name=高级工程车;
+	Description=建造高级地面建筑;
+	name-from=Adv. Construction Vehicle;
+	description-from=Tech Level 2;
+	}
+[CORAH]
+	{
+	Name=投石手防空气垫;
+	Description=防空气垫;
+	name-from=Slinger;
+	description-from=Anti-Air Hovercraft;
+	}
+[CORAK]
+	{
+	Name=AK步兵机甲;
+	Description=装备小型激光，机动力较强;
+	name-from=A.K.;
+	description-from=Infantry Kbot;
+	}
+[CORALAB]
+	{
+	Name=高级机甲实验室;
+	Description=生产高级机甲;
+	name-from=Adv. Kbot Lab;
+	description-from=Produces Kbots;
+	}
+[CORAMPH]
+	{
+	Name=瘸怪两栖机甲;
+	Description=装备激光和火炮，潜水时无防卫能力;
+	name-from=Gimp;
+	description-from=Amphibious Kbot;
+	}
+[CORAP]
+	{
+	Name=飞机工厂;
+	Description=生产初级飞机;
+	name-from=Aircraft Plant;
+	description-from=Produces Aircraft;
+	}
+[CORAPE]
+	{
+	Name=双刃剑直升机;
+	Description=装备空地导弹，无空战能力;
+	name-from=Rapier;
+	description-from=Gunship;
+	}
+[CORARAD]
+	{
+	Name=高级雷达塔;
+	Description=高级雷达，侦测范围较大;
+	name-from=Advanced Radar Tower;
+	description-from=Long Range Radar;
+	}
+[CORARCH]
+	{
+	Name=裂空者级防空舰;
+	Description=装备高射炮和对空、对地导弹，海面防空的中坚力量;
+	name-from=Shredder;
+	description-from=Anti-Air Ship;
+	}
+[CORASON]
+	{
+	Name=高级声纳站;
+	Description=大范围声纳，侦测水下舰只;
+	name-from=Advanced Sonar Station;
+	description-from=Locates Water Units;
+	}
+[CORASP]
+	{
+	Name=飞机修理平台;
+	Description=初级飞机修理平台，自动修复降落的飞机;
+	name-from=Air Repair Pad;
+	description-from=Automatically repairs aircraft;
+	}
+[CORASY]
+	{
+	Name=高级船坞;
+	Description=生产高级水面和水下舰只;
+	name-from=Adv. Shipyard;
+	description-from=Produces Ships;
+	}
+[CORATL]
+	{
+	Name=高级鱼雷发射器;
+	Description=发射制导鱼雷，战列舰的噩梦;
+	name-from=Advanced Torpedo Launcher;
+	description-from=Advanced Torpedo Launcher;
+	}
+[CORAVP]
+	{
+	Name=高级战车工厂;
+	Description=生产高级车辆;
+	name-from=Adv. Vehicle Plant;
+	description-from=Produces Vehicles;
+	}
+[CORAWAC]
+	{
+	Name=秃鹰预警机;
+	Description=装备机载雷达，非战斗单位;
+	name-from=Vulture;
+	description-from=Radar Plane;
+	}
+[CORBATS]
+	{
+	Name=霸王级战列舰;
+	Description=装备中远程火炮和重型激光，无反潜能力，防空能力弱;
+	name-from=Warlord;
+	description-from=Battleship;
+	}
+[CORBEAC]
+	{
+	Name=外星信标;
+	Description=外星信标;
+	name-from=Alien Beacon;
+	description-from=Alien Beacon;
+	}
+[CORBUILD]
+	{
+	Name=造水厂;
+	Description=制造水;
+	name-from=Hydration Plant;
+	description-from=Creates Water;
+	}
+[CORBUZZ]
+	{
+	Name=链锯速射长程等离子体炮;
+	Description=胁迫者的升级火炮，装填速度极快，地面部队的噩梦;
+	name-from=Buzzsaw;
+	description-from=Rapid Fire Plasma Cannon;
+	}
+[CORCA]
+	{
+	Name=工程飞机;
+	Description=建造初级建筑;
+	name-from=Construction Aircraft;
+	description-from=Tech Level 1;
+	}
+[CORCAN]
+	{
+	Name=罐形攻击机甲;
+	Description=装备重型激光，装甲厚重，机动力差;
+	name-from=The Can;
+	description-from=Armored Assault Kbot;
+	}
+[CORCARRY]
+	{
+	Name=蜂房级轻型航母;
+	Description=装备中型雷达和两个飞机修理平台，并生产一定的能量;
+	name-from=Hive;
+	description-from=Light Carrier;
+	}
+[CORCH]
+	{
+	Name=工程气垫;
+	Description=建造初级水面和地面建筑;
+	name-from=Construction Hovercraft;
+	description-from=Tech Level 1;
+	}
+[CORCK]
+	{
+	Name=工程机甲;
+	Description=建造初级建筑;
+	name-from=Construction Kbot;
+	description-from=Tech Level 1;
+	}
+[CORCKFUS]
+	{
+	Name=隐形聚变反应堆;
+	Description=具备隐形能力，隐形时消耗能量;
+	name-from=Cloakable Fusion Reactor;
+	description-from=Produces Energy;
+	}
+[CORCOM]
+	{
+	Name=指挥官;
+	Description=军团首脑，配备小型激光和必杀武器D-GUN，建造速度极快;
+	name-from=Commander;
+	description-from=Commander;
+	}
+[CORCRASH]
+	{
+	Name=撞击者导弹机甲;
+	Description=装备对空、对地导弹;
+	name-from=Crasher;
+	description-from=Missile Kbot;
+	}
+[CORCRUS]
+	{
+	Name=刽子手级巡洋舰;
+	Description=装备中远程火炮和深水炸弹，具备反潜能力，无防空能力;
+	name-from=Executioner;
+	description-from=Cruiser;
+	}
+[CORCS]
+	{
+	Name=工程船;
+	Description=建造水面初级建筑;
+	name-from=Construction Ship;
+	description-from=Tech Level 1;
+	}
+[CORCSA]
+	{
+	Name=水上工程飞机;
+	Description=建造水面和陆地初级建筑;
+	name-from=Construction Seaplane;
+	description-from=Tech Level 1;
+	}
+[CORCV]
+	{
+	Name=工程车;
+	Description=建造初级建筑;
+	name-from=Construction Vehicle;
+	description-from=Tech Level 1;
+	}
+[CORDECOM]
+	{
+	Name=诱饵指挥官;
+	Description=外形酷似指挥官的诱饵，配备小型激光，用来迷惑敌人;
+	name-from=Decoy Commander;
+	description-from=Decoy Commander;
+	}
+[CORDEV1]
+	{
+	Name=内爆装置;
+	Description=内爆装置;
+	name-from=Implosion Device;
+	description-from=Implosion Device;
+	}
+[CORDOOM]
+	{
+	Name=末日死光炮;
+	Description=装备死光炮和重型激光;
+	name-from=Doomsday Machine;
+	description-from=Energy Weapon;
+	}
+[CORDRAG]
+	{
+	Name=龙牙;
+	Description=坚固的工事，用于延缓敌军的机动;
+	name-from=Dragon's Teeth;
+	description-from=Perimeter Defense;
+	}
+[CORESTOR]
+	{
+	Name=能量存储器;
+	Description=存储过剩的能量，增大能量存储极限;
+	name-from=Energy Storage;
+	description-from=Increases Energy Storage;
+	}
+[CORETER]
+	{
+	Name=删除者雷达干扰车;
+	Description=装备雷达干扰器，非战斗单位;
+	name-from=Deleter;
+	description-from=Mobile Radar Jammer;
+	}
+[CORFAST]
+	{
+	Name=暴走徒速攻机甲;
+	Description=机动力强，配备小型激光;
+	name-from=Freaker;
+	description-from=Fast Attack Kbot;
+	}
+[CORFAV]
+	{
+	Name=黄鼠狼侦察车;
+	Description=配备小型激光，机动力强;
+	name-from=Weasel;
+	description-from=Scout;
+	}
+[CORFDRAG]
+	{
+	Name=水面龙牙;
+	Description=坚固的工事，用来延缓舰队机动;
+	name-from=Floating Dragon's Teeth;
+	description-from=Floating Dragon's Teeth;
+	}
+[CORFHLT]
+	{
+	Name=霹雳重型激光塔;
+	Description=水面重型激光塔;
+	name-from=Thunderbolt;
+	description-from=Floating Heavy Laser Tower;
+	}
+[CORFINK]
+	{
+	Name=线人侦察机;
+	Description=速度快，装备小型雷达;
+	name-from=Fink;
+	description-from=Air Scout;
+	}
+[CORFLAK]
+	{
+	Name=眼镜蛇高射炮;
+	Description=高射炮，射速快，密集的高射炮阵地可令敌机群迅速灰飞烟灭;
+	name-from=Cobra;
+	description-from=Anti-Air Flak Gun;
+	}
+[CORFMD]
+	{
+	Name=坚毅反导系统;
+	Description=生产和储备反弹道导弹，拦截一定范围内的敌方导弹;
+	name-from=Fortitude Missile Defense;
+	description-from=Anti Missile Defense System;
+	}
+[CORFMKR]
+	{
+	Name=水面金属转换器;
+	Description=初级金属转换器，将能量转换为少量金属;
+	name-from=Floating Metal Maker;
+	description-from=Floating Metal Maker;
+	}
+[CORFORT]
+	{
+	Name=要塞城墙;
+	Description=坚固的城墙，可以修建成环形工事，保护重要目标;
+	name-from=Fortification Wall;
+	description-from=Perimeter Defense;
+	}
+[CORFRT]
+	{
+	Name=毒刺导弹塔;
+	Description=装备对地、对空导弹;
+	name-from=Stinger;
+	description-from=Missile Tower - Naval Series;
+	}
+[CORFUS]
+	{
+	Name=聚变发电站;
+	Description=利用原子核聚变反应提供大量能量;
+	name-from=Fusion Power Plant;
+	description-from=Produces Energy;
+	}
+[CORGANT]
+	{
+	Name=柯古斯建造台;
+	Description=建造柯古斯;
+	name-from=Krogoth Gantry;
+	description-from=Builds Krogoth;
+	}
+[CORGATE]
+	{
+	Name=银河之门;
+	Description=太空传送器;
+	name-from=Galactic Gate;
+	description-from=Space Teleporter;
+	}
+[CORGATOR]
+	{
+	Name=煽动者攻击坦克;
+	Description=攻击坦克;
+	name-from=Instigator;
+	description-from=Assault Tank;
+	}
+[CORGEO]
+	{
+	Name=地热发电站;
+	Description=收集地热能转换为能量，需建造在地热出口处;
+	name-from=Geothermal Powerplant;
+	description-from=Produces Energy;
+	}
+[CORGOL]
+	{
+	Name=巨人超重型坦克;
+	Description=超重型坦克，机动力较差;
+	name-from=Goliath;
+	description-from=Very Heavy Assault Tank;
+	}
+[CORHLT]
+	{
+	Name=加特炮重型激光塔;
+	Description=重型激光塔，防御阵地的主力;
+	name-from=Gaat Gun;
+	description-from=Heavy Laser Tower;
+	}
+[CORHP]
+	{
+	Name=气垫平台;
+	Description=生产气垫单位;
+	name-from=Hovercraft Platform;
+	description-from=Builds Hovercraft;
+	}
+[CORHRK]
+	{
+	Name=统治者重型火箭机甲;
+	Description=装备重型火箭，高空垂直攻击，无防空能力;
+	name-from=Dominator;
+	description-from=Heavy Rocket Kbot;
+	}
+[CORHUNT]
+	{
+	Name=猎手声纳飞机;
+	Description=装备机载声纳;
+	name-from=Hunter;
+	description-from=Airborne Sonar;
+	}
+[CORHURC]
+	{
+	Name=飓风式战略轰炸机;
+	Description=高级轰炸机，装备有小型激光;
+	name-from=Hurricane;
+	description-from=Strategic Bomber;
+	}
+[CORINT]
+	{
+	Name=胁迫者等离子体加农炮;
+	Description=长程等离子体炮，每一次射击需要消耗大量的能量;
+	name-from=Intimidator;
+	description-from=Long Range Plasma Cannon;
+	}
+[CORKROG]
+	{
+	Name=柯古斯;
+	Description=试验型机甲，装备重型火箭、蓝色死光枪和穿透攻击火炮;
+	name-from=Krogoth;
+	description-from=Experimental Kbot;
+	}
+[CORLAB]
+	{
+	Name=机甲实验室;
+	Description=生产初级机甲;
+	name-from=Kbot Lab;
+	description-from=Produces Kbots;
+	}
+[CORLEVLR]
+	{
+	Name=平推者防暴坦克;
+	Description=射速较快，伤害范围较大;
+	name-from=Leveler;
+	description-from=Riot Tank;
+	}
+[CORLLT]
+	{
+	Name=轻型激光塔;
+	Description=初期防御力量;
+	name-from=Light Laser Tower;
+	description-from=Light Laser Tower;
+	}
+[CORMABM]
+	{
+	Name=刺猬移动反导系统;
+	Description=生产和储备反导导弹，在一定范围内拦截敌方导弹;
+	name-from=Hedgehog;
+	description-from=Mobile Missile Defense;
+	}
+[CORMAKR]
+	{
+	Name=金属转换器;
+	Description=初级金属转换器，将能量转换为少量金属;
+	name-from=Metal Maker;
+	description-from=Metal Maker;
+	}
+[CORMART]
+	{
+	Name=自行火炮;
+	Description=自行火炮，无防空能力，近战能力弱;
+	name-from=Mobile Artillery;
+	description-from=Mobile Artillery;
+	}
+[CORMEX]
+	{
+	Name=金属采集器;
+	Description=初级金属采集器，从矿源采集少量金属;
+	name-from=Metal Extractor;
+	description-from=Extracts Metal;
+	}
+[CORMH]
+	{
+	Name=水精灵重型火箭气垫;
+	Description=装备重型火箭，高空垂直攻击，无防空能力;
+	name-from=Nixer;
+	description-from=Hovercraft Rocket Launcher;
+	}
+[CORMINE1]
+	{
+	Name=M-104地雷;
+	Description=低伤害、中范围地雷;
+	name-from=M-104;
+	description-from=Low Damage, Med. Range Mine;
+	}
+[CORMINE2]
+	{
+	Name=M-209地雷;
+	Description=低伤害、大范围地雷;
+	name-from=M-209;
+	description-from=Low Damage, Large Range Mine;
+	}
+[CORMINE3]
+	{
+	Name=M-303地雷;
+	Description=中等伤害、中范围地雷;
+	name-from=M-303;
+	description-from=Med. Damage, Med. Range Mine;
+	}
+[CORMINE4]
+	{
+	Name=M-420地雷;
+	Description=高伤害、中范围地雷;
+	name-from=M-420;
+	description-from=High Damage, Med. Range Mine;
+	}
+[CORMINE5]
+	{
+	Name=M-515地雷;
+	Description=高伤害、大范围地雷;
+	name-from=M-515;
+	description-from=High Damage, Large Range Mine;
+	}
+[CORMINE6]
+	{
+	Name=M-610核子地雷;
+	Description=核子地雷;
+	name-from=M-610;
+	description-from=Nuclear Mine;
+	}
+[CORMIST]
+	{
+	Name=砍伐者导弹车;
+	Description=导弹发射车;
+	name-from=Slasher;
+	description-from=Missile Launcher;
+	}
+[CORMLV]
+	{
+	Name=洗劫者布雷车;
+	Description=布雷车，可生产和储备布雷导弹;
+	name-from=Spoiler;
+	description-from=Mine Layer Vehicle;
+	}
+[CORMMKR]
+	{
+	Name=高级金属转换器;
+	Description=将大量能量转换为金属;
+	name-from=Moho Metal Maker;
+	description-from=Produces Metal;
+	}
+[CORMOHO]
+	{
+	Name=高级金属采集器;
+	Description=深层金属采集，产量较初级金属采集器高;
+	name-from=Moho Mine;
+	description-from=Advanced Metal Extractor;
+	}
+[CORMORT]
+	{
+	Name=莫蒂自行迫击炮机甲;
+	Description=装备一门火炮，无防空能力;
+	name-from=Morty;
+	description-from=Mobile Mortar Kbot;
+	}
+[CORMSHIP]
+	{
+	Name=导弹护卫舰;
+	Description=装备重型火箭炮，高空垂直攻击，另装备轻型导弹，有限防空;
+	name-from=Missile Frigate;
+	description-from=Missile Ship;
+	}
+[CORMSTOR]
+	{
+	Name=金属存储器;
+	Description=存储过剩金属，增大金属存储极限;
+	name-from=Metal Storage;
+	description-from=Increases Metal Storage;
+	}
+[CORNECRO]
+	{
+	Name=复活机甲;
+	Description=可从废墟中复活被毁的单位;
+	name-from=Resurrection Kbot;
+	description-from=Resurrection Kbot;
+	}
+[CORPLAS]
+	{
+	Name=屠夫等离子体塔;
+	Description=初级等离子体炮，阻挡快速攻击部队;
+	name-from=Immolator;
+	description-from=Plasma Tower;
+	}
+[CORPLAT]
+	{
+	Name=水上飞机平台;
+	Description=生产水上飞机;
+	name-from=Seaplane Platform;
+	description-from=Builds Seaplanes;
+	}
+[CORPT]
+	{
+	Name=搜寻者侦察艇;
+	Description=装备小型激光和对空、对地导弹;
+	name-from=Searcher;
+	description-from=Scout Ship;
+	}
+[CORPUN]
+	{
+	Name=惩罚者等离子体炮;
+	Description=中长射距的等离子体炮，防御阵地的主力;
+	name-from=Punisher;
+	description-from=Plasma Battery;
+	}
+[CORPYRO]
+	{
+	Name=烈焰速攻机甲;
+	Description=装备火焰喷射枪;
+	name-from=Pyro;
+	description-from=Assault Kbot;
+	}
+[CORRAD]
+	{
+	Name=雷达塔;
+	Description=侦测敌方单位;
+	name-from=Radar Tower;
+	description-from=Radar Tower;
+	}
+[CORRAID]
+	{
+	Name=侵袭者中型坦克;
+	Description=中型坦克，无防空能力;
+	name-from=Raider;
+	description-from=Medium Assault Tank;
+	}
+[CORREAP]
+	{
+	Name=死神重型坦克;
+	Description=重型坦克，无防空能力;
+	name-from=Reaper;
+	description-from=Heavy Assault Tank;
+	}
+[CORRL]
+	{
+	Name=粉碎者导弹塔;
+	Description=具备对地和防空能力;
+	name-from=Pulverizer;
+	description-from=Missile Tower;
+	}
+[CORROACH]
+	{
+	Name=蟑螂蠕虫炸弹;
+	Description=攻击方式是靠近敌方单位自爆;
+	name-from=Roach;
+	description-from=Crawling Bomb;
+	}
+[CORROY]
+	{
+	Name=执法者级驱逐舰;
+	Description=装备中距火炮和深水炸弹，具有反潜能力;
+	name-from=Enforcer;
+	description-from=Destroyer;
+	}
+[CORSCORP]
+	{
+	Name=蝎子;
+	Description=本土生命体;
+	name-from=Scorpion;
+	description-from=Indigenous Lifeform;
+	}
+[CORSEAL]
+	{
+	Name=鳄鱼式两栖坦克;
+	Description=两栖坦克，潜水时无防卫能力;
+	name-from=Crock;
+	description-from=Amphibious Tank;
+	}
+[CORSEAP]
+	{
+	Name=台风式鱼雷战斗机;
+	Description=装备制导鱼雷和空空、空地导弹;
+	name-from=Typhoon;
+	description-from=Torpedo Seaplane;
+	}
+[CORSENT]
+	{
+	Name=铜斑蛇移动高炮;
+	Description=移动高炮，只限防空;
+	name-from=Copperhead;
+	description-from=Mobile Flak Vehicle;
+	}
+[CORSFIG]
+	{
+	Name=巫师水上战斗机;
+	Description=水上战斗机，装备对空、对地导弹;
+	name-from=Voodoo;
+	description-from=Seaplane Fighter;
+	}
+[CORSH]
+	{
+	Name=清道夫侦察气垫;
+	Description=侦察气垫;
+	name-from=Scrubber;
+	description-from=Scout Hovercraft;
+	}
+[CORSHAD]
+	{
+	Name=幽灵轰炸机;
+	Description=初级轰炸机，无对空能力;
+	name-from=Shadow;
+	description-from=Bomber;
+	}
+[CORSHARK]
+	{
+	Name=噬人鲨级猎潜艇;
+	Description=猎潜艇，亦可攻击水面舰只;
+	name-from=Shark;
+	description-from=Submarine Killer;
+	}
+[CORSILO]
+	{
+	Name=沉默者核弹井;
+	Description=生产和储备核子导弹，攻击地面和水面目标，导弹可被拦截;
+	name-from=Silencer;
+	description-from=Nuclear Missile Launcher;
+	}
+[CORSJAM]
+	{
+	Name=幻影雷达干扰舰;
+	Description=装备雷达干扰器，干扰敌方雷达，非战斗单位;
+	name-from=Phantom;
+	description-from=Radar Jammer Ship;
+	}
+[CORSNAP]
+	{
+	Name=狂犬式气垫坦克;
+	Description=攻击气垫，无防空能力;
+	name-from=Snapper;
+	description-from=Hovertank;
+	}
+[CORSOLAR]
+	{
+	Name=太阳能采集器;
+	Description=收集太阳能，生产少许能量;
+	name-from=Solar Collector;
+	description-from=Produces Energy;
+	}
+[CORSONAR]
+	{
+	Name=声纳站;
+	Description=侦测水面水下舰只;
+	name-from=Sonar Station;
+	description-from=Sonar Station;
+	}
+[CORSPEC]
+	{
+	Name=幽魂雷达干扰机甲;
+	Description=装备雷达干扰器，干扰敌方雷达，非战斗单位;
+	name-from=Spectre;
+	description-from=Radar Jammer;
+	}
+[CORSPY]
+	{
+	Name=寄生虫间谍机甲;
+	Description=间谍机甲;
+	name-from=Parasite;
+	description-from=SPY Kbot;
+	}
+[CORSS]
+	{
+	Name=海蛇;
+	Description=本土生命体;
+	name-from=Sea Serpent;
+	description-from=Indigenous Lifeform;
+	}
+[CORSSUB]
+	{
+	Name=巨鲸级潜艇;
+	Description=高级反舰潜艇，发射制导鱼雷;
+	name-from=Leviathan;
+	description-from=Battle Sub;
+	}
+[CORSTORM]
+	{
+	Name=风暴火箭机甲;
+	Description=轻型火箭机甲，防空能力弱;
+	name-from=Storm;
+	description-from=Rocket Kbot;
+	}
+[CORSUB]
+	{
+	Name=长蛇级潜艇;
+	Description=初级反舰潜艇;
+	name-from=Snake;
+	description-from=Submarine;
+	}
+[CORSUMO]
+	{
+	Name=相扑型重型攻击机甲;
+	Description=配备重型激光，机动能力弱;
+	name-from=Sumo;
+	description-from=Adv. Armored Assault Kbot;
+	}
+[CORSY]
+	{
+	Name=船坞;
+	Description=生产初级水面和水下舰只;
+	name-from=Shipyard;
+	description-from=Produces Ships;
+	}
+[CORTARG]
+	{
+	Name=自动火控系统;
+	Description=指引所有单位向射程内雷达侦测到的单位目标自动开火;
+	name-from=Targeting Facility;
+	description-from=Automatic Radar Targeting;
+	}
+[CORTHOVR]
+	{
+	Name=海龟式运输气垫;
+	Description=可运输大量轻型单位;
+	name-from=Turtle;
+	description-from=Transport Hovercraft;
+	}
+[CORTHUD]
+	{
+	Name=重击火炮机甲;
+	Description=装备双门短距火炮，可翻越较陡的山坡;
+	name-from=Thud;
+	description-from=Artillery Kbot;
+	}
+[CORTIDE]
+	{
+	Name=潮汐发电机;
+	Description=利用潮汐能生产能量;
+	name-from=Tidal Generator;
+	description-from=Produces Energy;
+	}
+[CORTITAN]
+	{
+	Name=泰坦鱼雷轰炸机;
+	Description=装备制导鱼雷，无对空能力;
+	name-from=Titan;
+	description-from=Torpedo Bomber;
+	}
+[CORTL]
+	{
+	Name=鱼雷发射器;
+	Description=发射鱼雷，攻击水面和水下舰只;
+	name-from=Torpedo Launcher;
+	description-from=Torpedo Launcher;
+	}
+[CORTOAST]
+	{
+	Name=魔鬼弹出式重炮;
+	Description=弹出式重炮，关闭时增加防御;
+	name-from=Toaster;
+	description-from=Pop-up Heavy Cannon;
+	}
+[CORTRON]
+	{
+	Name=中子导弹发射井;
+	Description=生产和储备中子导弹，对建筑物无伤害;
+	name-from=Neutron;
+	description-from=Neutron Missile Launcher;
+	}
+[CORTRUCK]
+	{
+	Name=卡车;
+	Description=地面运输车;
+	name-from=Truck;
+	description-from=Ground Transport;
+	}
+[CORTSHIP]
+	{
+	Name=特使级运输舰;
+	Description=可以运输大量轻型单位;
+	name-from=Envoy;
+	description-from=Transport Ship;
+	}
+[CORUWES]
+	{
+	Name=水下能量存储器;
+	Description=存储过剩的能量，增大能量存储极限;
+	name-from=Underwater Energy Storage;
+	description-from=Increases Energy Storage;
+	}
+[CORUWFUS]
+	{
+	Name=水下聚变发电站;
+	Description=藏匿于水下的核反应堆，生产大量能量;
+	name-from=Underwater Fusion Plant;
+	description-from=Produces Energy;
+	}
+[CORUWMEX]
+	{
+	Name=水下金属采集器;
+	Description=从水下矿源采集金属，产量较低;
+	name-from=Underwater Metal Extractor;
+	description-from=Extracts Metal;
+	}
+[CORUWMS]
+	{
+	Name=水下金属存储器;
+	Description=存储过剩的金属，增大金属存储极限;
+	name-from=Underwater Metal Storage;
+	description-from=Increases Metal Storage;
+	}
+[CORVALK]
+	{
+	Name=女武神运输机;
+	Description=初级运输机，可装载轻型单位;
+	name-from=Valkyrie;
+	description-from=Air Transport;
+	}
+[CORVAMP]
+	{
+	Name=魅惑式隐形战斗机;
+	Description=隐形战斗机，装备空地、空空导弹;
+	name-from=Vamp;
+	description-from=Stealth Fighter;
+	}
+[CORVENG]
+	{
+	Name=复仇者战斗机;
+	Description=初级战斗机，装备空地、空空导弹;
+	name-from=Avenger;
+	description-from=Fighter;
+	}
+[CORVIPE]
+	{
+	Name=毒蛇弹出式重型激光;
+	Description=弹出式重型激光，关闭时防御加强;
+	name-from=Viper;
+	description-from=Pop-Up Heavy Laser;
+	}
+[CORVOYR]
+	{
+	Name=窥视者雷达机甲;
+	Description=装备中程雷达，非战斗单位;
+	name-from=Voyeur;
+	description-from=Mobile Radar Kbot;
+	}
+[CORVP]
+	{
+	Name=战车工厂;
+	Description=生产初级车辆;
+	name-from=Vehicle Plant;
+	description-from=Produces Vehicles;
+	}
+[CORVRAD]
+	{
+	Name=告密者雷达车;
+	Description=装备中程雷达，非战斗单位;
+	name-from=Informer;
+	description-from=Mobile Radar;
+	}
+[CORVROC]
+	{
+	Name=铁腕重型火箭发射车;
+	Description=重型火箭发射车，高空垂直攻击，无防空能力;
+	name-from=Diplomat;
+	description-from=Mobile Rocket Launcher;
+	}
+[CORWIN]
+	{
+	Name=风力发电机;
+	Description=利用风能生产少许能量;
+	name-from=Wind Generator;
+	description-from=Produces Energy;
+	}

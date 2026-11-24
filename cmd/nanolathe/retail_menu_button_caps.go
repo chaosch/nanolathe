@@ -8,6 +8,7 @@ import (
 )
 
 func retailGAFGlyphDispatch(font *formats.GAFEntry, r rune) *formats.GAFFrame {
+	//fmt.Println(string(r))
 	if i18n.I18nLanguageNeedCJK() && i18n.HasCJK(string(r)) {
 		return retailGAFGlyphCJK(font, r)
 	}

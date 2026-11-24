@@ -84,6 +84,9 @@ func materializeGAFNoneText(data []byte, meta *GAFMetadata, keepDirectRaster boo
 	entries := make(map[uint32]GAFEntry)
 	frames := make(map[*GAFMetadataFrame]*GAFFrame)
 	for i := range meta.Entries {
+		if commandButtonName(meta.Entries[i].Name, commands) == "" {
+			continue
+		}
 		source := &meta.Entries[i]
 		if cached, ok := entries[source.sourceOffset]; ok {
 			gaf.Entries = append(gaf.Entries, cached)

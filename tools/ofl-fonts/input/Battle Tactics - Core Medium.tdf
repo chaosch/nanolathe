@@ -1,0 +1,83 @@
+[HEADER]
+{
+campaignside=CORE;
+}
+
+[MISSION0]
+{
+missionfile=Metal Maze.ota;
+missionname=Metal Maze;
+}
+
+[MISSION1]
+{
+missionfile=Titanium Fist Bay.ota;
+missionname=Titanium Fist Bay;
+}
+
+[MISSION2]
+{
+missionfile=Crossing Kerrap Shallows.ota;
+missionname=Crossing Kerrap Shallows;
+}
+
+[MISSION3]
+{
+missionfile=Peaceful Pools.ota;
+missionname=Peaceful Pools;
+}
+
+[MISSION4]
+{
+missionfile=Solidspire Base.ota;
+missionname=Solidspire Base;
+}
+
+[MISSION5]
+{
+missionfile=Fortitude Race.ota;
+missionname=Fortitude Race;
+}
+
+
+[MISSION6]
+{
+missionfile=Brawler Buildup.ota;
+missionname=Brawler Buildup;
+}
+
+[MISSION7]
+{
+missionfile=Silent Slayers.ota;
+missionname=Silent Slayers;
+}
+
+[MISSION8]
+{
+missionfile=Crossing Arnen Inlet.ota;
+missionname=Crossing Arnen Inlet;
+}
+
+[MISSION9]
+{
+missionfile=Cloaked in the Spires.ota;
+missionname=Cloaked in the Spires;
+}
+
+[MISSION10]
+{
+missionfile=Zedtopt Hotsprings.ota;
+missionname=Zedtopt Hotsprings;
+}
+
+[MISSION11]
+{
+missionfile=Intimidator Rising.ota;
+missionname=Intimidator Rising;
+}
+
+[MISSION12]
+{
+missionfile=Guditha Pass.ota;
+missionname=Guditha Pass;
+}

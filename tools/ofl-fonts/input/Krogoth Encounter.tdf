@@ -1,0 +1,14 @@
+[HEADER]
+	{
+	campaignside=ARM; 
+	}
+
+[MISSION0]
+	{
+	missionfile=Krogoth Encounter.ota;
+	missionname=1: Krogoth Encounter!;
+	Germanmissionname=1: Das Krogoth-Projekt!;
+	Frenchmissionname=1: L'Arm chez les Krogoth!;
+	Italianmissionname=1: Krogoth...;
+	}
+

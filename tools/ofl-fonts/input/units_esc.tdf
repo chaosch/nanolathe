@@ -1,0 +1,3213 @@
+[ALL_L2]
+	{
+	Name=二级单位升级模块;
+	Description=升级二级作战单位;
+	name-from=Level 2 Unit Upgrade;
+	description-from=Upgrades Level 2 Units;
+	}
+[ALL_L3]
+	{
+	Name=三级单位升级模块;
+	Description=升级三级作战单位;
+	name-from=Level 3 Unit Upgrade;
+	description-from=Upgrades Level 3 Units;
+	}
+[ARMAAA]
+	{
+	Name=弹弓重型防空导弹炮塔;
+	Description=重型防空导弹防御炮塔;
+	name-from=Slingshot;
+	description-from=Heavy Anti-Air Missile Tower;
+	}
+[ARMAABOAT]
+	{
+	Name=水手护卫舰;
+	Description=护卫舰，具备防空、反潜能力;
+	name-from=Mariner;
+	description-from=Corvette (AA, Anti-Sub);
+	}
+[ARMAABOT]
+	{
+	Name=游击队员速射防空机甲;
+	Description=速射防空机甲;
+	name-from=Partisan;
+	description-from=Rapid-Fire Anti-Air Kbot;
+	}
+[ARMAACRUS]
+	{
+	Name=洪流战斗巡洋舰;
+	Description=战斗巡洋舰，配备防空武器;
+	name-from=Torrent;
+	description-from=Battle Cruiser (AA);
+	}
+[ARMAAP]
+	{
+	Name=高级飞机工厂;
+	Description=生产二级科技飞行器;
+	name-from=Adv. Aircraft Plant;
+	description-from=Produces Tech Level 2 Aircraft;
+	}
+[ARMAAS]
+	{
+	Name=弓箭手高级护航护卫舰;
+	Description=高级护航护卫舰，兼顾防空反潜;
+	name-from=Archer;
+	description-from=Adv. Escort Frigate (AA, Anti-Sub);
+	}
+[ARMACH]
+	{
+	Name=高级工程气垫艇;
+	Description=建造二级科技建筑;
+	name-from=Adv. Construction Hovercraft;
+	description-from=Builds Tech Level 2 Buildings;
+	}
+[ARMACK]
+	{
+	Name=高级工程机甲;
+	Description=二级科技工程机甲，支持攀爬地形;
+	name-from=Adv. Construction Kbot;
+	description-from=Tech Level 2 (Climb);
+	}
+[ARMACSA]
+	{
+	Name=高级工程水上飞机;
+	Description=两栖工程单位，建造二级科技建筑;
+	name-from=Adv. Construction Seaplane;
+	description-from=Builds Tech Level 2 Buildings (Amphib);
+	}
+[ARMAFAV]
+	{
+	Name=侦察兵高速突击侦察车;
+	Description=高速突击侦察车辆;
+	name-from=Recon;
+	description-from=Fast Attack Scout Vehicle;
+	}
+[ARMAH]
+	{
+	Name=拍击者防空反潜气垫艇;
+	Description=防空/反潜气垫作战艇;
+	name-from=Swatter;
+	description-from=Anti-Air / Anti-Sub Hovercraft;
+	}
+[ARMAHP]
+	{
+	Name=高级气垫制造平台;
+	Description=生产二级科技气垫单位;
+	name-from=Adv. Hovercraft Platform;
+	description-from=Builds Tech Level 2 Hovercraft;
+	}
+[ARMALAB]
+	{
+	Name=高级机甲实验室;
+	Description=生产二级科技机甲;
+	name-from=Advanced Kbot Lab;
+	description-from=Produces Tech Level 2 Kbots;
+	}
+[ARMAMB]
+	{
+	Name=伏击者弹出式重炮;
+	Description=弹出式重炮，每发消耗500能源;
+	name-from=Ambusher;
+	description-from=Pop-up Heavy Cannon (-500 E/Shot);
+	}
+[ARMAMPH]
+	{
+	Name=鹈鹕高速两栖机甲;
+	Description=高速两栖机甲;
+	name-from=Pelican;
+	description-from=Fast Amphibious Kbot;
+	}
+[ARMANNI]
+	{
+	Name=歼灭者能量炮台;
+	Description=能量武器炮台，每发消耗5000能源;
+	name-from=Annihilator;
+	description-from=Energy Weapon (5K Energy/Shot);
+	}
+[ARMAPLAT]
+	{
+	Name=高级水上飞机平台;
+	Description=建造二级科技飞行器;
+	name-from=Adv. Seaplane Platform;
+	description-from=Builds Tech Level 2 Aircraft;
+	}
+[ARMAPT]
+	{
+	Name=激流高速突击轻巡洋舰;
+	Description=高速突击轻巡洋舰，隐形且具备防空;
+	name-from=Riptide;
+	description-from=Fast Attack Light-Cruiser (Stealth, AA);
+	}
+[ARMARAD]
+	{
+	Name=高级远程雷达塔;
+	Description=远程雷达塔，运转消耗50能源;
+	name-from=Advanced Radar Tower;
+	description-from=Long Range Radar Tower (50 Energy);
+	}
+[ARMARL]
+	{
+	Name=壁垒弹出式弹幕导弹炮台;
+	Description=弹出式弹幕导弹炮台;
+	name-from=Bulwark;
+	description-from=Pop-up Vspam Missile Battery;
+	}
+[ARMASAM]
+	{
+	Name=蝎子重型防空卡车;
+	Description=重型防空卡车，雷达拥有抗干扰强化;
+	name-from=Scorpion;
+	description-from=Heavy AA Truck (Hardened Radar);
+	}
+[ARMASER]
+	{
+	Name=消磁者雷达干扰机甲;
+	Description=雷达干扰机甲，运行消耗50能源;
+	name-from=Eraser;
+	description-from=Radar Jamming Kbot (-50 Energy);
+	}
+[ARMASON]
+	{
+	Name=高级声纳站;
+	Description=探测敌方单位，持续消耗75能源;
+	name-from=Advanced Sonar Station;
+	description-from=Locates Units (-75 Energy);
+	}
+[ARMASP]
+	{
+	Name=战机维修坪;
+	Description=自动修复空中单位，支持升级;
+	name-from=Repair Pad;
+	description-from=Automatically repairs air units (Upgradable);
+	}
+[ARMASP_UPGRADE]
+	{
+	Name=维修塔升级组件;
+	Description=自动修复周边全部作战单位;
+	name-from=Unit Repair Tower Upgrade;
+	description-from=Automatically repairs all nearby units;
+	}
+[ARMASPEN]
+	{
+	Name=潜艇船坞;
+	Description=生产一级、二级水下作战单位;
+	name-from=Submarine Pen;
+	description-from=Produces Tech Level 1 & 2 Underwater Units;
+	}
+[ARMASPID]
+	{
+	Name=戈耳贡电磁脉冲机甲;
+	Description=电磁脉冲眩晕机甲，每秒消耗3840能源，可升级;
+	name-from=Gorgon;
+	description-from=EMP Stun Kbot (3.84K Energy/S, Upgradable);
+	}
+[ARMASW]
+	{
+	Name=弧光重型雷击巡洋舰;
+	Description=重型雷击巡洋舰，专注反潜作战;
+	name-from=Arclight;
+	description-from=Heavy Lightning Cruiser (Anti-Sub);
+	}
+[ARMASY]
+	{
+	Name=高级舰船制造厂;
+	Description=生产二级科技舰船;
+	name-from=Advanced Shipyard;
+	description-from=Produces Tech Level 2 Ships;
+	}
+[ARMATL]
+	{
+	Name=海鳗高级鱼雷发射器;
+	Description=高级鱼雷发射装置;
+	name-from=Moray;
+	description-from=Advanced Torpedo Launcher;
+	}
+[ARMAVP]
+	{
+	Name=高级车辆工厂;
+	Description=生产二级科技地面载具;
+	name-from=Advanced Vehicle Plant;
+	description-from=Produces Tech Level 2 Vehicles;
+	}
+[ARMAWAC]
+	{
+	Name=雄鹰高级侦察机;
+	Description=高级侦察机，集成声纳雷达，机体隐形;
+	name-from=Eagle;
+	description-from=Advanced Scout Plane (Sonar, Radar, Stealth);
+	}
+[ARMBATS]
+	{
+	Name=千禧轰击巡洋舰;
+	Description=轰击型巡洋舰;
+	name-from=Millenium;
+	description-from=Bombardment Cruiser;
+	}
+[ARMBRTHA]
+	{
+	Name=大贝莎远程等离子炮;
+	Description=远程等离子炮，每发消耗5400能源，支持升级;
+	name-from=Big Bertha;
+	description-from=Long Range Plasma Cannon (5.4K Energy/Shot - Upgradable);
+	}
+[ARMBRTHA_UPG]
+	{
+	Name=伏尔坎升级套件;
+	Description=武器射速提升6倍，探测射程提升2倍;
+	name-from=Vulcan Upgrade;
+	description-from=Increases Weapon Rate of Fire (6x), LOS (2x);
+	}
+[ARMBSUB]
+	{
+	Name=大漩涡战斗潜艇;
+	Description=主战潜艇;
+	name-from=Maelstrom;
+	description-from=Battle Submarine;
+	}
+[ARMBULL]
+	{
+	Name=斗牛犬重型突击坦克;
+	Description=重型突击坦克，可升级;
+	name-from=Bulldog;
+	description-from=Heavy Assault Tank (Upgradable);
+	}
+[ARMCARRY]
+	{
+	Name=巨像轻型航空母舰;
+	Description=轻型航母，+500能源，建造维修单位，具备反核防护;
+	name-from=Colossus;
+	description-from=Light Carrier (+500 E, Builds/Repairs Units, Anti-Nuke);
+	}
+[ARMCBT]
+	{
+	Name=海市蜃楼瘫痪突击坦克;
+	Description=瘫痪突击坦克，每秒消耗2160能源，可隐形;
+	name-from=Mirage;
+	description-from=Paralyzer Assault Tank (2.16K E/S, Cloak);
+	}
+[ARMCERB]
+	{
+	Name=刻耳柏洛斯MK2重型突击机甲;
+	Description=重型突击机甲，支持升级;
+	name-from=Cerberus MK2;
+	description-from=Heavy Assault Kbot (Upgradable);
+	}
+[ARMCRAWL]
+	{
+	Name=先知扰乱机甲;
+	Description=扰乱机甲，抹除敌方情报充能护盾，可隐形，消耗250能源;
+	name-from=Prophet;
+	description-from=Disrupt Kbot (Voids Enemy Intel/Charge/Shield, Cloaks, -250E);
+	}
+[ARMCROC]
+	{
+	Name=特里同两栖突击坦克;
+	Description=两栖突击坦克;
+	name-from=Triton;
+	description-from=Amphibious Assault Tank;
+	}
+[ARMCSA]
+	{
+	Name=工程水上飞机;
+	Description=一级科技，两栖作业;
+	name-from=Construction Seaplane;
+	description-from=Tech Level 1 (Amphib);
+	}
+[ARMDECOM]
+	{
+	Name=诱饵指挥官单位;
+	Description=诱饵/支援指挥官，可升级;
+	name-from=Commander;
+	description-from=Decoy/Support Commander (Upgradable);
+	}
+[ARMDPL]
+	{
+	Name=和风深水炸弹武装直升机;
+	Description=深水炸弹武装直升机，两栖;
+	name-from=Zephyr;
+	description-from=Depthcharge Gunship (Amphib);
+	}
+[ARMDREAD]
+	{
+	Name=胜利号战列舰;
+	Description=战列舰，具备自我修复;
+	name-from=Victory;
+	description-from=Battleship (Self-Heal);
+	}
+[ARMECA]
+	{
+	Name=究极工程飞机;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Aircraft;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[ARMECH]
+	{
+	Name=究极工程气垫艇;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Hovercraft;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[ARMECK]
+	{
+	Name=究极工程机甲;
+	Description=建造三级科技建筑，可攀爬地形;
+	name-from=Ultra Construction Kbot;
+	description-from=Builds Tech Level 3 Buildings (Climb);
+	}
+[ARMECS]
+	{
+	Name=究极工程舰船;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Ship;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[ARMECSA]
+	{
+	Name=究极工程水上飞机;
+	Description=三级科技，两栖;
+	name-from=Ultra Construction Seaplane;
+	description-from=Tech Level 3 (Amphib);
+	}
+[ARMECSUB]
+	{
+	Name=究极工程潜艇;
+	Description=三级科技水下工程单位;
+	name-from=Ultra Construction Sub;
+	description-from=Tech Level 3;
+	}
+[ARMECV]
+	{
+	Name=究极工程车辆;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Vehicle;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[ARMEHP]
+	{
+	Name=究极气垫工坊;
+	Description=建造三级科技气垫单位;
+	name-from=Ultra Hovercraft Lab;
+	description-from=Builds Tech Level 3 Hovercraft;
+	}
+[ARMELAB]
+	{
+	Name=究极机甲组装厂;
+	Description=生产三级科技机甲，可升级;
+	name-from=Ultra Kbot Assembler;
+	description-from=Produces Tech Level 3 Kbots (Upgradable);
+	}
+[ARMEMP]
+	{
+	Name=斥力者战术核导弹发射台;
+	Description=战术核导弹发射装置;
+	name-from=Repulsor;
+	description-from=Tactical Nuclear Missile Launcher;
+	}
+[ARMEPLAT]
+	{
+	Name=究极水上飞机平台;
+	Description=建造三级科技飞行器;
+	name-from=Ultra Seaplane Platform;
+	description-from=Builds Tech Level 3 Aircraft;
+	}
+[ARMESPEN]
+	{
+	Name=究极潜艇船坞;
+	Description=生产全部水下作战单位;
+	name-from=Ultra Submarine Pen;
+	description-from=Produces Underwater Units;
+	}
+[ARMESTOR]
+	{
+	Name=能源存储器;
+	Description=能源存储上限+5000，支持成对部署;
+	name-from=Energy Storage;
+	description-from=Increases Energy Storage by 5K (Pairing);
+	}
+[ARMESY]
+	{
+	Name=主力船坞;
+	Description=生产三级科技大型舰船;
+	name-from=Capital Shipyard;
+	description-from=Produces Tech Level 3 Ships;
+	}
+[ARMFAB]
+	{
+	Name=究极飞机机库;
+	Description=生产三级科技飞行器;
+	name-from=Ultra Aircraft Hangar;
+	description-from=Produces Tech Level 3 Aircraft;
+	}
+[ARMFAHP]
+	{
+	Name=高级浮置气垫工厂;
+	Description=建造二级科技气垫单位;
+	name-from=Adv. Floating Hover Plant;
+	description-from=Builds Tech Level 2 Hovercraft;
+	}
+[ARMFARK]
+	{
+	Name=复原者复活机甲;
+	Description=复活机甲，可攀爬地形;
+	name-from=Rector;
+	description-from=Resurrection Kbot (Climb);
+	}
+[ARMFDRAG]
+	{
+	Name=海上龙牙防御工事;
+	Description=边界防御工事;
+	name-from=Sea Dragon's Teeth;
+	description-from=Perimeter Defense;
+	}
+[ARMFEHP]
+	{
+	Name=究极浮置气垫工坊;
+	Description=建造三级科技气垫单位;
+	name-from=Ultra Floating Hovercraft Lab;
+	description-from=Builds Tech Level 3 Hovercraft;
+	}
+[ARMFFLAG]
+	{
+	Name=霸权围城突击指挥垂直起降机;
+	Description=围城突击指挥垂直起降机;
+	name-from=Supremacy;
+	description-from=Siege Assault Command VTOL;
+	}
+[ARMFFLAK]
+	{
+	Name=陷阱浮置防空高射炮塔;
+	Description=浮置防空高射炮塔;
+	name-from=Snare;
+	description-from=Floating Anti-Air Flak Tower;
+	}
+[ARMFGUARD]
+	{
+	Name=三叉戟浮置等离子炮;
+	Description=浮置等离子炮，每发消耗500能源;
+	name-from=Trident;
+	description-from=Floating Plasma Cannon (-500 E/Shot);
+	}
+[ARMFHP]
+	{
+	Name=气垫制造平台;
+	Description=生产气垫作战单位;
+	name-from=Floating Hovercraft Platform;
+	description-from=Builds Hovercraft;
+	}
+[ARMFIDO]
+	{
+	Name=菲多袭扰突击机甲;
+	Description=袭扰突击机甲;
+	name-from=Fido;
+	description-from=Skirmish Assault Kbot;
+	}
+[ARMFIELD]
+	{
+	Name=方尖碑充能力场发生器;
+	Description=充能力场发生器，消耗250能源，强化能量防御与资源产出;
+	name-from=Obelisk;
+	description-from=Charge Field Emitter (250 E, Boosts Energy Defenses/Resources);
+	}
+[ARMFLAG]
+	{
+	Name=凯旋舰队旗舰;
+	Description=舰队旗舰;
+	name-from=Triumph;
+	description-from=Flag Ship;
+	}
+[ARMFLEA]
+	{
+	Name=跳蚤侦察搜刮机甲;
+	Description=侦察搜刮机甲，隐形，可攀爬地形;
+	name-from=Flea;
+	description-from=Scavenger Kbot (Stealth, Climb);
+	}
+[ARMFLLT]
+	{
+	Name=浮置轻型激光塔;
+	Description=浮置轻型激光炮塔;
+	name-from=F.L.L.T;
+	description-from=Floating Light Laser Tower;
+	}
+[ARMFMKR]
+	{
+	Name=浮置金属转换器;
+	Description=将能源转化为金属，消耗80产出1金属;
+	name-from=Floating Metal Maker;
+	description-from=Converts Energy into Metal (-80/+1);
+	}
+[ARMFORGE]
+	{
+	Name=锻造厂资源设施;
+	Description=生产储存能源金属，上限125K能源/25K金属，可隐形，成对部署;
+	name-from=Forge;
+	description-from=Makes/Stores Energy/Metal (500/20), 125K/25K, Cloak, Pairing);
+	}
+[ARMFRAD]
+	{
+	Name=浮置雷达塔;
+	Description=探测敌方单位，消耗5能源;
+	name-from=Floating Radar Tower;
+	description-from=Locates Units (-5 Energy);
+	}
+[ARMFRIG]
+	{
+	Name=先锋护航护卫舰;
+	Description=护航护卫舰;
+	name-from=Vanguard;
+	description-from=Escort Frigate;
+	}
+[ARMFRT]
+	{
+	Name=哨兵浮置防空炮塔;
+	Description=浮置防空炮塔;
+	name-from=Sentry;
+	description-from=Floating Anti-Air Tower;
+	}
+[ARMFSCAR]
+	{
+	Name=神鹰指挥航母;
+	Description=指挥航母，+2500能源，建造维修充能单位;
+	name-from=Condor;
+	description-from=Command Carrier (+2.5K E, Builds/Repairs/Charges Units);
+	}
+[ARMFUS]
+	{
+	Name=聚变反应堆;
+	Description=产出+1000能源，成对部署，可升级;
+	name-from=Fusion Reactor;
+	description-from=Produces Energy (+1K, Pairing, Upgradable);
+	}
+[ARMFUS_UPGRADE]
+	{
+	Name=聚变反应堆装甲升级组件;
+	Description=单位血量×4，能源产出+250;
+	name-from=Fusion Reactor Armor Upgrade;
+	description-from=Increases Unit Health (4x) and Energy Output (+250);
+	}
+[ARMFUSSHIP]
+	{
+	Name=催化剂聚变补给舰;
+	Description=聚变补给舰，+4000能源，具备隐形;
+	name-from=Catalyst;
+	description-from=Fusion Tanker Ship (+4K Energy, Cloak);
+	}
+[ARMFWIN]
+	{
+	Name=浮置风力发电机;
+	Description=产出能源;
+	name-from=Floating Wind Generator;
+	description-from=Produces Energy;
+	}
+[ARMGANT]
+	{
+	Name=究极车辆工厂;
+	Description=生产三级科技车辆，可升级;
+	name-from=Ultra Vehicle Plant;
+	description-from=Produces Tech Level 3 Vehicles (Upgradable);
+	}
+[ARMGATE]
+	{
+	Name=银河之门空间传送装置;
+	Description=传送作战单位;
+	name-from=Galactic Gate;
+	description-from=Teleports Units;
+	}
+[ARMGEN]
+	{
+	Name=资源生成器;
+	Description=产出能源+200或者金属+2;
+	name-from=Resource Generator;
+	description-from=Produces Energy or Metal (+200/+2);
+	}
+[ARMGEO]
+	{
+	Name=地热发电站;
+	Description=产出300能源，可升级;
+	name-from=Geothermal Powerplant;
+	description-from=Produces Energy (300, Upgradable);
+	}
+[ARMGEO_UPGRADE]
+	{
+	Name=地热装甲升级套件;
+	Description=解锁弹幕导弹，单位血量提升四倍;
+	name-from=Geothermal Armor Upgrade;
+	description-from=Builds V‑Spam Missiles, Increases Unit Health (4x);
+	}
+[ARMGUARD]
+	{
+	Name=守卫者中距等离子炮台;
+	Description=中距等离子炮台，每发消耗500能源，可升级;
+	name-from=Guardian;
+	description-from=Medium Range Plasma Battery (-500 E/Shot, Upgradable);
+	}
+[ARMGUARD_UPG]
+	{
+	Name=伏击者升级套件;
+	Description=收起状态火力×3，血量×4;
+	name-from=Ambusher Upgrade;
+	description-from=Increases Firepower (3x), Unit Health (4x) when closed;
+	}
+[ARMHAAT]
+	{
+	Name=季风重型防空气垫巡洋舰;
+	Description=重型防空气垫巡洋舰，防空反潜两用;
+	name-from=Monsoon;
+	description-from=Heavy Flak Hovercruiser (AA, Anti‑Sub);
+	}
+[ARMHAM]
+	{
+	Name=战锤火炮机甲;
+	Description=火炮机甲，可攀爬地形;
+	name-from=Hammer;
+	description-from=Artillery Kbot (Climb);
+	}
+[ARMHANNI]
+	{
+	Name=圣骑士歼灭者气垫坦克;
+	Description=搭载歼灭者武器的气垫坦克，每秒消耗1500能源;
+	name-from=Paladin;
+	description-from=Annihilator Hovertank (-1.5k E/S);
+	}
+[ARMHARL]
+	{
+	Name=冰雹混合导弹突击气垫坦克;
+	Description=混合导弹突击气垫坦克;
+	name-from=Hailstorm;
+	description-from=Hybrid Missile Assault Hovertank;
+	}
+[ARMHART]
+	{
+	Name=海啸火炮气垫坦克;
+	Description=火炮气垫坦克;
+	name-from=Tsunami;
+	description-from=Artillery Hovertank;
+	}
+[ARMHAWK]
+	{
+	Name=战隼高级隐形战斗机;
+	Description=高级战斗机，机体隐形;
+	name-from=Hawk;
+	description-from=Advanced Fighter (Stealth);
+	}
+[ARMHBATS]
+	{
+	Name=永恒气垫战列舰;
+	Description=气垫战列舰，拥有自我修复;
+	name-from=Aeon;
+	description-from=Hover Battleship (Self Heal);
+	}
+[ARMHCAR]
+	{
+	Name=垂钓者气垫航母;
+	Description=气垫航母，提供200能源，可建造维修作战单位;
+	name-from=Angler;
+	description-from=Hover Carrier (+200 E, Builds/Repairs Units);
+	}
+[ARMHCRUS]
+	{
+	Name=冠军战斗气垫巡洋舰;
+	Description=战斗气垫巡洋舰;
+	name-from=Champion;
+	description-from=Battle Hovercruiser;
+	}
+[ARMHFLAG]
+	{
+	Name=解放者无畏突击气垫艇;
+	Description=无畏级突击气垫作战单位;
+	name-from=Liberator;
+	description-from=Dreadnought Assault Hovercraft;
+	}
+[ARMHFLAK]
+	{
+	Name=旋风高射气垫坦克;
+	Description=高射气垫坦克，兼顾防空反潜;
+	name-from=Whirlwind;
+	description-from=Flak Hovertank (AA, Anti-Sub);
+	}
+[ARMHJAM]
+	{
+	Name=伪装者雷达干扰气垫艇;
+	Description=雷达干扰气垫作战单位;
+	name-from=Concealer;
+	description-from=Radar Jamming Hovercraft;
+	}
+[ARMHLT]
+	{
+	Name=警戒重型激光塔;
+	Description=重型激光防御塔，支持升级改造;
+	name-from=Sentinel;
+	description-from=Heavy Laser Tower (Upgradable);
+	}
+[ARMHLT_UPGRADE]
+	{
+	Name=猎户座升级组件;
+	Description=增加雷达干扰，火力提升3倍，收起状态血量提升4倍;
+	name-from=Orion Upgrade;
+	description-from=Adds Radar Jamming, Firepower (3x), Unit Health (when closed 4x;
+	}
+[ARMHOMNI]
+	{
+	Name=神谕全向干扰气垫艇;
+	Description=全向雷达干扰气垫单位，消耗500能源，具备隐形;
+	name-from=Oracle;
+	description-from=Omni Radar/Jamming Hover (-500 E, Stealth);
+	}
+[ARMHROY]
+	{
+	Name=叛逆者驱逐舰气垫坦克;
+	Description=驱逐舰气垫坦克，专注反潜作战;
+	name-from=Renegade;
+	description-from=Destroyer Hovertank (anti-sub);
+	}
+[ARMHSPID]
+	{
+	Name=掠夺者速射火箭机甲;
+	Description=速射火箭发射机甲;
+	name-from=Marauder;
+	description-from=Rapid-Fire Rocket Kbot;
+	}
+[ARMHSTUN]
+	{
+	Name=美杜莎瘫痪突击气垫坦克;
+	Description=兼具瘫痪与突击能力的气垫坦克;
+	name-from=Medusa;
+	description-from=Stun/Assault Hovertank;
+	}
+[ARMHTANK]
+	{
+	Name=反叛者霰弹突击气垫坦克;
+	Description=霰弹火力突击气垫坦克;
+	name-from=Rebel;
+	description-from=Shotgun Assault Hovertank;
+	}
+[ARMJAM]
+	{
+	Name=干扰者雷达干扰车;
+	Description=车载雷达干扰装置，运行消耗75能源;
+	name-from=Jammer;
+	description-from=Radar Jamming Vehicle (-75 Energy);
+	}
+[ARMJAMMER]
+	{
+	Name=面纱雷达干扰塔;
+	Description=固定雷达干扰塔，运行消耗100能源;
+	name-from=Veil;
+	description-from=Radar Jamming Tower (-100 Energy);
+	}
+[ARMJAV]
+	{
+	Name=标枪高斯突击卡车;
+	Description=搭载高斯武器的突击卡车;
+	name-from=Javelin;
+	description-from=Gauss Assault Truck;
+	}
+[ARMLART]
+	{
+	Name=投掷者轻型火炮车;
+	Description=轻型车载火炮单位;
+	name-from=Tosser;
+	description-from=Light Artillery Vehicle;
+	}
+[ARMLATNK]
+	{
+	Name=黑豹闪电突击坦克;
+	Description=闪电突击坦克，拥有防空能力;
+	name-from=Panther;
+	description-from=Lightning Assault Tank (AA);
+	}
+[ARMLFLAG]
+	{
+	Name=阿瓦隆实验突击指挥坦克;
+	Description=实验型号突击指挥坦克;
+	name-from=Avalon;
+	description-from=Experimental Assault Command Tank;
+	}
+[ARMLGTNK]
+	{
+	Name=奇美拉超重型闪电突击坦克;
+	Description=超重型闪电突击坦克，每秒输出450能源伤害;
+	name-from=Chimera;
+	description-from=Ultra Heavy Lightning Assault Tank (450E/Sec);
+	}
+[ARMLH]
+	{
+	Name=电击者闪电气垫坦克;
+	Description=搭载闪电武器的气垫坦克;
+	name-from=Zapper;
+	description-from=Lightning Hovertank;
+	}
+[ARMLIFT]
+	{
+	Name=大力神重型多单位运输机;
+	Description=重型空中运输机，可同时运载多台作战单位;
+	name-from=Hercules;
+	description-from=Heavy Multi-Unit Air Transport;
+	}
+[ARMMAKR]
+	{
+	Name=金属转换器;
+	Description=消耗80能源转换产出1点金属;
+	name-from=Metal Maker;
+	description-from=Converts Energy into Metal (-80/+1);
+	}
+[ARMMANNI]
+	{
+	Name=破甲矛机动能量武器;
+	Description=可移动能量武器，每发消耗1000能源，支持升级;
+	name-from=Penetrator;
+	description-from=Mobile Energy Weapon (1K Energy/Shot, Upgradable);
+	}
+[ARMMARK]
+	{
+	Name=马基雷达机甲;
+	Description=机甲形态雷达探测单位;
+	name-from=Marky;
+	description-from=Radar Kbot;
+	}
+[ARMMART]
+	{
+	Name=鲁格尔机动火炮车;
+	Description=机动车载火炮作战单位;
+	name-from=Luger;
+	description-from=Mobile Artillery Vehicle;
+	}
+[ARMMAS]
+	{
+	Name=地幔深层金属抽取站;
+	Description=深层矿点开采金属，持续运转消耗75能源;
+	name-from=Mantle Extractor;
+	description-from=Deep Core Metal Extractor (-75 Energy);
+	}
+[ARMMBT]
+	{
+	Name=百夫长超重型突击坦克;
+	Description=超重型地面突击坦克;
+	name-from=Centurion;
+	description-from=Super Heavy Assault Tank;
+	}
+[ARMMCV]
+	{
+	Name=天国移动堡垒;
+	Description=可移动堡垒，具备自我修复能力;
+	name-from=Empyrrean;
+	description-from=Mobile Fortress (Self-Heal);
+	}
+[ARMMECH]
+	{
+	Name=猛禽超重型突击机甲;
+	Description=超重型突击机甲，两栖，拥有自我修复;
+	name-from=Raptor;
+	description-from=Ultra Heavy Assault Kbot (Amphib, Self-Heal);
+	}
+[ARMMERL]
+	{
+	Name=默尔机动火箭发射车;
+	Description=机动火箭发射载具，支持升级;
+	name-from=Merl;
+	description-from=Mobile Rocket Launcher (Upgradable);
+	}
+[ARMMEX]
+	{
+	Name=金属采集器;
+	Description=普通矿点开采金属，持续消耗3能源;
+	name-from=Metal Extractor;
+	description-from=Extracts Metal (-3 Energy);
+	}
+[ARMMLA]
+	{
+	Name=哥布林布雷飞机;
+	Description=空中布雷飞行器;
+	name-from=Goblin;
+	description-from=Mine Layer Aircraft;
+	}
+[ARMMLS]
+	{
+	Name=小鬼布雷潜艇;
+	Description=水下布雷潜艇;
+	name-from=Gremlin;
+	description-from=Minelayer Sub;
+	}
+[ARMMMKR]
+	{
+	Name=莫霍高级金属转换器;
+	Description=消耗800能源产出10点金属;
+	name-from=Moho Metal Maker;
+	description-from=Converts Energy into Metal (-800/+10);
+	}
+[ARMMMKSHIP]
+	{
+	Name=铁砧金属转换补给舰;
+	Description=海上资源补给舰，增加30点金属;
+	name-from=Anvil;
+	description-from=Metal Maker Tanker Ship (+30 Metal);
+	}
+[ARMMOBGG]
+	{
+	Name=链路机甲传送器;
+	Description=机甲专用传送装置，传送一次消耗250能源;
+	name-from=Link;
+	description-from=Teleporter Kbot (-250e);
+	}
+[ARMMOHO]
+	{
+	Name=莫霍高级金属矿场;
+	Description=高级金属开采设施，运行消耗15能源;
+	name-from=Moho Extractor;
+	description-from=Advanced Metal Extractor (-15 Energy);
+	}
+[ARMMSHIP]
+	{
+	Name=游骑兵导弹巡洋舰;
+	Description=搭载导弹武器的巡洋舰;
+	name-from=Ranger;
+	description-from=Missile Cruiser;
+	}
+[ARMMSTOR]
+	{
+	Name=金属存储器;
+	Description=金属存储上限增加1000;
+	name-from=Metal Storage;
+	description-from=Increases Metal Storage by 1K;
+	}
+[ARMMUAT]
+	{
+	Name=天鹤多单位运输机;
+	Description=空中运输机，可运载多台作战单位;
+	name-from=Sky Crane;
+	description-from=Multi-Unit Air Transport;
+	}
+[ARMNH]
+	{
+	Name=小精灵侦察气垫艇;
+	Description=侦察气垫艇，具备隐形;
+	name-from=Wisp;
+	description-from=Scavenger Hovercraft (Stealth);
+	}
+[ARMNOMAD]
+	{
+	Name=游牧民机动工厂垂直起降机;
+	Description=可移动工厂型垂直起降战机;
+	name-from=Nomad;
+	description-from=Mobile Factory VTOL;
+	}
+[ARMNOVA]
+	{
+	Name=新星机动远程等离子炮;
+	Description=机动远程等离子火炮，一轮齐射消耗5400能源;
+	name-from=Nova;
+	description-from=Mobile Long Range Plasma Cannon (5.4K Energy/Salvo);
+	}
+[ARMNSUB]
+	{
+	Name=洪水重型导弹潜艇;
+	Description=重型制导导弹潜艇，每秒消耗9600能源;
+	name-from=Deluge;
+	description-from=Heavy Missile Submarine (Guided, 9.6K E/S);
+	}
+[ARMNUKEBOMBER]
+	{
+	Name=启示录实验核轰炸机;
+	Description=实验核轰炸机，每枚炸弹消耗450000能源;
+	name-from=Apocalypse;
+	description-from=Experimental Nuclear Bomber (-450K Energy/Bomb);
+	}
+[ARMOLYMPUS]
+	{
+	Name=奥林匹斯机动超级核火炮;
+	Description=机动超级核火炮，每发消耗750000能源;
+	name-from=Olympus;
+	description-from=Mobile Super Nuclear Cannon (750K E/Shot);
+	}
+[ARMOMNI]
+	{
+	Name=坦塔罗斯全向雷达干扰传感器;
+	Description=全向雷达干扰传感设施，持续消耗500能源;
+	name-from=Tantalus;
+	description-from=Omni Radar/Jamming Sensor (-500 E);
+	}
+[ARMORION]
+	{
+	Name=猎户座弹出式重型激光炮;
+	Description=可收纳弹出的重型激光防御炮塔;
+	name-from=Orion;
+	description-from=Pop-up Heavy Laser;
+	}
+[ARMPARASUB]
+	{
+	Name=塞壬复活潜艇;
+	Description=水下复活潜艇，复原损毁水下单位;
+	name-from=Siren;
+	description-from=Resurrection Sub;
+	}
+[ARMPEEP]
+	{
+	Name=偷窥者侦察机;
+	Description=基础侦察飞机;
+	name-from=Peeper;
+	description-from=Scout Plane;
+	}
+[ARMPLAT]
+	{
+	Name=水上飞机平台;
+	Description=生产各类水上飞机;
+	name-from=Seaplane Platform;
+	description-from=Builds Aircraft;
+	}
+[ARMPNIX]
+	{
+	Name=凤凰重型轰炸机;
+	Description=重型空中轰炸单位;
+	name-from=Phoenix;
+	description-from=Heavy Bomber;
+	}
+[ARMRAD]
+	{
+	Name=雷达塔;
+	Description=基础雷达探测塔，运转消耗5能源;
+	name-from=Radar Tower;
+	description-from=Locates Units (5 Energy);
+	}
+[ARMREZ]
+	{
+	Name=萨满究极复活机甲;
+	Description=高阶复活机甲，复原损毁机甲;
+	name-from=Shaman;
+	description-from=Ultra Ressurection Kbot;
+	}
+[ARMRL]
+	{
+	Name=防卫者防空导弹塔;
+	Description=防空导弹防御塔;
+	name-from=Defender;
+	description-from=Anti-Air Missile Tower;
+	}
+[ARMSAM]
+	{
+	Name=参孙防空车;
+	Description=机动防空作战车辆;
+	name-from=Samson;
+	description-from=Anti-Air Vehicle;
+	}
+[ARMSBERTHA]
+	{
+	Name=世界末日超远程等离子炮;
+	Description=超远射程等离子炮，每发消耗125000能源;
+	name-from=Armageddon;
+	description-from=Very Long Range Plasma Cannon (-125K Energy/Shot);
+	}
+[ARMSBOMBER]
+	{
+	Name=极光战略隐形轰炸机;
+	Description=战略隐形轰炸机，每枚炸弹消耗5000能源;
+	name-from=Aurora;
+	description-from=Strategic Stealth Bomber (5K Energy/Bomb);
+	}
+[ARMSCAR]
+	{
+	Name=亚特兰蒂斯主力航母;
+	Description=主力航母，+1500能源，建造维修充能作战单位;
+	name-from=Atlantis;
+	description-from=Capital Carrier (+1.5K E, Builds/Repairs/Charges Units);
+	}
+[ARMSCRAM]
+	{
+	Name=骗子雷达干扰潜艇;
+	Description=潜艇型雷达干扰器，持续消耗200能源;
+	name-from=Fibber;
+	description-from=Radar Jamming Sub (-200 Energy);
+	}
+[ARMSEAP]
+	{
+	Name=信天翁鱼雷水上轰炸机;
+	Description=鱼雷水上轰炸机，两栖;
+	name-from=Albatross;
+	description-from=Torpedo Bomber Seaplane (Amphib);
+	}
+[ARMSEER]
+	{
+	Name=先知雷达车;
+	Description=机动雷达探测车辆;
+	name-from=Seer;
+	description-from=Radar Vehicle;
+	}
+[ARMSEHAK]
+	{
+	Name=海鹰情报水上飞机;
+	Description=情报侦察水上飞机，集成声呐雷达，两栖;
+	name-from=Seahawk;
+	description-from=Airborne Intel Seaplane (Sonar, Radar, Amphib);
+	}
+[ARMSES]
+	{
+	Name=高级能量存储器;
+	Description=能量存储上限提升25000，支持成对部署;
+	name-from=Advanced Energy Storage;
+	description-from=Increases Energy Storage by 25K (Pairing);
+	}
+[ARMSFIDO]
+	{
+	Name=半人马实验四足狩猎机甲;
+	Description=实验四足狩猎机甲，两栖;
+	name-from=Centaur;
+	description-from=Experimental Hunter Quadra Kbot (Amphib);
+	}
+[ARMSFIG]
+	{
+	Name=旋风水上战斗机;
+	Description=水上战斗机，两栖;
+	name-from=Tornado;
+	description-from=Seaplane Fighter (Amphib);
+	}
+[ARMSFOIL]
+	{
+	Name=眩晕混合型制空战斗机;
+	Description=混合构型制空战斗机;
+	name-from=Vertigo;
+	description-from=Hybrid Superiority Fighter;
+	}
+[ARMSFUS]
+	{
+	Name=重型聚变反应堆;
+	Description=产出5000能源，可隐形，成对部署，支持升级;
+	name-from=Heavy Fusion Reactor;
+	description-from=Produces Energy (+5K, Cloak, Pairing, Upgradable);
+	}
+[ARMSFUS_UPGRADE]
+	{
+	Name=凝缩装甲能源升级组件;
+	Description=单位血量提升4倍，能源产出增加1250;
+	name-from=Condensed Armor and Energy Boos;
+	description-from=Increases Unit Health (4x) and Energy Output (+1250);
+	}
+[ARMSGS]
+	{
+	Name=暴风雨重型制空垂直起降机;
+	Description=重型制空垂直起降战机;
+	name-from=Tempest;
+	description-from=Heavy Surface Control VTOL;
+	}
+[ARMSHGEN]
+	{
+	Name=宙斯盾护盾发生器;
+	Description=护盾发生器，降低建筑受到伤害，具备自我修复;
+	name-from=Aegis;
+	description-from=Shield Generator (Reduces damage to buildings, Self-Heal);
+	}
+[ARMSHGEN_UPG]
+	{
+	Name=宙斯盾升级组件;
+	Description=扩大护盾覆盖范围，削弱干扰效果;
+	name-from=Aegis Upgrade;
+	description-from=Increases Shield Coverage Area, Reduces Disruption;
+	}
+[ARMSIEGE]
+	{
+	Name=毁灭者轨道炮攻城坦克;
+	Description=轨道炮攻城坦克，每秒消耗9000能源，储能10000，支持升级;
+	name-from=Demolisher;
+	description-from=Railgun Siege Tank (9K E/S, 10K E. Storage, Upgradable);
+	}
+[ARMSILO]
+	{
+	Name=报复者战略核导弹井;
+	Description=战略核导弹发射井;
+	name-from=Retaliator;
+	description-from=Strategic Nuclear Missile Launcher;
+	}
+[ARMSJAM]
+	{
+	Name=护卫者雷达干扰舰;
+	Description=舰船雷达干扰装置，运行消耗125能源;
+	name-from=Escort;
+	description-from=Radar Jammer Ship (-125 Energy);
+	}
+[ARMSMB]
+	{
+	Name=鞭笞重型防空导弹塔;
+	Description=重型防空导弹塔，自带雷达模块;
+	name-from=Whiplash;
+	description-from=Heavy Anti-Air Missile Tower (Radar);
+	}
+[ARMSMS]
+	{
+	Name=高级金属存储器;
+	Description=金属存储上限增加5000;
+	name-from=Advanced Metal Storage;
+	description-from=Increases Metal Storage by 5K;
+	}
+[ARMSNIPE]
+	{
+	Name=射手特种作战机甲;
+	Description=特种作战狙击机甲，每秒消耗675能源，支持升级;
+	name-from=Shooter;
+	description-from=Special Operations Kbot (675 E/S, Upgradable);
+	}
+[ARMSOLAR]
+	{
+	Name=太阳能采集器;
+	Description=产出25点能源;
+	name-from=Solar Collector;
+	description-from=Produces Energy (+25);
+	}
+[ARMSONAR]
+	{
+	Name=声呐站;
+	Description=探测水下单位，消耗15能源;
+	name-from=Sonar Station;
+	description-from=Locates Units (-15 Energy);
+	}
+[ARMSONJAM]
+	{
+	Name=浮置雷达声呐干扰器;
+	Description=隐藏我方单位信号，消耗125能源;
+	name-from=Floating Radar/Sonar Jammer;
+	description-from=Hides Units (125 Energy);
+	}
+[ARMSPID]
+	{
+	Name=蜘蛛瘫痪机甲;
+	Description=蜘蛛型瘫痪机甲，可攀爬，具备隐形;
+	name-from=Spider;
+	description-from=Paralytic Spider-Kbot (Climb, Stealth);
+	}
+[ARMSPOT]
+	{
+	Name=观测支援巡逻机甲;
+	Description=支援巡逻侦察机甲，隐形，支持攀爬;
+	name-from=S.P.O.T;
+	description-from=Support. Patrol. Observe. Traverse (Stealth, Climb);
+	}
+[ARMSPY]
+	{
+	Name=渗透者间谍机甲;
+	Description=间谍机甲，两栖，可隐形，拥有干扰能力;
+	name-from=Infiltrator;
+	description-from=Spy Kbot (Amphib, Cloak, Jam);
+	}
+[ARMSR71]
+	{
+	Name=幻象广域雷达干扰垂直起降机;
+	Description=大范围雷达干扰垂直起降战机，消耗400能源;
+	name-from=Illusion;
+	description-from=Wide Area Radar Jamming VTOL (-400E, Jam);
+	}
+[ARMSSILO]
+	{
+	Name=苦难实验核导弹井;
+	Description=实验级别核导弹发射井;
+	name-from=Tribulation;
+	description-from=Exp. Nuclear Missile Silo;
+	}
+[ARMSSUB]
+	{
+	Name=潜行者突击潜艇;
+	Description=突击型潜艇;
+	name-from=Stalker;
+	description-from=Assault Submarine;
+	}
+[ARMSSY]
+	{
+	Name=舰队船坞;
+	Description=生产四级科技大型舰船;
+	name-from=Fleet Shipyard;
+	description-from=Produces Tech Level 4 Ships;
+	}
+[ARMST]
+	{
+	Name=强盗隐形突击坦克;
+	Description=隐形突击坦克;
+	name-from=Bandit;
+	description-from=Stealth Assault Tank;
+	}
+[ARMSTUN]
+	{
+	Name=典狱长重型瘫痪炮台;
+	Description=重型瘫痪防御炮台，一轮齐射消耗4800能源;
+	name-from=Warden;
+	description-from=Heavy Stun Battery (4.8K Energy/Salvo);
+	}
+[ARMSUBK]
+	{
+	Name=食人鱼猎潜艇;
+	Description=猎杀敌方潜艇的反潜舰艇;
+	name-from=Piranha;
+	description-from=Submarine Hunter;
+	}
+[ARMT3SEAP]
+	{
+	Name=密史脱拉风重型鱼雷水上战斗轰炸机;
+	Description=重型鱼雷水上战斗轰炸机，两栖;
+	name-from=Mistral;
+	description-from=Heavy Torpedo Seaplane Figher/Bomber (Amphib);
+	}
+[ARMTECH]
+	{
+	Name=科研升级设施;
+	Description=升级指挥官诱饵与雷达自动锁定，消耗2500能源;
+	name-from=Research Facility;
+	description-from=Upgrades Commander/Decoys and Radar (auto-targeting, -2.5K E);
+	}
+[ARMTICK]
+	{
+	Name=蜱虫机动热核炸弹;
+	Description=机动热核炸弹，两栖，还可执行建造;
+	name-from=Tick;
+	description-from=Mobile Thermonuclear Bomb (Amphib, Builder);
+	}
+[ARMTIDE]
+	{
+	Name=潮汐发电机;
+	Description=产出能源，产量受地图环境影响;
+	name-from=Tidal Generator;
+	description-from=Produces Energy (Variable by map);
+	}
+[ARMTL]
+	{
+	Name=鱼叉鱼雷发射器;
+	Description=基础鱼雷发射装置;
+	name-from=Harpoon;
+	description-from=Torpedo Launcher;
+	}
+[ARMTSUB]
+	{
+	Name=方舟装甲两栖运输潜航载具;
+	Description=装甲两栖运输单位，可作为潜艇使用;
+	name-from=Ark;
+	description-from=Armored Amphibious Transport Vehicle/Sub;
+	}
+[ARMUCH]
+	{
+	Name=实验级工程气垫艇;
+	Description=建造四级科技作战单位;
+	name-from=Exp. Construction Hovercraft;
+	description-from=Builds Tech Level 4 Units;
+	}
+[ARMUCV]
+	{
+	Name=实验级工程车辆;
+	Description=建造四级科技作战单位;
+	name-from=Exp. Construction Vehicle;
+	description-from=Builds Tech Level 4 Units;
+	}
+[ARMULAB]
+	{
+	Name=实验单位组装工厂;
+	Description=生产四级科技作战单位;
+	name-from=Exp. Unit Fabricator;
+	description-from=Produces Tech Level 4 Units;
+	}
+[ARMUSCAR]
+	{
+	Name=舰队统帅舰队航母;
+	Description=舰队级航母，提供5000能源，可建造、维修、充能作战单位;
+	name-from=Armada;
+	description-from=Fleet Carrier (+5K E, Builds/Repairs/Charges Units);
+	}
+[ARMUSUB]
+	{
+	Name=深渊战略指挥潜艇;
+	Description=战略指挥潜艇，主炮单次开火消耗100000能源;
+	name-from=Abyssal;
+	description-from=Strategic Command Submarine (100K Energy/Shot);
+	}
+[ARMUWCS]
+	{
+	Name=水下综合资源存储库;
+	Description=同时提升水下能源、金属存储上限，支持成对部署;
+	name-from=Underwater Combined Storage;
+	description-from=Increases Energy/Metal Storage by 25/5K (Pairing);
+	}
+[ARMUWES]
+	{
+	Name=水下能量存储器;
+	Description=提升水下能源存储上限5000，支持成对部署;
+	name-from=Underwater Energy Storage;
+	description-from=Increases Energy Storage by 5K (Pairing);
+	}
+[ARMUWFUS]
+	{
+	Name=水下聚变反应堆;
+	Description=产出1200能源，支持成对部署;
+	name-from=Underwater Fusion Reactor;
+	description-from=Produces Energy (+1.2K, Pairing);
+	}
+[ARMUWMAS]
+	{
+	Name=水下地幔金属抽取站;
+	Description=水下深层金属开采设施，持续消耗75能源;
+	name-from=Underwater Mantle Extractor;
+	description-from=Deep Core Metal Extractor (-75 Energy);
+	}
+[ARMUWMEX]
+	{
+	Name=水下金属采集器;
+	Description=开采水下矿脉金属，持续消耗3能源;
+	name-from=Underwater Metal Extractor;
+	description-from=Extracts Metal (-3 Energy);
+	}
+[ARMUWMFUS]
+	{
+	Name=水下资源动力厂;
+	Description=同时产出100能源与1金属，支持成对部署;
+	name-from=Underwater Resource Powerplant;
+	description-from=Produces Energy and Metal (+100/+1, Pairing);
+	}
+[ARMUWMMM]
+	{
+	Name=水下莫霍金属转换器;
+	Description=消耗800能源转换产出12金属;
+	name-from=Underwater Moho Metal Maker;
+	description-from=Converts Energy into Metal (-800/+12);
+	}
+[ARMUWMOHO]
+	{
+	Name=水下莫霍金属矿场;
+	Description=水下高级金属开采设施，持续消耗15能源;
+	name-from=Underwater Moho Extractor;
+	description-from=Advanced Metal Extractor (-15 Energy);
+	}
+[ARMUWMS]
+	{
+	Name=水下金属存储器;
+	Description=提升水下金属存储上限1000;
+	name-from=Underwater Metal Storage;
+	description-from=Increases Metal Storage by 1K;
+	}
+[ARMVADER]
+	{
+	Name=入侵者爬行炸弹;
+	Description=自爆炸弹，可攀爬地形，具备隐形;
+	name-from=Invader;
+	description-from=Crawling Bomb (Climb, Cloak);
+	}
+[ARMVCAR]
+	{
+	Name=远征号指挥航母;
+	Description=指挥型航母，提供1250能源，可建造、维修、充能作战单位;
+	name-from=Expedition;
+	description-from=Command Carrier (+1.25K E, Builds/Repairs/Charges Units);
+	}
+[ARMVERMIN]
+	{
+	Name=害虫核子爬行炸弹;
+	Description=核装药自爆炸弹，两栖，可攀爬地形，具备隐形;
+	name-from=Vermin;
+	description-from=Nuclear Crawling Bomb (Amphibious, Climbing, Cloakable);
+	}
+[ARMVULC]
+	{
+	Name=伏尔坎速射远程等离子炮;
+	Description=速射远程等离子火炮，每发消耗5400能源;
+	name-from=Vulcan;
+	description-from=Rapid Fire Long Range Plasma Cannon (5.4K Energy/Shot);
+	}
+[ARMWALK]
+	{
+	Name=巨人全能实验机甲;
+	Description=实验全能机甲，提供2500能源，两栖，集成雷达、干扰、扰乱功能;
+	name-from=Gargant;
+	description-from=Exp. Omni Kbot (+2.5K E, Amphib, Radar, Jam, Disrupt);
+	}
+[ARMWAR]
+	{
+	Name=勇士中型突击机甲;
+	Description=中型地面突击机甲;
+	name-from=Warrior;
+	description-from=Medium Assault Kbot;
+	}
+[ARMWING]
+	{
+	Name=层云空中堡垒垂直起降机;
+	Description=空中堡垒型垂直起降战机，具备自我修复;
+	name-from=Stratus;
+	description-from=Sky Fortress VTOL (Self‑Heal);
+	}
+[ARMXSHIP]
+	{
+	Name=枪骑兵重型远程等离子巡洋舰;
+	Description=搭载重型远程等离子武器的巡洋舰;
+	name-from=Lancer;
+	description-from=Heavy LRPC Cruiser;
+	}
+[ARMZEUS]
+	{
+	Name=宙斯重型突击机甲;
+	Description=重型突击机甲，支持升级改造;
+	name-from=Zeus;
+	description-from=Heavy Assault Kbot (Upgradable);
+	}
+[ARMZIG]
+	{
+	Name=全景监视情报阵列;
+	Description=全域情报侦察阵列，具备隐形;
+	name-from=Panopticon;
+	description-from=Panoptic Intel Array (Cloakable);
+	}
+[CORAAA]
+	{
+	Name=撕裂者重型防空导弹塔;
+	Description=重型防空导弹防御塔;
+	name-from=Lacerator;
+	description-from=Heavy Anti‑Air Missile Tower;
+	}
+[CORAABOAT]
+	{
+	Name=海盗护卫舰;
+	Description=护卫舰，兼顾防空与反潜作战;
+	name-from=Corsair;
+	description-from=Corvette (AA, Anti‑Sub);
+	}
+[CORAABOT]
+	{
+	Name=螳螂速射防空机甲;
+	Description=速射型防空机甲;
+	name-from=Mantis;
+	description-from=Rapid‑Fire Anti‑Air Kbot;
+	}
+[CORAACRUS]
+	{
+	Name=监视者重型防空巡洋舰;
+	Description=重型巡洋舰，拥有防空能力，可在低矮陆地行进;
+	name-from=Monitor;
+	description-from=Heavy Cruiser (AA, Walks on low terrain);
+	}
+[CORAAP]
+	{
+	Name=高级飞机工厂;
+	Description=生产二级科技飞行器;
+	name-from=Adv. Aircraft Plant;
+	description-from=Produces Tech Level 2 Aircraft;
+	}
+[CORACH]
+	{
+	Name=高级工程气垫艇;
+	Description=建造二级科技建筑;
+	name-from=Adv. Construction Hovercraft;
+	description-from=Builds Tech Level 2 Buildings;
+	}
+[CORACK]
+	{
+	Name=高级工程机甲;
+	Description=二级科技工程机甲，支持攀爬地形;
+	name-from=Adv. Construction Kbot;
+	description-from=Tech Level 2 (Climb);
+	}
+[CORACSA]
+	{
+	Name=高级工程水上飞机;
+	Description=两栖工程单位，建造二级科技建筑;
+	name-from=Adv. Construction Seaplane;
+	description-from=Builds Tech Level 2 Buildings (Amphib);
+	}
+[CORAFAV]
+	{
+	Name=烈焰喷火侦察车;
+	Description=高速喷火侦察车辆;
+	name-from=Blaze;
+	description-from=Fast Flamethrower Scout Vehicle;
+	}
+[CORAH]
+	{
+	Name=投石手防空反潜气垫艇;
+	Description=气垫作战单位，兼顾防空反潜;
+	name-from=Slinger;
+	description-from=Anti‑Air / Anti‑Sub Hovercraft;
+	}
+[CORAHP]
+	{
+	Name=高级气垫制造平台;
+	Description=生产二级科技气垫单位;
+	name-from=Adv. Hovercraft Platform;
+	description-from=Builds Tech Level 2 Hovercraft;
+	}
+[CORALAB]
+	{
+	Name=高级机甲实验室;
+	Description=生产二级科技机甲;
+	name-from=Advanced Kbot Lab;
+	description-from=Produces Tech Level 2 Kbots;
+	}
+[CORAMIST]
+	{
+	Name=鞭打者重型防空卡车;
+	Description=重型防空卡车，雷达模块抗干扰强化;
+	name-from=Thrasher;
+	description-from=Heavy AA Truck (Hardened Radar);
+	}
+[CORAMPH]
+	{
+	Name=瘸怪两栖突击机甲;
+	Description=两栖突击机甲;
+	name-from=Gimp;
+	description-from=Amphibious Assault Kbot;
+	}
+[CORAPLAT]
+	{
+	Name=高级水上飞机平台;
+	Description=建造二级科技飞行器;
+	name-from=Adv. Seaplane Platform;
+	description-from=Builds Tech Level 2 Aircraft;
+	}
+[CORAPT]
+	{
+	Name=暗流高速突击轻巡洋舰;
+	Description=高速突击轻巡洋舰，隐形且具备防空;
+	name-from=Slipstream;
+	description-from=Fast Assault Light‑Cruiser (Stealth, AA);
+	}
+[CORARAD]
+	{
+	Name=高级远程雷达塔;
+	Description=远程雷达塔，运转消耗50能源;
+	name-from=Advanced Radar Tower;
+	description-from=Long Range Radar (50 Energy);
+	}
+[CORARCH]
+	{
+	Name=裂空者高级护航护卫舰;
+	Description=高级护航护卫舰，兼顾防空反潜;
+	name-from=Shredder;
+	description-from=Adv. Escort Frigate (AA, Anti‑Sub);
+	}
+[CORASON]
+	{
+	Name=高级声呐站;
+	Description=探测敌方水下单位，持续消耗75能源;
+	name-from=Advanced Sonar Station;
+	description-from=Locates Units (-75 Energy);
+	}
+[CORASP]
+	{
+	Name=战机维修坪;
+	Description=自动修复停靠空中单位，支持升级;
+	name-from=Repair Pad;
+	description-from=Automatically repairs air units (Upgradable);
+	}
+[CORASP_UPGRADE]
+	{
+	Name=维修塔升级组件;
+	Description=自动修复周边全部作战单位;
+	name-from=Repair Tower Upgrade;
+	description-from=Repairs Nearby Units;
+	}
+[CORASPEN]
+	{
+	Name=潜艇船坞;
+	Description=生产一级、二级水下作战单位;
+	name-from=Submarine Pen;
+	description-from=Produces Tech Level 1 & 2 Underwater Units;
+	}
+[CORASY]
+	{
+	Name=高级船坞;
+	Description=生产二级科技舰船;
+	name-from=Advanced Shipyard;
+	description-from=Produces Tech Level 2 Ships;
+	}
+[CORATL]
+	{
+	Name=七鳃鳗高级鱼雷发射器;
+	Description=高级鱼雷发射装置;
+	name-from=Lamprey;
+	description-from=Advanced Torpedo Launcher;
+	}
+[CORAVP]
+	{
+	Name=高级车辆工厂;
+	Description=生产二级科技地面载具;
+	name-from=Advanced Vehicle Plant;
+	description-from=Produces Tech Level 2 Vehicles;
+	}
+[CORAWAC]
+	{
+	Name=秃鹰高级侦察机;
+	Description=高级侦察机，集成声呐雷达，机体隐形;
+	name-from=Vulture;
+	description-from=Advanced Scout Plane (Sonar, Radar, Stealth);
+	}
+[CORBATS]
+	{
+	Name=战争领主战斗巡洋舰;
+	Description=战斗巡洋舰;
+	name-from=Warlord;
+	description-from=Battle Cruiser;
+	}
+[CORBEH]
+	{
+	Name=巨兽超重型突击坦克;
+	Description=超重型地面突击坦克;
+	name-from=Behemoth;
+	description-from=Super Heavy Assault Tank;
+	}
+[CORBFG]
+	{
+	Name=B.F.G实验反物质巨炮;
+	Description=实验巨型反物质火炮，每发消耗1000000能源;
+	name-from=B.F.G.;
+	description-from=Experimental Mass Antimatter Cannon (1000K E/Shot);
+	}
+[CORBSUB]
+	{
+	Name=巨齿鲨战斗潜艇;
+	Description=主战潜艇;
+	name-from=Megalodon;
+	description-from=Battle Submarine;
+	}
+[CORBULK]
+	{
+	Name=先驱机动工厂垂直起降机;
+	Description=可移动工厂型垂直起降战机;
+	name-from=Harbinger;
+	description-from=Mobile Factory VTOL;
+	}
+[CORBURN]
+	{
+	Name=地狱火战斗巡洋舰;
+	Description=战斗巡洋舰，具备反潜，可在低矮陆地行进;
+	name-from=Inferno;
+	description-from=Battle Cruiser (Anti‑Sub, walks on low terrain);
+	}
+[CORBUZZ]
+	{
+	Name=链锯速射远程等离子炮;
+	Description=速射远程等离子火炮，每发消耗6000能源;
+	name-from=Buzzsaw;
+	description-from=Rapid Fire Long Range Plasma Cannon (6K Energy/Shot);
+	}
+[CORCAN]
+	{
+	Name=罐形重装机甲;
+	Description=装甲突击机甲，拥有部分瘫痪抗性;
+	name-from=The Can;
+	description-from=Armored Assault Kbot (partial stun resistance);
+	}
+[CORCARRY]
+	{
+	Name=蜂房轻型航母;
+	Description=轻型航母，提供500能源，建造维修单位，具备反核防护;
+	name-from=Hive;
+	description-from=Light Carrier (+500 E, Builds/Repairs Units, Anti‑Nuke);
+	}
+[CORCBT]
+	{
+	Name=亡魂隐形重突击坦克;
+	Description=重型隐形突击坦克，每秒消耗600能源，具备瘫痪抗性;
+	name-from=Revenant;
+	description-from=Heavy Assault Cloaking Tank (600 E/S, Stun Resist);
+	}
+[CORCRASH]
+	{
+	Name=撞击者防空机甲;
+	Description=防空作战机甲;
+	name-from=Crasher;
+	description-from=Anti‑Air Kbot;
+	}
+[CORCSA]
+	{
+	Name=工程水上飞机;
+	Description=一级科技两栖工程飞行器;
+	name-from=Construction Seaplane;
+	description-from=Tech Level 1 (Amphib);
+	}
+[CORCT]
+	{
+	Name=幽灵激光隐形坦克;
+	Description=搭载激光武器的隐形突击坦克;
+	name-from=Wraith;
+	description-from=Laser Stealth Tank;
+	}
+[CORDECI]
+	{
+	Name=预兆干扰卡车;
+	Description=干扰卡车，抹除敌方情报、护盾、充能，可隐形，消耗250能源;
+	name-from=Omen;
+	description-from=Disrupt Truck (Voids Enemy Intel/Charge/Shield, Cloaks, -250E);
+	}
+[CORDECOM]
+	{
+	Name=诱饵指挥官;
+	Description=诱饵支援指挥官，支持升级;
+	name-from=Commander;
+	description-from=Decoy/Support Commander (Upgradable);
+	}
+[CORDOOM]
+	{
+	Name=末日死光炮;
+	Description=大型能量武器炮台，每发消耗2400能源;
+	name-from=Doomsday Machine;
+	description-from=Energy Weapon (2.4K Energy/Shot);
+	}
+[CORDPL]
+	{
+	Name=鸬鹚深水炸弹武装直升机;
+	Description=投放深水炸弹的武装直升机，两栖;
+	name-from=Cormorant;
+	description-from=Depthcharge Gunship (Amphib);
+	}
+[CORDREAD]
+	{
+	Name=暴君战列舰;
+	Description=战列舰，具备自我修复;
+	name-from=Tyrant;
+	description-from=Battleship (Self‑Heal);
+	}
+[CORECA]
+	{
+	Name=究极工程飞机;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Aircraft;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[CORECH]
+	{
+	Name=究极工程气垫艇;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Hovercraft;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[CORECK]
+	{
+	Name=究极工程机甲;
+	Description=三级科技工程机甲，支持攀爬地形;
+	name-from=Ultra Construction Kbot;
+	description-from=Builds Tech Level 3 Buildings (Climb);
+	}
+[CORECLIPSE]
+	{
+	Name=本影广域雷达干扰垂直起降机;
+	Description=大范围雷达干扰垂直起降战机，消耗500能源;
+	name-from=Umbra;
+	description-from=Wide Area Radar Jamming VTOL (-500E, Jam);
+	}
+[CORECS]
+	{
+	Name=究极工程舰船;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Ship;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[CORECSA]
+	{
+	Name=究极工程水上飞机;
+	Description=三级科技两栖工程飞行器;
+	name-from=Ultra Construction Seaplane;
+	description-from=Builds Tech Level 3 Buildings (Amphib);
+	}
+[CORECSUB]
+	{
+	Name=究极工程潜艇;
+	Description=三级科技水下工程单位;
+	name-from=Ultra Construction Sub;
+	description-from=Tech Level 3;
+	}
+[CORECV]
+	{
+	Name=究极工程车辆;
+	Description=建造三级科技建筑;
+	name-from=Ultra Construction Vehicle;
+	description-from=Builds Tech Level 3 Buildings;
+	}
+[COREHP]
+	{
+	Name=究极气垫工坊;
+	Description=生产三级科技气垫单位;
+	name-from=Ultra Hovercraft Lab;
+	description-from=Builds Hovercraft;
+	}
+[COREPLAT]
+	{
+	Name=究极水上飞机平台;
+	Description=建造三级科技飞行器;
+	name-from=Ultra Seaplane Platform;
+	description-from=Builds Tech Level 3 Aircraft;
+	}
+[CORESPEN]
+	{
+	Name=究极潜艇船坞;
+	Description=生产全部水下作战单位;
+	name-from=Ultra Submarine Pen;
+	description-from=Produces Underwater Units;
+	}
+[CORESTOR]
+	{
+	Name=能量存储器;
+	Description=能源存储上限提升5000，支持成对部署;
+	name-from=Energy Storage;
+	description-from=Increases Energy Storage by 5K (Pairing);
+	}
+[CORESY]
+	{
+	Name=主力船坞;
+	Description=生产三级科技大型舰船;
+	name-from=Capital Shipyard;
+	description-from=Produces Tech Level 3 Ships;
+	}
+[CORETER]
+	{
+	Name=删除者雷达干扰车;
+	Description=车载雷达干扰装置，持续消耗75能源;
+	name-from=Deleter;
+	description-from=Radar Jamming Vehicle (-75 Energy);
+	}
+[COREVP]
+	{
+	Name=究极车辆工厂;
+	Description=生产三级科技地面载具，支持升级;
+	name-from=Ultra Vehicle Plant;
+	description-from=Produces Tech Level 3 Vehicles (Upgradable);
+	}
+[CORFAB]
+	{
+	Name=究极飞机机库;
+	Description=生产三级科技飞行器;
+	name-from=Ultra Aircraft Hangar;
+	description-from=Produces Tech Level 3 Aircraft;
+	}
+[CORFAHP]
+	{
+	Name=高级浮置气垫工厂;
+	Description=生产二级科技气垫单位;
+	name-from=Adv. Floating Hover Plant;
+	description-from=Builds Tech Level 2 Hovercraft;
+	}
+[CORFDRAG]
+	{
+	Name=海上龙牙防御工事;
+	Description=海上边界防御工事;
+	name-from=Sea Dragon's Teeth;
+	description-from=Perimeter Defense;
+	}
+[CORFEHP]
+	{
+	Name=究极浮置气垫工坊;
+	Description=水面平台，生产三级科技气垫单位;
+	name-from=Ultra Floating Hovercraft Lab;
+	description-from=Builds Tech Level 3 Hovercraft;
+	}
+[CORFFLAG]
+	{
+	Name=日蚀围城无畏垂直起降机;
+	Description=围城攻坚无畏级垂直起降战机;
+	name-from=Eclipse;
+	description-from=Siege Assault Dreadnought VTOL;
+	}
+[CORFFLAK]
+	{
+	Name=狂怒浮置防空高射炮塔;
+	Description=漂浮水面的防空高射炮防御塔;
+	name-from=Fury;
+	description-from=Floating Anti‑Air Flak Tower;
+	}
+[CORFH]
+	{
+	Name=火蜥蜴火焰喷射气垫坦克;
+	Description=搭载喷火器的气垫坦克;
+	name-from=Salamander;
+	description-from=Flamethrower Hovertank;
+	}
+[CORFHP]
+	{
+	Name=气垫制造平台;
+	Description=生产气垫作战单位;
+	name-from=Floating Hovercraft Platform;
+	description-from=Builds Hovercraft;
+	}
+[CORFIELD]
+	{
+	Name=巨石碑充能力场发生器;
+	Description=充能力场装置，消耗250能源，强化能量防御与资源产出;
+	name-from=Monolith;
+	description-from=Charge Field Emitter (250 E, Boosts Energy Defenses/Resources);
+	}
+[CORFINK]
+	{
+	Name=线人侦察机;
+	Description=侦察飞机;
+	name-from=Fink;
+	description-from=Scout Plane;
+	}
+[CORFLAG]
+	{
+	Name=君主舰队旗舰;
+	Description=舰队指挥旗舰;
+	name-from=Sovereign;
+	description-from=Flag Ship;
+	}
+[CORFLLT]
+	{
+	Name=浮置轻型激光塔;
+	Description=水面轻型激光防御炮塔;
+	name-from=Floating Light Laser Tower;
+	description-from=Floating Light Laser Tower;
+	}
+[CORFMD]
+	{
+	Name=坚毅反导系统;
+	Description=反弹道导弹防御设施;
+	name-from=Fortitude;
+	description-from=Anti Missile Defense System;
+	}
+[CORFMKR]
+	{
+	Name=水面金属转换器;
+	Description=消耗80能源产出1金属，完成资源转换;
+	name-from=Floating Metal Maker;
+	description-from=Converts Energy into Metal (-80/+1);
+	}
+[CORFPUN]
+	{
+	Name=莲花浮置等离子炮台;
+	Description=水面等离子炮台，每发消耗500能源;
+	name-from=Lotus;
+	description-from=Floating Plasma Cannon (-500 E/Shot);
+	}
+[CORFRAD]
+	{
+	Name=浮置雷达塔;
+	Description=水面雷达探测塔，持续消耗5能源;
+	name-from=Floating Radar Tower;
+	description-from=Locates Units (-5 Energy);
+	}
+[CORFRIG]
+	{
+	Name=维京护航护卫舰;
+	Description=承担护航任务的护卫舰;
+	name-from=Viking;
+	description-from=Escort Frigate;
+	}
+[CORFRT]
+	{
+	Name=毒刺浮置防空塔;
+	Description=漂浮水面防空导弹塔;
+	name-from=Stinger;
+	description-from=Floating Anti‑Air Tower;
+	}
+[CORFSCAR]
+	{
+	Name=奇点指挥航母;
+	Description=指挥航母，提供2500能源，建造维修充能作战单位;
+	name-from=Singularity;
+	description-from=Command Carrier (+2.5K E, Builds/Repairs/Charges Units);
+	}
+[CORFUS]
+	{
+	Name=聚变反应堆;
+	Description=产出1000能源，支持成对部署，支持升级;
+	name-from=Fusion Reactor;
+	description-from=Produces Energy (+1K, Pairing, Upgradable);
+	}
+[CORFUS_UPGRADE]
+	{
+	Name=聚变反应堆护盾升级组件;
+	Description=单位生命值提升4倍，能源产出增加250;
+	name-from=Fusion Reactor Shield Upgrade;
+	description-from=Increases Unit Health (4x) and Energy Output (+250);
+	}
+[CORFUSSHIP]
+	{
+	Name=含水层聚变补给舰;
+	Description=聚变能源补给舰船，增加4000能源，具备隐形;
+	name-from=Aquifer;
+	description-from=Fusion Tanker Ship (+4K Energy, Cloak);
+	}
+[CORFWIN]
+	{
+	Name=浮置风力发电机;
+	Description=漂浮水面的风力发电设施，产出能源;
+	name-from=Floating Wind Generator;
+	description-from=Produces Energy;
+	}
+[CORGANT]
+	{
+	Name=究极机甲建造台;
+	Description=生产三级科技机甲，支持升级改造;
+	name-from=Ultra Kbot Gantry;
+	description-from=Produces Tech Level 3 Kbots (Upgradable);
+	}
+[CORGATE]
+	{
+	Name=银河之门空间传送装置;
+	Description=对作战单位执行远距离传送;
+	name-from=Galactic Gate;
+	description-from=Teleports Units;
+	}
+[CORGEN]
+	{
+	Name=资源生成器;
+	Description=可产出200能源或者2点金属资源;
+	name-from=Resource Generator;
+	description-from=Produces Energy or Metal (+200/+2);
+	}
+[CORGEO]
+	{
+	Name=地热发电站;
+	Description=产出300能源，本体支持升级改造;
+	name-from=Geothermal Powerplant;
+	description-from=Produces Energy (300, Upgradable);
+	}
+[CORGEO_UPGRADE]
+	{
+	Name=地热武器升级套件;
+	Description=解锁 riot 加农炮，单位生命值提升4倍;
+	name-from=Geothermal Weapon Upgrade;
+	description-from=Builds Riot Cannon, Increases Unit Health (4x);
+	}
+[CORGOL]
+	{
+	Name=巨人超重型突击坦克;
+	Description=超重型突击坦克，支持升级改造;
+	name-from=Goliath;
+	description-from=Very Heavy Assault Tank (Upgradable);
+	}
+[CORHAAT]
+	{
+	Name=连枷重型防空气垫巡洋舰;
+	Description=重型防空气垫巡洋舰，兼顾防空反潜;
+	name-from=Flail;
+	description-from=Heavy Flak Hovercruiser (AA, Anti-Sub);
+	}
+[CORHARL]
+	{
+	Name=独眼巨人火炮气垫坦克;
+	Description=主打炮火轰击的气垫突击坦克;
+	name-from=Cyclops;
+	description-from=Artillery Assault Hovertank;
+	}
+[CORHART]
+	{
+	Name=地狱恶魔火箭气垫坦克;
+	Description=搭载火箭武器的气垫坦克;
+	name-from=Hellion;
+	description-from=Rocket Hovertank;
+	}
+[CORHBATS]
+	{
+	Name=霸主气垫战列舰;
+	Description=气垫型战列舰，具备自我修复;
+	name-from=Hegemon;
+	description-from=Hover Battleship (Self Heal);
+	}
+[CORHCAR]
+	{
+	Name=避难所气垫航母;
+	Description=气垫航母，提供200能源，可建造维修作战单位;
+	name-from=Refuge;
+	description-from=Hover Carrier (+200 E, Builds/Repairs Units);
+	}
+[CORHCRUS]
+	{
+	Name=独裁者战斗气垫巡洋舰;
+	Description=战斗气垫巡洋舰，单次开火消耗500能源;
+	name-from=Autocrat;
+	description-from=Battle Hovercruiser (500 Energy/Shot);
+	}
+[CORHDDM]
+	{
+	Name=狂战士末日气垫坦克;
+	Description=末日型气垫坦克，每秒消耗1000能源;
+	name-from=Berserker;
+	description-from=Doomsday Hovertank (-1K E/S);
+	}
+[CORHFLAG]
+	{
+	Name=专制君主无畏突击气垫艇;
+	Description=无畏级大型突击气垫作战单位;
+	name-from=Despot;
+	description-from=Dreadnought Assault Hovercraft;
+	}
+[CORHFLAK]
+	{
+	Name=女妖高射气垫坦克;
+	Description=高射气垫坦克，兼顾防空反潜;
+	name-from=Banshee;
+	description-from=Flak Hovertank (AA, Anti-Sub);
+	}
+[CORHJAM]
+	{
+	Name=涂改者雷达干扰气垫艇;
+	Description=气垫形态雷达干扰作战单位;
+	name-from=Blotter;
+	description-from=Radar-Jamming Hovercraft;
+	}
+[CORHLAS]
+	{
+	Name=手术刀闪电气垫坦克;
+	Description=搭载激光武器的气垫坦克;
+	name-from=Scalpel;
+	description-from=Laser Hovertank;
+	}
+[CORHLT]
+	{
+	Name=加特重型激光塔;
+	Description=重型激光防御塔，支持升级改造;
+	name-from=Gaat;
+	description-from=Heavy Laser Tower (Upgradable);
+	}
+[CORHLT_UPGRADE]
+	{
+	Name=毒蛇升级组件;
+	Description=增加雷达干扰，火力提升3倍，收起状态血量提升4倍;
+	name-from=Viper Upgrade;
+	description-from=Adds Radar Jamming, Firepower (3x), Unit Health (when closed 4x;
+	}
+[CORHOMNI]
+	{
+	Name=秘法师全向干扰气垫艇;
+	Description=全向雷达干扰气垫单位，消耗500能源，具备隐形;
+	name-from=Mystic;
+	description-from=Omni Radar/Jamming Hover (-500 E, Stealth);
+	}
+[CORHRK]
+	{
+	Name=统治者重型火箭机甲;
+	Description=重型火箭机甲，拥有两套开火模式;
+	name-from=Dominator;
+	description-from=Heavy Rocket Kbot (dual fire modes);
+	}
+[CORHROY]
+	{
+	Name=监督者驱逐舰气垫坦克;
+	Description=驱逐舰气垫坦克，专注反潜作战;
+	name-from=Overseer;
+	description-from=Destroyer Hovertank (anti-sub);
+	}
+[CORHSPID]
+	{
+	Name=寡妇速射火箭机甲;
+	Description=高射速火箭发射机甲;
+	name-from=Widow;
+	description-from=Rapid-Fire Rocket Kbot;
+	}
+[CORHTANK]
+	{
+	Name=复仇女神防暴突击气垫坦克;
+	Description=防暴类型突击气垫坦克;
+	name-from=Nemesis;
+	description-from=Riot Assault Hovertank;
+	}
+[CORHUNT]
+	{
+	Name=猎手情报水上飞机;
+	Description=情报侦察水上飞机，集成声呐雷达，两栖;
+	name-from=Hunter;
+	description-from=Airborne Intel Seaplane (Sonar, Radar, Amphib);
+	}
+[CORHURC]
+	{
+	Name=飓风重型轰炸机;
+	Description=重型空中轰炸单位;
+	name-from=Hurricane;
+	description-from=Heavy Bomber;
+	}
+[CORINT]
+	{
+	Name=胁迫者远程等离子炮;
+	Description=远程等离子火炮，每发消耗6000能源，支持升级;
+	name-from=Intimidator;
+	description-from=Long Range Plasma Cannon (6K Energy/Shot - Upgradable);
+	}
+[CORINT_UPGRADE]
+	{
+	Name=链锯升级套件;
+	Description=武器射速提升6倍，探测射程提升2倍;
+	name-from=Buzzsaw Upgrade;
+	description-from=Increases Weapon Rate of Fire (6x), LOS (2x);
+	}
+[CORJAMMER]
+	{
+	Name=裹尸布雷达干扰塔;
+	Description=固定雷达干扰塔，持续工作消耗100能源;
+	name-from=Shroud;
+	description-from=Radar Jamming Tower (-100 Energy);
+	}
+[CORJUGG]
+	{
+	Name=主宰者重装攻城机甲;
+	Description=装甲攻城机甲，每秒消耗3200能源，支持升级;
+	name-from=Juggernaut;
+	description-from=Armored Assault Siege Kbot (3.2K E/S, Upgradable);
+	}
+[CORKPAD]
+	{
+	Name=信使两栖装甲运输机甲;
+	Description=两栖装甲运输机甲，转运作战单位;
+	name-from=Courier;
+	description-from=Amphibious Armored Transport Kbot;
+	}
+[CORKROG]
+	{
+	Name=克罗格斯超突击机甲;
+	Description=超规格突击机甲，每秒消耗4800能源，两栖，自带自愈;
+	name-from=Krogoth;
+	description-from=Ultra Assault Kbot (4.8K E/S, Amphib, Self-Heal);
+	}
+[CORLART]
+	{
+	Name=破坏者轻型轰击车辆;
+	Description=轻型炮火轰击载具;
+	name-from=Vandal;
+	description-from=Light Bombard Vehicle;
+	}
+[CORLFLAG]
+	{
+	Name=帝王实验攻城指挥坦克;
+	Description=实验型号攻城突击指挥坦克;
+	name-from=Imperator;
+	description-from=Experimental Seige Assault Tank;
+	}
+[CORLIFT]
+	{
+	Name=蜻蜓重型多单位运输机;
+	Description=重型空中运输机，同时转运多台作战单位;
+	name-from=Dragonfly;
+	description-from=Heavy Multi-Unit Air Transport;
+	}
+[CORLSTNK]
+	{
+	Name=猛犸超重型闪电突击坦克;
+	Description=超重型闪电突击坦克，每秒输出640能源伤害;
+	name-from=Mammoth;
+	description-from=Ultra Heavy Laser Assault Tank (640E/Sec);
+	}
+[CORMAK]
+	{
+	Name=M.A.K中型突击机甲;
+	Description=中型地面突击机甲;
+	name-from=M.A.K.;
+	description-from=Medium Assault Kbot;
+	}
+[CORMAKR]
+	{
+	Name=金属转换器;
+	Description=消耗80能源转换产出1点金属;
+	name-from=Metal Maker;
+	description-from=Converts Energy into Metal (-80/+1);
+	}
+[CORMANT]
+	{
+	Name=蝎狮混合突击坦克;
+	Description=混合型袭扰突击坦克，具备防空能力;
+	name-from=Manticore;
+	description-from=Hybrid Skirmish Assault Tank (AA);
+	}
+[CORMART]
+	{
+	Name=掠夺者机动火炮车;
+	Description=机动车载火炮作战单位;
+	name-from=Pillager;
+	description-from=Mobile Artillery Vehicle;
+	}
+[CORMAS]
+	{
+	Name=地幔深层金属抽取站;
+	Description=深层矿点开采金属，持续运转消耗75能源;
+	name-from=Mantle Extractor;
+	description-from=Deep Core Metal Extractor (-75 Energy);
+	}
+[CORMCV]
+	{
+	Name=霸主移动等离子炮台;
+	Description=可移动等离子武器堡垒，具备自我修复;
+	name-from=Overlord;
+	description-from=Mobile Plasma Cannon (Self-Heal);
+	}
+[CORMEX]
+	{
+	Name=金属采集器;
+	Description=普通矿点开采金属，持续消耗3能源;
+	name-from=Metal Extractor;
+	description-from=Extracts Metal (-3 Energy);
+	}
+[CORMIST]
+	{
+	Name=挥砍者防空车辆;
+	Description=机动防空作战车辆;
+	name-from=Slasher;
+	description-from=Anti-Air Vehicle;
+	}
+[CORMKL]
+	{
+	Name=C.O.R.E核心本体;
+	Description=应急秩序恢复引擎，两栖，具备隐形;
+	name-from=C.O.R.E.;
+	description-from=Contingency Order Restoration Engine (Amphib, Stealth);
+	}
+[CORMLA]
+	{
+	Name=秃鹫布雷飞机;
+	Description=空中布雷飞行器，投放地雷;
+	name-from=Buzzard;
+	description-from=Mine Layer Aircraft;
+	}
+[CORMLS]
+	{
+	Name=小鬼布雷潜艇;
+	Description=水下布雷潜艇，布设水下水雷;
+	name-from=Imp;
+	description-from=Minelayer Sub;
+	}
+[CORMMKR]
+	{
+	Name=莫霍高级金属转换器;
+	Description=消耗800能源产出10点金属;
+	name-from=Moho Metal Maker;
+	description-from=Converts Energy into Metal (-800/+10);
+	}
+[CORMMKSHIP]
+	{
+	Name=补给者金属补给舰;
+	Description=海上资源补给舰，增加30点金属;
+	name-from=Replinisher;
+	description-from=Metal Maker Tanker Ship (+30 Metal);
+	}
+[CORMOBGG]
+	{
+	Name=大使机甲传送器;
+	Description=机甲专用传送装置，传送一次消耗250能源;
+	name-from=Ambassador;
+	description-from=Teleporter Kbot (-250e);
+	}
+[CORMOHO]
+	{
+	Name=莫霍高级金属矿场;
+	Description=高级金属开采设施，运行消耗15能源;
+	name-from=Moho Extractor;
+	description-from=Advanced Metal Extractor (-15 Energy);
+	}
+[CORMORT]
+	{
+	Name=莫蒂机动迫击炮机甲;
+	Description=机动迫击炮机甲，可以攀爬地形;
+	name-from=Morty;
+	description-from=Mobile Mortar Kbot (Climb);
+	}
+[CORMPAD]
+	{
+	Name=技工战场支援车;
+	Description=机动型战场辅助支援载具;
+	name-from=Mechanic;
+	description-from=Mobile Battlefield Assist Vehicle;
+	}
+[CORMS]
+	{
+	Name=天顶星中央指挥舰;
+	Description=中央意识指挥舰船，主炮单次开火消耗300000能源;
+	name-from=Zenith;
+	description-from=Central Consciousness Command Ship (-300K Energy/Shot);
+	}
+[CORMSHIP]
+	{
+	Name=九头蛇导弹巡洋舰;
+	Description=搭载导弹武器的巡洋舰;
+	name-from=Hydra;
+	description-from=Missile Cruiser;
+	}
+[CORMSTOR]
+	{
+	Name=金属存储器;
+	Description=金属存储上限增加1000;
+	name-from=Metal Storage;
+	description-from=Increases Metal Storage By 1K;
+	}
+[CORMUAT]
+	{
+	Name=使者多单位运输机;
+	Description=空中运输机，可运载多台作战单位;
+	name-from=Emissary;
+	description-from=Multi-Unit Air Transport;
+	}
+[CORNECRO]
+	{
+	Name=死灵复活机甲;
+	Description=复活机甲，能够攀爬地形;
+	name-from=Necro;
+	description-from=Resurrection Kbot (Climb);
+	}
+[CORNH]
+	{
+	Name=蟾蜍侦察气垫艇;
+	Description=侦察气垫艇，具备隐形;
+	name-from=Toad;
+	description-from=Scavenger Hovercraft (Stealth);
+	}
+[CORNOVA]
+	{
+	Name=独裁者超远程等离子炮;
+	Description=超远程等离子火炮，每发消耗120000能源;
+	name-from=Dictator;
+	description-from=Very Long Range Plasma Cannon (-120K Energy/Shot);
+	}
+[CORNSUB]
+	{
+	Name=锤头鲨重型导弹潜艇;
+	Description=重型制导导弹潜艇，每秒消耗9600能源;
+	name-from=Hammerhead;
+	description-from=Heavy Missile Submarine (Guided, 9.6K E/S);
+	}
+[COROMNI]
+	{
+	Name=阿格斯全向雷达干扰传感器;
+	Description=全向雷达干扰传感设施，持续消耗500能源;
+	name-from=Argus;
+	description-from=Omni Radar/Jamming Sensor (-500 E);
+	}
+[CORPLAS]
+	{
+	Name=焚灭者弹出式火焰炮台;
+	Description=可收纳弹出的火焰喷射防御炮台;
+	name-from=Immolator;
+	description-from=Pop-up Flamethrower Battery;
+	}
+[CORPLAT]
+	{
+	Name=水上飞机平台;
+	Description=生产各类水上飞机;
+	name-from=Seaplane Platform;
+	description-from=Builds Aircraft;
+	}
+[CORPOUND]
+	{
+	Name=重击者脉冲发射车;
+	Description=脉冲武器载具，每秒消耗7680能源，支持升级;
+	name-from=Pounder;
+	description-from=Pulse Emitter Vehicle (7.68K E/S, Upgradable);
+	}
+[CORPUN]
+	{
+	Name=惩罚者中距等离子炮台;
+	Description=中距离等离子防御炮台，每发消耗500能源，支持升级;
+	name-from=Punisher;
+	description-from=Medium Range Plasma Battery (-500 E/Shot, Upgradable);
+	}
+[CORPUN_UPGRADE]
+	{
+	Name=烤面包机升级组件;
+	Description=收起状态火力提升3倍，生命值提升4倍;
+	name-from=Toaster Upgrade;
+	description-from=Increases Firepower (3x), Unit Health (4x) when closed;
+	}
+[CORPYRO]
+	{
+	Name=烈焰喷射机甲;
+	Description=火焰喷射机甲，支持升级改造;
+	name-from=Pyro;
+	description-from=Flamethrower Kbot (Upgradable);
+	}
+[CORRAD]
+	{
+	Name=雷达塔;
+	Description=基础雷达探测塔，运转消耗5能源;
+	name-from=Radar Tower;
+	description-from=Radar Tower (5 Energy);
+	}
+[CORRANCOR]
+	{
+	Name=兰科尔轰击巡洋舰;
+	Description=轰击型巡洋舰，每秒消耗3000能源，可在低矮陆地行进;
+	name-from=Rancor;
+	description-from=Bombardment Cruiser (3K E/S, walks on low terrain);
+	}
+[CORREAP]
+	{
+	Name=收割者重型防暴突击坦克;
+	Description=重型防暴突击坦克，支持升级;
+	name-from=Reaper;
+	description-from=Heavy Riot Assault Tank (Upgradable);
+	}
+[CORREZ]
+	{
+	Name=异教徒究极复活机甲;
+	Description=高阶复活机甲，复原损毁机甲单位;
+	name-from=Heretic;
+	description-from=Ultra Ressurection Kbot;
+	}
+[CORRL]
+	{
+	Name=碾碎者防空导弹塔;
+	Description=防空导弹防御塔;
+	name-from=Pulverizer;
+	description-from=Anti-Air Missile Tower;
+	}
+[CORROACH]
+	{
+	Name=蟑螂爬行炸弹;
+	Description=爬行自爆炸弹，可攀爬地形，具备隐形;
+	name-from=Roach;
+	description-from=Crawling Bomb (Climb, Cloak);
+	}
+[CORSC]
+	{
+	Name=螨虫侦察机甲;
+	Description=侦察搜刮机甲，隐形，支持攀爬地形;
+	name-from=Mite;
+	description-from=Scavenger Kbot (Stealth, Climb);
+	}
+[CORSCAR]
+	{
+	Name=枢纽主力航母;
+	Description=主力航母，+1500能源，建造维修充能作战单位;
+	name-from=Nexus;
+	description-from=Capital Carrier (+1.5K E, Builds/Repairs/Charges Units);
+	}
+[CORSEAL]
+	{
+	Name=鳄鱼两栖突击坦克;
+	Description=两栖突击坦克;
+	name-from=Croc;
+	description-from=Amphibious Assault Tank;
+	}
+[CORSEAP]
+	{
+	Name=台风鱼雷水上轰炸机;
+	Description=鱼雷水上轰炸机，两栖;
+	name-from=Typhoon;
+	description-from=Torpedo Bomber Seaplane (Amphib);
+	}
+[CORSES]
+	{
+	Name=高级能量存储器;
+	Description=能源存储上限提升25000，支持成对部署;
+	name-from=Advanced Energy Storage;
+	description-from=Increases Energy Storage by 25K (Pairing);
+	}
+[CORSFUS]
+	{
+	Name=反物质反应堆;
+	Description=产出5000能源，可隐形，成对部署，支持升级;
+	name-from=Anti-Matter Reactor;
+	description-from=Produces Energy (+5K, Cloak, Pairing, Upgradable);
+	}
+[CORSFUS_UPGRADE]
+	{
+	Name=重型护盾能源强化升级组件;
+	Description=单位生命值提升4倍，能源产出增加1250;
+	name-from=Heavy Shield and Energy Boost U;
+	description-from=Increases Unit Health (4x) and Energy Output (+1250);
+	}
+[CORSGS]
+	{
+	Name=哈比重型火焰喷射战机;
+	Description=重型火焰喷射武装战机;
+	name-from=Harpy;
+	description-from=Heavy Flamethrower Gunship;
+	}
+[CORSHARK]
+	{
+	Name=鲨鱼狙击潜艇;
+	Description=狙击型潜艇作战单位;
+	name-from=Shark;
+	description-from=Sniper Submarine;
+	}
+[CORSHGEN]
+	{
+	Name=日冕护盾发生器;
+	Description=护盾发生器，降低建筑受到伤害，具备自我修复;
+	name-from=Corona;
+	description-from=Shield Generator (Reduces damage to buildings, Self-Heal);
+	}
+[CORSHOCK]
+	{
+	Name=歼灭者激光脉冲重型轰炸机;
+	Description=激光脉冲重型轰炸机，每秒消耗4800能源，具备隐形;
+	name-from=Decimator;
+	description-from=Laser Pulse Heavy Bomber (4.8K Energy/Second, Stealth);
+	}
+[CORSILO]
+	{
+	Name=消音者战略核导弹井;
+	Description=战略核导弹发射井;
+	name-from=Silencer;
+	description-from=Strategic Nuclear Missile Launcher;
+	}
+[CORSJAM]
+	{
+	Name=幻影雷达干扰舰;
+	Description=舰船雷达干扰装置，运行消耗125能源;
+	name-from=Phantom;
+	description-from=Radar Jammer Ship (-125 Energy);
+	}
+[CORSKROG]
+	{
+	Name=泰坦实验指挥机甲;
+	Description=实验型号指挥机甲，两栖作战;
+	name-from=Titan;
+	description-from=Experimental Command Kbot (Amphib);
+	}
+[CORSKYNET]
+	{
+	Name=天网制空垂直起降机;
+	Description=夺取制空权的垂直起降战机;
+	name-from=Skynet;
+	description-from=Aerial Superiorty VTOL;
+	}
+[CORSMB]
+	{
+	Name=开膛者重型防空导弹塔;
+	Description=重型防空导弹塔，自带雷达模块;
+	name-from=Eviscerator;
+	description-from=Heavy Anti-Air Missile Tower (Radar);
+	}
+[CORSMS]
+	{
+	Name=高级金属存储器;
+	Description=金属存储上限增加5000;
+	name-from=Advanced Metal Storage;
+	description-from=Increases Metal Storage by 5K;
+	}
+[CORSOLAR]
+	{
+	Name=太阳能采集器;
+	Description=产出25点能源;
+	name-from=Solar Collector;
+	description-from=Produces Energy (+25);
+	}
+[CORSONAR]
+	{
+	Name=声呐站;
+	Description=探测水下单位，消耗15能源;
+	name-from=Sonar Station;
+	description-from=Locates Units (-15 Energy);
+	}
+[CORSONJAM]
+	{
+	Name=浮置雷达声呐干扰器;
+	Description=隐藏我方单位信号，消耗125能源;
+	name-from=Floating Radar/Sonar Jammer;
+	description-from=Hides Units (125 Energy);
+	}
+[CORSPEC]
+	{
+	Name=幽灵雷达干扰机甲;
+	Description=雷达干扰机甲，运行消耗50能源;
+	name-from=Spectre;
+	description-from=Radar Jamming Kbot (-50 Energy);
+	}
+[CORSPID]
+	{
+	Name=亵渎者辐射蜘蛛侦察机甲;
+	Description=辐射蜘蛛侦察机甲，每秒消耗960能源，两栖，可攀爬;
+	name-from=Defiler;
+	description-from=Radiation Spider Scout (-960 E/S, Amphib, Climb);
+	}
+[CORSPUN]
+	{
+	Name=堡垒硬化防御炮台;
+	Description=高硬度防御炮台，一轮齐射消耗6400能源;
+	name-from=Bastion;
+	description-from=Hardened Defense Battery (6.4K Energy/Salvo);
+	}
+[CORSPY]
+	{
+	Name=寄生虫间谍机甲;
+	Description=间谍机甲，两栖，具备隐形与信号干扰能力;
+	name-from=Parasite;
+	description-from=Spy Kbot (Amphib, Cloak, Jam);
+	}
+[CORSQUID]
+	{
+	Name=克拉肯复活潜艇;
+	Description=水下复活潜艇，复原损毁水下作战单位;
+	name-from=Kraken;
+	description-from=Resurrection Sub;
+	}
+[CORSSUB]
+	{
+	Name=利维坦突击潜艇;
+	Description=突击型潜艇，用于水下交火作战;
+	name-from=Leviathan;
+	description-from=Assault Submarine;
+	}
+[CORSSY]
+	{
+	Name=舰队船坞;
+	Description=生产四级科技大型舰队舰船;
+	name-from=Fleet Shipyard;
+	description-from=Produces Tech Level 4 Ships;
+	}
+[CORSUMO]
+	{
+	Name=相扑高级重装突击机甲;
+	Description=高级装甲突击机甲，每发消耗768能源，支持升级;
+	name-from=Sumo;
+	description-from=Adv. Armored Assault Kbot (768 Energy/Shot, Upgradable);
+	}
+[CORT3SEAP]
+	{
+	Name=灾变重型鱼雷水上轰炸机;
+	Description=重型鱼雷水上轰炸单位，两栖;
+	name-from=Cataclysm;
+	description-from=Heavy Torpedo Seaplane Bomber (Amphib);
+	}
+[CORTAC]
+	{
+	Name=仲裁者机动重型导弹发射车;
+	Description=机动重型导弹发射载具，制导武器，每秒消耗9600能源;
+	name-from=Arbitrator;
+	description-from=Mobile Heavy Missile Launcher (Guided, 9.6K E/S);
+	}
+[CORTALOS]
+	{
+	Name=塔罗斯混合导弹突击机甲;
+	Description=搭载混合导弹武器的突击机甲;
+	name-from=Talos;
+	description-from=Hybrid Missile Assault Kbot;
+	}
+[CORTECH]
+	{
+	Name=升级中心;
+	Description=升级指挥官、诱饵与雷达自动锁定，消耗2500能源;
+	name-from=Upgrade Center;
+	description-from=Upgrades Commander/Decoys and Radar (auto-targeting, -2.5K E);
+	}
+[CORTHUD]
+	{
+	Name=萨德火炮机甲;
+	Description=火炮机甲，能够攀爬地形;
+	name-from=Thud;
+	description-from=Artillery Kbot (Climb);
+	}
+[CORTIDE]
+	{
+	Name=潮汐发电机;
+	Description=产出能源，产量受地图环境影响;
+	name-from=Tidal Generator;
+	description-from=Produces Energy (Variable by map);
+	}
+[CORTITAN]
+	{
+	Name=旋风鱼雷轰炸机;
+	Description=鱼雷轰炸战机;
+	name-from=Cyclone;
+	description-from=Torpedo Bomber;
+	}
+[CORTL]
+	{
+	Name=海胆鱼雷发射器;
+	Description=基础鱼雷发射装置;
+	name-from=Urchin;
+	description-from=Torpedo Launcher;
+	}
+[CORTOAST]
+	{
+	Name=烤面包机弹出式重炮;
+	Description=可收纳弹出重型火炮，每发消耗500能源;
+	name-from=Toaster;
+	description-from=Pop-up Heavy Cannon (-500 E/Shot);
+	}
+[CORTRON]
+	{
+	Name=中和者战术核导弹发射台;
+	Description=战术核导弹发射装置;
+	name-from=Neutralizer;
+	description-from=Tactical Nuclear Missile Launcher;
+	}
+[CORTSAR]
+	{
+	Name=沙皇实验机动全域防空平台;
+	Description=实验机动单位，+2000能源，集成雷达、干扰、扰乱功能;
+	name-from=Tsar;
+	description-from=Exp. Mobile Omni/AA (+2K E, Radar, Jam, Disrupt);
+	}
+[CORUCH]
+	{
+	Name=实验级工程气垫艇;
+	Description=建造四级科技作战单位;
+	name-from=Exp. Construction Hovercraft;
+	description-from=Builds Tech Level 4 Units;
+	}
+[CORUCK]
+	{
+	Name=实验级工程机甲;
+	Description=建造四级科技作战单位;
+	name-from=Exp. Construction Kbot;
+	description-from=Builds Tech Level 4 Units;
+	}
+[CORULAB]
+	{
+	Name=实验单位铸造厂;
+	Description=生产四级科技作战单位;
+	name-from=Exp. Unit Foundry;
+	description-from=Produces Tech Level 4 Units;
+	}
+[CORUSCAR]
+	{
+	Name=停泊点舰队航母;
+	Description=舰队级航母，+5000能源，建造、维修、充能作战单位;
+	name-from=Anchorage;
+	description-from=Fleet Carrier (+5K E, Builds/Repairs/Charges Units);
+	}
+[CORUSUB]
+	{
+	Name=漩涡战略指挥潜艇;
+	Description=战略指挥潜艇，主炮单次开火消耗225000能源;
+	name-from=Vortex;
+	description-from=Strategic Command Submarine (-225K Energy/Shot);
+	}
+[CORUWCS]
+	{
+	Name=水下综合资源存储库;
+	Description=同时提升水下能源、金属存储上限，支持成对部署;
+	name-from=Underwater Combined Storage;
+	description-from=Increases Energy/Metal Storage by 25/5K (Pairing);
+	}
+[CORUWES]
+	{
+	Name=水下能量存储器;
+	Description=提升水下能源存储上限5000，支持成对部署;
+	name-from=Underwater Energy Storage;
+	description-from=Increases Energy Storage by 5K (Pairing);
+	}
+[CORUWFUS]
+	{
+	Name=水下聚变工厂;
+	Description=产出1200能源，支持成对部署;
+	name-from=Underwater Fusion Plant;
+	description-from=Produces Energy (+1.2K, Pairing);
+	}
+[CORUWMAS]
+	{
+	Name=水下地幔金属抽取站;
+	Description=水下深层金属开采设施，持续消耗75能源;
+	name-from=Underwater Mantle Extractor;
+	description-from=Deep Core Metal Extractor (-75 Energy);
+	}
+[CORUWMEX]
+	{
+	Name=水下金属采集器;
+	Description=开采水下矿脉金属，持续消耗3能源;
+	name-from=Underwater Metal Extractor;
+	description-from=Extracts Metal (-3 Energy);
+	}
+[CORUWMFUS]
+	{
+	Name=水下资源动力厂;
+	Description=同时产出100能源与1金属，支持成对部署;
+	name-from=Underwater Resource Powerplant;
+	description-from=Produces Energy and Metal (+100/+1, Pairing);
+	}
+[CORUWMMM]
+	{
+	Name=水下莫霍金属转换器;
+	Description=消耗800能源转换产出12金属;
+	name-from=Underwater Moho Metal Maker;
+	description-from=Converts Energy to Metal (-800/+12);
+	}
+[CORUWMOHO]
+	{
+	Name=水下莫霍金属矿场;
+	Description=水下高级金属开采设施，持续消耗15能源;
+	name-from=Underwater Moho Extractor;
+	description-from=Advanced Metal Extractor (-15 Energy);
+	}
+[CORUWMS]
+	{
+	Name=水下金属存储器;
+	Description=提升水下金属存储上限1000;
+	name-from=Underwater Metal Storage;
+	description-from=Increases Metal Storage by 1K;
+	}
+[CORVAMP]
+	{
+	Name=吸血鬼拦截机;
+	Description=拦截战机，具备隐形;
+	name-from=Vamp;
+	description-from=Interceptor (Stealth);
+	}
+[CORVAULT]
+	{
+	Name=宝库资源设施;
+	Description=生产储存能源金属，上限125000能源、25000金属，可隐形，成对部署;
+	name-from=Vault;
+	description-from=Makes/Stores Energy/Metal (500/20), 125K/25K, Cloak, Pairing);
+	}
+[CORVCAR]
+	{
+	Name=宁静号指挥航母;
+	Description=指挥型航母，+1250能源，建造、维修、充能作战单位;
+	name-from=Halcyon;
+	description-from=Command Carrier (+1.25K E, Builds/Repairs/Charges Units);
+	}
+[CORVIND]
+	{
+	Name=复仇者装甲突击指挥垂直起降机;
+	Description=装甲突击指挥垂直起降战机，具备自我修复;
+	name-from=Vindicator;
+	description-from=Armored Assault Command VTOL (Self‑Heal);
+	}
+[CORVIPE]
+	{
+	Name=毒蛇弹出式重型激光炮;
+	Description=可收纳弹出重型激光防御炮塔;
+	name-from=Viper;
+	description-from=Pop‑up Heavy Laser;
+	}
+[CORVOYR]
+	{
+	Name=偷窥者雷达机甲;
+	Description=机甲形态雷达探测单位;
+	name-from=Voyeur;
+	description-from=Radar Kbot;
+	}
+[CORVRAD]
+	{
+	Name=通报者雷达车;
+	Description=机动雷达探测车辆;
+	name-from=Informer;
+	description-from=Radar Vehicle;
+	}
+[CORVROC]
+	{
+	Name=外交官机动火箭发射车;
+	Description=机动火箭发射载具，支持升级;
+	name-from=Diplomat;
+	description-from=Mobile Rocket Launcher (Upgradable);
+	}
+[CORZIG]
+	{
+	Name=塑形者外围意识单元;
+	Description=外围意识装置，具备隐形;
+	name-from=Shaper;
+	description-from=Peripheral Consciousness (Cloakable);
+	}
+[GoKT3SupRpod]
+	{
+	Name=女族长战场控制机动舱;
+	Description=战场控制专用机动舱体;
+	name-from=Matriarch;
+	description-from=Battlefield Control Runnerpod;
+	}
+[mARMATLAS]
+	{
+	Name=阿特拉斯手动运输机;
+	Description=手动操控的空中运输单位;
+	name-from=Atlas;
+	description-from=Air Transport (Manual);
+	}
+[mARMGATE]
+	{
+	Name=银河之门空间传送门;
+	Description=太空级单位传送装置;
+	name-from=Galactic Gate;
+	description-from=Space Teleporter;
+	}
+[mBEAC]
+	{
+	Name=异星信标;
+	Description=异星来源的信号信标;
+	name-from=Alien Beacon;
+	description-from=Alien Beacon;
+	}
+[mBUILD]
+	{
+	Name=水化工厂;
+	Description=生成水资源;
+	name-from=Hydration Plant;
+	description-from=Creates Water;
+	}
+[mCORGATE]
+	{
+	Name=银河之门空间传送门;
+	Description=太空级单位传送装置;
+	name-from=Galactic Gate;
+	description-from=Space Teleporter;
+	}
+[mCORVALK]
+	{
+	Name=女武神手动运输机;
+	Description=手动操控的空中运输单位;
+	name-from=Valkyrie;
+	description-from=Air Transport (Manual);
+	}
+[mDEV1]
+	{
+	Name=内爆装置;
+	Description=内爆效应武器装置;
+	name-from=Implosion Device;
+	description-from=Implosion Device;
+	}
+[mSCORP]
+	{
+	Name=蝎子本土生物;
+	Description=星球本土生命形态;
+	name-from=Scorpion;
+	description-from=Indigenous Lifeform;
+	}
+[mSS]
+	{
+	Name=海蛇本土生物;
+	Description=星球本土生命形态;
+	name-from=Sea Serpent;
+	description-from=Indigenous Lifeform;
+	}
+[mTRUCK]
+	{
+	Name=卡车地面运输车;
+	Description=地面货运运输车辆;
+	name-from=Truck;
+	description-from=Ground Transport;
+	}
+[xARMMLS]
+	{
+	Name=小鬼精灵布雷潜艇;
+	Description=水下布雷潜艇，布设水下水雷;
+	name-from=Gremlin;
+	description-from=Minelayer Sub;
+	}
+[xHACK]
+	{
+	Name=激活指挥官入侵程序;
+	Description=启动入侵程序，揭露敌方指挥官，消耗10000能源;
+	name-from=Activate Commander Hack;
+	description-from=Activate Commander Hack (Reveal Enemy Commander, -10K Energy);
+	}
+[xMINE1]
+	{
+	Name=轻型地雷;
+	Description=低伤害范围杀伤地雷;
+	name-from=Light Mine;
+	description-from=Low Damage/Area Mine;
+	}
+[xMINE2]
+	{
+	Name=重型地雷;
+	Description=高伤害范围杀伤地雷;
+	name-from=Heavy Mine;
+	description-from=High Damage/Area Mine;
+	}
+[xMINE3]
+	{
+	Name=核地雷;
+	Description=核装药地雷武器;
+	name-from=Nuclear Mine;
+	description-from=Nuclear Mine;
+	}
+[xMINE4]
+	{
+	Name=边界信标;
+	Description=提供视野，可隐形，会被雷达干扰屏蔽;
+	name-from=Perimeter Beacon;
+	description-from=Provides Line of Sight (Cloakable, Radar Jammed);
+	}
+[xMINE5]
+	{
+	Name=破坏地雷;
+	Description=范围瘫痪效果地雷;
+	name-from=Sabotage Mine;
+	description-from=Area Stun Mine;
+	}
+[xOMNI]
+	{
+	Name=激活全域情报程序;
+	Description=开启最大情报，获得视野、雷达、声呐，消耗5000能源;
+	name-from=Activate Maximum Intel;
+	description-from=Activate Maximum Intel (LOS/Radar/Sonar, -5K Energy);
+	}
+[ZZZ]
+	{
+	Name=欢迎来到扬克斯庞克炮塔;
+	Description=恶搞趣味炮塔;
+	name-from=shturl.cc/GAHWcs3bLvQ3R;
+	description-from=Spank Tower;
+	}

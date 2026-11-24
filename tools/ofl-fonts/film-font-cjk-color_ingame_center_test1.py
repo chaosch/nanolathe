@@ -15,7 +15,7 @@ SOURCE_FONT = r"zitidi.com.ttf"
 Pixel_Font_12 =r"ZLabsPixel_12px_M_CN.ttf"
 Pixel_Font_14 = r"ZLabsPixel_12px_M_CN.ttf"
 PIXEL_FONT_16 = r"ChangBanDianSong-16-SC.ttf"
-
+Pixel_FONT_16_Zlib=r"ZLabsDiamondPix_16px_MD_SC.ttf"
 SCRIPT_DIR = Path(__file__).resolve().parent
 INPUT_DIR = SCRIPT_DIR / "input"
 OUT = SCRIPT_DIR / "output"

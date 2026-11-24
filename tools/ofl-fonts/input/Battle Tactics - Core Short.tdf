@@ -1,0 +1,124 @@
+[HEADER]
+{
+campaignside=CORE;
+}
+
+[MISSION0]
+{
+missionfile=Sink the Battleship.ota;
+missionname=Sink the Battleship;
+}
+
+[MISSION1]
+{
+missionfile=Coordinated Assault.ota;
+missionname=Coordinated Assault;
+}
+
+[MISSION2]
+{
+missionfile=Dogfight over Grantham Deep.ota;
+missionname=Dogfight over Grantham Deep;
+}
+
+[MISSION3]
+{
+missionfile=Mesa Run.ota;
+missionname=Mesa Run;
+}
+
+[MISSION4]
+{
+missionfile=Krocark Firebase Complex.ota;
+missionname=Krocark Firebase Complex;
+}
+
+[MISSION5]
+{
+missionfile=Jungle Journey.ota;
+missionname=Jungle Journey;
+}
+
+[MISSION6]
+{
+missionfile=Capturing Terseknos.ota;
+missionname=Capturing Terseknos;
+}
+
+[MISSION7]
+{
+missionfile=Bertha Cleansing.ota;
+missionname=Bertha Cleansing;
+}
+
+[MISSION8]
+{
+missionfile=Surprise at Labrodorite.ota;
+missionname=Surprise at Labrodorite;
+}
+
+[MISSION9]
+{
+missionfile=Skirmish on the Sand.ota;
+missionname=Skirmish on the Sand;
+}
+
+[MISSION10]
+{
+missionfile=New Moon.ota;
+missionname=New Moon;
+}
+
+[MISSION11]
+{
+missionfile=Kbot Mop Up.ota;
+missionname=Kbot Mop Up;
+}
+
+[MISSION12]
+{
+missionfile=River Base Alpha.ota;
+missionname=River Base Alpha;
+}
+
+[MISSION13]
+{
+missionfile=Crossing Two Rivers.ota;
+missionname=Crossing Two Rivers;
+}
+
+[MISSION14]
+{
+missionfile=Caranat Conquest.ota;
+missionname=Caranat Conquest;
+}
+
+[MISSION15]
+{
+missionfile=Less Refreshing Sea.ota;
+missionname=Less Refreshing Sea;
+}
+
+[MISSION16]
+{
+missionfile=Hot Day and Hull Down.ota;
+missionname=Hot Day and Hull Down;
+}
+
+[MISSION17]
+{
+missionfile=Seed Crystal.ota;
+missionname=Seed Crystal;
+}
+
+[MISSION18]
+{
+missionfile=Cleanup on Kral.ota;
+missionname=Cleanup on Kral;
+}
+
+[MISSION19]
+{
+missionfile=Air Assault.ota;
+missionname=Air Assault;
+}

@@ -1,0 +1,106 @@
+[HEADER]
+{
+campaignside=ARM;
+}
+
+[MISSION0]
+{
+missionfile=Zipper Attack.ota;
+missionname=Zipper Attack;
+}
+
+[MISSION1]
+{
+missionfile=Can Rush.ota;
+missionname=Can Rush;
+}
+
+[MISSION2]
+{
+missionfile=Attack on Barrack.ota;
+missionname=Attack on Barrack;
+}
+
+[MISSION3]
+{
+missionfile=Cutoff in Sector 6895.ota;
+missionname=Cutoff in Sector 6895;
+}
+
+[MISSION4]
+{
+missionfile=Encounter on the Coral Sea.ota;
+missionname=Encounter on the Coral Sea;
+}
+
+[MISSION5]
+{
+missionfile=The Wayneston Ford Engagement.ota;
+missionname=The Wayneston Ford Engagement;
+}
+
+[MISSION6]
+{
+missionfile=Ice Base Baryn.ota;
+missionname=Ice Base Baryn;
+}
+
+[MISSION7]
+{
+missionfile=Forest Base 129.ota;
+missionname=Forest Base 129;
+}
+
+[MISSION8]
+{
+missionfile=Rock Candy Mountains.ota;
+missionname=Rock Candy Mountains;
+}
+
+[MISSION9]
+{
+missionfile=Kudzu Base.ota;
+missionname=Kudzu Base;
+}
+
+[MISSION10]
+{
+missionfile=Yerrot Foothills.ota;
+missionname=Yerrot Foothills;
+}
+
+[MISSION11]
+{
+missionfile=Island Hopping.ota;
+missionname=Island Hopping;
+}
+
+[MISSION12]
+{
+missionfile=Mist Bombers.ota;
+missionname=Mist Bombers;
+}
+
+[MISSION13]
+{
+missionfile=A Shortage of Water.ota;
+missionname=A Shortage of Water;
+}
+
+[MISSION14]
+{
+missionfile=Raid on Vetes.ota;
+missionname=Raid on Vetes;
+}
+
+[MISSION15]
+{
+missionfile=Three Passes.ota;
+missionname=Three Passes;
+}
+
+[MISSION16]
+{
+missionfile=Spire Sports.ota;
+missionname=Spire Sports;
+}

@@ -4,7 +4,6 @@ package main
 // drawer per control kind — art, button, text and surface [07 §5].
 
 import (
-	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -283,8 +282,6 @@ func (g *gameShell) drawRetailTextState(c *client.Client, p *ui.Panel, index int
 	if text == "" && !(gad.Kind == gui.KindTextBox && p.EditorCaptured() && p.EditorIndex() == index) {
 		return
 	}
-	text = i18n.T(text)
-
 	// Every text painter first selects the font the gadget's `fontnumber`
 	// picks from the window's own kind-7 records — font number 0 is the first
 	// record — and the common font when none matches. Only the label painter

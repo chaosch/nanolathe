@@ -173,14 +173,8 @@ func drawRetailGAFTextLit(c *client.Client, font *formats.GAFEntry, text string,
 		return
 	}
 	baselineHeight := retailGAFBaselineHeight(font)
-	text = i18n.T(text)
-	if _, ok := c.DrawRetailFilmCJKCylindrical(
-		text,
-		x, y, maxWidth, baselineHeight,
-		255,
-		2,
-	); ok {
-		return
+	if i18n.Language() != i18n.English || i18n.I18nLanguageNeedCJK() && !i18n.HasCJK(text) {
+		text = i18n.T(text)
 	}
 	remaining := maxWidth
 	for _, r := range text {
@@ -221,32 +215,15 @@ func (g *gameShell) drawRetailString(c *client.Client, text string, x, y, maxWid
 }
 
 func (g *gameShell) drawRetailStringLit(c *client.Client, text string, x, y, maxWidth int, fntColor byte, shade int) {
-	text = i18n.T(text)
 	if font := g.retailGAFTextFont(); font != nil {
 		var pal *palette.Tables
 		if g.assets != nil {
 			pal = g.assets.pal
 		}
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			text,
-			x, y, maxWidth, g.retailTextHeight(),
-			0,
-			0,
-		); ok {
-			return
-		}
 		drawRetailGAFTextLit(c, font, text, x, y, maxWidth, pal, shade)
 		return
 	}
 	if g != nil && g.font != nil {
-		if _, ok := c.DrawRetailFilmCJKCylindrical(
-			text,
-			x, y, maxWidth, y,
-			fntColor,
-			2,
-		); ok {
-			return
-		}
 		c.UITextWidth(g.font, text, x, y, maxWidth, fntColor)
 	}
 

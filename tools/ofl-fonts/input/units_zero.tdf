@@ -1,0 +1,1918 @@
+[ArmCommander]
+{
+    Name = 指挥官;
+    Description = Arm反抗军指挥官;
+    Name-from = Commander;
+    Description-from = Commander of Arm Rebellion;
+}
+[ArmT1AAHover]
+{
+    Name = 毒刺;
+    Description = T1防空气垫艇;
+    Name-from = Stinger;
+    Description-from = T1 Anti-Air Hovercraft;
+}
+[ArmT1AATurret]
+{
+    Name = 瞭望塔;
+    Description = T1防空炮塔;
+    Name-from = Watchtower;
+    Description-from = T1 Anti-Air Turret;
+}
+[ArmT1AF]
+{
+    Name = T1空军工厂;
+    Description = 生产T1空军单位;
+    Name-from = T1 Aircraft Factory;
+    Description-from = Builds T1 Air Units;
+}
+[ArmT1AF_AI]
+{
+    Name = T1空军工厂;
+    Description = 生产T1空军单位;
+    Name-from = T1 Aircraft Factory;
+    Description-from = Builds T1 Air Units;
+}
+[ArmT1AirCon]
+{
+    Name = 监察者;
+    Description = T1运输/工程机;
+    Name-from = Overseer;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[ArmT1AirCon_AI]
+{
+    Name = 监察者;
+    Description = T1运输/工程机;
+    Name-from = Overseer;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[ArmT1AirPad]
+{
+    Name = 战机维修中心;
+    Description = 自动修复战机;
+    Name-from = Aircraft Repair Center;
+    Description-from = Automatic Aircraft Repairing;
+}
+[ArmT1ArtKbot]
+{
+    Name = 舷炮;
+    Description = T1炮击机甲;
+    Name-from = Broadside;
+    Description-from = T1 Artillery Kbot;
+}
+[ArmT1ArtTank]
+{
+    Name = 投石机;
+    Description = T1机动火箭炮;
+    Name-from = Ballista;
+    Description-from = T1 Mobile Rocket Launcher;
+}
+[ArmT1AsTank]
+{
+    Name = 天蝎;
+    Description = T1袭扰坦克;
+    Name-from = Scorpion;
+    Description-from = T1 Skirmish Tank;
+}
+[ArmT1Bomber]
+{
+    Name = 海盗;
+    Description = T1轰炸机;
+    Name-from = Corsair;
+    Description-from = T1 Bomber;
+}
+[ArmT1ConHover]
+{
+    Name = 管护者;
+    Description = T1工程气垫艇;
+    Name-from = Custodian;
+    Description-from = T1 Construction Hovercraft;
+}
+[ArmT1ConHover_AI]
+{
+    Name = 管护者;
+    Description = T1工程气垫艇;
+    Name-from = Custodian;
+    Description-from = T1 Construction Hovercraft;
+}
+[ArmT1ConSub]
+{
+    Name = 下属;
+    Description = T1工程潜艇;
+    Name-from = Underling;
+    Description-from = T1 Construction Submarine;
+}
+[ArmT1ConSub_AI]
+{
+    Name = 下属;
+    Description = T1工程潜艇;
+    Name-from = Underling;
+    Description-from = T1 Construction Submarine;
+}
+[ArmT1Destroyer]
+{
+    Name = 爱国者;
+    Description = T1驱逐舰;
+    Name-from = Patriot;
+    Description-from = T1 Destroyer;
+}
+[ArmT1Dropship]
+{
+    Name = 大力神;
+    Description = T1运输机;
+    Name-from = Hercules;
+    Description-from = T1 Transport Aircraft;
+}
+[ArmT1ES]
+{
+    Name = 储能仓;
+    Description = 储能+1000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 1000;
+}
+[ArmT1ES_AI]
+{
+    Name = 储能仓;
+    Description = 储能+1000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 1000;
+}
+[ArmT1FAATurret]
+{
+    Name = 瞭望塔·浮;
+    Description = T1浮式防空炮塔;
+    Name-from = Watchtower NS;
+    Description-from = T1 Floating Anti-Air Turret;
+}
+[ArmT1FEKbot]
+{
+    Name = 定居者;
+    Description = T1战地工程机甲;
+    Name-from = Settler;
+    Description-from = T1 Field Engineer Kbot;
+}
+[ArmT1FEKbot_AI]
+{
+    Name = 定居者;
+    Description = T1战地工程机甲;
+    Name-from = Settler;
+    Description-from = T1 Field Engineer Kbot;
+}
+[ArmT1Fighter]
+{
+    Name = 反叛者;
+    Description = T1战斗机;
+    Name-from = Rebel;
+    Description-from = T1 Fighter;
+}
+[ArmT1FMex]
+{
+    Name = 前沿采矿机;
+    Description = 每秒采矿2;
+    Name-from = Frontier Extractor;
+    Description-from = Extracts 2 Metal Per Second;
+}
+[ArmT1FMine]
+{
+    Name = 激流;
+    Description = T1水下水雷;
+    Name-from = Riptide;
+    Description-from = T1 Submerged Mine;
+}
+[ArmT1FPD]
+{
+    Name = 封锁;
+    Description = T1浮式外围防御;
+    Name-from = Blockade;
+    Description-from = T1 Floating Perimeter Defence;
+}
+[ArmT1FPDTurret]
+{
+    Name = 鱼叉;
+    Description = T1浮式防御炮塔;
+    Name-from = Harpoon;
+    Description-from = T1 Floating Perimeter Defence Turret;
+}
+[ArmT1FSolar]
+{
+    Name = 浮式太阳能板;
+    Description = 每秒产能4;
+    Name-from = Floating Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[ArmT1FSolar_AI]
+{
+    Name = 浮式太阳能板;
+    Description = 每秒产能4;
+    Name-from = Floating Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[ArmT1FTLTurret]
+{
+    Name = 三叉戟;
+    Description = T1浮式鱼雷炮塔;
+    Name-from = Trident;
+    Description-from = T1 Floating Torpedo Turret;
+}
+[ArmT1Geo]
+{
+    Name = 地热电站;
+    Description = 每秒产能30;
+    Name-from = Geothermal Power Plant;
+    Description-from = Produces 30 Energy Per Second;
+}
+[ArmT1HDTurret]
+{
+    Name = 重锤;
+    Description = T1炮击炮塔;
+    Name-from = Hammer;
+    Description-from = T1 Artillery Turret;
+}
+[ArmT1HGF]
+{
+    Name = T1重型地面工厂;
+    Description = 生产T1重型地面单位;
+    Name-from = T1 Heavy Ground Factory;
+    Description-from = Builds T1 Heavy Units;
+}
+[ArmT1HGF_AI]
+{
+    Name = T1重型地面工厂;
+    Description = 生产T1重型地面单位;
+    Name-from = T1 Heavy Ground Factory;
+    Description-from = Builds T1 Heavy Units;
+}
+[ArmT1InfKbot]
+{
+    Name = 陆战队员;
+    Description = T1步兵机甲;
+    Name-from = Marine;
+    Description-from = T1 Infantry Kbot;
+}
+[ArmT1LGF]
+{
+    Name = T1轻型地面工厂;
+    Description = 生产T1轻型地面单位;
+    Name-from = T1 Light Ground Factory;
+    Description-from = Builds T1 Light Units;
+}
+[ArmT1LGF_AI]
+{
+    Name = T1轻型地面工厂;
+    Description = 生产T1轻型地面单位;
+    Name-from = T1 Light Ground Factory;
+    Description-from = Builds T1 Light Units;
+}
+[ArmT1MBTank]
+{
+    Name = 浩劫;
+    Description = T1主战坦克;
+    Name-from = Havoc;
+    Description-from = T1 Battle Tank;
+}
+[ArmT1Mex]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[ArmT1Mex_AI]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[ArmT1Mine]
+{
+    Name = 蒺藜;
+    Description = T1感应地雷;
+    Name-from = Caltrop;
+    Description-from = T1 Proximity Mine;
+}
+[ArmT1MS]
+{
+    Name = 储矿仓;
+    Description = 储矿+1000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 1000;
+}
+[ArmT1MS_AI]
+{
+    Name = 储矿仓;
+    Description = 储矿+1000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 1000;
+}
+[ArmT1NF]
+{
+    Name = T1海军工厂;
+    Description = 生产T1海军单位;
+    Name-from = T1 Naval Factory;
+    Description-from = Builds T1 Naval Units;
+}
+[ArmT1NF_AI]
+{
+    Name = T1海军工厂;
+    Description = 生产T1海军单位;
+    Name-from = T1 Naval Factory;
+    Description-from = Builds T1 Naval Units;
+}
+[ArmT1PD]
+{
+    Name = 围墙;
+    Description = T1外围防御;
+    Name-from = Wall;
+    Description-from = T1 Perimeter Defence;
+}
+[ArmT1PDTurret]
+{
+    Name = 速射炮;
+    Description = T1防御炮塔;
+    Name-from = Autogun;
+    Description-from = T1 Perimeter Defence Turret;
+}
+[ArmT1Radar]
+{
+    Name = 警戒者;
+    Description = T1雷达塔（耗能8/秒）;
+    Name-from = Vigilant;
+    Description-from = T1 Radar Tower (Consumes 8 Energy Per Second);
+}
+[ArmT1Recon]
+{
+    Name = 掠食者;
+    Description = T1侦察机;
+    Name-from = Predator;
+    Description-from = T1 Reconnaissance Aircraft;
+}
+[ArmT1ReconHover]
+{
+    Name = 斥候;
+    Description = T1侦察气垫艇;
+    Name-from = Outrider;
+    Description-from = T1 Reconnaissance Hovercraft;
+}
+[ArmT1RGHover]
+{
+    Name = 维京;
+    Description = T1攻击气垫艇;
+    Name-from = Viking;
+    Description-from = T1 Attack Hovercraft;
+}
+[ArmT1ScoutTank]
+{
+    Name = 骚扰者;
+    Description = T1轻型半履带突击车;
+    Name-from = Harasser;
+    Description-from = T1 Light Attack Half-Track;
+}
+[ArmT1Solar]
+{
+    Name = 太阳能板;
+    Description = 每秒产能4;
+    Name-from = Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[ArmT1Solar_AI]
+{
+    Name = 太阳能板;
+    Description = 每秒产能4;
+    Name-from = Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[ArmT1Sonar]
+{
+    Name = 哨兵;
+    Description = T1海军声呐站（耗能8/秒）;
+    Name-from = Sentinel;
+    Description-from = T1 Naval Sensor Station (Consumes 8 Energy Per Second);
+}
+[ArmT1Sub]
+{
+    Name = 钢首;
+    Description = T1潜艇;
+    Name-from = Steelhead;
+    Description-from = T1 Submarine;
+}
+[ArmT1UMex]
+{
+    Name = 水下采矿机;
+    Description = 每秒采矿3;
+    Name-from = Underwater Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[ArmT1UMex_AI]
+{
+    Name = 水下采矿机;
+    Description = 每秒采矿3;
+    Name-from = Underwater Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[ArmT2AATank]
+{
+    Name = 无政府者;
+    Description = T2防空坦克;
+    Name-from = Anarchist;
+    Description-from = T2 Anti-Air Tank;
+}
+[ArmT2AATurret]
+{
+    Name = 激进者;
+    Description = T2防空炮塔;
+    Name-from = Radical;
+    Description-from = T2 Anti-Air Turret;
+}
+[ArmT2AF]
+{
+    Name = T2空军工厂;
+    Description = 生产T2空军单位;
+    Name-from = T2 Aircraft Factory;
+    Description-from = Builds T2 Air Units;
+}
+[ArmT2AF_AI]
+{
+    Name = T2空军工厂;
+    Description = 生产T2空军单位;
+    Name-from = T2 Aircraft Factory;
+    Description-from = Builds T2 Air Units;
+}
+[ArmT2AirCon]
+{
+    Name = 阿特拉斯;
+    Description = T2运输/工程机;
+    Name-from = Atlas;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+[ArmT2AirCon_AI]
+{
+    Name = 阿特拉斯;
+    Description = T2运输/工程机;
+    Name-from = Atlas;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+[ArmT2ArtTank]
+{
+    Name = 痛击者;
+    Description = T2自行火炮;
+    Name-from = Mauler;
+    Description-from = T2 Artillery Vehicle;
+}
+[ArmT2AsKbot]
+{
+    Name = 瓦良格;
+    Description = T2突击机甲;
+    Name-from = Varjag;
+    Description-from = T2 Shock Assault Kbot;
+}
+[ArmT2Bomber]
+{
+    Name = 惩戒者;
+    Description = T2战术轰炸机;
+    Name-from = Vindicator;
+    Description-from = T2 Tactical Bomber;
+}
+[ArmT2ConTank]
+{
+    Name = 机匠;
+    Description = T2工程车;
+    Name-from = Machinist;
+    Description-from = T2 Construction Vehicle;
+}
+[ArmT2ConTank_AI]
+{
+    Name = 机匠;
+    Description = T2工程车;
+    Name-from = Machinist;
+    Description-from = T2 Construction Vehicle;
+}
+[ArmT2FEKbot]
+{
+    Name = 工兵;
+    Description = T2战地工程机甲;
+    Name-from = Sapper;
+    Description-from = T2 Field Engineer Kbot;
+}
+[ArmT2FEKbot_AI]
+{
+    Name = 工兵;
+    Description = T2战地工程机甲;
+    Name-from = Sapper;
+    Description-from = T2 Field Engineer Kbot;
+}
+[ArmT2Fighter]
+{
+    Name = 猎鹰;
+    Description = T2截击机;
+    Name-from = Falcon;
+    Description-from = T2 Interceptor;
+}
+[ArmT2GF]
+{
+    Name = T2地面工厂;
+    Description = 生产T2地面单位;
+    Name-from = T2 Ground Factory;
+    Description-from = Builds T2 Ground Units;
+}
+[ArmT2GF_AI]
+{
+    Name = T2地面工厂;
+    Description = 生产T2地面单位;
+    Name-from = T2 Ground Factory;
+    Description-from = Builds T2 Ground Units;
+}
+[ArmT2Gunship]
+{
+    Name = 解放者;
+    Description = T2炮艇机;
+    Name-from = Liberator;
+    Description-from = T2 Gunship;
+}
+[ArmT2Gunship_AI]
+{
+    Name = 解放者;
+    Description = T2炮艇机;
+    Name-from = Liberator;
+    Description-from = T2 Gunship;
+}
+[ArmT2HDTurret]
+{
+    Name = 不屈者;
+    Description = T2重型防御炮塔;
+    Name-from = Defiant;
+    Description-from = T2 Heavy Defence Turret;
+}
+[ArmT2Jammer]
+{
+    Name = 盲区;
+    Description = T2雷达干扰器（耗能4/秒）;
+    Name-from = Blindspot;
+    Description-from = T2 Radar Jammer (Consumes 4 Energy Per Second);
+}
+[ArmT2JammerHover]
+{
+    Name = 扰乱者;
+    Description = T2气垫雷达干扰艇;
+    Name-from = Scrambler;
+    Description-from = T2 Radar Jammer Hovercraft;
+}
+[ArmT2JumpKbot]
+{
+    Name = 迅猛龙;
+    Description = T2喷气突击机甲;
+    Name-from = Raptor;
+    Description-from = T2 Fast Attack Jumpjet Kbot;
+}
+[ArmT2Launcher]
+{
+    Name = 报复者;
+    Description = T2战术导弹井（耗能40/秒）;
+    Name-from = Retaliator;
+    Description-from = T2 Tactical Missile Silo (Consumes 40 Energy Per Second);
+}
+[ArmT2Mex]
+{
+    Name = 高产采矿机;
+    Description = 每秒采矿6;
+    Name-from = High Yield Metal Extractor;
+    Description-from = Extracts 6 Metal Per Second;
+}
+[ArmT2Mine]
+{
+    Name = 爆破雷;
+    Description = T2反装甲地雷;
+    Name-from = Buster;
+    Description-from = T2 Anti-Armor Mine;
+}
+[ArmT2PDTurret]
+{
+    Name = 无畏者;
+    Description = T2防御炮塔;
+    Name-from = Dauntless;
+    Description-from = T2 Perimeter Defence Turret;
+}
+[ArmT2PGen]
+{
+    Name = 聚变反应堆;
+    Description = 每秒产能80;
+    Name-from = Fusion Reactor;
+    Description-from = Produces 80 Energy Per Second;
+}
+[ArmT2PGen_AI]
+{
+    Name = 聚变反应堆;
+    Description = 每秒产能80;
+    Name-from = Fusion Reactor;
+    Description-from = Produces 80 Energy Per Second;
+}
+[ArmT2Radar]
+{
+    Name = 知察者;
+    Description = T2雷达塔（耗能48/秒）;
+    Name-from = Cognizant;
+    Description-from = T2 Radar Tower (Consumes 48 Energy Per Second);
+}
+[ArmT2RadarHover]
+{
+    Name = 观测员;
+    Description = T2气垫雷达艇;
+    Name-from = Spotter;
+    Description-from = T2 Radar Hovercraft;
+}
+[ArmT2Recon]
+{
+    Name = 访客;
+    Description = T2侦察机;
+    Name-from = Visitant;
+    Description-from = T2 Reconnaissance Aircraft;
+}
+[ArmT2RGTank]
+{
+    Name = 毁灭者;
+    Description = T2重型突击坦克;
+    Name-from = Devastator;
+    Description-from = T2 Heavy Assault Tank;
+}
+[ArmT2SaboKbot]
+{
+    Name = 渗透者;
+    Description = T2狙击/破坏机甲;
+    Name-from = Infiltrator;
+    Description-from = T2 Sniper/Saboteur Kbot;
+}
+[ArmT2Stealth]
+{
+    Name = 谜影;
+    Description = T2匿踪力场发生器（耗能40/秒）;
+    Name-from = Enigma;
+    Description-from = T2 Stealth Field Generator (Consumes 40 Energy Per Second);
+}
+[CoreCommander]
+{
+    Name = 指挥官;
+    Description = Core战术师团指挥官;
+    Name-from = Commander;
+    Description-from = Commander of Core's Tactical Division;
+}
+[CoreT1AAShip]
+{
+    Name = 扫天者;
+    Description = T1防空护卫舰;
+    Name-from = Sky Sweeper;
+    Description-from = T1 Anti-Air Frigate;
+}
+[CoreT1AATank]
+{
+    Name = 追踪者;
+    Description = T1防空半履带车;
+    Name-from = Tracker;
+    Description-from = T1 Anti-Air Half-Track;
+}
+[CoreT1AATurret]
+{
+    Name = 岗哨;
+    Description = T1防空炮塔;
+    Name-from = Sentry;
+    Description-from = T1 Anti-Air Turret;
+}
+[CoreT1ADTurret]
+{
+    Name = 焚烬者;
+    Description = T1区域封锁碉堡;
+    Name-from = Incinerator;
+    Description-from = T1 Area Denial Pillbox;
+}
+[CoreT1AF]
+{
+    Name = T1航空实验台;
+    Description = 生产T1空军单位;
+    Name-from = T1 Air Laboratory;
+    Description-from = Builds T1 Air Units;
+}
+[CoreT1AF_AI]
+{
+    Name = T1航空实验台;
+    Description = 生产T1空军单位;
+    Name-from = T1 Air Laboratory;
+    Description-from = Builds T1 Air Units;
+}
+[CoreT1AirCon]
+{
+    Name = 馆长;
+    Description = T1运输/工程机;
+    Name-from = Curator;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[CoreT1AirCon_AI]
+{
+    Name = 馆长;
+    Description = T1运输/工程机;
+    Name-from = Curator;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[CoreT1AirPad]
+{
+    Name = 战机维修中心;
+    Description = 自动修复战机;
+    Name-from = Aircraft Repair Center;
+    Description-from = Automatic Aircraft Repairing;
+}
+[CoreT1ArtTank]
+{
+    Name = 弧光;
+    Description = T1炮击坦克;
+    Name-from = Arclite;
+    Description-from = T1 Artillery Tank;
+}
+[CoreT1ArtTurret]
+{
+    Name = 惩戒官;
+    Description = T1炮击炮塔;
+    Name-from = Retributor;
+    Description-from = T1 Artillery Turret;
+}
+[CoreT1AsKbot]
+{
+    Name = 蛮兵;
+    Description = T1突击机甲;
+    Name-from = Grunt;
+    Description-from = T1 Assault Kbot;
+}
+[CoreT1ConShip]
+{
+    Name = 执行者;
+    Description = T1工程护卫舰;
+    Name-from = Executor;
+    Description-from = T1 Construction Frigate;
+}
+[CoreT1ConShip_AI]
+{
+    Name = 执行者;
+    Description = T1工程护卫舰;
+    Name-from = Executor;
+    Description-from = T1 Construction Frigate;
+}
+[CoreT1ConTank]
+{
+    Name = 劳工;
+    Description = T1工程车;
+    Name-from = Laborer;
+    Description-from = T1 Construction Vehicle;
+}
+[CoreT1ConTank_AI]
+{
+    Name = 劳工;
+    Description = T1工程车;
+    Name-from = Laborer;
+    Description-from = T1 Construction Vehicle;
+}
+[CoreT1Destroyer]
+{
+    Name = 普罗透斯;
+    Description = T1驱逐舰;
+    Name-from = Proteus;
+    Description-from = T1 Destroyer;
+}
+[CoreT1Dropship]
+{
+    Name = 矢量;
+    Description = T1运输机;
+    Name-from = Vector;
+    Description-from = T1 Transport Aircraft;
+}
+[CoreT1ES]
+{
+    Name = 储能仓;
+    Description = 储能+2000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 2000;
+}
+[CoreT1ES_AI]
+{
+    Name = 储能仓;
+    Description = 储能+2000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 2000;
+}
+[CoreT1FAATurret]
+{
+    Name = 岗哨·浮;
+    Description = T1浮式防空炮塔;
+    Name-from = Sentry NS;
+    Description-from = T1 Floating Anti-Air Turret;
+}
+[CoreT1Fighter]
+{
+    Name = 马蜂;
+    Description = T1截击机;
+    Name-from = Hornet;
+    Description-from = T1 Interceptor;
+}
+[CoreT1FPD]
+{
+    Name = 卫界;
+    Description = T1浮式外围防御;
+    Name-from = Ward;
+    Description-from = T1 Floating Perimeter Defence;
+}
+[CoreT1FPDTurret]
+{
+    Name = 穿孔者;
+    Description = T1浮式防御炮塔;
+    Name-from = Perforator;
+    Description-from = T1 Floating Perimeter Defence Turret;
+}
+[CoreT1FPGen]
+{
+    Name = 潮汐电站;
+    Description = 每秒产能5;
+    Name-from = Tidal Generator;
+    Description-from = Produces 5 Energy Per Second;
+}
+[CoreT1FPGen_AI]
+{
+    Name = 潮汐电站;
+    Description = 每秒产能5;
+    Name-from = Tidal Generator;
+    Description-from = Produces 5 Energy Per Second;
+}
+[CoreT1FTLTurret]
+{
+    Name = 潜蚀者;
+    Description = T1浮式鱼雷炮塔;
+    Name-from = Submerger;
+    Description-from = T1 Floating Torpedo Turret;
+}
+[CoreT1Geo]
+{
+    Name = 地热电站;
+    Description = 每秒产能30;
+    Name-from = Geothermal Power Plant;
+    Description-from = Produces 30 Energy Per Second;
+}
+[CoreT1GF]
+{
+    Name = T1陆地实验台;
+    Description = 生产T1地面单位;
+    Name-from = T1 Ground Laboratory;
+    Description-from = Builds T1 Ground Units;
+}
+[CoreT1GF_AI]
+{
+    Name = T1陆地实验台;
+    Description = 生产T1地面单位;
+    Name-from = T1 Ground Laboratory;
+    Description-from = Builds T1 Ground Units;
+}
+[CoreT1Gunship]
+{
+    Name = 猎手;
+    Description = T1炮艇机;
+    Name-from = Hunter;
+    Description-from = T1 Gunship;
+}
+[CoreT1Gunship_AI]
+{
+    Name = 猎手;
+    Description = T1炮艇机;
+    Name-from = Hunter;
+    Description-from = T1 Gunship;
+}
+[CoreT1LasBomber]
+{
+    Name = 极光;
+    Description = T1激光轰炸机;
+    Name-from = Aurora;
+    Description-from = T1 Laser Bomber;
+}
+[CoreT1LasHover]
+{
+    Name = 掠夺者;
+    Description = T1突击气垫艇;
+    Name-from = Marauder;
+    Description-from = T1 Assault Hovercraft;
+}
+[CoreT1LasTank]
+{
+    Name = 神盾;
+    Description = T1突击坦克;
+    Name-from = Aegis;
+    Description-from = T1 Assault Tank;
+}
+[CoreT1Mex]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[CoreT1Mex_AI]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[CoreT1MS]
+{
+    Name = 储矿仓;
+    Description = 储矿+2000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 2000;
+}
+[CoreT1MS_AI]
+{
+    Name = 储矿仓;
+    Description = 储矿+2000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 2000;
+}
+[CoreT1NF]
+{
+    Name = T1海洋实验台;
+    Description = 生产T1海军单位;
+    Name-from = T1 Sea Laboratory;
+    Description-from = Builds T1 Naval Units;
+}
+[CoreT1NF_AI]
+{
+    Name = T1海洋实验台;
+    Description = 生产T1海军单位;
+    Name-from = T1 Sea Laboratory;
+    Description-from = Builds T1 Naval Units;
+}
+[CoreT1PD]
+{
+    Name = 六棱壁垒;
+    Description = T1外围防御;
+    Name-from = Hex;
+    Description-from = T1 Perimeter Defence;
+}
+[CoreT1PDTurret]
+{
+    Name = 穿刺者;
+    Description = T1防御炮塔;
+    Name-from = Puncturer;
+    Description-from = T1 Perimeter Defence Turret;
+}
+[CoreT1PGen]
+{
+    Name = 发电站;
+    Description = 每秒产能10;
+    Name-from = Power Generator;
+    Description-from = Produces 10 Energy Per Second;
+}
+[CoreT1PGen_AI]
+{
+    Name = 发电站;
+    Description = 每秒产能10;
+    Name-from = Power Generator;
+    Description-from = Produces 10 Energy Per Second;
+}
+[CoreT1Radar]
+{
+    Name = 阿格斯;
+    Description = T1雷达塔（耗能10/秒）;
+    Name-from = Argus;
+    Description-from = T1 Radar Tower (Consumes 10 Energy Per Second);
+}
+[CoreT1RocKbot]
+{
+    Name = 执法者;
+    Description = T1火力支援机甲;
+    Name-from = Enforcer;
+    Description-from = T1 Fire Support Kbot;
+}
+[CoreT1RocShip]
+{
+    Name = 特里同;
+    Description = T1突击护卫舰;
+    Name-from = Triton;
+    Description-from = T1 Assault Frigate;
+}
+[CoreT1ScoutBike]
+{
+    Name = 流浪者;
+    Description = T1轻型突击摩托;
+    Name-from = Errant;
+    Description-from = T1 Light Attack Bike;
+}
+[CoreT1ScoutKbot]
+{
+    Name = 探路者;
+    Description = T1侦察机甲;
+    Name-from = Pathfinder;
+    Description-from = T1 Scout Kbot;
+}
+[CoreT1Sensor]
+{
+    Name = 预警信标;
+    Description = 探测信标;
+    Name-from = Warning Beacon;
+    Description-from = T1 Sensor;
+}
+[CoreT1Sonar]
+{
+    Name = 观象台;
+    Description = T1海军声呐站（耗能10/秒）;
+    Name-from = Observatory;
+    Description-from = T1 Naval Sensor Station (Consumes 10 Energy Per Second);
+}
+[CoreT1Sub]
+{
+    Name = 尼普顿;
+    Description = T1潜艇;
+    Name-from = Neptune;
+    Description-from = T1 Submarine;
+}
+[CoreT1SupHover]
+{
+    Name = 监视者;
+    Description = T1支援气垫艇;
+    Name-from = Monitor;
+    Description-from = T1 Support Hovercraft;
+}
+[CoreT1SupHover_AI]
+{
+    Name = 监视者;
+    Description = T1支援气垫艇;
+    Name-from = Monitor;
+    Description-from = T1 Support Hovercraft;
+}
+[CoreT1UMex]
+{
+    Name = 水下采矿机;
+    Description = 每秒采矿3;
+    Name-from = Underwater Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[CoreT1UMex_AI]
+{
+    Name = 水下采矿机;
+    Description = 每秒采矿3;
+    Name-from = Underwater Metal Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[CoreT2AAGunship]
+{
+    Name = 洛基;
+    Description = T2防空炮艇机;
+    Name-from = Loki;
+    Description-from = T2 Anti-Air Gunship;
+}
+[CoreT2AASpider]
+{
+    Name = 粉碎者;
+    Description = T2防空机甲;
+    Name-from = Crasher;
+    Description-from = T2 Anti-Air Kbot;
+}
+[CoreT2AATurret]
+{
+    Name = 阿尔忒弥斯;
+    Description = T2防空炮塔;
+    Name-from = Artemis;
+    Description-from = T2 Anti-Air Turret;
+}
+[CoreT2AF]
+{
+    Name = T2航空实验台;
+    Description = 生产T2空军单位;
+    Name-from = T2 Air Laboratory;
+    Description-from = Builds T2 Air Units;
+}
+[CoreT2AF_AI]
+{
+    Name = T2航空实验台;
+    Description = 生产T2空军单位;
+    Name-from = T2 Air Laboratory;
+    Description-from = Builds T2 Air Units;
+}
+[CoreT2AirCon]
+{
+    Name = 使者;
+    Description = T2运输/工程机;
+    Name-from = Envoy;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+[CoreT2AirCon_AI]
+{
+    Name = 使者;
+    Description = T2运输/工程机;
+    Name-from = Envoy;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+[CoreT2AmpTank]
+{
+    Name = 掠袭者;
+    Description = T2两栖匿踪坦克;
+    Name-from = Raider;
+    Description-from = T2 Amphibious Stealth Tank;
+}
+[CoreT2ArtTank]
+{
+    Name = 调停者;
+    Description = T2炮击坦克;
+    Name-from = Mediator;
+    Description-from = T2 Artillery Tank;
+}
+[CoreT2ArtTurret]
+{
+    Name = 仲裁官;
+    Description = T2炮击炮塔;
+    Name-from = Arbiter;
+    Description-from = T2 Artillery Turret;
+}
+[CoreT2AsKbot]
+{
+    Name = 拿非利人;
+    Description = T2反突击机甲;
+    Name-from = Nephilim;
+    Description-from = T2 Anti-Assault Kbot;
+}
+[CoreT2BTank]
+{
+    Name = 巨兽;
+    Description = T2攻城坦克;
+    Name-from = Behemoth;
+    Description-from = T2 Siege Tank;
+}
+[CoreT2ConTank]
+{
+    Name = 巧匠;
+    Description = T2工程车;
+    Name-from = Artificer;
+    Description-from = T2 Construction Vehicle;
+}
+[CoreT2ConTank_AI]
+{
+    Name = 巧匠;
+    Description = T2工程车;
+    Name-from = Artificer;
+    Description-from = T2 Construction Vehicle;
+}
+[CoreT2EWHover]
+{
+    Name = 黯灭;
+    Description = T2电子战气垫艇;
+    Name-from = Blackout;
+    Description-from = T2 Electronic Warfare Hovercraft;
+}
+[CoreT2GF]
+{
+    Name = T2陆地实验台;
+    Description = 生产T2地面单位;
+    Name-from = T2 Ground Laboratory;
+    Description-from = Builds T2 Ground Units;
+}
+[CoreT2GF_AI]
+{
+    Name = T2陆地实验台;
+    Description = 生产T2地面单位;
+    Name-from = T2 Ground Laboratory;
+    Description-from = Builds T2 Ground Units;
+}
+[CoreT2Gunship]
+{
+    Name = 索尔;
+    Description = T2炮艇机;
+    Name-from = Thor;
+    Description-from = T2 Gunship;
+}
+[CoreT2HDTurret]
+{
+    Name = 暴君;
+    Description = T2重型防御炮塔;
+    Name-from = Tyrant;
+    Description-from = T2 Heavy Defence Turret;
+}
+[CoreT2Jammer]
+{
+    Name = 本影;
+    Description = T2雷达干扰器（耗能5/秒）;
+    Name-from = Umbra;
+    Description-from = T2 Radar Jammer (Consumes 5 Energy Per Second);
+}
+[CoreT2LasKbot]
+{
+    Name = 泰坦;
+    Description = T2反装甲机甲;
+    Name-from = Titan;
+    Description-from = T2 Anti-Armor Kbot;
+}
+[CoreT2Mex]
+{
+    Name = 重型采矿机;
+    Description = 每秒采矿6;
+    Name-from = Heavy Metal Extractor;
+    Description-from = Extracts 6 Metal Per Second;
+}
+[CoreT2Mine]
+{
+    Name = 熄焰雷;
+    Description = T2等离子地雷;
+    Name-from = Extinguisher;
+    Description-from = T2 Plasma Mine;
+}
+[CoreT2PDTurret]
+{
+    Name = 坚铠;
+    Description = T2防御炮塔;
+    Name-from = Adamant;
+    Description-from = T2 Perimeter Defence Turret;
+}
+[CoreT2PGen]
+{
+    Name = 聚变电站;
+    Description = 每秒产能100;
+    Name-from = Fusion Power Plant;
+    Description-from = Produces 100 Energy Per Second;
+}
+[CoreT2PGen_AI]
+{
+    Name = 聚变电站;
+    Description = 每秒产能100;
+    Name-from = Fusion Power Plant;
+    Description-from = Produces 100 Energy Per Second;
+}
+[CoreT2Radar]
+{
+    Name = 全知者;
+    Description = T2雷达塔（耗能30/秒）;
+    Name-from = Omniscient;
+    Description-from = T2 Radar Tower (Consumes 30 Energy Per Second);
+}
+[CoreT2Recon]
+{
+    Name = 凝视者;
+    Description = T2侦察/电子战机;
+    Name-from = Beholder;
+    Description-from = T2 Surveillance/Electronic Warfare Aircraft;
+}
+[CoreT2Sensor]
+{
+    Name = 窥秘者;
+    Description = T2匿踪探测信标;
+    Name-from = Voyeur;
+    Description-from = T2 Cloaked Sensor;
+}
+[CoreT2Shield]
+{
+    Name = 庇护者;
+    Description = T2护盾发生器（耗能25/秒）;
+    Name-from = Patron;
+    Description-from = T2 Shield Generator (Consumes 25 Energy Per Second);
+}
+[CoreT2Shield2]
+{
+    Name = 堡垒;
+    Description = T2护盾发生器（耗能50/秒）;
+    Name-from = Bastion;
+    Description-from = T2 Shield Generator (Consumes 50 Energy Per Second);
+}
+[CoreT2Spy]
+{
+    Name = 审判官;
+    Description = T2间谍机甲;
+    Name-from = Inquisitor;
+    Description-from = T2 Spy Kbot;
+}
+[CoreT2Stealth]
+{
+    Name = 秘仪;
+    Description = T2匿踪力场发生器（耗能50/秒）;
+    Name-from = Arcanum;
+    Description-from = T2 Stealth Field Generator (Consumes 50 Energy Per Second);
+}
+[GoKCommander]
+{
+    Name = 守护者;
+    Description = Kadesh守护者;
+    Name-from = Guardian;
+    Description-from = Guardian of Kadesh;
+}
+[GoKT1AAHover]
+{
+    Name = 先兆;
+    Description = T1防空/炮击气垫艇;
+    Name-from = Harbinger;
+    Description-from = T1 Anti-Air/Artillery Hovercraft;
+}
+[GoKT1AATurret]
+{
+    Name = 观星者;
+    Description = T1防空炮塔;
+    Name-from = Stargazer;
+    Description-from = T1 Anti-Air Turret;
+}
+[GoKT1AF]
+{
+    Name = T1航空平台;
+    Description = 生产T1空军单位;
+    Name-from = T1 Aero Platform;
+    Description-from = Builds T1 Air Units;
+}
+[GoKT1AF_AI]
+{
+    Name = T1航空平台;
+    Description = 生产T1空军单位;
+    Name-from = T1 Aero Platform;
+    Description-from = Builds T1 Air Units;
+}
+[GoKT1AirCon]
+{
+    Name = 善灵;
+    Description = T1运输/工程机;
+    Name-from = Eudaemon;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[GoKT1AirCon_AI]
+{
+    Name = 善灵;
+    Description = T1运输/工程机;
+    Name-from = Eudaemon;
+    Description-from = T1 Transport/Construction Aircraft;
+}
+[GoKT1AirPad]
+{
+    Name = 战机维修中心;
+    Description = 自动修复战机;
+    Name-from = Aircraft Repair Center;
+    Description-from = Automatic Aircraft Repairing;
+}
+[GoKT1AsKbot]
+{
+    Name = 门徒;
+    Description = T1突击机甲;
+    Name-from = Disciple;
+    Description-from = T1 Assault Kbot;
+}
+[GoKT1ATHover]
+{
+    Name = 灾厄;
+    Description = T1反装甲气垫艇;
+    Name-from = Scourge;
+    Description-from = T1 Anti-Tank Hovercraft;
+}
+[GoKT1Bomber]
+{
+    Name = 挽歌歌者;
+    Description = T1轰炸机;
+    Name-from = Dirgesinger;
+    Description-from = T1 Bomber;
+}
+[GoKT1ConHover]
+{
+    Name = 护持者;
+    Description = T1工程气垫艇;
+    Name-from = Protector;
+    Description-from = T1 Construction Hovercraft;
+}
+[GoKT1ConHover_AI]
+{
+    Name = 护持者;
+    Description = T1工程气垫艇;
+    Name-from = Protector;
+    Description-from = T1 Construction Hovercraft;
+}
+[GoKT1ConSub]
+{
+    Name = 保全者;
+    Description = T1工程潜艇;
+    Name-from = Preserver;
+    Description-from = T1 Construction Submarine;
+}
+[GoKT1ConSub_AI]
+{
+    Name = 保全者;
+    Description = T1工程潜艇;
+    Name-from = Preserver;
+    Description-from = T1 Construction Submarine;
+}
+[GoKT1Destroyer]
+{
+    Name = 海龙;
+    Description = T1驱逐舰;
+    Name-from = Sea Dragon;
+    Description-from = T1 Destroyer;
+}
+[GoKT1Dropship]
+{
+    Name = 传令者;
+    Description = T1运输机;
+    Name-from = Herald;
+    Description-from = T1 Transport Aircraft;
+}
+[GoKT1ES]
+{
+    Name = 储能仓;
+    Description = 储能+2000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 2000;
+}
+[GoKT1ES_AI]
+{
+    Name = 储能仓;
+    Description = 储能+2000;
+    Name-from = Energy Storage;
+    Description-from = Increases Energy Storage By 2000;
+}
+[GoKT1FAATurret]
+{
+    Name = 观星者·浮;
+    Description = T1浮式防空炮塔;
+    Name-from = Stargazer NS;
+    Description-from = T1 Floating Anti-Air Turret;
+}
+[GoKT1FEHover]
+{
+    Name = 使者;
+    Description = T1战地工程气垫艇;
+    Name-from = Emissary;
+    Description-from = T1 Field Engineer Hovercraft;
+}
+[GoKT1FEHover_AI]
+{
+    Name = 使者;
+    Description = T1战地工程气垫艇;
+    Name-from = Emissary;
+    Description-from = T1 Field Engineer Hovercraft;
+}
+[GoKT1FPDTurret]
+{
+    Name = 训诫者·浮;
+    Description = T1浮式防御炮塔;
+    Name-from = Admonisher NS;
+    Description-from = T1 Floating Perimeter Defence Turret;
+}
+[GoKT1FSNode]
+{
+    Name = 护盾节点·浮;
+    Description = T1浮式外围护盾;
+    Name-from = Shield Node NS;
+    Description-from = T1 Floating Perimeter Shield;
+}
+[GoKT1FSolar]
+{
+    Name = 浮式太阳能板;
+    Description = 每秒产能4;
+    Name-from = Floating Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[GoKT1FSolar_AI]
+{
+    Name = 浮式太阳能板;
+    Description = 每秒产能4;
+    Name-from = Floating Solar Panel;
+    Description-from = Produces 4 Energy Per Second;
+}
+[GoKT1FTLTurret]
+{
+    Name = 尼克斯蔷薇;
+    Description = T1浮式鱼雷炮塔;
+    Name-from = Nix Rose;
+    Description-from = T1 Floating Torpedo Turret;
+}
+[GoKT1Geo]
+{
+    Name = 地热电站;
+    Description = 每秒产能30;
+    Name-from = Geothermal Power Plant;
+    Description-from = Produces 30 Energy Per Second;
+}
+[GoKT1GF]
+{
+    Name = T1大地平台;
+    Description = 生产T1陆地单位;
+    Name-from = T1 Terra Platform;
+    Description-from = Builds T1 Land Units;
+}
+[GoKT1GF_AI]
+{
+    Name = T1大地平台;
+    Description = 生产T1陆地单位;
+    Name-from = T1 Terra Platform;
+    Description-from = Builds T1 Land Units;
+}
+[GoKT1Gunship]
+{
+    Name = 幽影;
+    Description = T1战斗炮艇机;
+    Name-from = Spectre;
+    Description-from = T1 Fighter/Gunship;
+}
+[GoKT1HDTurret]
+{
+    Name = 黎黯;
+    Description = T1炮击炮塔;
+    Name-from = Black Dawn;
+    Description-from = T1 Artillery Turret;
+}
+[GoKT1HSKbot]
+{
+    Name = 收割者;
+    Description = T1重型支援机甲;
+    Name-from = Reaper;
+    Description-from = T1 Heavy Support Kbot;
+}
+[GoKT1Mex]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[GoKT1Mex_AI]
+{
+    Name = 采矿机;
+    Description = 每秒采矿3;
+    Name-from = Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+[GoKT1MS]
+{
+    Name = 储矿仓;
+    Description = 储矿+2000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 2000;
+}
+[GoKT1MS_AI]
+{
+    Name = 储矿仓;
+    Description = 储矿+2000;
+    Name-from = Metal Storage;
+    Description-from = Increases Metal Storage By 2000;
+}
+[GoKT1NF]
+{
+    Name = T1海洋平台;
+    Description = 生产T1海军单位;
+    Name-from = T1 Hydro Platform;
+    Description-from = Builds T1 Naval Units;
+}
+[GoKT1NF_AI]
+{
+    Name = T1海洋平台;
+    Description = 生产T1海军单位;
+    Name-from = T1 Hydro Platform;
+    Description-from = Builds T1 Naval Units;
+}
+[GoKT1PD]
+{
+    Name = 星界壁垒;
+    Description = T1外围防御;
+    Name-from = Star;
+    Description-from = T1 Perimeter Defence;
+}
+[GoKT1PDTurret]
+{
+    Name = 训诫者;
+    Description = T1防御炮塔;
+    Name-from = Admonisher;
+    Description-from = T1 Perimeter Defence Turret;
+}
+[GoKT1PGen]
+{
+    Name = 发电机;
+    Description = 每秒产能12;
+    Name-from = Dynamo;
+    Description-from = Produces 12 Energy Per Second;
+}
+[GoKT1PGen_AI]
+{
+    Name = 发电机;
+    Description = 每秒产能12;
+    Name-from = Dynamo;
+    Description-from = Produces 12 Energy Per Second;
+}
+[GoKT1PMine]
+{
+    Name = 灾星;
+    Description = T1光子鱼雷水雷;
+    Name-from = Jinx;
+    Description-from = T1 Photon Torpedo Mine;
+}
+[GoKT1Radar]
+{
+    Name = 方尖塔;
+    Description = T1雷达塔（耗能12/秒）;
+    Name-from = Pylon;
+    Description-from = T1 Radar Tower (Consumes 12 Energy Per Second);
+}
+[GoKT1Recon]
+{
+    Name = 幻灵;
+    Description = T1侦察探针;
+    Name-from = Phantasm;
+    Description-from = T1 Reconnaissance Probe;
+}
+[GoKT1ScoutHover]
+{
+    Name = 仙灵;
+    Description = T1侦察气垫艇;
+    Name-from = Faerie;
+    Description-from = T1 Scout Hovercraft;
+}
+[GoKT1SNode]
+{
+    Name = 护盾节点;
+    Description = T1外围护盾;
+    Name-from = Shield Node;
+    Description-from = T1 Perimeter Shield;
+}
+[GoKT1Sonar]
+{
+    Name = 灯塔;
+    Description = T1海军声呐站（耗能12/秒）;
+    Name-from = Pharos;
+    Description-from = T1 Naval Sensor Station (Consumes 12 Energy Per Second);
+}
+[GoKT1Sub]
+{
+    Name = 塞壬;
+    Description = T1 侦察潜艇;
+    Name-from = Siren;
+    Description-from = T1 Scout Submarine;
+}
+
+[GoKT1SupHover]
+{
+    Name = 多弥娜;
+    Description = T1 支援气垫艇;
+    Name-from = Domina;
+    Description-from = T1 Support Hovercraft;
+}
+
+[GoKT1UMex]
+{
+    Name = 水下采矿厂;
+    Description = 每秒产出3金属;
+    Name-from = Underwater Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+
+[GoKT1UMex_AI]
+{
+    Name = 水下采矿厂;
+    Description = 每秒产出3金属;
+    Name-from = Underwater Extractor;
+    Description-from = Extracts 3 Metal Per Second;
+}
+
+[GoKT2AALauncher]
+{
+    Name = 星爆;
+    Description = T2 防空发射井;
+    Name-from = Starburst;
+    Description-from = T2 Anti-Air Silo;
+}
+
+[GoKT2AARpod]
+{
+    Name = 破晓;
+    Description = T2 防空机动机甲;
+    Name-from = Daybreak;
+    Description-from = T2 Anti-Air Runnerpod;
+}
+
+[GoKT2AATurret]
+{
+    Name = 延音;
+    Description = T2 停滞防空装置;
+    Name-from = Fermata;
+    Description-from = T2 Anti-Air Stasis Device;
+}
+
+[GoKT2AF]
+{
+    Name = T2 航空平台;
+    Description = 生产T2空军单位;
+    Name-from = T2 Aero Platform;
+    Description-from = Builds T2 Air Units;
+}
+
+[GoKT2AF_AI]
+{
+    Name = T2 航空平台;
+    Description = 生产T2空军单位;
+    Name-from = T2 Aero Platform;
+    Description-from = Builds T2 Air Units;
+}
+
+[GoKT2AirCon]
+{
+    Name = 狂喜;
+    Description = T2 运输/工程机;
+    Name-from = Rapture;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+
+[GoKT2AirCon_AI]
+{
+    Name = 狂喜;
+    Description = T2 运输/工程机;
+    Name-from = Rapture;
+    Description-from = T2 Transport/Construction Aircraft;
+}
+
+[GoKT2AirJammer]
+{
+    Name = 欺瞒者;
+    Description = T2 外勤工程/雷达干扰机;
+    Name-from = Deceiver;
+    Description-from = T2 Field Engineer/Radar Jammer Aircraft;
+}
+
+[GoKT2ArtRpod]
+{
+    Name = 暮落;
+    Description = T2 重炮机动机甲;
+    Name-from = Nightfall;
+    Description-from = T2 Artillery Runnerpod;
+}
+
+[GoKT2ArtTurret]
+{
+    Name = 灼兰;
+    Description = T2 榴弹炮塔;
+    Name-from = Blazing Orchid;
+    Description-from = T2 Artillery Turret;
+}
+
+[GoKT2ATRpod]
+{
+    Name = 不朽者;
+    Description = T2 反装甲机动机甲;
+    Name-from = Immortal;
+    Description-from = T2 Anti-Armor Runnerpod;
+}
+
+[GoKT2ConHover]
+{
+    Name = 造物者;
+    Description = T2 工程气垫艇;
+    Name-from = Creator;
+    Description-from = T2 Construction Hovercraft;
+}
+
+[GoKT2ConHover_AI]
+{
+    Name = 造物者;
+    Description = T2 工程气垫艇;
+    Name-from = Creator;
+    Description-from = T2 Construction Hovercraft;
+}
+
+[GoKT2DecoyFPDT]
+{
+    Name = 幻影NS;
+    Description = 伪装T1水上边界防御塔;
+    Name-from = Illusion NS;
+    Description-from = Mimics T1 Floating Perimeter Defence Turret;
+}
+
+[GoKT2DecoyPDT]
+{
+    Name = 幻影;
+    Description = 伪装T1边界防御塔;
+    Name-from = Illusion;
+    Description-from = Mimics T1 Perimeter Defence Turret;
+}
+
+[GoKT2Fighter]
+{
+    Name = 幽灵;
+    Description = T2 截击机;
+    Name-from = Wraith;
+    Description-from = T2 Interceptor;
+}
+
+[GoKT2GF]
+{
+    Name = T2 陆地平台;
+    Description = 生产T2陆军单位;
+    Name-from = T2 Terra Platform;
+    Description-from = Builds T2 Ground Units;
+}
+
+[GoKT2GF_AI]
+{
+    Name = T2 陆地平台;
+    Description = 生产T2陆军单位;
+    Name-from = T2 Terra Platform;
+    Description-from = Builds T2 Ground Units;
+}
+
+[GoKT2Gunship]
+{
+    Name = 耀光;
+    Description = T2 炮艇机;
+    Name-from = Radiant;
+    Description-from = T2 Gunship;
+}
+
+[GoKT2Jammer]
+{
+    Name = 扰灵;
+    Description = T2 隐身雷达干扰机（每秒消耗6能量）;
+    Name-from = Raveller;
+    Description-from = T2 Cloaked Radar Jammer (Consumes 6 Energy Per Second);
+}
+
+[GoKT2JumpKbot]
+{
+    Name = 女武神;
+    Description = T2 突击跳跃机甲;
+    Name-from = Valkyrie;
+    Description-from = T2 Fast Attack Jumpjet Kbot;
+}
+
+[GoKT2Mex]
+{
+    Name = 采掘者;
+    Description = 每秒产出6金属;
+    Name-from = Exploiter;
+    Description-from = Extracts 6 Metal Per Second;
+}
+
+[GoKT2PDTurret]
+{
+    Name = 光之柱;
+    Description = T2 边界防御塔;
+    Name-from = Pillar of Light;
+    Description-from = T2 Perimeter Defence Turret;
+}
+
+[GoKT2PGen]
+{
+    Name = 熔炉;
+    Description = 每秒产出120能量;
+    Name-from = Furnace;
+    Description-from = Produces 120 Energy Per Second;
+}
+
+[GoKT2PGen_AI]
+{
+    Name = 熔炉;
+    Description = 每秒产出120能量;
+    Name-from = Furnace;
+    Description-from = Produces 120 Energy Per Second;
+}
+
+[GoKT2Radar]
+{
+    Name = 信标;
+    Description = T2 雷达塔（每秒消耗24能量）;
+    Name-from = Beacon;
+    Description-from = T2 Radar Tower (Consumes 24 Energy Per Second);
+}
+
+[GoKT2Shield]
+{
+    Name = 庇护所;
+    Description = T2 护盾发生器（每秒消耗40能量）;
+    Name-from = Haven;
+    Description-from = T2 Shield Generator (Consumes 40 Energy Per Second);
+}
+
+[GoKT2Shield2]
+{
+    Name = 圣所;
+    Description = T2 护盾发生器（每秒消耗60能量）;
+    Name-from = Sanctuary;
+    Description-from = T2 Shield Generator (Consumes 60 Energy Per Second);
+}
+
+[GoKT2SMine]
+{
+    Name = 休止符;
+    Description = T2 停滞地雷;
+    Name-from = Caesura;
+    Description-from = T2 Stasis Mine;
+}
+
+[GoKT2Stealth]
+{
+    Name = 蚀;
+    Description = T2 隐身力场发生器（每秒消耗60能量）;
+    Name-from = Eclipse;
+    Description-from = T2 Stealth Field Generator (Consumes 60 Energy Per Second);
+}
+
+[GoKT2SupHover]
+{
+    Name = 法师;
+    Description = T2 区域封锁气垫艇;
+    Name-from = Magus;
+    Description-from = T2 Area Denial Hovercraft;
+}
+
+[GoKT3SupRpod]
+{
+    Name = 母皇;
+    Description = T3 战场控制机动机甲;
+    Name-from = Matriarch;
+    Description-from = T3 Battlefield Control Runnerpod;
+}

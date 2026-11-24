@@ -1,0 +1,40 @@
+[HEADER]
+{
+campaignside=CORE;
+}
+
+[MISSION0]
+{
+missionfile=The Ravenstein Run.ota;
+missionname=The Ravenstein Run;
+}
+
+[MISSION1]
+{
+missionfile=Reducing the Yrdac Islands.ota;
+missionname=Reducing the Yrdac Islands;
+}
+
+[MISSION2]
+{
+missionfile=Black Box.ota;
+missionname=Black Box;
+}
+
+[MISSION3]
+{
+missionfile=Firebase Prasad.ota;
+missionname=Firebase Prasad;
+}
+
+[MISSION4]
+{
+missionfile=Invasion of Destral II.ota;
+missionname=Invasion of Destral II;
+}
+
+[MISSION5]
+{
+missionfile=Guardian Hill.ota;
+missionname=Guardian Hill;
+}

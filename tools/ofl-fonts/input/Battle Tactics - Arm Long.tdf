@@ -1,0 +1,34 @@
+[HEADER]
+{
+campaignside=ARM;
+}
+
+[MISSION0]
+{
+missionfile=Com Pattern Five.ota;
+missionname=Com Pattern Five;
+}
+
+[MISSION1]
+{
+missionfile=Steel Stronghold.ota;
+missionname=Steel Stronghold;
+}
+
+[MISSION2]
+{
+missionfile=Thermal Exchange Causeway.ota;
+missionname=Thermal Exchange Causeway;
+}
+
+[MISSION3]
+{
+missionfile=Crossing the Long Lakes.ota;
+missionname=Crossing the Long Lakes;
+}
+
+[MISSION4]
+{
+missionfile=Capture Hanan Base.ota;
+missionname=Capture Hanan Base;
+}

@@ -1,0 +1,114 @@
+[HEADER]
+	{
+	campaignside=ARM;
+	}
+
+[MISSION0]
+	{
+	missionfile=EXP1AC01.ota;
+	missionname=1: Hydross - The Search Begins!;
+	Germanmissionname=1: Hydross - Die Suche beginnt!;
+	Frenchmissionname=1: Hydross - La traque commence!;
+	Italianmissionname=1: ;
+	}
+
+[MISSION1]
+	{
+	missionfile=EXP1AC02.ota;
+	missionname=2: Securing the Atoll;
+	Germanmissionname=2: Das Atoll sichern;
+	Frenchmissionname=2: Sécurisez l'Atoll;
+	Italianmissionname=2: ;
+	}
+
+[MISSION2]
+	{
+	missionfile=EXP1AC03.ota;
+	missionname=3: Sinking Core;
+	Germanmissionname=3: Core sinkt;
+	Frenchmissionname=3: Le Core prend l'eau!;
+	Italianmissionname=3: ;
+	}
+
+[MISSION3]
+	{
+	missionfile=EXP1AC04.ota;
+	missionname=4: Lusch - Hovercraft Technology;
+	Germanmissionname=4: Lusch - Hovercraft-Technologie;
+	Frenchmissionname=4: Lusch - Les premiers Hovercrafts;
+	Italianmissionname=4: ;
+	}
+
+[MISSION4]
+	{
+	missionfile=EXP1AC05.ota;
+	missionname=5: Through Bog And Swamp;
+	Germanmissionname=5: Durch Sümpfe und Wasserlöcher;
+	Frenchmissionname=5: Les pieds dans les marais;
+	Italianmissionname=5: ;
+	}
+
+[MISSION5]
+	{
+	missionfile=EXP1AC06.ota;
+	missionname=6: The Beacon;
+	Germanmissionname=6: Der Matrix-Konverter;
+	Frenchmissionname=6: La Balise;
+	Italianmissionname=6: ;
+	}
+
+[MISSION6]
+	{
+	missionfile=EXP1AC07.ota;
+	missionname=7: Temblor - Earthquake! ;
+	Germanmissionname=7: Temblor - Erdbeben!;
+	Frenchmissionname=7: Tremblement de terre sur Temblor!;
+	Italianmissionname=7: ;
+	}
+
+[MISSION7]
+	{
+	missionfile=EXP1AC08.ota;
+	missionname=8: Rock And A Hard Place;
+	Germanmissionname=8: Rock And A Hard Place;
+	Frenchmissionname=8: L'Arm dans le déCore;
+	Italianmissionname=8: ;
+	}
+
+[MISSION8]
+	{
+	missionfile=EXP1AC09.ota;
+	missionname=9: Arm Rocks - Core Trembles;
+	Germanmissionname=9: Arm Rocks - Core Trembles;
+	Frenchmissionname=9: Arm et Core du délit;
+	Italianmissionname=9: ;
+	}
+
+[MISSION9]
+	{
+	missionfile=EXP1AC10.ota;
+	missionname=10: Gelidus - A Cold Reception;
+	Germanmissionname=10: Gelidus - Ein kühler Empfang;
+	Frenchmissionname=10: Gelidus - Un accueil glacial;
+	Italianmissionname=10: ;
+	}
+
+[MISSION10]
+	{
+	missionfile=EXP1AC11.ota;
+	missionname=11: Go With the Floe;
+	Germanmissionname=11: Einsatz auf dem Treibeis;
+	Frenchmissionname=11: Autant en emporte la banquise;
+	Italianmissionname=11: ;
+	}
+
+[MISSION11]
+	{
+	missionfile=EXP1AC12.ota;
+	missionname=12: The Salvation Of A Galaxy;
+	Germanmissionname=12: Die Rettung einer Galaxie;
+	Frenchmissionname=12: 90 minutes pour vivre°!;
+	Italianmissionname=12: ;
+	}
+
+

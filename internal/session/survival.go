@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/internal/ai"
@@ -755,9 +756,9 @@ func (s *Session) survivalBeginWarning(tick uint32) {
 		default:
 			word = "the " + word
 		}
-		parts = append(parts, word)
+		parts = append(parts, i18n.T(word))
 	}
-	s.survivalSay(tick, fmt.Sprintf("Wave %d incoming: %s", st.wave, strings.Join(parts, ", ")))
+	s.survivalSay(tick, fmt.Sprintf(i18n.T("Wave %d incoming: %s"), st.wave, strings.Join(parts, ", ")))
 }
 
 // survivalPublishWarning hands the survivors' managers what the warning

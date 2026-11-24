@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/nanolathe-gg/nanolathe/internal/i18n"
 	"strings"
 
 	"github.com/nanolathe-gg/nanolathe/formats"
@@ -393,6 +394,9 @@ func loadRetailBattleHUDForOwner(fs vfs.FSOps, sess *session.Session, cat *conte
 	resultWin := loadGUIOptional(fs, "guis/endmsn.gui", "endmsn.gui [07 §11]", captions)
 	resultGAF := loadGAFOptional(fs, "anims/endmsn.gaf", "endmsn.gaf [07 §11]")
 	var resultPanel *ui.Panel
+	if i18n.I18nLanguageNeedCJK() && shell != nil {
+		ReplaceCommandButtons(shell.cs.unmappedMount, common)
+	}
 	h := &retailBattleHUD{
 		shell: shell, windowContext: windowContext, optionsRelabel: optionsRelabel,
 		side: side, cat: cat, owner: owner, anchors: anchors, console: console, guiFont: guiFont, primaryFont: primaryFont, developerFont: developerFont, pal: pal,
