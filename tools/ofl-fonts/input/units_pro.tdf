@@ -1,0 +1,735 @@
+[ARMAH]
+{
+    Name = 拍击者;
+    Description = 导弹气垫艇;
+    Name-from = Swatter;
+    Description-from = Missile Hovercraft;
+}
+
+[ARMANNI]
+{
+    Name = 湮灭者;
+    Description = 能量武器;
+    Name-from = Annihilator;
+    Description-from = Energy Weapon;
+}
+
+[ARMAPEX]
+{
+    Name = 顶点;
+    Description = 实验载具;
+    Name-from = Apex;
+    Description-from = Experimental Vehicle;
+}
+
+[ARMARAD]
+{
+    Name = 高级雷达塔;
+    Description = 提供更远雷达探测范围;
+    Name-from = Advanced Radar Tower;
+    Description-from = Provides Extended Radar Coverage;
+}
+
+[ARMASER]
+{
+    Name = 抹除者;
+    Description = 雷达干扰机甲;
+    Name-from = Eraser;
+    Description-from = Radar Jammer Kbot;
+}
+
+[ARMASON]
+{
+    Name = 高级声呐站;
+    Description = 提供更远声呐探测范围;
+    Name-from = Advanced Sonar Station;
+    Description-from = Provides Extended Sonar Coverage;
+}
+
+[ARMASP]
+{
+    Name = 战机维修坪;
+    Description = 自动维修飞行器;
+    Name-from = Air Repair Pad;
+    Description-from = Automatically Repairs Aircraft;
+}
+
+[ARMASYE]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMASYN]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMASYW]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMATL]
+{
+    Name = 高级鱼雷发射塔;
+    Description = 发射高级鱼雷;
+    Name-from = Advanced Torpedo Launcher;
+    Description-from = Launches Advanced Torpedoes;
+}
+
+[ARMBATS]
+{
+    Name = 千年号;
+    Description = 战列舰;
+    Name-from = Millennium;
+    Description-from = Battleship;
+}
+
+[ARMBRTHAE]
+{
+    Name = 大贝莎;
+    Description = 远程等离子炮;
+    Name-from = Big Bertha;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[ARMBRTHAN]
+{
+    Name = 大贝莎;
+    Description = 远程等离子炮;
+    Name-from = Big Bertha;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[ARMBRTHAW]
+{
+    Name = 大贝莎;
+    Description = 远程等离子炮;
+    Name-from = Big Bertha;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[ARMCK]
+{
+    Name = 工程机甲;
+    Description = T1单位;
+    Name-from = Construction Kbot;
+    Description-from = Tech Level 1;
+}
+
+[ARMDECOM]
+{
+    Name = 指挥官诱饵;
+    Description = 伪装指挥官;
+    Name-from = Commander;
+    Description-from = Decoy Commander;
+}
+
+[ARMFAV]
+{
+    Name = 杰菲;
+    Description = 高速侦察单位;
+    Name-from = Jeffy;
+    Description-from = Fast Attack Scout;
+}
+
+[ARMFDRAG]
+{
+    Name = 鲨齿浮障;
+    Description = 水上龙牙拒马;
+    Name-from = Shark's Teeth;
+    Description-from = Floating Dragon's Teeth;
+}
+
+[ARMFMKR]
+{
+    Name = 水上金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Floating Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[ARMFNDRY]
+{
+    Name = 顶点铸造厂;
+    Description = 建造顶点实验载具;
+    Name-from = Apex Foundry;
+    Description-from = Builds Apex;
+}
+
+[ARMFRT]
+{
+    Name = 防御者-NS;
+    Description = 水上导弹塔;
+    Name-from = Defender - NS;
+    Description-from = Floating Missile Tower;
+}
+
+[ARMJAM]
+{
+    Name = 干扰车;
+    Description = 雷达干扰载具;
+    Name-from = Jammer;
+    Description-from = Radar Jammer Vehicle;
+}
+
+[ARMJETH]
+{
+    Name = 杰思罗;
+    Description = 导弹机甲;
+    Name-from = Jethro;
+    Description-from = Missile Kbot;
+}
+
+[ARMLH]
+{
+    Name = 火花;
+    Description = 闪电气垫坦克;
+    Name-from = Spark;
+    Description-from = Lightning Hovertank;
+}
+
+[ARMMARK]
+{
+    Name = 马基;
+    Description = 雷达机甲;
+    Name-from = Marky;
+    Description-from = Radar Kbot;
+}
+
+[ARMMAV]
+{
+    Name = 独行侠;
+    Description = 重火力机甲;
+    Name-from = Maverick;
+    Description-from = Gun-Slinging Kbot;
+}
+
+[ARMPNIX]
+{
+    Name = 凤凰;
+    Description = 战略轰炸机;
+    Name-from = Phoenix;
+    Description-from = Strategic Bomber;
+}
+
+[ARMRAD]
+{
+    Name = 雷达塔;
+    Description = 提供雷达探测范围;
+    Name-from = Radar Tower;
+    Description-from = Provides Radar Coverage;
+}
+
+[ARMSEAP]
+{
+    Name = 信天翁;
+    Description = 深水炸弹水上飞机;
+    Name-from = Albatross;
+    Description-from = Depth Charge Seaplane;
+}
+
+[ARMSEER]
+{
+    Name = 先知;
+    Description = 雷达车;
+    Name-from = Seer;
+    Description-from = Radar Vehicle;
+}
+
+[ARMSONAR]
+{
+    Name = 声呐站;
+    Description = 提供声呐探测范围;
+    Name-from = Sonar Station;
+    Description-from = Provides Sonar Coverage;
+}
+
+[ARMSPID]
+{
+    Name = 蜘蛛;
+    Description = 麻痹蜘蛛载具;
+    Name-from = Spider;
+    Description-from = Paralyzing Spider Vehicle;
+}
+
+[ARMSPY]
+{
+    Name = 渗透者;
+    Description = 间谍机甲;
+    Name-from = Infiltrator;
+    Description-from = Spy Kbot;
+}
+
+[ARMSYE]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMSYN]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMSYW]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[ARMTL]
+{
+    Name = 鱼雷发射塔;
+    Description = 发射鱼雷;
+    Name-from = Torpedo Launcher;
+    Description-from = Launches Torpedoes;
+}
+
+[ARMUWMMKR]
+{
+    Name = 水下莫霍金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Underwater Moho Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[ARMUWMOHO]
+{
+    Name = 水下莫霍矿;
+    Description = 高级金属采集设施;
+    Name-from = Underwater Moho Mine;
+    Description-from = Advanced Metal Extractor;
+}
+
+[ARMVULCE]
+{
+    Name = 伏尔甘;
+    Description = 速射等离子炮;
+    Name-from = Vulcan;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[ARMVULCN]
+{
+    Name = 伏尔甘;
+    Description = 速射等离子炮;
+    Name-from = Vulcan;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[ARMVULCW]
+{
+    Name = 伏尔甘;
+    Description = 速射等离子炮;
+    Name-from = Vulcan;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[ARMZEUS]
+{
+    Name = 宙斯;
+    Description = 重型突击机甲;
+    Name-from = Zeus;
+    Description-from = Heavy Assault Kbot;
+}
+
+[CORAH]
+{
+    Name = 投石者;
+    Description = 导弹气垫艇;
+    Name-from = Slinger;
+    Description-from = Missile Hovercraft;
+}
+
+[CORARAD]
+{
+    Name = 高级雷达塔;
+    Description = 提供更远雷达探测范围;
+    Name-from = Advanced Radar Tower;
+    Description-from = Provides Extended Radar Coverage;
+}
+
+[CORASON]
+{
+    Name = 高级声呐站;
+    Description = 提供更远声呐探测范围;
+    Name-from = Advanced Sonar Station;
+    Description-from = Provides Extended Sonar Coverage;
+}
+
+[CORASP]
+{
+    Name = 战机维修坪;
+    Description = 自动维修飞行器;
+    Name-from = Air Repair Pad;
+    Description-from = Automatically Repairs Aircraft;
+}
+
+[CORASYE]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORASYN]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORASYW]
+{
+    Name = 高级造船厂;
+    Description = 生产海军舰船;
+    Name-from = Adv. Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORATL]
+{
+    Name = 高级鱼雷发射塔;
+    Description = 发射高级鱼雷;
+    Name-from = Advanced Torpedo Launcher;
+    Description-from = Launches Advanced Torpedoes;
+}
+
+[CORBUZZE]
+{
+    Name = 锯刃;
+    Description = 速射等离子炮;
+    Name-from = Buzzsaw;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[CORBUZZN]
+{
+    Name = 锯刃;
+    Description = 速射等离子炮;
+    Name-from = Buzzsaw;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[CORBUZZW]
+{
+    Name = 锯刃;
+    Description = 速射等离子炮;
+    Name-from = Buzzsaw;
+    Description-from = Rapid Fire Plasma Cannon;
+}
+
+[CORDECOM]
+{
+    Name = 指挥官诱饵;
+    Description = 伪装指挥官;
+    Name-from = Commander;
+    Description-from = Decoy Commander;
+}
+
+[CORETER]
+{
+    Name = 抹除者;
+    Description = 雷达干扰载具;
+    Name-from = Deleter;
+    Description-from = Radar Jammer Vehicle;
+}
+
+[CORFAV]
+{
+    Name = 鼬鼠;
+    Description = 高速侦察单位;
+    Name-from = Weasel;
+    Description-from = Fast Attack Scout;
+}
+
+[CORFDRAG]
+{
+    Name = 鲨齿浮障;
+    Description = 水上龙牙拒马;
+    Name-from = Shark's Teeth;
+    Description-from = Floating Dragon's Teeth;
+}
+
+[CORFH]
+{
+    Name = 烈焰;
+    Description = 喷火气垫坦克;
+    Name-from = Blaze;
+    Description-from = Flamethrower Hovertank;
+}
+
+[CORFMD]
+{
+    Name = 坚毅;
+    Description = 反导弹防御系统;
+    Name-from = Fortitude;
+    Description-from = Anti Missile Defense System;
+}
+
+[CORFMKR]
+{
+    Name = 水上金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Floating Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[CORFRT]
+{
+    Name = 毒刺;
+    Description = 水上导弹塔;
+    Name-from = Stinger;
+    Description-from = Floating Missile Tower;
+}
+
+[CORINTE]
+{
+    Name = 威慑者;
+    Description = 远程等离子炮;
+    Name-from = Intimidator;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[CORINTN]
+{
+    Name = 威慑者;
+    Description = 远程等离子炮;
+    Name-from = Intimidator;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[CORINTW]
+{
+    Name = 威慑者;
+    Description = 远程等离子炮;
+    Name-from = Intimidator;
+    Description-from = Long Range Plasma Cannon;
+}
+
+[CORMAKR]
+{
+    Name = 金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[CORMART]
+{
+    Name = 劫掠者;
+    Description = 机动火炮;
+    Name-from = Pillager;
+    Description-from = Mobile Artillery;
+}
+
+[CORMIST]
+{
+    Name = 劈砍者;
+    Description = 机动导弹发射车;
+    Name-from = Slasher;
+    Description-from = Mobile Missile Launcher;
+}
+
+[CORMMKR]
+{
+    Name = 莫霍金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Moho Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[CORMSHIP]
+{
+    Name = 九头蛇;
+    Description = 导弹舰;
+    Name-from = Hydra;
+    Description-from = Missile Ship;
+}
+
+[CORNECRO]
+{
+    Name = 死灵;
+    Description = 复活机甲;
+    Name-from = Necro;
+    Description-from = Resurrection Kbot;
+}
+
+[CORRAD]
+{
+    Name = 雷达塔;
+    Description = 提供雷达探测范围;
+    Name-from = Radar Tower;
+    Description-from = Provides Radar Coverage;
+}
+
+[CORSEAP]
+{
+    Name = 台风;
+    Description = 深水炸弹水上飞机;
+    Name-from = Typhoon;
+    Description-from = Depth Charge Seaplane;
+}
+
+[CORSONAR]
+{
+    Name = 声呐站;
+    Description = 提供声呐探测范围;
+    Name-from = Sonar Station;
+    Description-from = Provides Sonar Coverage;
+}
+
+[CORSPEC]
+{
+    Name = 幽灵;
+    Description = 雷达干扰机甲;
+    Name-from = Spectre;
+    Description-from = Radar Jammer Kbot;
+}
+
+[CORSPY]
+{
+    Name = 寄生者;
+    Description = 间谍机甲;
+    Name-from = Parasite;
+    Description-from = Spy Kbot;
+}
+
+[CORSYE]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORSYN]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORSYW]
+{
+    Name = 造船厂;
+    Description = 生产海军舰船;
+    Name-from = Shipyard;
+    Description-from = Produces Ships;
+}
+
+[CORTL]
+{
+    Name = 鱼雷发射塔;
+    Description = 发射鱼雷;
+    Name-from = Torpedo Launcher;
+    Description-from = Launches Torpedoes;
+}
+
+[CORUWMMKR]
+{
+    Name = 水下莫霍金属转换器;
+    Description = 将能量转化为金属;
+    Name-from = Underwater Moho Metal Maker;
+    Description-from = Converts Energy into Metal;
+}
+
+[CORUWMOHO]
+{
+    Name = 水下莫霍矿;
+    Description = 高级金属采集设施;
+    Name-from = Underwater Moho Mine;
+    Description-from = Advanced Metal Extractor;
+}
+
+[CORVOYR]
+{
+    Name = 窥伺者;
+    Description = 雷达机甲;
+    Name-from = Voyeur;
+    Description-from = Radar Kbot;
+}
+
+[CORVRAD]
+{
+    Name = 情报员;
+    Description = 雷达车;
+    Name-from = Informer;
+    Description-from = Radar Vehicle;
+}
+
+[MAKEANTIARM]
+{
+    Name = 拦截导弹;
+    Description = ;
+    Name-from = Interceptor Missile;
+    Description-from = ;
+}
+
+[MAKEANTICOR]
+{
+    Name = 拦截导弹;
+    Description = ;
+    Name-from = Interceptor Missile;
+    Description-from = ;
+}
+
+[MAKENUKEARM]
+{
+    Name = 核弹;
+    Description = ;
+    Name-from = Nuclear Missile;
+    Description-from = ;
+}
+
+[MAKENUKECOR]
+{
+    Name = 核弹;
+    Description = ;
+    Name-from = Nuclear Missile;
+    Description-from = ;
+}
+
+[MAKENUKEEMP]
+{
+    Name = EMP导弹;
+    Description = ;
+    Name-from = EMP Missile;
+    Description-from = ;
+}
+
+[MAKENUKETRON]
+{
+    Name = 中子导弹;
+    Description = ;
+    Name-from = Neutron Missile;
+    Description-from = ;
+}
+
+[ZZZ]
+{
+    Name = shturl.cc/PxUvwZIvAGeS9;
+    Description = 惩戒塔;
+    Name-from = shturl.cc/PxUvwZIvAGeS9;
+    Description-from = Spank Tower;
+}
