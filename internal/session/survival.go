@@ -748,13 +748,13 @@ func (s *Session) survivalBeginWarning(tick uint32) {
 		word := compassWord(g.Angle)
 		switch g.Domain {
 		case survival.Air:
-			word = "air from the " + word
+			word = i18n.T("air from the ") + word
 		case survival.Naval:
-			word = "naval from the " + word
+			word = i18n.T("naval from the ") + word
 		case survival.Hover:
-			word = "hover from the " + word
+			word = i18n.T("hover from the ") + word
 		default:
-			word = "the " + word
+			word = i18n.T("the " + word)
 		}
 		parts = append(parts, i18n.T(word))
 	}
@@ -792,7 +792,7 @@ func (s *Session) survivalPublishWarning(tick uint32) {
 // (north up). Angles follow the simulation trig: x by cosine, z by sine.
 func compassWord(a uint16) string {
 	words := [8]string{"east", "southeast", "south", "southwest", "west", "northwest", "north", "northeast"}
-	return words[((uint32(a)+4096)>>13)&7]
+	return i18n.T(words[((uint32(a)+4096)>>13)&7])
 }
 
 // survivalEntryCell is the entry point for an angle: where the ray from the
