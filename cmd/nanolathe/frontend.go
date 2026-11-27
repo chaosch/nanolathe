@@ -1566,7 +1566,7 @@ type glyphCacheKey struct {
 	face string
 }
 
-func (g *gameShell) drawRetailFilmCJKCylindrical(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) bool {
+func (g *gameShell) drawRetailFilmCJKCylindrical1(c *client.Client, text string, x, baselineY, maxWidth int, controlHeight int, palColor byte, attribs uint32) bool {
 	if cjkCache == nil {
 		cjkCache = make(map[glyphCacheKey]*cachedGlyph)
 	}
