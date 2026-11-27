@@ -1390,7 +1390,6 @@
   "Settings": "设置",
   "Resume": "返回游戏",
   "Page": "页码",
-  "{} - {}": "    {}-{}",
   "Max Units:": "单位数量限制:",
   "Click to change the rules. Modern: Community 3.9 plus Nanolathe's own fixes for movement, building and targeting.": "现代规则:社区3.9加上现代版自带的移动.建造与索敌修复",
   "Click to change the rules. Community 3.9: the original game plus the TA community patch's fixes and larger limits.": "社区3.9规则:原版游戏加上 TA社区补丁的修复与更大的限制放宽.",
@@ -1550,13 +1549,17 @@
   "air from the {}":"空军在{}",
   "naval from the {}":"海军在{}",
   "hover from the {}":"气垫在{}",
-  "the {}":"{}",
-
   "Wave {#} incoming in {}":"第{}波将在{}内来袭。",
   "Wave {#} - {#} attackers":"第{}波共{}单位来袭。",
   "Wave {#} in {} - {#} attackers left":"第{}波在{}内-剩余{}。",
-  "Wave {#} incoming: {}":"第{}波来袭:{}"
-
+  "Wave {#} incoming: {}":"第{}波来袭:{}",
+  "southeast": "东南",
+  "southwest": "西南",
+  "northwest": "西北",
+  "northeast": "东北",
+  "amphibious from the {}": "{}方两栖部队",
+  "ground from the {}": "{}方地面部队",
+  "unknown from the {}": "{}方未知部队"
 
 
 }
