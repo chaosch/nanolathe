@@ -745,20 +745,26 @@ func (s *Session) survivalBeginWarning(tick uint32) {
 	s.survivalPublishWarning(tick)
 	var parts []string
 	for _, g := range st.plan.Groups {
-		word := compassWord(g.Angle)
+		dir := compassWord(g.Angle)
+		var domainWord string
 		switch g.Domain {
 		case survival.Air:
-			word = i18n.T("air from the ") + word
+			domainWord = "air"
 		case survival.Naval:
-			word = i18n.T("naval from the ") + word
+			domainWord = "naval"
 		case survival.Hover:
-			word = i18n.T("hover from the ") + word
+			domainWord = "hover"
+		case survival.Amphibious:
+			domainWord = "amphibious"
+		case survival.Ground:
+			domainWord = "ground"
 		default:
-			word = i18n.T("the " + word)
+			domainWord = "unknown"
 		}
-		parts = append(parts, i18n.T(word))
+		phrase := fmt.Sprintf("%s from the %s", domainWord, dir)
+		parts = append(parts, i18n.T(phrase))
 	}
-	s.survivalSay(tick, fmt.Sprintf(i18n.T("Wave %d incoming: %s"), st.wave, strings.Join(parts, ", ")))
+	s.survivalSay(tick, i18n.T(fmt.Sprintf("Wave %d incoming: %s", st.wave, strings.Join(parts, ", "))))
 }
 
 // survivalPublishWarning hands the survivors' managers what the warning
@@ -792,7 +798,7 @@ func (s *Session) survivalPublishWarning(tick uint32) {
 // (north up). Angles follow the simulation trig: x by cosine, z by sine.
 func compassWord(a uint16) string {
 	words := [8]string{"east", "southeast", "south", "southwest", "west", "northwest", "north", "northeast"}
-	return i18n.T(words[((uint32(a)+4096)>>13)&7])
+	return words[((uint32(a)+4096)>>13)&7]
 }
 
 // survivalEntryCell is the entry point for an angle: where the ray from the

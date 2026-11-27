@@ -118,6 +118,10 @@ func T(s string) string {
 	}
 	return c.translate(s, 0)
 }
+func Tf(s string, args ...interface{}) string {
+	translated := T(s)
+	return fmt.Sprintf(translated, args...)
+}
 
 const cacheLimit = 4096
 
